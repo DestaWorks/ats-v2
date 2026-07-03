@@ -118,3 +118,92 @@ model ActivityLog {
   @@map("activity_log")
 }
 
+// --- Recruiting pipeline (Wave 1.1) ---
+// Candidate + Client + StageHistory. Vocabulary enums (credential, status, track, source,
+// population, setting, tags, licenseStatus) are stored as String/String[] and validated in
+// zod against the `lib/constants` unions (matches `User.role`) — keeps vocab churn out of
+// migrations. Status is a stable CODE + numeric `stageOrder` mirror (never the label). Actor
+// columns are plain `String` ids (mirrors `activity_log.actor`) — legacy actors may not
+// resolve to a `User` row at ETL. Soft-delete (`deletedAt`) is filtered by default at the
+// repository layer. `licenseNumber` is sensitive PII — DTO-gated (`viewCredentials`).
+
+model Client {
+  id         String      @id @default(cuid())
+  legacyId   String?     @unique
+  name       String
+  capacity   Int?
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  deletedAt  DateTime?
+  candidates Candidate[]
+
+  @@index([deletedAt])
+  @@map("clients")
+}
+
+model Candidate {
+  id       String  @id @default(cuid())
+  legacyId String? @unique
+  // identity / contact (PII)
+  name     String
+  email    String?
+  phone    String?
+  city     String?
+  state    String?
+  employer String?
+  yearsExp Int?
+  // clinical profile (scoring/gate inputs)
+  credential       String?
+  population       String?
+  setting          String?
+  track            String   @default("Clinical")
+  source           String?
+  tags             String[] @default([])
+  outreachAttempts Int      @default(0)
+  // license / verification
+  licenseState        String?
+  licenseNumber       String? // SENSITIVE — DTO-gated + encrypted
+  licenseStatus       String    @default("Not Verified")
+  licenseExpiry       DateTime?
+  licenseVerifiedAt   DateTime?
+  licenseVerifiedById String?
+  // pipeline (code + ordinal + denormalized timing)
+  status         String   @default("NEW_CANDIDATE")
+  stageOrder     Int      @default(0)
+  stageEnteredAt DateTime @default(now())
+  placedAt       DateTime?
+  // client
+  clientId String?
+  client   Client? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  // lifecycle
+  createdById  String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+  deletedById  String?
+  stageHistory StageHistory[]
+
+  @@index([status])
+  @@index([clientId])
+  @@index([deletedAt])
+  @@index([licenseExpiry])
+  @@index([status, deletedAt])
+  @@index([email])
+  @@map("candidates")
+}
+
+model StageHistory {
+  id             String    @id @default(cuid())
+  candidateId    String
+  candidate      Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  fromStatus     String?
+  toStatus       String
+  fromStageOrder Int?
+  toStageOrder   Int
+  enteredAt      DateTime  @default(now())
+  actorId        String
+
+  @@index([candidateId])
+  @@index([candidateId, enteredAt])
+  @@map("stage_history")
+}
