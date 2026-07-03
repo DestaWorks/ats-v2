@@ -38,7 +38,6 @@ yarn-error.log*
 # Prisma generated client
 /src/generated/
 
-# Legacy Apps Script backend — the .gs source has a hardcoded client ID + admin emails. NEVER
-# commit it. The legacy client (legacy/index.html) is kept as a tracked parity reference (it only
-# contains the already-public web-app URL + Google *client ID*, no secrets).
-/legacy/*.gs
+# Legacy app (Apps Script backend + monolith client) — LOCAL-ONLY parity reference.
+# Never committed: keep it on the dev machine, not in the shared repo.
+/legacy/
