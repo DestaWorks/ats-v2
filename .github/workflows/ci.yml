@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [main, staging]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # No `version:` here — pnpm/action-setup reads it from package.json `packageManager`
+      # (pnpm@11.1.2). Specifying both errors with ERR_PNPM_BAD_PM_VERSION.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The generated Prisma client is gitignored, so CI must generate it before typecheck/test.
+      # `generate` only reads the schema — no DB connection — so a placeholder URL satisfies
+      # prisma.config.ts (env("DIRECT_URL")) without needing real credentials as CI secrets.
+      - name: Generate Prisma client
+        env:
+          DIRECT_URL: postgresql://user:pass@localhost:5432/placeholder
+          DATABASE_URL: postgresql://user:pass@localhost:5432/placeholder
+        run: pnpm db:generate
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Test
+        run: pnpm test
+
+      - name: Format check
+        run: pnpm format:check

@@ -1,0 +1,14 @@
+# pnpm settings file (single-package repo). In pnpm 10+, install-time settings
+# such as build-script approval live here rather than in package.json / .npmrc.
+#
+# Native deps whose install/build scripts we explicitly trust and run:
+#   esbuild        — required by Vitest (bundling for tests)
+#   unrs-resolver  — required by eslint-plugin-import's resolver
+#   sharp          — Next.js image optimization at build/runtime
+#   prisma/@prisma/engines — Prisma query engine (client generation + migrations)
+allowBuilds:
+  "@prisma/engines": true
+  prisma: true
+  esbuild: true
+  sharp: true
+  unrs-resolver: true

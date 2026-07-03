@@ -1,0 +1,14 @@
+# Build output & deps
+.next/
+node_modules/
+pnpm-lock.yaml
+
+# Legacy app (do not reformat — being strangled, not maintained)
+index.html
+
+# Markdown is hand-formatted prose (docs, CLAUDE.md, README, layer notes) — not code
+docs/
+**/*.md
+
+# Prisma generated client
+src/generated/

@@ -1,0 +1,120 @@
+// DestaHealth ATS — Prisma schema.
+// Wave 0.3 brings ONLY the auth tables (Better Auth models + our `role`) and a minimal
+// `access_request` (the request-access screen). Feature tables land in their own waves.
+//
+// Runtime connects via the Supabase transaction pooler (DATABASE_URL, pg driver adapter);
+// migrations use the session pooler (DIRECT_URL, set in prisma.config.ts).
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// --- Better Auth core models (+ admin plugin fields) ---
+
+model User {
+  id            String    @id @default(cuid())
+  name          String
+  email         String    @unique
+  emailVerified Boolean   @default(false)
+  image         String?
+  // RBAC (DECISIONS D3): one fixed role per account; `admin` is a role value.
+  role          String    @default("Associate")
+  // admin plugin
+  banned        Boolean   @default(false)
+  banReason     String?
+  banExpires    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  sessions      Session[]
+  accounts      Account[]
+
+  @@map("user")
+}
+
+model Session {
+  id             String   @id @default(cuid())
+  expiresAt      DateTime
+  token          String   @unique
+  ipAddress      String?
+  userAgent      String?
+  userId         String
+  impersonatedBy String? // admin plugin
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id @default(cuid())
+  accountId             String
+  providerId            String
+  userId                String
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("verification")
+}
+
+// --- Access requests (request-access screen; full admin CRUD in Wave 5) ---
+
+model AccessRequest {
+  id           String   @id @default(cuid())
+  name         String
+  email        String
+  organization String?
+  message      String?
+  status       String   @default("pending") // pending | approved | declined
+  createdAt    DateTime @default(now())
+
+  @@index([status])
+  @@map("access_request")
+}
+
+// --- Audit trail (Wave 0.5) ---
+// Append-only activity log. `before`/`after` snapshots may contain PII/PHI, so reads are
+// capability-gated (`viewAuditLog`); rows are written inside the same transaction as the
+// mutation they record (see server/db/audit.ts) so the trail can't drift from the data.
+
+model ActivityLog {
+  id       String   @id @default(cuid())
+  entity   String
+  entityId String
+  actor    String // the acting user's id
+  action   String
+  before   Json?
+  after    Json?
+  at       DateTime @default(now())
+
+  @@index([entity, entityId])
+  @@index([actor, at])
+  @@map("activity_log")
+}
+

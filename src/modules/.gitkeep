@@ -1,0 +1,3 @@
+# Client feature modules (one folder per feature: pipeline, sourcing, crm, …).
+# Each: components/ · hooks/ · api/ · query-keys.ts · types.ts · index.ts (barrel).
+# Must NOT import from src/server/** (enforced by eslint import/no-restricted-paths).

@@ -1,0 +1,97 @@
+@import "tailwindcss";
+
+/*
+  Tailwind v4 CSS-first theme. Named tokens ported from the legacy palette (`C` in index.html)
+  and status colors (`SC`). Cryptic legacy keys (ch/br/bl/…) are renamed to self-explanatory
+  names per CONVENTIONS §4. Status colors are keyed by stage CODE (see lib/constants), never the label.
+*/
+@theme {
+  /* Brand palette (legacy `C`) */
+  --color-charcoal: #2d2d2d; /* C.ch — primary text */
+  --color-brand: #8b7355; /* C.br — brand accent */
+  --color-ivory: #f8f6f1; /* C.iv — soft background */
+  --color-navy: #1e4a8a; /* C.bl — primary blue */
+  --color-green: #43a047; /* C.gn */
+  --color-red: #e53935; /* C.rd */
+  --color-orange: #fb8c00; /* C.or */
+  --color-gray: #888888; /* C.gy */
+  --color-purple: #7b1fa2; /* C.pu */
+  --color-teal: #00897b; /* C.tl */
+  --color-label: #ebf0f8; /* C.lbl — chip/label bg */
+
+  /* App surface (legacy body bg) */
+  --color-surface: #f0f2f5;
+
+  /* Pipeline status colors (legacy `SC`), keyed by stage code */
+  --color-status-new: #42a5f5; /* 0 New Candidate */
+  --color-status-qualified: #29b6f6; /* 1 Qualified (Pre-Screen) */
+  --color-status-screening: #ab47bc; /* 2 Initial Screening */
+  --color-status-review: #ffa726; /* 3 Desta Review */
+  --color-status-submitted: #26a69a; /* 4 Submitted to Client */
+  --color-status-interview: #5c6bc0; /* 5 Client Interview */
+  --color-status-offer: #ff7043; /* 6 Offer / Negotiation */
+  --color-status-accepted: #66bb6a; /* 7 Offer Accepted */
+  --color-status-started: #2e7d32; /* 8 Started (Day 1) */
+  --color-status-not-qualified: #e53935; /* 9 Not Qualified */
+  --color-status-no-response: #bdbdbd; /* 10 No Response */
+  --color-status-rejected: #f44336; /* 11 Client Rejected */
+  --color-status-future: #78909c; /* 12 Future Pipeline */
+}
+
+html,
+body {
+  background: var(--color-surface);
+  color: var(--color-charcoal);
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    Helvetica,
+    Arial,
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Screen-reader-only utility (visually hidden, still announced). */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Accessibility: honor reduced-motion (disable Skeleton pulse, Spinner spin, etc.). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/*
+  Print baseline for printable views (reports, credentials matrix, client portal).
+  Add `no-print` to chrome (nav, buttons) to hide it, and use Tailwind `print:` variants
+  for finer control. Printable content stays on a white background.
+*/
+@media print {
+  html,
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  @page {
+    margin: 0.5in;
+  }
+}
