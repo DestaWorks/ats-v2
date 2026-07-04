@@ -182,6 +182,7 @@ model Candidate {
   deletedAt    DateTime?
   deletedById  String?
   stageHistory StageHistory[]
+  documents    Document[]
 
   @@index([status])
   @@index([clientId])
@@ -190,6 +191,45 @@ model Candidate {
   @@index([status, deletedAt])
   @@index([email])
   @@map("candidates")
+}
+
+// Uploaded documents (résumés today; licenses/other later). Wave 1.2 (design S-1/S-2):
+// stores metadata + client-extracted text + captured structured JSON. Physical PDF bytes are
+// deferred to Wave 6 — `storageKey` stays null until the Supabase bucket is wired.
+model Document {
+  id       String  @id @default(cuid())
+  legacyId String? @unique // ETL upsert (legacy ResumeFileID)
+
+  // ownership — NULLABLE: a doc can exist pre-match (uploaded, not yet attached).
+  // Cascade: a résumé is pure candidate PII — a hard purge takes its documents with it.
+  candidateId String?
+  candidate   Candidate? @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  // classification (validated vs DOCUMENT_TYPES in zod; stored as String)
+  type             String  @default("resume")
+  originalFilename String
+  mimeType         String
+  sizeBytes        Int?
+
+  // storage references (S-2)
+  storageKey String? // Supabase object path — NULL until Wave 6
+  legacyUrl  String? // legacy Google Drive URL, carried at ETL
+
+  // captured extraction (SENSITIVE — DTO-gated on viewCredentials; never logged)
+  extractedText String?
+  extractedData Json?
+
+  // lifecycle
+  uploadedById String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+  deletedById  String?
+
+  @@index([candidateId])
+  @@index([deletedAt])
+  @@index([type])
+  @@map("documents")
 }
 
 model StageHistory {
