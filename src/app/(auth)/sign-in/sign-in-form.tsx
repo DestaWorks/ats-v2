@@ -7,6 +7,7 @@ import { signIn } from "@/lib/auth-client";
 import { useZodForm } from "@/lib/forms/use-zod-form";
 import { signInSchema, type SignInInput } from "@/lib/validation/auth";
 import { Field } from "@/components/ui/field";
+import { Button } from "@/components/ui/button";
 
 export function SignInForm({ googleEnabled }: { googleEnabled: boolean }) {
   const router = useRouter();
@@ -60,13 +61,9 @@ export function SignInForm({ googleEnabled }: { googleEnabled: boolean }) {
             className={inputClass}
           />
         </Field>
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
-        >
+        <Button type="submit" disabled={isSubmitting}>
           {isSubmitting ? "Signing in…" : "Sign in"}
-        </button>
+        </Button>
       </form>
 
       {googleEnabled ? (
@@ -75,13 +72,9 @@ export function SignInForm({ googleEnabled }: { googleEnabled: boolean }) {
             <span className="h-px flex-1 bg-black/10" /> or{" "}
             <span className="h-px flex-1 bg-black/10" />
           </div>
-          <button
-            type="button"
-            onClick={onGoogle}
-            className="rounded-md border border-black/15 px-4 py-2 text-sm font-semibold text-charcoal transition hover:bg-black/5"
-          >
+          <Button type="button" variant="secondary" onClick={onGoogle}>
             Continue with Google
-          </button>
+          </Button>
         </>
       ) : null}
 

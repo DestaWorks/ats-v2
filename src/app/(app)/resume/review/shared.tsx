@@ -10,7 +10,7 @@ import {
 } from "react-hook-form";
 import type { ResumeMatch } from "@/lib/validation/resume";
 import { Field } from "@/components/ui/field";
-import { Spinner } from "@/components/ui/spinner";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils/cn";
 import { confirmedCandidateIdFor } from "../lib/confirm-gate";
 
@@ -206,21 +206,13 @@ export function SaveBar({
         </label>
       ) : null}
 
-      <button
-        type="submit"
-        disabled={submitting}
-        className="self-start rounded-md bg-green px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
-      >
-        {submitting ? (
-          <span className="inline-flex items-center gap-2">
-            <Spinner className="h-4 w-4 text-white" /> Saving…
-          </span>
-        ) : match.status === "auto" || (match.status === "confirm" && confirmed) ? (
-          "Attach & Save"
-        ) : (
-          "Save as New Candidate"
-        )}
-      </button>
+      <Button type="submit" variant="success" size="lg" loading={submitting} className="self-start">
+        {submitting
+          ? "Saving…"
+          : match.status === "auto" || (match.status === "confirm" && confirmed)
+            ? "Attach & Save"
+            : "Save as New Candidate"}
+      </Button>
     </div>
   );
 }

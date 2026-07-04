@@ -4,6 +4,7 @@ import { useDroppable } from "@dnd-kit/core";
 import { statusSlaDays, type CandidateStatus } from "@/lib/constants";
 import type { BoardColumn as BoardColumnData, CandidateCardDTO } from "@/lib/validation/pipeline";
 import { cn } from "@/lib/utils/cn";
+import { Badge } from "@/components/ui/badge";
 import { CandidateCard } from "./candidate-card";
 import { STATUS_BG } from "./lib/status-style";
 
@@ -39,9 +40,7 @@ export function BoardColumn({
             {column.label}
           </h2>
         </div>
-        <span className="rounded-full bg-black/5 px-2 py-0.5 text-[11px] font-semibold text-gray">
-          {column.count}
-        </span>
+        <Badge>{column.count}</Badge>
       </header>
 
       {sla != null ? (

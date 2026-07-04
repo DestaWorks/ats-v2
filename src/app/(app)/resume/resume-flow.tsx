@@ -12,6 +12,7 @@ import type {
 import { Spinner } from "@/components/ui/spinner";
 import { ErrorState } from "@/components/ui/error-state";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Button } from "@/components/ui/button";
 import { VariantPicker } from "./variant-picker";
 import { UploadZone } from "./upload-zone";
 import { ReviewForm } from "./review/review-form";
@@ -193,13 +194,9 @@ export function ResumeFlow({
             <p className="text-sm text-gray">
               Extracted by AI — review and fact-check before saving.
             </p>
-            <button
-              type="button"
-              onClick={() => setStep("upload")}
-              className="rounded-md px-2 py-1 text-xs font-medium text-gray transition hover:bg-black/5"
-            >
+            <Button type="button" variant="ghost" size="xs" onClick={() => setStep("upload")}>
               ← Re-upload
-            </button>
+            </Button>
           </div>
           <ReviewForm
             variant={variant}
@@ -216,13 +213,9 @@ export function ResumeFlow({
           title={`${savedName ?? "Candidate"} saved`}
           description={`Added to the pipeline by ${recruiterName}.`}
           action={
-            <button
-              type="button"
-              onClick={resetToPick}
-              className="rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
-            >
+            <Button type="button" onClick={resetToPick}>
               Convert another résumé
-            </button>
+            </Button>
           }
         />
       ) : null}

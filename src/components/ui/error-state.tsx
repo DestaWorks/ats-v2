@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils/cn";
+import { Button } from "./button";
 
 /**
  * Error state — shown when an async view fails to load. `onRetry` renders a retry
@@ -26,13 +27,9 @@ export function ErrorState({
       <h3 className="text-base font-semibold text-red">{title}</h3>
       {message ? <p className="max-w-sm text-sm text-charcoal">{message}</p> : null}
       {onRetry ? (
-        <button
-          type="button"
-          onClick={onRetry}
-          className="mt-2 rounded-md bg-navy px-3 py-1.5 text-sm font-semibold text-white transition hover:opacity-90"
-        >
+        <Button type="button" size="sm" onClick={onRetry} className="mt-2">
           Try again
-        </button>
+        </Button>
       ) : null}
     </div>
   );

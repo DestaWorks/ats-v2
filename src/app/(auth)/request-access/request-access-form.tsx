@@ -7,6 +7,7 @@ import { useZodForm } from "@/lib/forms/use-zod-form";
 import { accessRequestSchema, type AccessRequestInput } from "@/lib/validation/auth";
 import { Field } from "@/components/ui/field";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Button } from "@/components/ui/button";
 import { submitAccessRequest } from "./actions";
 
 export function RequestAccessForm() {
@@ -62,13 +63,9 @@ export function RequestAccessForm() {
         <Field label="Message" htmlFor="message" error={errors.message?.message}>
           <textarea id="message" rows={3} {...register("message")} className={inputClass} />
         </Field>
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
-        >
+        <Button type="submit" disabled={isSubmitting}>
           {isSubmitting ? "Sending…" : "Send request"}
-        </button>
+        </Button>
       </form>
       <p className="text-sm text-gray">
         Have an account?{" "}
