@@ -3,7 +3,8 @@
 import { PrescriberResumeSchema, type PrescriberResume } from "@/lib/validation/resume";
 import { useZodForm } from "@/lib/forms/use-zod-form";
 import { useFieldArray, type Path } from "react-hook-form";
-import { inputClass, Section, TextField } from "./shared";
+import { Section, TextField } from "./shared";
+import { Input } from "@/components/ui/input";
 import {
   EducationSection,
   ExperienceSection,
@@ -28,15 +29,13 @@ function DeaEditor({ form }: { form: UseFormReturn<PrescriberResume> }) {
       <legend className="text-sm font-medium text-charcoal">DEA registrations</legend>
       {fields.map((field, index) => (
         <div key={field.id} className="flex items-center gap-2">
-          <input
+          <Input
             {...form.register(`dea.${index}.state` as Path<PrescriberResume>)}
             placeholder="State"
-            className={inputClass}
           />
-          <input
+          <Input
             {...form.register(`dea.${index}.number` as Path<PrescriberResume>)}
             placeholder="Number"
-            className={inputClass}
           />
           <button
             type="button"

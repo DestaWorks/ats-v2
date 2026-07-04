@@ -21,7 +21,7 @@ vi.mock("./auth", () => ({
   auth: { api: { getSession: async () => mockSession } },
 }));
 
-import { getCurrentUser, requireUser, requireCapability, requireRole } from "./guards";
+import { getCurrentUser, requireUser, requireCapability } from "./guards";
 
 function signInAs(role?: string) {
   mockSession = { user: { id: "u1", email: "u@desta.works", name: "Test User", role } };
@@ -58,15 +58,5 @@ describe("auth guards — server-side authorization", () => {
   it("admits a leadership role through the same capability", async () => {
     signInAs("Owner");
     expect((await requireCapability("viewReports")).role).toBe("Owner");
-  });
-
-  it("requireRole blocks a non-admin from an admin-only guard", async () => {
-    signInAs("Associate");
-    await expect(requireRole("Owner", "Admin")).rejects.toMatchObject({ code: "FORBIDDEN" });
-  });
-
-  it("requireRole admits an admin to an admin-only guard", async () => {
-    signInAs("Admin");
-    expect((await requireRole("Owner", "Admin")).role).toBe("Admin");
   });
 });

@@ -12,7 +12,7 @@ import { Field } from "@/components/ui/field";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { fieldError } from "./lib/form-error";
-import { inputClass } from "./lib/field-styles";
+import { Textarea } from "@/components/ui/textarea";
 import { formatRelativeTime, noteTypeLabel, noteTypeTone } from "./lib/notes-format";
 import { messageForFailure, postNote } from "./lib/detail-fetch";
 
@@ -92,10 +92,10 @@ export function NotesTab({
         </fieldset>
 
         <Field label="Add a note" htmlFor="note-body" error={fieldError(form, "body")}>
-          <textarea
+          <Textarea
             id="note-body"
             rows={3}
-            className={cn(inputClass, "resize-y")}
+            className="resize-y"
             placeholder="Write an internal or client-facing note…"
             {...form.register("body")}
           />

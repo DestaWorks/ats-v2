@@ -7,7 +7,7 @@ import type { CandidateProfileDTO } from "@/lib/validation/candidate";
 import { Badge } from "@/components/ui/badge";
 import { buildStageMoverOptions } from "./lib/stage-mover-options";
 import { messageForFailure, postMove, type MovedFields } from "./lib/detail-fetch";
-import { selectClass } from "./lib/field-styles";
+import { Select } from "@/components/ui/select";
 
 /**
  * Current-stage badge + a "Move to…" `<select>` (mirrors the board card's control). OQ-4: a
@@ -83,12 +83,12 @@ export function StageMover({
         <label htmlFor={selectId} className="sr-only">
           Move candidate to a different stage
         </label>
-        <select
+        <Select
           id={selectId}
           value={candidate.status}
           disabled={pending}
           onChange={(e) => move(e.target.value as CandidateStatus)}
-          className={`${selectClass} max-w-xs`}
+          className="max-w-xs"
         >
           {options.map((o) => (
             <option key={o.code} value={o.code} disabled={!o.valid && !o.current}>
@@ -96,7 +96,7 @@ export function StageMover({
               {!o.valid && !o.current ? " — blocked" : ""}
             </option>
           ))}
-        </select>
+        </Select>
       </div>
       {blockedReasons.length > 0 ? (
         <ul role="alert" className="mt-0.5 list-disc pl-5 text-xs text-red">

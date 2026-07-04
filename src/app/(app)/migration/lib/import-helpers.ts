@@ -11,7 +11,6 @@ const IMPORTABLE_ACTIONS: ReadonlySet<ImportRowReport["action"]> = new Set([
   "add",
   "update",
   "softDelete",
-  "flag",
 ]);
 
 /**

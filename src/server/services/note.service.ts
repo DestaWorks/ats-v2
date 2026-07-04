@@ -7,6 +7,7 @@ import { withTransaction } from "@/server/db/with-transaction";
 import { candidateRepository } from "@/server/repositories/candidate.repository";
 import { noteRepository, type NoteRow } from "@/server/repositories/note.repository";
 import { AppError } from "@/server/http/app-error";
+import { toIso } from "@/lib/utils/iso";
 
 /** Minimal viewer shape the note scope needs (kept structural for a future client-portal viewer). */
 export interface NoteViewer {
@@ -33,7 +34,7 @@ export function toNoteDTO(row: NoteRow): NoteDTO {
     noteType: row.noteType as NoteType,
     authorId: row.authorId,
     authorName: row.authorName,
-    createdAt: row.createdAt.toISOString(),
+    createdAt: toIso(row.createdAt),
   };
 }
 

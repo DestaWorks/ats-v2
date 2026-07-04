@@ -5,10 +5,7 @@
  */
 import type { CandidateStatus } from "@/lib/constants";
 import type { BoardResponse } from "@/lib/validation/pipeline";
-
-interface ApiErrorBody {
-  error?: { code?: string; message?: string };
-}
+import type { ApiErrorBody } from "@/lib/api/client";
 
 export interface MoveFailure {
   code: string;

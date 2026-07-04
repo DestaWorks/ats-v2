@@ -17,12 +17,9 @@ import { VariantPicker } from "./variant-picker";
 import { UploadZone } from "./upload-zone";
 import { ReviewForm } from "./review/review-form";
 import { capResumeText, extractPdfText } from "./lib/pdf-extract";
+import type { ApiErrorBody } from "@/lib/api/client";
 
 type Step = "pick" | "upload" | "extracting" | "review" | "saved";
-
-interface ApiErrorBody {
-  error?: { code?: string; message?: string };
-}
 
 /** Turn an API error envelope into a user-safe message (no PII, no raw provider text). */
 function messageForError(body: ApiErrorBody, fallback: string): string {

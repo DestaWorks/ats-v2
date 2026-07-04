@@ -15,20 +15,16 @@ import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Card } from "@/components/ui/card";
 import { fieldError } from "./lib/form-error";
-import { inputClass, selectClass } from "./lib/field-styles";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { messageForFailure, postVerifyLicense } from "./lib/detail-fetch";
+import { formatDate } from "@/lib/utils/format-date";
 
 /** Status dot color: Active = green, negative statuses = red, "Not Verified" = orange. */
 function statusDotClass(status: string): string {
   if (status === "Active") return "bg-green";
   if (status === "Not Verified") return "bg-orange";
   return "bg-red";
-}
-
-function formatDate(iso: string | null): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString();
 }
 
 export function LicenseTab({
@@ -137,19 +133,18 @@ export function LicenseTab({
               error={fieldError(form, "licenseStatus")}
               required
             >
-              <select id="lic-status" className={selectClass} {...form.register("licenseStatus")}>
+              <Select id="lic-status" {...form.register("licenseStatus")}>
                 {LICENSE_STATUSES.map((s) => (
                   <option key={s} value={s}>
                     {s}
                   </option>
                 ))}
-              </select>
+              </Select>
             </Field>
             <Field label="Expiry" htmlFor="lic-expiry" error={fieldError(form, "licenseExpiry")}>
-              <input
+              <Input
                 id="lic-expiry"
                 type="date"
-                className={inputClass}
                 {...form.register("licenseExpiry", { setValueAs: emptyToNull })}
               />
             </Field>
@@ -159,9 +154,8 @@ export function LicenseTab({
                 htmlFor="lic-number"
                 error={fieldError(form, "licenseNumber")}
               >
-                <input
+                <Input
                   id="lic-number"
-                  className={inputClass}
                   {...form.register("licenseNumber", { setValueAs: emptyToNull })}
                 />
               </Field>

@@ -20,7 +20,6 @@ const ACTION_TONE: Record<ImportAction, BadgeTone> = {
   update: "navy",
   softDelete: "neutral",
   skip: "neutral",
-  flag: "amber",
   error: "danger",
 };
 
@@ -29,7 +28,6 @@ const ACTION_LABEL: Record<ImportAction, string> = {
   update: "update",
   softDelete: "soft-delete",
   skip: "skip",
-  flag: "flag",
   error: "error",
 };
 
@@ -107,15 +105,11 @@ export function ReportView({ report }: { report: ImportReport }) {
             columns={["Legacy ID", "Name", "Action", "Reasons"]}
           >
             {report.rows.map((r) => {
-              const prominent = r.action === "error" || r.action === "flag";
+              const prominent = r.action === "error";
               return (
                 <tr
                   key={r.legacyId}
-                  className={cn(
-                    "hover:bg-black/[0.02]",
-                    r.action === "error" && "bg-red/5",
-                    r.action === "flag" && "bg-orange/5",
-                  )}
+                  className={cn("hover:bg-black/[0.02]", r.action === "error" && "bg-red/5")}
                 >
                   <Td className="font-mono text-xs">{r.legacyId}</Td>
                   <Td className="font-medium">{r.name}</Td>

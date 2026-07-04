@@ -44,12 +44,3 @@ export async function requireCapability(capability: Capability): Promise<AuthUse
   }
   return user;
 }
-
-/** Require one of the given roles (403 otherwise). Prefer `requireCapability` where possible. */
-export async function requireRole(...roles: Role[]): Promise<AuthUser> {
-  const user = await requireUser();
-  if (!roles.includes(user.role)) {
-    throw new AppError("FORBIDDEN", "Insufficient role");
-  }
-  return user;
-}

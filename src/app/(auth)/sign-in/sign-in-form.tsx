@@ -8,6 +8,8 @@ import { useZodForm } from "@/lib/forms/use-zod-form";
 import { signInSchema, type SignInInput } from "@/lib/validation/auth";
 import { Field } from "@/components/ui/field";
 import { Button } from "@/components/ui/button";
+import { controlClass } from "@/components/ui/input";
+import { cn } from "@/lib/utils/cn";
 
 export function SignInForm({ googleEnabled }: { googleEnabled: boolean }) {
   const router = useRouter();
@@ -32,8 +34,7 @@ export function SignInForm({ googleEnabled }: { googleEnabled: boolean }) {
     await signIn.social({ provider: "google", callbackURL: "/dashboard" });
   }
 
-  const inputClass =
-    "rounded-md border border-black/15 px-3 py-2 text-sm focus:ring-2 focus:ring-navy focus:outline-none";
+  const inputClass = cn(controlClass, "px-3 py-2 text-sm");
 
   return (
     <div className="flex w-full max-w-sm flex-col gap-5">

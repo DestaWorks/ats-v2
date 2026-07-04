@@ -41,16 +41,9 @@ describe("detectFormat", () => {
 });
 
 describe("importableCount", () => {
-  it("counts add/update/softDelete/flag and excludes error/skip", () => {
-    const r = report([
-      row("add"),
-      row("update"),
-      row("softDelete"),
-      row("flag"),
-      row("error"),
-      row("skip"),
-    ]);
-    expect(importableCount(r)).toBe(4);
+  it("counts add/update/softDelete and excludes error/skip", () => {
+    const r = report([row("add"), row("update"), row("softDelete"), row("error"), row("skip")]);
+    expect(importableCount(r)).toBe(3);
   });
 
   it("is 0 when every row errors or skips", () => {

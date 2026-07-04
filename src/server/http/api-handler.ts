@@ -2,6 +2,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import { ZodError } from "zod";
 import { AppError } from "./app-error";
+import type { FieldIssue } from "@/lib/api/client";
 
 /**
  * Route wrapper for Next.js App Router handlers. Centralizes error mapping so every
@@ -18,12 +19,6 @@ import { AppError } from "./app-error";
 
 /** The shape of a route function `apiHandler` wraps. `ctx` is Next's optional route context. */
 type RouteFn<Ctx> = (req: Request, ctx: Ctx) => Promise<Response> | Response;
-
-/** A single Zod validation failure, flattened to a client-safe `{ path, message }`. */
-interface FieldIssue {
-  path: string;
-  message: string;
-}
 
 /** JSON success helper — the counterpart to the error envelope. */
 export function json<T>(data: T, status = 200): Response {
