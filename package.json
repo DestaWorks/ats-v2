@@ -21,7 +21,9 @@
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
     "db:seed": "NODE_OPTIONS=--conditions=react-server tsx scripts/seed-owner.ts",
-    "db:seed:clients": "NODE_OPTIONS=--conditions=react-server tsx scripts/seed-clients.ts"
+    "db:seed:clients": "NODE_OPTIONS=--conditions=react-server tsx scripts/seed-clients.ts",
+    "db:seed:demo": "NODE_OPTIONS=--conditions=react-server tsx scripts/seed-demo.ts",
+    "db:status": "NODE_OPTIONS=--conditions=react-server tsx scripts/db-status.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.7",

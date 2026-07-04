@@ -164,6 +164,52 @@ describe("candidateService.move", () => {
   });
 });
 
+describe("candidateService.bulkMove", () => {
+  it("is partial-success: valid ids move, blocked ids are reported, NONE bypass the gate", async () => {
+    // "ok" is a complete Clinical candidate; "bad" is missing credential + license state, so
+    // QUALIFIED_PRESCREEN is gated for it. Both ids are attempted against the same gate.
+    h.candidateRepo.findById.mockImplementation(async (id: string) =>
+      id === "ok"
+        ? candidate({ id: "ok" })
+        : candidate({ id: "bad", credential: null, licenseState: null }),
+    );
+    h.candidateRepo.update.mockResolvedValue({ id: "ok", status: "QUALIFIED_PRESCREEN" });
+
+    const result = await candidateService.bulkMove(
+      ["ok", "bad"],
+      "QUALIFIED_PRESCREEN",
+      h.user as AuthUser,
+    );
+
+    expect(result.moved).toEqual(["ok"]);
+    expect(result.blocked).toEqual([
+      { id: "bad", reason: "Credential required; License state required" },
+    ]);
+    // Every id ran the gate (findById for both); only the allowed one wrote (no bypass, per-txn).
+    expect(h.candidateRepo.findById).toHaveBeenCalledWith("ok");
+    expect(h.candidateRepo.findById).toHaveBeenCalledWith("bad");
+    expect(h.candidateRepo.update).toHaveBeenCalledTimes(1);
+    const [uid] = h.candidateRepo.update.mock.calls[0]!;
+    expect(uid).toBe("ok");
+  });
+
+  it("collects a not-found id in `blocked` instead of throwing", async () => {
+    h.candidateRepo.findById.mockImplementation(async (id: string) =>
+      id === "missing" ? null : candidate({ id }),
+    );
+    h.candidateRepo.update.mockResolvedValue({ id: "c1" });
+
+    const result = await candidateService.bulkMove(
+      ["missing", "c1"],
+      "CLIENT_INTERVIEW",
+      h.user as AuthUser,
+    );
+
+    expect(result.moved).toEqual(["c1"]);
+    expect(result.blocked).toEqual([{ id: "missing", reason: "Candidate not found" }]);
+  });
+});
+
 describe("candidateService.softDelete", () => {
   it("sets deletedAt + deletedById via the repository", async () => {
     h.candidateRepo.findById.mockResolvedValue(candidate());

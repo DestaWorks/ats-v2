@@ -1,20 +1,36 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/server/auth/guards";
-import { hasCapability } from "@/lib/constants";
+import { candidateService } from "@/server/services/candidate.service";
+import type { CandidateCardDTO } from "@/lib/validation/pipeline";
+import { EmptyState } from "@/components/ui/empty-state";
+import { cn } from "@/lib/utils/cn";
+import { STATUS_BG } from "../pipeline/lib/status-style";
+import { FunnelBar } from "./funnel-bar";
+import { StatCard } from "./stat-card";
 import { SignOutButton } from "./sign-out-button";
 
 /**
- * Protected route — proves server-side auth + capability gating. Reads the session on
- * the server (role comes from the DB, never the client) and gates content by capability.
+ * Dashboard (RSC). Reads the funnel-grouped board directly (`candidateService.listBoard`) and
+ * renders the pipeline funnel (bar per active stage), headline stats (active / overdue / stuck),
+ * a "needs attention" list (overdue + stuck cards — the board DTO carries no `createdAt`, so this
+ * is more useful than an arbitrary "recent"), and a prominent link into the board.
  */
 export default async function DashboardPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/sign-in");
 
-  const canViewReports = hasCapability(user.role, "viewReports");
+  const board = await candidateService.listBoard({}, user);
+  const maxCount = board.columns.reduce((m, c) => Math.max(m, c.count), 0);
+
+  const attention: CandidateCardDTO[] = board.columns
+    .flatMap((c) => c.candidates)
+    .filter((c) => c.isOverdue || c.isStuck)
+    .sort((a, b) => b.daysInStage - a.daysInStage)
+    .slice(0, 8);
 
   return (
-    <main className="mx-auto flex max-w-2xl flex-col gap-6 p-8">
+    <main className="mx-auto flex max-w-4xl flex-col gap-6 p-8">
       <header className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-navy">Dashboard</h1>
@@ -25,21 +41,67 @@ export default async function DashboardPage() {
         <SignOutButton />
       </header>
 
+      <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <StatCard label="Total" value={board.meta.total} />
+        <StatCard label="Active" value={board.meta.active} />
+        <StatCard label="Overdue" value={board.meta.overdue} tone="red" />
+        <StatCard label="Stuck >7d" value={board.meta.stuck} tone="orange" />
+      </section>
+
       <section className="rounded-xl border border-black/5 bg-white p-5">
-        <h2 className="text-sm font-bold tracking-wide text-navy uppercase">Capability check</h2>
-        <p className="mt-2 text-sm text-charcoal">
-          Reports (leadership capability):{" "}
-          {canViewReports ? (
-            <span className="font-semibold text-green">visible for your role</span>
-          ) : (
-            <span className="font-semibold text-gray">hidden for your role</span>
-          )}
-        </p>
-        <p className="mt-2 text-xs text-gray">
-          UI hiding is UX only — the same check is enforced server-side by
-          <code className="mx-1 rounded bg-label px-1 text-navy">requireCapability</code>
-          on every guarded route/endpoint.
-        </p>
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-sm font-bold tracking-wide text-navy uppercase">Pipeline funnel</h2>
+          <Link
+            href="/pipeline"
+            className="rounded-md bg-navy px-3 py-1.5 text-sm font-semibold text-white transition hover:opacity-90"
+          >
+            Open pipeline board →
+          </Link>
+        </div>
+        {board.meta.active === 0 ? (
+          <EmptyState
+            title="No active candidates"
+            description="Add candidates via the résumé flow to populate the pipeline."
+          />
+        ) : (
+          <div className="flex flex-col gap-2">
+            {board.columns.map((col) => (
+              <FunnelBar
+                key={col.status}
+                status={col.status}
+                label={col.label}
+                count={col.count}
+                max={maxCount}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="rounded-xl border border-black/5 bg-white p-5">
+        <h2 className="mb-3 text-sm font-bold tracking-wide text-navy uppercase">
+          Needs attention
+        </h2>
+        {attention.length === 0 ? (
+          <p className="text-sm text-gray">Nothing overdue or stuck — the pipeline is healthy.</p>
+        ) : (
+          <ul className="flex flex-col divide-y divide-black/5">
+            {attention.map((c) => (
+              <li key={c.id} className="flex items-center justify-between gap-3 py-2">
+                <span className="flex items-center gap-2">
+                  <span aria-hidden className={cn("h-2 w-2 rounded-full", STATUS_BG[c.status])} />
+                  <span className="text-sm font-medium text-charcoal">{c.name}</span>
+                  <span className="text-xs text-gray">{c.clientName ?? "Unassigned"}</span>
+                </span>
+                <span
+                  className={cn("text-xs font-semibold", c.isOverdue ? "text-red" : "text-orange")}
+                >
+                  {c.isOverdue ? "overdue" : "stuck"} · {c.daysInStage}d
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
     </main>
   );
