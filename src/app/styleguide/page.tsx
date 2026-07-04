@@ -35,6 +35,7 @@ import { Field } from "@/components/ui/field";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { Table, Td } from "@/components/ui/table";
 import { useZodForm } from "@/lib/forms/use-zod-form";
 import { signInSchema, type SignInInput } from "@/lib/validation/auth";
 
@@ -164,6 +165,29 @@ export default function StyleguidePage() {
             <code>as</code> (section / aside) and padding/layout come from <code>className</code>.
           </p>
         </Card>
+      </Section>
+
+      <Section title="Table">
+        <Table caption="Example candidates" columns={["Legacy ID", "Name", "Status"]}>
+          <tr className="hover:bg-black/[0.02]">
+            <Td className="font-mono text-xs">L-001</Td>
+            <Td className="font-medium">Ada Lovelace</Td>
+            <Td>
+              <Badge tone="success" size="sm">
+                add
+              </Badge>
+            </Td>
+          </tr>
+          <tr className="hover:bg-black/[0.02]">
+            <Td className="font-mono text-xs">L-002</Td>
+            <Td className="font-medium">Alan Turing</Td>
+            <Td>
+              <Badge tone="amber" size="sm">
+                flag
+              </Badge>
+            </Td>
+          </tr>
+        </Table>
       </Section>
 
       <Section title="Display states">
