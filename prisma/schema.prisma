@@ -215,6 +215,11 @@ model Candidate {
   @@index([licenseExpiry])
   @@index([status, deletedAt])
   @@index([email])
+  // Keyset pagination (search-pagination wave). Composite indexes serve the (where..., orderBy)
+  // tuples of the list + board keyset queries so deep pages stay O(page), not a growing scan.
+  @@index([deletedAt, createdAt, id]) // list, createdAt sorts (Newest/Oldest)
+  @@index([status, deletedAt, createdAt, id]) // board per-column keyset (status + createdAt desc, id)
+  @@index([status, deletedAt, stageEnteredAt]) // stuck/overdue thresholds + listStaleActive
   @@map("candidates")
 }
 

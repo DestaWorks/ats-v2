@@ -10,7 +10,9 @@
  */
 import { z } from "zod";
 import {
+  ACTIVE_STATUS_CODES,
   ALL_STATUS_CODES,
+  LICENSE_STATUSES,
   TRACKS,
   type CandidateStatus,
   type LicenseStatus,
@@ -41,21 +43,42 @@ export interface CandidateCardDTO {
   score: number | null;
 }
 
-/** One of the 9 active-stage columns (always present, even when empty). */
+/**
+ * One of the 9 active-stage columns (always present, even when empty). `count` is the TRUE total
+ * for this status (from the filtered `groupBy`); `candidates` is the FIRST page only, with
+ * `nextCursor`/`hasMore` driving the per-column "Load more" (a `ColumnPageDTO` appends the rest).
+ */
 export interface BoardColumn {
   status: CandidateStatus;
   label: string;
   stageOrder: number;
   count: number;
   candidates: CandidateCardDTO[];
+  /**
+   * Per-column keyset cursor for the next page; `null` ⇒ this column is fully loaded. Optional at
+   * the type level (like `BoardTerminal`) so existing board consumers compile unchanged; the board
+   * service ALWAYS populates it.
+   */
+  nextCursor?: string | null;
+  hasMore?: boolean;
 }
 
-/** A terminal state's summary — `candidates` present only when `includeTerminal`. */
+/** A terminal state's summary — `candidates` present only when `includeTerminal` (then paginated). */
 export interface BoardTerminal {
   status: CandidateStatus;
   label: string;
   count: number;
   candidates?: CandidateCardDTO[];
+  nextCursor?: string | null;
+  hasMore?: boolean;
+}
+
+/** One column's load-more page (returned by `GET /api/candidates?column=<status>&cursor=<c>`). */
+export interface ColumnPageDTO {
+  status: CandidateStatus;
+  items: CandidateCardDTO[];
+  nextCursor: string | null;
+  hasMore: boolean;
 }
 
 /** The funnel-grouped board payload the client renders directly (no client-side grouping). */
@@ -96,6 +119,26 @@ const candidateStatusSchema = z.enum(
   ALL_STATUS_CODES as readonly [CandidateStatus, ...CandidateStatus[]],
 );
 
+/** Only the 9 active stages are paginatable columns (a `column=` load-more targets one of them). */
+const activeStatusSchema = z.enum(
+  ACTIVE_STATUS_CODES as readonly [CandidateStatus, ...CandidateStatus[]],
+);
+
+/** A query-string presence flag — only "1"/"true" enable it (mirrors `includeTerminal`). */
+export const boolFlagSchema = z.preprocess((v) => v === "1" || v === "true", z.boolean());
+
+/** Comma-separated `tags=a,b,c` → a trimmed non-empty array, or `undefined` when absent/empty. */
+export const tagsParamSchema = z.preprocess(
+  (v) =>
+    typeof v === "string" && v.length > 0
+      ? v
+          .split(",")
+          .map((t) => t.trim())
+          .filter(Boolean)
+      : undefined,
+  z.array(z.string().min(1)).optional(),
+);
+
 /** Body for `POST /api/candidates/:id/move`. */
 export const moveInputSchema = z.object({
   toStatus: candidateStatusSchema,
@@ -109,13 +152,49 @@ export const bulkMoveInputSchema = z.object({
 });
 export type BulkMoveInput = z.infer<typeof bulkMoveInputSchema>;
 
-/** Query for `GET /api/candidates` (board read). All filters optional. */
+/**
+ * Query for `GET /api/candidates` (board read + per-column load-more). All filters optional.
+ * `column` (+ `cursor`) switches to single-column load-more mode → a `ColumnPageDTO`. `mine` is a
+ * presence flag — the route resolves `createdById` from the SESSION, never a client-supplied id.
+ */
 export const boardQuerySchema = z.object({
   status: candidateStatusSchema.optional(),
   track: z.enum(TRACKS).optional(),
   clientId: z.string().min(1).optional(),
   search: z.string().trim().min(1).max(100).optional(),
+  tags: tagsParamSchema,
+  licenseStatus: z.enum(LICENSE_STATUSES).optional(),
+  mine: boolFlagSchema,
+  overdue: boolFlagSchema,
+  stuck: boolFlagSchema,
   // Query strings are always strings — only "1"/"true" enable terminal card lists.
-  includeTerminal: z.preprocess((v) => v === "1" || v === "true", z.boolean()),
+  includeTerminal: boolFlagSchema,
+  // Per-column load-more: the target column + its opaque keyset cursor.
+  column: activeStatusSchema.optional(),
+  cursor: z.string().min(1).optional(),
 });
 export type BoardQuery = z.infer<typeof boardQuerySchema>;
+
+/**
+ * Query for `GET /api/candidates/list` (the flat browse list's load-more). Mirrors the board
+ * filters + a DB-backed `sort` (Newest/Oldest; Name A–Z deferred per OQ-4) + the keyset `cursor`.
+ */
+export const listQuerySchema = z.object({
+  status: candidateStatusSchema.optional(),
+  track: z.enum(TRACKS).optional(),
+  clientId: z.string().min(1).optional(),
+  search: z.string().trim().min(1).max(100).optional(),
+  tags: tagsParamSchema,
+  licenseStatus: z.enum(LICENSE_STATUSES).optional(),
+  mine: boolFlagSchema,
+  overdue: boolFlagSchema,
+  stuck: boolFlagSchema,
+  sort: z.enum(["newest", "oldest"]).default("newest"),
+  cursor: z.string().min(1).optional(),
+});
+export type ListQuery = z.infer<typeof listQuerySchema>;
+
+/** Map the list's `sort` query value to the repository's keyset `orderBy`. */
+export function listSortToOrderBy(sort: "newest" | "oldest"): "createdAt_desc" | "createdAt_asc" {
+  return sort === "oldest" ? "createdAt_asc" : "createdAt_desc";
+}

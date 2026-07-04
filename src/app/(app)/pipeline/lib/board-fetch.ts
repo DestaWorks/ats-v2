@@ -4,7 +4,7 @@
  * resume flow's `messageForError` pattern. No PII ever crosses these (the board DTO omits it).
  */
 import type { CandidateStatus } from "@/lib/constants";
-import type { BoardResponse } from "@/lib/validation/pipeline";
+import type { BoardResponse, ColumnPageDTO } from "@/lib/validation/pipeline";
 import type { ApiErrorBody } from "@/lib/api/client";
 
 export interface MoveFailure {
@@ -23,6 +23,26 @@ export async function fetchBoard(params: URLSearchParams): Promise<BoardResponse
   });
   if (!res.ok) throw new Error("Failed to load the pipeline board.");
   return (await res.json()) as BoardResponse;
+}
+
+/**
+ * Fetch the next per-column keyset page (the column "Load more"). Carries the board's current URL
+ * filters (`params`) plus the target `column` + its opaque `cursor`; returns a single-column
+ * `ColumnPageDTO`. The board appends `items` to that column and advances its `nextCursor`/`hasMore`.
+ */
+export async function fetchColumnPage(
+  params: URLSearchParams,
+  column: CandidateStatus,
+  cursor: string,
+): Promise<ColumnPageDTO> {
+  const out = new URLSearchParams(params.toString());
+  out.set("column", column);
+  out.set("cursor", cursor);
+  const res = await fetch(`/api/candidates?${out.toString()}`, {
+    headers: { Accept: "application/json" },
+  });
+  if (!res.ok) throw new Error("Failed to load more candidates for this column.");
+  return (await res.json()) as ColumnPageDTO;
 }
 
 /** POST a single gated move. On `422 STAGE_BLOCKED` the reasons come back split for a list. */

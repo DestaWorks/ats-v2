@@ -17,11 +17,13 @@ import { toast } from "sonner";
 import { statusLabel, type CandidateStatus } from "@/lib/constants";
 import type { BoardResponse, CandidateCardDTO } from "@/lib/validation/pipeline";
 import { Spinner } from "@/components/ui/spinner";
+import { FilterChip } from "../lib/filter-chip";
+import { mergePage } from "../candidates/lib/list-pagination";
 import { BoardColumn } from "./board-column";
 import { BoardFilters, type ClientOption } from "./board-filters";
 import { TerminalRail } from "./terminal-rail";
 import { applyBoardMove } from "./lib/optimistic-move";
-import { fetchBoard, postMove } from "./lib/board-fetch";
+import { fetchBoard, fetchColumnPage, postMove } from "./lib/board-fetch";
 import { TRACK_BADGE } from "./lib/status-style";
 
 function findCard(board: BoardResponse, id: string): CandidateCardDTO | null {
@@ -53,6 +55,8 @@ export function PipelineBoard({
   const [activeCard, setActiveCard] = useState<CandidateCardDTO | null>(null);
   const includeTerminal = useRef(false);
   const [terminalLoading, setTerminalLoading] = useState(false);
+  const [hotOnly, setHotOnly] = useState(false);
+  const [loadingColumn, setLoadingColumn] = useState<Record<string, boolean>>({});
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -131,6 +135,35 @@ export function PipelineBoard({
       .finally(() => setTerminalLoading(false));
   }
 
+  // Per-column "Load more" — fetch the next keyset page for one column and append (deduped) to its
+  // cards, advancing that column's cursor. Reads the cursor from BASE `board` (drag moves never touch
+  // it) and commits via `setBoard`, so `useOptimistic` re-derives cleanly and in-flight moves survive.
+  function onLoadMoreColumn(status: CandidateStatus) {
+    const col = board.columns.find((c) => c.status === status);
+    if (!col?.nextCursor || loadingColumn[status]) return;
+    setLoadingColumn((prev) => ({ ...prev, [status]: true }));
+    const params = new URLSearchParams(paramsKey);
+    fetchColumnPage(params, status, col.nextCursor)
+      .then((page) => {
+        setBoard((prev) => ({
+          ...prev,
+          columns: prev.columns.map((c) =>
+            c.status === status
+              ? {
+                  ...c,
+                  candidates: mergePage(c.candidates, page.items),
+                  nextCursor: page.nextCursor,
+                  hasMore: page.hasMore,
+                }
+              : c,
+          ),
+        }));
+        announce(`Loaded ${page.items.length} more in ${statusLabel(status)}.`);
+      })
+      .catch(() => toast.error("Couldn't load more candidates."))
+      .finally(() => setLoadingColumn((prev) => ({ ...prev, [status]: false })));
+  }
+
   function onDragStart(e: DragStartEvent) {
     setActiveCard(findCard(optimisticBoard, String(e.active.id)));
   }
@@ -149,6 +182,13 @@ export function PipelineBoard({
   return (
     <div className="flex flex-col gap-4">
       <BoardFilters clients={clients} />
+
+      {/* Page-local "Hot" lens — filters the loaded cards in every column (does not re-query). */}
+      <div className="flex flex-wrap items-center gap-2">
+        <FilterChip pressed={hotOnly} onToggle={() => setHotOnly((v) => !v)}>
+          Hot (this page)
+        </FilterChip>
+      </div>
 
       {error ? (
         <p role="alert" className="rounded-md bg-red/5 px-3 py-2 text-sm text-red">
@@ -181,6 +221,9 @@ export function PipelineBoard({
               onMove={onMove}
               busy={pending}
               isDragActive={activeCard !== null}
+              hotOnly={hotOnly}
+              onLoadMore={onLoadMoreColumn}
+              loadingMore={loadingColumn[column.status] ?? false}
             />
           ))}
 

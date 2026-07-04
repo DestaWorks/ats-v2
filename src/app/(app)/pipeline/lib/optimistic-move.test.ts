@@ -52,6 +52,29 @@ describe("moveCardBetweenColumns", () => {
     expect(moved.isStuck).toBe(false);
   });
 
+  it("preserves a paginated column's TRUE count (±1), not the loaded page length (B1)", () => {
+    // count ≫ loaded cards — the paginated case the old `count: candidates.length` collapsed.
+    const columns: BoardColumn[] = [
+      {
+        status: "NEW_CANDIDATE",
+        label: "New",
+        stageOrder: 0,
+        count: 100,
+        candidates: [card("a", "NEW_CANDIDATE"), card("b", "NEW_CANDIDATE")],
+      },
+      {
+        status: "QUALIFIED_PRESCREEN",
+        label: "Q",
+        stageOrder: 1,
+        count: 50,
+        candidates: [card("c", "QUALIFIED_PRESCREEN")],
+      },
+    ];
+    const { columns: next } = moveCardBetweenColumns(columns, "a", "QUALIFIED_PRESCREEN");
+    expect(next.find((c) => c.status === "NEW_CANDIDATE")!.count).toBe(99); // 100−1, not loaded len 1
+    expect(next.find((c) => c.status === "QUALIFIED_PRESCREEN")!.count).toBe(51); // 50+1, not 2
+  });
+
   it("removes the card from its column when the target is terminal", () => {
     const columns = baseColumns();
     const { columns: next } = moveCardBetweenColumns(columns, "b", "NOT_QUALIFIED");
@@ -108,6 +131,30 @@ describe("applyBoardMove", () => {
     expect(next.meta.overdue).toBe(0);
     expect(next.meta.stuck).toBe(0);
     expect(next.meta.total).toBe(5);
+  });
+
+  it("adjusts meta by delta on a paginated board — not re-summed from loaded pages (M1)", () => {
+    const b: BoardResponse = {
+      columns: [
+        {
+          status: "NEW_CANDIDATE",
+          label: "New",
+          stageOrder: 0,
+          count: 100,
+          candidates: [card("x", "NEW_CANDIDATE", true)], // overdue + stuck
+        },
+        { status: "QUALIFIED_PRESCREEN", label: "Q", stageOrder: 1, count: 50, candidates: [] },
+      ],
+      terminal: [],
+      meta: { total: 150, active: 150, overdue: 30, stuck: 20 },
+    };
+    const next = applyBoardMove(b, "x", "QUALIFIED_PRESCREEN");
+    // active→active keeps active; moved card was overdue+stuck → each −1 (NOT collapsed to loaded ≈0)
+    expect(next.meta.active).toBe(150);
+    expect(next.meta.overdue).toBe(29);
+    expect(next.meta.stuck).toBe(19);
+    expect(next.columns.find((c) => c.status === "NEW_CANDIDATE")!.count).toBe(99);
+    expect(next.columns.find((c) => c.status === "QUALIFIED_PRESCREEN")!.count).toBe(51);
   });
 
   it("bumps the terminal count and list when the target terminal was loaded", () => {
