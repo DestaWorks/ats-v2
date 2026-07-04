@@ -10,16 +10,9 @@ import {
 } from "react-hook-form";
 import type { ResumeData, ResumeMatch } from "@/lib/validation/resume";
 import { cn } from "@/lib/utils/cn";
+import { Input } from "@/components/ui/input";
 import { defaultConfirmed } from "../lib/confirm-gate";
-import {
-  attachIdFor,
-  inputClass,
-  SaveBar,
-  Section,
-  StringListEditor,
-  TextArea,
-  TextField,
-} from "./shared";
+import { attachIdFor, SaveBar, Section, StringListEditor, TextArea, TextField } from "./shared";
 
 /**
  * Shared, variant-agnostic editors for the fields present on every résumé variant
@@ -154,10 +147,7 @@ function BulletsEditor<T extends FieldValues>({
       <span className="text-xs font-medium text-gray">Bullets</span>
       {fields.map((field, bulletIndex) => (
         <div key={field.id} className="flex items-center gap-2">
-          <input
-            {...form.register(`experience.${index}.bullets.${bulletIndex}` as Path<T>)}
-            className={inputClass}
-          />
+          <Input {...form.register(`experience.${index}.bullets.${bulletIndex}` as Path<T>)} />
           <button
             type="button"
             onClick={() => remove(bulletIndex)}

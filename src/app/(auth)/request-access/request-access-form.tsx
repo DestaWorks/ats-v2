@@ -8,6 +8,8 @@ import { accessRequestSchema, type AccessRequestInput } from "@/lib/validation/a
 import { Field } from "@/components/ui/field";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
+import { controlClass } from "@/components/ui/input";
+import { cn } from "@/lib/utils/cn";
 import { submitAccessRequest } from "./actions";
 
 export function RequestAccessForm() {
@@ -27,8 +29,7 @@ export function RequestAccessForm() {
     setSent(true);
   }
 
-  const inputClass =
-    "rounded-md border border-black/15 px-3 py-2 text-sm focus:ring-2 focus:ring-navy focus:outline-none";
+  const inputClass = cn(controlClass, "px-3 py-2 text-sm");
 
   if (sent) {
     return (

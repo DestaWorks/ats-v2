@@ -4,6 +4,7 @@ import { useId, useRef, useState } from "react";
 import { RESUME_VARIANT_LABELS, type ResumeVariant } from "@/lib/constants/documents";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
+import { controlClass } from "@/components/ui/input";
 import { cn } from "@/lib/utils/cn";
 
 /**
@@ -121,7 +122,7 @@ export function UploadZone({
           value={pasted}
           onChange={(event) => setPasted(event.target.value)}
           placeholder="Paste the candidate's résumé text here (only if no PDF available)…"
-          className="resize-y rounded-md border border-black/15 px-3 py-2 font-mono text-xs focus:ring-2 focus:ring-navy focus:outline-none"
+          className={cn(controlClass, "resize-y px-3 py-2 font-mono text-xs")}
         />
         {pasted.trim().length > 0 ? (
           <p className="text-xs text-gray">{pasted.length} characters</p>

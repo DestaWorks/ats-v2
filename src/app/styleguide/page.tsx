@@ -33,6 +33,10 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
 import { Field } from "@/components/ui/field";
 import { Button } from "@/components/ui/button";
+import { Input, controlClass } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils/cn";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Table, Td } from "@/components/ui/table";
@@ -215,7 +219,7 @@ export default function StyleguidePage() {
               id="sg-email"
               type="email"
               {...register("email")}
-              className="rounded-md border border-black/15 px-3 py-2 text-sm focus:ring-2 focus:ring-navy focus:outline-none"
+              className={cn(controlClass, "px-3 py-2 text-sm")}
             />
           </Field>
           <Field label="Password" htmlFor="sg-password" required error={errors.password?.message}>
@@ -223,13 +227,36 @@ export default function StyleguidePage() {
               id="sg-password"
               type="password"
               {...register("password")}
-              className="rounded-md border border-black/15 px-3 py-2 text-sm focus:ring-2 focus:ring-navy focus:outline-none"
+              className={cn(controlClass, "px-3 py-2 text-sm")}
             />
           </Field>
           <Button type="submit" disabled={isSubmitting} className="self-start">
             Validate
           </Button>
         </form>
+      </Section>
+
+      <Section title="Form controls (Input · Select · Textarea)">
+        <div className="flex max-w-sm flex-col gap-3">
+          <Field label="Input" htmlFor="sg-input">
+            <Input id="sg-input" placeholder="Text input" />
+          </Field>
+          <Field label="Select" htmlFor="sg-select">
+            <Select id="sg-select" defaultValue="">
+              <option value="">Choose…</option>
+              <option value="a">Option A</option>
+              <option value="b">Option B</option>
+            </Select>
+          </Field>
+          <Field label="Textarea" htmlFor="sg-textarea">
+            <Textarea
+              id="sg-textarea"
+              rows={3}
+              className="resize-y"
+              placeholder="Multi-line text"
+            />
+          </Field>
+        </div>
       </Section>
 
       <Section title="Drag & drop (dnd-kit — keyboard accessible)">

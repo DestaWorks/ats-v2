@@ -7,7 +7,7 @@ import type { Prisma } from "@/generated/prisma/client";
  * SECURITY: `before`/`after` capture entity snapshots that may hold PII/PHI (candidate
  * names, emails, phones, license numbers, NPI). They are persisted for the audit trail
  * but MUST NEVER be written to app / observability logs. Reads of the trail are
- * capability-gated (`viewAuditLog`) — see `server/services/audit.service.ts`.
+ * capability-gated (`viewAudit`) — see `server/services/audit.service.ts`.
  */
 export interface WriteAuditParams {
   entity: string;

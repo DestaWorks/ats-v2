@@ -13,9 +13,6 @@ import {
 } from "@/lib/constants";
 import type {
   CandidateDetailDTO,
-  CandidateProfileDTO,
-  DocumentSummaryDTO,
-  StageEventDTO,
   UpdateCandidateInput,
   VerifyLicenseInput,
 } from "@/lib/validation/candidate";
@@ -33,16 +30,19 @@ import { candidateRepository, type CandidateRow } from "@/server/repositories/ca
 import { clientRepository } from "@/server/repositories/client.repository";
 import { documentRepository } from "@/server/repositories/document.repository";
 import { noteRepository } from "@/server/repositories/note.repository";
-import {
-  stageHistoryRepository,
-  type StageHistoryRow,
-} from "@/server/repositories/stage-history.repository";
+import { stageHistoryRepository } from "@/server/repositories/stage-history.repository";
 import { checkStageGate } from "@/lib/rules/stage-gates";
 import { getDaysInStage, isOverdue, isStuck } from "@/lib/rules/stage-timing";
 import { AppError } from "@/server/http/app-error";
 import { visibleNotes, toNoteDTO } from "./note.service";
-import { toDocumentDTO, type DocumentDTO } from "./document.dto";
-import { toCandidateDTO, toRuleCandidate, type CandidateDTO } from "./candidate.dto";
+import { toDocumentDTO } from "./document.dto";
+import {
+  toCandidateDTO,
+  toCandidateProfileDTO,
+  toDocumentSummaryDTO,
+  toRuleCandidate,
+  toStageEventDTO,
+} from "./candidate.dto";
 
 /** Filters accepted by the board read (a subset of the repository's list filters). */
 export interface BoardFilters {
@@ -157,84 +157,6 @@ export interface CandidateCreateInput {
 
 /** Editable fields. `status`/pipeline timing are owned by `move` (denormalization contract). */
 export type CandidateUpdateInput = Partial<Omit<CandidateCreateInput, "legacyId">>;
-
-/** ISO-serialize a nullable Date for the wire (both `Response.json` and the RSC produce strings). */
-function isoOrNull(d: Date | null | undefined): string | null {
-  return d ? d.toISOString() : null;
-}
-
-/**
- * Project the PII-gated candidate DTO onto the serialized `CandidateProfileDTO` (ISO string dates).
- * `licenseNumber` is carried ONLY when `toCandidateDTO` included it (viewer had `viewCredentials`) —
- * the gate is inherited from the DTO, never re-decided here.
- */
-function toCandidateProfileDTO(dto: CandidateDTO): CandidateProfileDTO {
-  const profile: CandidateProfileDTO = {
-    id: dto.id,
-    name: dto.name,
-    email: dto.email,
-    phone: dto.phone,
-    city: dto.city,
-    state: dto.state,
-    employer: dto.employer,
-    yearsExp: dto.yearsExp,
-    credential: dto.credential,
-    population: dto.population,
-    setting: dto.setting,
-    track: dto.track,
-    source: dto.source,
-    tags: dto.tags,
-    outreachAttempts: dto.outreachAttempts,
-    licenseState: dto.licenseState,
-    licenseStatus: dto.licenseStatus,
-    licenseExpiry: isoOrNull(dto.licenseExpiry),
-    licenseVerifiedAt: isoOrNull(dto.licenseVerifiedAt),
-    licenseVerifiedById: dto.licenseVerifiedById,
-    status: dto.status,
-    stageOrder: dto.stageOrder,
-    stageEnteredAt: dto.stageEnteredAt.toISOString(),
-    placedAt: isoOrNull(dto.placedAt),
-    clientId: dto.clientId,
-    createdById: dto.createdById,
-    createdAt: dto.createdAt.toISOString(),
-    updatedAt: dto.updatedAt.toISOString(),
-  };
-  // Present only when the gate let it through (key absence, not null, means "hidden").
-  if ("licenseNumber" in dto) profile.licenseNumber = dto.licenseNumber;
-  return profile;
-}
-
-/** Project the PII-gated document DTO onto the serialized `DocumentSummaryDTO`. */
-function toDocumentSummaryDTO(dto: DocumentDTO): DocumentSummaryDTO {
-  const summary: DocumentSummaryDTO = {
-    id: dto.id,
-    candidateId: dto.candidateId,
-    type: dto.type,
-    originalFilename: dto.originalFilename,
-    mimeType: dto.mimeType,
-    sizeBytes: dto.sizeBytes,
-    storageKey: dto.storageKey,
-    legacyUrl: dto.legacyUrl,
-    createdAt: dto.createdAt.toISOString(),
-  };
-  // Both fields ride together through the same `viewCredentials` gate in `toDocumentDTO`.
-  if ("extractedText" in dto) summary.extractedText = dto.extractedText;
-  if ("extractedData" in dto) summary.extractedData = dto.extractedData;
-  return summary;
-}
-
-/** Project a stage-history row onto the serialized `StageEventDTO` (actor-name resolve deferred). */
-function toStageEventDTO(row: StageHistoryRow): StageEventDTO {
-  return {
-    id: row.id,
-    fromStatus: row.fromStatus,
-    toStatus: row.toStatus,
-    fromStageOrder: row.fromStageOrder,
-    toStageOrder: row.toStageOrder,
-    enteredAt: row.enteredAt.toISOString(),
-    actorId: row.actorId,
-  };
-}
 
 /**
  * Narrow a full candidate row to just the keys present in `input`, for a small audit snapshot.

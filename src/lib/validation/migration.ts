@@ -41,7 +41,7 @@ export type ImportInput = z.infer<typeof importInputSchema>;
  * Per-row disposition. `prepare` reports what commit WOULD do; `commit` reports what it DID.
  * A row can be added/updated AND flagged — `flagged` is a separate count over rows with reasons.
  */
-export type ImportAction = "add" | "update" | "softDelete" | "skip" | "flag" | "error";
+export type ImportAction = "add" | "update" | "softDelete" | "skip" | "error";
 
 /** One row in the report — the diffable surface (no PII beyond the name already shown in-app). */
 export interface ImportRowReport {

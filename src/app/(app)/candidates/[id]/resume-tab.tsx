@@ -4,17 +4,13 @@ import type { DocumentSummaryDTO } from "@/lib/validation/candidate";
 import { Badge } from "@/components/ui/badge";
 import { Table, Td } from "@/components/ui/table";
 import { EmptyState } from "@/components/ui/empty-state";
+import { formatDate } from "@/lib/utils/format-date";
 
 /** Storage status derived from the document's storage columns (no dedicated status field exists). */
 function storageStatus(doc: DocumentSummaryDTO): string {
   if (doc.storageKey) return "Stored";
   if (doc.legacyUrl) return "Legacy link";
   return "Metadata only";
-}
-
-function formatDate(iso: string): string {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString();
 }
 
 /** Only ever render an http(s) link — never a `javascript:`/`data:` URL from imported data. */

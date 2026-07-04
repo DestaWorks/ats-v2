@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ErrorState } from "@/components/ui/error-state";
 import { Spinner } from "@/components/ui/spinner";
+import { controlClass } from "@/components/ui/input";
 import { cn } from "@/lib/utils/cn";
 import { detectFormat, importableCount } from "./lib/import-helpers";
 import { ReportView } from "./report-view";
@@ -217,7 +218,10 @@ export function MigrationWizard() {
               type="file"
               accept=".csv,.json"
               onChange={onFileChange}
-              className="rounded-md border border-black/15 px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-navy file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-white hover:file:opacity-90 focus:ring-2 focus:ring-navy focus:outline-none"
+              className={cn(
+                controlClass,
+                "px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-navy file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-white hover:file:opacity-90",
+              )}
             />
             <p className="text-xs text-gray">
               The file is read in your browser and sent for a dry-run preview — nothing is written

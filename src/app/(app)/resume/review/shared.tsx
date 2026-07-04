@@ -11,11 +11,9 @@ import {
 import type { ResumeMatch } from "@/lib/validation/resume";
 import { Field } from "@/components/ui/field";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils/cn";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { confirmedCandidateIdFor } from "../lib/confirm-gate";
-
-export const inputClass =
-  "w-full rounded-md border border-black/15 px-2.5 py-1.5 text-sm focus:ring-2 focus:ring-navy focus:outline-none";
 
 /** Resolve a possibly-nested react-hook-form error message by dotted path. */
 export function fieldError<T extends FieldValues>(
@@ -61,7 +59,7 @@ export function TextField<T extends FieldValues>({
   const id = `f-${name}`;
   return (
     <Field label={label} htmlFor={id} error={fieldError(form, name)} className={className}>
-      <input id={id} {...form.register(name)} className={inputClass} />
+      <Input id={id} {...form.register(name)} />
     </Field>
   );
 }
@@ -81,12 +79,7 @@ export function TextArea<T extends FieldValues>({
   const id = `f-${name}`;
   return (
     <Field label={label} htmlFor={id} error={fieldError(form, name)}>
-      <textarea
-        id={id}
-        rows={rows}
-        {...form.register(name)}
-        className={cn(inputClass, "resize-y")}
-      />
+      <Textarea id={id} rows={rows} {...form.register(name)} className="resize-y" />
     </Field>
   );
 }
@@ -143,11 +136,7 @@ export function StringListEditor<T extends FieldValues>({
       <legend className="text-sm font-medium text-charcoal">{label}</legend>
       {fields.map((field, index) => (
         <div key={field.id} className="flex items-center gap-2">
-          <input
-            {...form.register(`${name}.${index}` as Path<T>)}
-            placeholder={placeholder}
-            className={inputClass}
-          />
+          <Input {...form.register(`${name}.${index}` as Path<T>)} placeholder={placeholder} />
           <RemoveButton label={`Remove ${label} item ${index + 1}`} onClick={() => remove(index)} />
         </div>
       ))}

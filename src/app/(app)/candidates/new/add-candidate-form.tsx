@@ -19,7 +19,8 @@ import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { ErrorState } from "@/components/ui/error-state";
 import { fieldError } from "../[id]/lib/form-error";
-import { inputClass, selectClass } from "../[id]/lib/field-styles";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { messageForFailure, postCandidate } from "./lib/create-fetch";
 import { trackFieldVisibility } from "./lib/track-fields";
 
@@ -93,127 +94,93 @@ export function AddCandidateForm({
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Name" htmlFor="ac-name" error={fieldError(form, "name")} required>
-          <input id="ac-name" className={inputClass} autoFocus {...form.register("name")} />
+          <Input id="ac-name" autoFocus {...form.register("name")} />
         </Field>
         <Field label="Track" htmlFor="ac-track" error={fieldError(form, "track")} required>
-          <select id="ac-track" className={selectClass} {...form.register("track")}>
+          <Select id="ac-track" {...form.register("track")}>
             {TRACKS.map((t) => (
               <option key={t} value={t}>
                 {t}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
         <Field label="Email" htmlFor="ac-email" error={fieldError(form, "email")}>
-          <input
+          <Input
             id="ac-email"
             type="email"
-            className={inputClass}
             {...form.register("email", { setValueAs: emptyToNull })}
           />
         </Field>
         <Field label="Phone" htmlFor="ac-phone" error={fieldError(form, "phone")}>
-          <input
-            id="ac-phone"
-            className={inputClass}
-            {...form.register("phone", { setValueAs: emptyToNull })}
-          />
+          <Input id="ac-phone" {...form.register("phone", { setValueAs: emptyToNull })} />
         </Field>
         <Field label="City" htmlFor="ac-city" error={fieldError(form, "city")}>
-          <input
-            id="ac-city"
-            className={inputClass}
-            {...form.register("city", { setValueAs: emptyToNull })}
-          />
+          <Input id="ac-city" {...form.register("city", { setValueAs: emptyToNull })} />
         </Field>
         <Field label="State" htmlFor="ac-state" error={fieldError(form, "state")}>
-          <select
-            id="ac-state"
-            className={selectClass}
-            {...form.register("state", { setValueAs: emptyToNull })}
-          >
+          <Select id="ac-state" {...form.register("state", { setValueAs: emptyToNull })}>
             <option value="">—</option>
             {US_STATES.map((s) => (
               <option key={s} value={s}>
                 {s}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
         <Field label="Employer" htmlFor="ac-employer" error={fieldError(form, "employer")}>
-          <input
-            id="ac-employer"
-            className={inputClass}
-            {...form.register("employer", { setValueAs: emptyToNull })}
-          />
+          <Input id="ac-employer" {...form.register("employer", { setValueAs: emptyToNull })} />
         </Field>
         <Field label="Years experience" htmlFor="ac-years" error={fieldError(form, "yearsExp")}>
-          <input
+          <Input
             id="ac-years"
             type="number"
             min={0}
             max={80}
-            className={inputClass}
             {...form.register("yearsExp", { setValueAs: emptyToNullNumber })}
           />
         </Field>
         {showCredential ? (
           <Field label="Credential" htmlFor="ac-cred" error={fieldError(form, "credential")}>
-            <select
-              id="ac-cred"
-              className={selectClass}
-              {...form.register("credential", { setValueAs: emptyToNull })}
-            >
+            <Select id="ac-cred" {...form.register("credential", { setValueAs: emptyToNull })}>
               <option value="">—</option>
               {CREDENTIALS.map((c) => (
                 <option key={c} value={c}>
                   {c}
                 </option>
               ))}
-            </select>
+            </Select>
           </Field>
         ) : null}
         <Field label="Population" htmlFor="ac-pop" error={fieldError(form, "population")}>
-          <select
-            id="ac-pop"
-            className={selectClass}
-            {...form.register("population", { setValueAs: emptyToNull })}
-          >
+          <Select id="ac-pop" {...form.register("population", { setValueAs: emptyToNull })}>
             <option value="">—</option>
             {POPULATIONS.map((p) => (
               <option key={p} value={p}>
                 {p}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
         <Field label="Setting" htmlFor="ac-setting" error={fieldError(form, "setting")}>
-          <select
-            id="ac-setting"
-            className={selectClass}
-            {...form.register("setting", { setValueAs: emptyToNull })}
-          >
+          <Select id="ac-setting" {...form.register("setting", { setValueAs: emptyToNull })}>
             <option value="">—</option>
             {SETTINGS.map((s) => (
               <option key={s} value={s}>
                 {s}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
         <Field label="Source" htmlFor="ac-source" error={fieldError(form, "source")}>
-          <select
-            id="ac-source"
-            className={selectClass}
-            {...form.register("source", { setValueAs: emptyToNull })}
-          >
+          <Select id="ac-source" {...form.register("source", { setValueAs: emptyToNull })}>
             <option value="">—</option>
             {SOURCES.map((s) => (
               <option key={s} value={s}>
                 {s}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
         {showLicenseState ? (
           <Field
@@ -221,9 +188,8 @@ export function AddCandidateForm({
             htmlFor="ac-licstate"
             error={fieldError(form, "licenseState")}
           >
-            <select
+            <Select
               id="ac-licstate"
-              className={selectClass}
               {...form.register("licenseState", { setValueAs: emptyToNull })}
             >
               <option value="">—</option>
@@ -232,7 +198,7 @@ export function AddCandidateForm({
                   {s}
                 </option>
               ))}
-            </select>
+            </Select>
           </Field>
         ) : null}
         {showLicenseNumber ? (
@@ -242,26 +208,21 @@ export function AddCandidateForm({
             error={fieldError(form, "licenseNumber")}
             hint="Only visible to credential-cleared roles"
           >
-            <input
+            <Input
               id="ac-licnum"
-              className={inputClass}
               {...form.register("licenseNumber", { setValueAs: emptyToNull })}
             />
           </Field>
         ) : null}
         <Field label="Client" htmlFor="ac-client" error={fieldError(form, "clientId")}>
-          <select
-            id="ac-client"
-            className={selectClass}
-            {...form.register("clientId", { setValueAs: emptyToNull })}
-          >
+          <Select id="ac-client" {...form.register("clientId", { setValueAs: emptyToNull })}>
             <option value="">Unassigned</option>
             {clients.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
       </div>
 
