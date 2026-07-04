@@ -1,6 +1,8 @@
 import "server-only";
-import type { Document, Prisma } from "@/generated/prisma/client";
+import { Prisma } from "@/generated/prisma/client";
+import type { Document } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
+import { decryptField, encryptField, isEncryptionEnabled } from "@/server/db/field-crypto";
 
 /** A raw document row (Prisma model). Services/DTOs map this to API shapes. */
 export type DocumentRow = Document;
@@ -29,6 +31,50 @@ function db(tx?: Prisma.TransactionClient) {
   return tx ?? prisma;
 }
 
+const ENC_PREFIX = "enc:v1:";
+
+/**
+ * FIELD ENCRYPTION BOUNDARY (see `server/db/field-crypto`). `extractedText` and `extractedData` are
+ * the heaviest PII/PHI surface in the app; both are encrypted at rest when `FIELD_ENCRYPTION_KEY`
+ * is set (no-op passthrough otherwise). `extractedData` is JSON, so we STRINGIFY it before
+ * encrypting and store the resulting `enc:v1:` string in the Json column; on read we decrypt then
+ * `JSON.parse`. Reads are mixed-safe via the prefix, so services/DTOs only ever see plaintext.
+ */
+function encryptText<T extends string | null | undefined>(value: T): T {
+  if (typeof value === "string" && !value.startsWith(ENC_PREFIX)) return encryptField(value) as T;
+  return value;
+}
+
+/**
+ * Encrypt a JSON payload for storage. Key ON → stringify+encrypt to an `enc:v1:` string; key OFF →
+ * store the NATIVE object unchanged. (Stringifying in the no-key path would round-trip object→string
+ * and permanently corrupt the shape — B1.) `decryptJson` reads both: prefixed→parse, native→as-is.
+ */
+function encryptJson(value: unknown): Prisma.InputJsonValue | typeof Prisma.JsonNull {
+  if (value === null || value === undefined) return Prisma.JsonNull;
+  if (typeof value === "string" && value.startsWith(ENC_PREFIX)) return value; // already encrypted
+  if (!isEncryptionEnabled()) return value as Prisma.InputJsonValue; // passthrough: store native JSON
+  return encryptField(JSON.stringify(value));
+}
+
+/** Decrypt an `extractedData` value read back from the Json column (mixed plaintext/ciphertext). */
+function decryptJson(value: Prisma.JsonValue): Prisma.JsonValue {
+  if (typeof value === "string" && value.startsWith(ENC_PREFIX)) {
+    return JSON.parse(decryptField(value)) as Prisma.JsonValue;
+  }
+  return value; // legacy object/array/plain-string/null — as-is
+}
+
+/** Decrypt the sensitive fields on a document row read back from the DB (passthrough when null). */
+function decryptRow<T extends Document | null>(row: T): T {
+  if (!row) return row;
+  return {
+    ...row,
+    extractedText: row.extractedText === null ? null : decryptField(row.extractedText),
+    extractedData: row.extractedData === null ? null : decryptJson(row.extractedData),
+  };
+}
+
 /**
  * Document data access — the ONLY layer that touches Prisma for documents (Wave 1.2).
  *
@@ -37,49 +83,67 @@ function db(tx?: Prisma.TransactionClient) {
  * so the résumé service can compose the candidate write + document write + audit atomically.
  */
 export const documentRepository = {
-  create(data: DocumentCreateData, tx?: Prisma.TransactionClient) {
-    const { extractedData, ...rest } = data;
-    return db(tx).document.create({
-      data: { ...rest, extractedData: extractedData as Prisma.InputJsonValue },
-    });
+  async create(data: DocumentCreateData, tx?: Prisma.TransactionClient) {
+    const { extractedData, extractedText, ...rest } = data;
+    return decryptRow(
+      await db(tx).document.create({
+        data: {
+          ...rest,
+          extractedText: encryptText(extractedText),
+          extractedData: encryptJson(extractedData),
+        },
+      }),
+    );
   },
 
-  findById(id: string, opts?: { includeDeleted?: boolean }, tx?: Prisma.TransactionClient) {
-    return db(tx).document.findFirst({
-      where: { id, ...(opts?.includeDeleted ? {} : { deletedAt: null }) },
-    });
+  async findById(id: string, opts?: { includeDeleted?: boolean }, tx?: Prisma.TransactionClient) {
+    return decryptRow(
+      await db(tx).document.findFirst({
+        where: { id, ...(opts?.includeDeleted ? {} : { deletedAt: null }) },
+      }),
+    );
   },
 
   /**
    * ETL-ONLY, intentionally delete-agnostic (mirrors the candidate repo): returns a soft-deleted
    * row too so the one-shot migration re-upserts an existing document instead of duplicating it.
    */
-  findByLegacyId(legacyId: string, tx?: Prisma.TransactionClient) {
-    return db(tx).document.findUnique({ where: { legacyId } });
+  async findByLegacyId(legacyId: string, tx?: Prisma.TransactionClient) {
+    return decryptRow(await db(tx).document.findUnique({ where: { legacyId } }));
   },
 
   /** ETL upsert keyed on the legacy Sheet ResumeFileID — idempotent re-runs (Wave 1.3 §5). */
-  upsertByLegacyId(legacyId: string, data: DocumentCreateData, tx?: Prisma.TransactionClient) {
-    const { extractedData, ...rest } = data;
-    const json = extractedData as Prisma.InputJsonValue;
-    return db(tx).document.upsert({
-      where: { legacyId },
-      create: { ...rest, legacyId, extractedData: json },
-      update: { ...rest, extractedData: json },
-    });
+  async upsertByLegacyId(
+    legacyId: string,
+    data: DocumentCreateData,
+    tx?: Prisma.TransactionClient,
+  ) {
+    const { extractedData, extractedText, ...rest } = data;
+    const text = encryptText(extractedText);
+    const json = encryptJson(extractedData);
+    return decryptRow(
+      await db(tx).document.upsert({
+        where: { legacyId },
+        create: { ...rest, legacyId, extractedText: text, extractedData: json },
+        update: { ...rest, extractedText: text, extractedData: json },
+      }),
+    );
   },
 
-  listByCandidate(candidateId: string, tx?: Prisma.TransactionClient) {
-    return db(tx).document.findMany({
+  async listByCandidate(candidateId: string, tx?: Prisma.TransactionClient) {
+    const rows = await db(tx).document.findMany({
       where: { candidateId, deletedAt: null },
       orderBy: { createdAt: "desc" },
     });
+    return rows.map(decryptRow);
   },
 
-  softDelete(id: string, actorId: string, tx?: Prisma.TransactionClient) {
-    return db(tx).document.update({
-      where: { id },
-      data: { deletedAt: new Date(), deletedById: actorId },
-    });
+  async softDelete(id: string, actorId: string, tx?: Prisma.TransactionClient) {
+    return decryptRow(
+      await db(tx).document.update({
+        where: { id },
+        data: { deletedAt: new Date(), deletedById: actorId },
+      }),
+    );
   },
 };

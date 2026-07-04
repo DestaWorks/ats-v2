@@ -10,7 +10,11 @@ import type { AuthUser } from "@/server/auth/guards";
  */
 
 const h = vi.hoisted(() => ({
-  candidateRepo: { list: vi.fn() },
+  candidateRepo: {
+    list: vi.fn(),
+    groupByStatus: vi.fn(),
+    listStaleActive: vi.fn(),
+  },
   clientRepo: { list: vi.fn() },
 }));
 
@@ -124,5 +128,57 @@ describe("candidateService.listBoard", () => {
       search: "jane",
       status: "NEW_CANDIDATE",
     });
+  });
+
+  it("caps a column's cards at 50 but reports the TRUE total count", async () => {
+    // 60 candidates all in NEW_CANDIDATE — more than the per-column cap.
+    const many = Array.from({ length: 60 }, (_, i) =>
+      row({ id: `n${i}`, status: "NEW_CANDIDATE", stageOrder: 0 }),
+    );
+    h.candidateRepo.list.mockResolvedValue(many);
+    const board = await candidateService.listBoard({}, viewer);
+    const newCol = board.columns.find((c) => c.status === "NEW_CANDIDATE")!;
+    expect(newCol.count).toBe(60); // true total
+    expect(newCol.candidates).toHaveLength(50); // capped payload
+    expect(board.meta.total).toBe(60);
+  });
+});
+
+describe("candidateService.dashboardStats", () => {
+  beforeEach(() => {
+    // Per-status counts come from a groupBy — NOT a full-table load.
+    h.candidateRepo.groupByStatus.mockResolvedValue([
+      { status: "NEW_CANDIDATE", _count: { _all: 5 } },
+      { status: "SUBMITTED_TO_CLIENT", _count: { _all: 3 } },
+      { status: "NOT_QUALIFIED", _count: { _all: 2 } }, // terminal
+    ]);
+    // A small targeted read of the oldest-in-stage active candidates.
+    h.candidateRepo.listStaleActive.mockResolvedValue([
+      row({ id: "old", status: "NEW_CANDIDATE", stageOrder: 0, stageEnteredAt: daysAgo(30) }),
+      row({ id: "fresh", status: "NEW_CANDIDATE", stageOrder: 0 }),
+    ]);
+  });
+
+  it("derives total/active/terminal from the groupBy (no full-table load)", async () => {
+    const stats = await candidateService.dashboardStats(viewer);
+    expect(h.candidateRepo.list).not.toHaveBeenCalled();
+    expect(stats.total).toBe(10);
+    expect(stats.active).toBe(8); // 5 + 3
+    expect(stats.terminal).toBe(2); // NOT_QUALIFIED
+  });
+
+  it("builds the 9 active funnel columns from the per-status counts", async () => {
+    const stats = await candidateService.dashboardStats(viewer);
+    expect(stats.columns).toHaveLength(9);
+    expect(stats.columns.find((c) => c.status === "NEW_CANDIDATE")!.count).toBe(5);
+    expect(stats.columns.find((c) => c.status === "SUBMITTED_TO_CLIENT")!.count).toBe(3);
+    expect(stats.columns.find((c) => c.status === "OFFER_ACCEPTED")!.count).toBe(0);
+  });
+
+  it("surfaces only overdue/stuck candidates from the targeted stale read", async () => {
+    const stats = await candidateService.dashboardStats(viewer);
+    // The 30-day-old NEW card is overdue/stuck; the fresh one is not.
+    expect(stats.attention.map((c) => c.id)).toEqual(["old"]);
+    expect(h.candidateRepo.listStaleActive).toHaveBeenCalledWith(8);
   });
 });

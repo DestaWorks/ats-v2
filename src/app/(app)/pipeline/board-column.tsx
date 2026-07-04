@@ -60,6 +60,13 @@ export function BoardColumn({
           ))
         )}
       </ul>
+
+      {/* The board caps cards per column; when the true total exceeds what shipped, say so. */}
+      {column.count > column.candidates.length ? (
+        <p className="border-t border-black/5 px-3 py-2 text-center text-[10px] text-gray">
+          Showing {column.candidates.length} of {column.count}
+        </p>
+      ) : null}
     </section>
   );
 }

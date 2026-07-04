@@ -42,7 +42,7 @@ describe("apiHandler — centralized error mapping", () => {
     expect(body.error.issues.some((i) => i.path === "email")).toBe(true);
   });
 
-  it("maps a generic Error to 500 WITHOUT leaking its message", async () => {
+  it("maps a generic Error to 500 WITHOUT leaking its message, and returns a correlation ref", async () => {
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const handler = apiHandler(async () => {
       throw new Error("secret leak");
@@ -50,10 +50,16 @@ describe("apiHandler — centralized error mapping", () => {
     const res = await handler(req(), undefined);
     expect(res.status).toBe(500);
     const text = await res.text();
+    // The raw message never reaches the client (response OR the logged line).
     expect(text).not.toContain("secret leak");
-    expect(JSON.parse(text)).toEqual({
-      error: { code: "INTERNAL", message: "Internal server error" },
-    });
+    const logged = errSpy.mock.calls.map((c) => c.join(" ")).join("\n");
+    expect(logged).not.toContain("secret leak");
+    const body = JSON.parse(text) as { error: { code: string; message: string; ref?: string } };
+    expect(body.error.code).toBe("INTERNAL");
+    expect(body.error.message).toBe("Internal server error");
+    // A generated correlation id ties the 500 to its (PII-free) log line.
+    expect(typeof body.error.ref).toBe("string");
+    expect(body.error.ref!.length).toBeGreaterThan(0);
     errSpy.mockRestore();
   });
 
