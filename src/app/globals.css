@@ -12,9 +12,9 @@
   --color-ivory: #f8f6f1; /* C.iv — soft background */
   --color-navy: #1e4a8a; /* C.bl — primary blue */
   --color-green: #43a047; /* C.gn */
-  --color-red: #e53935; /* C.rd */
-  --color-orange: #fb8c00; /* C.or */
-  --color-gray: #888888; /* C.gy */
+  --color-red: #d32f2f; /* C.rd — darkened from #e53935 for WCAG AA as small text (badge danger, overdue) on white */
+  --color-orange: #b45309; /* C.or — darkened from #fb8c00 for WCAG AA as small text (badge amber, stuck) on white */
+  --color-gray: #6b6b6b; /* C.gy — darkened from #888888 for WCAG AA on white */
   --color-purple: #7b1fa2; /* C.pu */
   --color-teal: #00897b; /* C.tl */
   --color-label: #ebf0f8; /* C.lbl — chip/label bg */

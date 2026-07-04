@@ -16,6 +16,8 @@ export interface CandidateListFilters {
   /** Match candidates carrying any of these tags. */
   tags?: string[];
   includeDeleted?: boolean;
+  /** Cap the number of rows returned (bounds a browse/report read). */
+  take?: number;
 }
 
 /** Resolve the client to use — the transaction client when composing writes, else the singleton. */
@@ -78,7 +80,11 @@ export const candidateRepository = {
         { email: { contains: filters.search, mode: "insensitive" } },
       ];
     }
-    return db(tx).candidate.findMany({ where, orderBy: { createdAt: "desc" } });
+    return db(tx).candidate.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      ...(filters.take !== undefined ? { take: filters.take } : {}),
+    });
   },
 
   update(id: string, data: Prisma.CandidateUncheckedUpdateInput, tx?: Prisma.TransactionClient) {

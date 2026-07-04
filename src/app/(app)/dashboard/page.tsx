@@ -9,7 +9,6 @@ import { cn } from "@/lib/utils/cn";
 import { STATUS_BG } from "../pipeline/lib/status-style";
 import { FunnelBar } from "./funnel-bar";
 import { StatCard } from "./stat-card";
-import { SignOutButton } from "./sign-out-button";
 
 /**
  * Dashboard (RSC). Reads the funnel-grouped board directly (`candidateService.listBoard`) and
@@ -31,16 +30,8 @@ export default async function DashboardPage() {
     .slice(0, 8);
 
   return (
-    <main className="mx-auto flex max-w-4xl flex-col gap-6 p-8">
-      <header className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-navy">Dashboard</h1>
-          <p className="text-sm text-gray">
-            {user.name} · <span className="font-semibold text-charcoal">{user.role}</span>
-          </p>
-        </div>
-        <SignOutButton />
-      </header>
+    <div className="mx-auto flex max-w-4xl flex-col gap-6 p-8">
+      <h1 className="text-2xl font-bold text-navy">Dashboard</h1>
 
       <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatCard label="Total" value={board.meta.total} />
@@ -105,6 +96,6 @@ export default async function DashboardPage() {
           </ul>
         )}
       </Card>
-    </main>
+    </div>
   );
 }

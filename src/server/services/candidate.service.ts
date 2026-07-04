@@ -19,6 +19,7 @@ import type {
   UpdateCandidateInput,
   VerifyLicenseInput,
 } from "@/lib/validation/candidate";
+import type { CandidateListDTO, CandidateListItemDTO } from "@/lib/validation/candidate";
 import type { BoardResponse, BulkMoveResponse, CandidateCardDTO } from "@/lib/validation/pipeline";
 import { requireUser, type AuthUser } from "@/server/auth/guards";
 import { writeAudit } from "@/server/db/audit";
@@ -47,6 +48,13 @@ export interface BoardFilters {
 }
 
 /**
+ * Hard ceiling on the `/candidates` browse read. The list is a flat table (not the funnel board),
+ * so it must be bounded — addresses the audit's unbounded-list finding for this new screen. When
+ * the ceiling is hit the DTO carries `capped: true` and the UI shows a "showing first N" note.
+ */
+const LIST_CAP = 100;
+
+/**
  * Project a raw candidate row onto the client-safe `CandidateCardDTO`. Runs through
  * `toCandidateDTO` first (the PII boundary) — the card type omits `licenseNumber` entirely, so
  * it can never reach a card regardless of viewer role. Timing is derived from `stageEnteredAt`.
@@ -73,6 +81,32 @@ function toCard(
     daysInStage: getDaysInStage(dto.stageEnteredAt, now),
     isOverdue: isOverdue(status, dto.stageEnteredAt, now),
     isStuck: isStuck(dto.stageEnteredAt, now),
+  };
+}
+
+/**
+ * Project a raw candidate row onto the PII-gated `CandidateListItemDTO` for the browse list. Runs
+ * through `toCandidateDTO` first (the PII boundary) — the list item type omits `licenseNumber`
+ * entirely, so it can never reach a row. `clientName` is resolved from the batch-loaded client map.
+ */
+function toListItem(
+  row: CandidateRow,
+  viewer: AuthUser,
+  clientNames: Map<string, string>,
+  now: Date,
+): CandidateListItemDTO {
+  const dto = toCandidateDTO(row, viewer);
+  const status = dto.status as CandidateStatus;
+  return {
+    id: dto.id,
+    name: dto.name,
+    credential: dto.credential,
+    track: dto.track,
+    clientName: dto.clientId ? (clientNames.get(dto.clientId) ?? null) : null,
+    status,
+    statusLabel: statusLabel(status),
+    licenseStatus: dto.licenseStatus,
+    daysInStage: getDaysInStage(dto.stageEnteredAt, now),
   };
 }
 
@@ -322,6 +356,24 @@ export const candidateService = {
       });
       return updated;
     });
+  },
+
+  /**
+   * Read the `/candidates` browse list — a flat, PII-gated table (distinct from the funnel board).
+   * AuthZ is the caller's (RSC `getCurrentUser()`); `viewer` drives the PII gate (`toCandidateDTO`
+   * omits `licenseNumber`, so no row can carry it). The read is CAPPED at `LIST_CAP` rows at the
+   * query level (repository `take`) — `capped` is true when the ceiling was hit. `clientName` is
+   * resolved via a one-shot in-memory join over the small `clients` table (as `listBoard` does).
+   */
+  async listCandidates(filters: BoardFilters = {}, viewer: AuthUser): Promise<CandidateListDTO> {
+    const [rows, clients] = await Promise.all([
+      candidateRepository.list({ ...filters, take: LIST_CAP }),
+      clientRepository.list(),
+    ]);
+    const clientNames = new Map(clients.map((c) => [c.id, c.name]));
+    const now = new Date();
+    const candidates = rows.map((row) => toListItem(row, viewer, clientNames, now));
+    return { candidates, count: candidates.length, capped: candidates.length >= LIST_CAP };
   },
 
   /**

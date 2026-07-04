@@ -21,7 +21,7 @@ export default async function AddCandidatePage() {
   const canEditCredential = hasCapability(user.role, "viewCredentials");
 
   return (
-    <main className="mx-auto flex max-w-3xl flex-col gap-5 p-6">
+    <div className="mx-auto flex max-w-3xl flex-col gap-5 p-6">
       <header className="flex items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-navy">Add candidate</h1>
@@ -36,6 +36,6 @@ export default async function AddCandidatePage() {
       </header>
 
       <AddCandidateForm clients={clients} canEditCredential={canEditCredential} />
-    </main>
+    </div>
   );
 }

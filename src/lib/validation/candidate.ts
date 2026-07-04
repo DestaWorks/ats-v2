@@ -99,6 +99,34 @@ export interface CandidateProfileDTO {
   updatedAt: string; // ISO
 }
 
+/**
+ * One row in the `/candidates` browse list — a PII-gated summary distinct from the board card.
+ * Mirrors the server `toCandidateDTO` boundary: NO `licenseNumber` (and no other sensitive PII).
+ * `status` is the stable code (for styling / links); `statusLabel` is the display string.
+ */
+export interface CandidateListItemDTO {
+  id: string;
+  name: string;
+  credential: string | null;
+  track: string;
+  clientName: string | null;
+  status: string; // stable code
+  statusLabel: string;
+  licenseStatus: string;
+  daysInStage: number;
+}
+
+/**
+ * The `/candidates` browse payload. `candidates` is capped server-side (see `LIST_CAP`); `capped`
+ * is true when that ceiling was hit (the UI shows a "showing first N" note), addressing the audit's
+ * unbounded-list finding for this screen.
+ */
+export interface CandidateListDTO {
+  candidates: CandidateListItemDTO[];
+  count: number;
+  capped: boolean;
+}
+
 /** The single composite payload the RSC loads and seeds the client detail page with. */
 export interface CandidateDetailDTO {
   candidate: CandidateProfileDTO;

@@ -14,7 +14,7 @@ export default async function ResumePage() {
   if (!user) redirect("/sign-in");
 
   return (
-    <main className="mx-auto flex max-w-4xl flex-col gap-6 p-6 sm:p-8">
+    <div className="mx-auto flex max-w-4xl flex-col gap-6 p-6 sm:p-8">
       <header>
         <h1 className="text-2xl font-bold text-navy">Résumé Converter</h1>
         <p className="text-sm text-gray">
@@ -22,6 +22,6 @@ export default async function ResumePage() {
         </p>
       </header>
       <ResumeFlow recruiterName={user.name} resumeExtractionEnabled={resumeExtractionEnabled} />
-    </main>
+    </div>
   );
 }
