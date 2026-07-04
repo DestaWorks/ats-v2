@@ -1,20 +1,27 @@
 "use client";
 
 import Link from "next/link";
-import type { CandidateProfileDTO } from "@/lib/validation/candidate";
+import type { CandidateDetailDTO, CandidateProfileDTO } from "@/lib/validation/candidate";
 import { Badge } from "@/components/ui/badge";
+import { ScoreBadge } from "@/components/ui/score-badge";
 import { StageMover } from "./stage-mover";
 import type { MovedFields } from "./lib/detail-fetch";
 
-/** Detail header: name, credential · track · license-state chips, client, and the stage-mover. */
+/**
+ * Detail header: name, credential · track · license-state chips, the client-fit `ScoreBadge`,
+ * client, and the stage-mover. `scoring` is `null` when there's nothing to score against — the
+ * badge then renders a muted "—".
+ */
 export function DetailHeader({
   candidate,
   clientName,
+  scoring,
   onMoved,
   announce,
 }: {
   candidate: CandidateProfileDTO;
   clientName: string | null;
+  scoring: CandidateDetailDTO["scoring"];
   onMoved: (fields: MovedFields) => void;
   announce: (message: string) => void;
 }) {
@@ -33,6 +40,7 @@ export function DetailHeader({
             {candidate.credential ? <Badge tone="navy">{candidate.credential}</Badge> : null}
             <Badge tone="neutral">{candidate.track}</Badge>
             {candidate.licenseState ? <Badge tone="neutral">{candidate.licenseState}</Badge> : null}
+            <ScoreBadge score={scoring ? scoring.pct : null} />
           </div>
           <p className="text-sm text-charcoal">
             {clientName ?? <span className="text-gray italic">Unassigned</span>}

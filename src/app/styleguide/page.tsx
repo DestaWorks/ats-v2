@@ -38,6 +38,7 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils/cn";
 import { Badge } from "@/components/ui/badge";
+import { ScoreBadge } from "@/components/ui/score-badge";
 import { Card } from "@/components/ui/card";
 import { Table, Td } from "@/components/ui/table";
 import { useZodForm } from "@/lib/forms/use-zod-form";
@@ -158,6 +159,22 @@ export default function StyleguidePage() {
           <Badge tone="amber" size="sm" pill={false}>
             stuck · 7d
           </Badge>
+        </div>
+      </Section>
+
+      <Section title="Score badge (candidate fit)">
+        <p className="text-xs text-gray">
+          Color scale: ≥ 80 green · 50–79 amber · &lt; 50 neutral. A hot chip shows at/above the
+          shared <code>HOT_SCORE</code>. <code>null</code> renders a muted “—” (never “0%”); a real
+          0 is a legitimate low score.
+        </p>
+        <div className="flex flex-wrap items-center gap-3">
+          <ScoreBadge score={92} />
+          <ScoreBadge score={80} />
+          <ScoreBadge score={64} />
+          <ScoreBadge score={42} />
+          <ScoreBadge score={0} />
+          <ScoreBadge score={null} />
         </div>
       </Section>
 

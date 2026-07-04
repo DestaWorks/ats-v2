@@ -5,8 +5,8 @@
  *
  * See `docs/design/wave-2.1-pipeline.md`. The board is funnel-grouped: the 9 ACTIVE stages are
  * always-present columns (order 0..8), the 4 terminal states are summarized (counts always,
- * card lists only when `includeTerminal`). Cards NEVER carry `licenseNumber` and NO score
- * (score needs the `client_rules` table — deferred).
+ * card lists only when `includeTerminal`). Cards NEVER carry `licenseNumber`; they DO carry a
+ * `score` (fit `pct`, or `null`) now that the `client_rules` table exists (candidate-scoring wave).
  */
 import { z } from "zod";
 import {
@@ -17,7 +17,7 @@ import {
   type Track,
 } from "@/lib/constants";
 
-/** Client-safe card projection. NO `licenseNumber`, NO score (P-5/P-6). */
+/** Client-safe card projection. NO `licenseNumber`; carries the fit `score` (pct, or null). */
 export interface CandidateCardDTO {
   id: string;
   /** PII — the board is auth-gated, so a name is fine; `licenseNumber` never is. */
@@ -33,6 +33,12 @@ export interface CandidateCardDTO {
   daysInStage: number;
   isOverdue: boolean;
   isStuck: boolean;
+  /**
+   * Candidate's fit for the assigned client as a `pct` (0–100), or `null` when there's nothing to
+   * score against (no client / no rules / the rules constrain nothing). `null` renders as "—",
+   * never as "0%"; a real `0` is a legitimate low score and DOES render.
+   */
+  score: number | null;
 }
 
 /** One of the 9 active-stage columns (always present, even when empty). */

@@ -11,6 +11,7 @@ import type {
 import { DetailHeader } from "./detail-header";
 import { DetailTabs, type TabDef } from "./detail-tabs";
 import { DetailsTab, type ClientOption } from "./details-tab";
+import { ScoringCard } from "./scoring-card";
 import { LicenseTab } from "./license-tab";
 import { ResumeTab } from "./resume-tab";
 import { NotesTab } from "./notes-tab";
@@ -87,13 +88,16 @@ export function CandidateDetail({
       key: "details",
       label: "Details",
       panel: (
-        <DetailsTab
-          candidate={candidate}
-          clients={clients}
-          canEditCredential={canEditCredential}
-          onSaved={onSaved}
-          announce={announce}
-        />
+        <div className="flex flex-col gap-4">
+          <DetailsTab
+            candidate={candidate}
+            clients={clients}
+            canEditCredential={canEditCredential}
+            onSaved={onSaved}
+            announce={announce}
+          />
+          <ScoringCard scoring={initial.scoring} clientName={clientName} />
+        </div>
       ),
     },
     {
@@ -131,6 +135,7 @@ export function CandidateDetail({
       <DetailHeader
         candidate={candidate}
         clientName={clientName}
+        scoring={initial.scoring}
         onMoved={onMoved}
         announce={announce}
       />
