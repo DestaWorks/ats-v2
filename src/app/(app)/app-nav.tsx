@@ -6,8 +6,6 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils/cn";
 import { activeNavHref, type NavItem } from "./lib/nav";
 import { SignOutButton } from "./sign-out-button";
-import { AddCandidateButton } from "./add-candidate-modal";
-import type { ClientOption } from "./candidates/new/add-candidate-form";
 
 /**
  * The persistent app-shell **left sidebar** (client — needs `usePathname` to highlight the active
@@ -18,20 +16,16 @@ import type { ClientOption } from "./candidates/new/add-candidate-form";
  * Layout: a fixed-width column on `md+` (`w-60`, sticky full-height); on small screens it collapses
  * to a top bar with an accessible hamburger that expands the nav panel *inline* (pushing content
  * down, never overlaying/hiding it). Top→bottom: brand · nav links (active = `aria-current`) ·
- * prominent "+ Add candidate" modal trigger · spacer · user name·role + Sign out.
+ * spacer · user name·role + Sign out. (Add-candidate lives on the pages, not the sidebar.)
  */
 export function AppNav({
   items,
   userName,
   userRole,
-  clients,
-  canEditCredential,
 }: {
   items: NavItem[];
   userName: string;
   userRole: string;
-  clients: ClientOption[];
-  canEditCredential: boolean;
 }) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -101,12 +95,6 @@ export function AppNav({
             );
           })}
         </ul>
-
-        <AddCandidateButton
-          clients={clients}
-          canEditCredential={canEditCredential}
-          className="w-full"
-        />
 
         {/* Spacer pushes the user block to the bottom of the full-height column. */}
         <div className="mt-auto flex flex-col gap-2 border-t border-black/5 pt-4">

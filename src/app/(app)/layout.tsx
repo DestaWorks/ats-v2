@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/server/auth/guards";
 import { hasCapability } from "@/lib/constants";
-import { clientRepository } from "@/server/repositories/client.repository";
 import { AppNav } from "./app-nav";
 import { BASE_NAV_ITEMS, type NavItem } from "./lib/nav";
 
@@ -14,10 +13,7 @@ import { BASE_NAV_ITEMS, type NavItem } from "./lib/nav";
  * 2. **Chrome.** A persistent, capability-gated **left sidebar** (client `AppNav`) + a
  *    skip-to-content link, with page content in a single `<main id="content">` (the skip target) to
  *    the sidebar's right. The **Import** link is appended only for viewers with `bulkImport` — UI
- *    hiding is UX; the route stays server-guarded.
- * 3. **Add-candidate data.** Loads the clients list (+ derives `viewCredentials` clearance) here in
- *    the RSC and passes it to the sidebar's "+ Add candidate" modal trigger, so the client sidebar
- *    never imports `src/server/**`.
+ *    hiding is UX; the route stays server-guarded. (Add-candidate lives on the pages, not the nav.)
  */
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();
@@ -28,10 +24,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     items.push({ href: "/migration", label: "Import" });
   }
 
-  const clientRows = await clientRepository.list();
-  const clients = clientRows.map((c) => ({ id: c.id, name: c.name }));
-  const canEditCredential = hasCapability(user.role, "viewCredentials");
-
   return (
     <>
       <a
@@ -41,13 +33,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         Skip to content
       </a>
       <div className="flex min-h-screen flex-col md:flex-row">
-        <AppNav
-          items={items}
-          userName={user.name}
-          userRole={user.role}
-          clients={clients}
-          canEditCredential={canEditCredential}
-        />
+        <AppNav items={items} userName={user.name} userRole={user.role} />
         <main id="content" className="min-w-0 flex-1">
           {children}
         </main>
