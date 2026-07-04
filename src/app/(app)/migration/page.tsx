@@ -16,17 +16,17 @@ export default async function MigrationPage() {
 
   if (!hasCapability(user.role, "bulkImport")) {
     return (
-      <main className="mx-auto flex max-w-4xl flex-col gap-6 p-6 sm:p-8">
+      <div className="mx-auto flex max-w-4xl flex-col gap-6 p-6 sm:p-8">
         <ErrorState
           title="You don't have access"
           message="Bulk import is limited to leadership roles. Ask an Owner, Director, Manager, or Admin to run the migration."
         />
-      </main>
+      </div>
     );
   }
 
   return (
-    <main className="mx-auto flex max-w-5xl flex-col gap-6 p-6 sm:p-8">
+    <div className="mx-auto flex max-w-5xl flex-col gap-6 p-6 sm:p-8">
       <header>
         <p className="text-xs font-semibold tracking-widest text-brand uppercase">
           Wave 1.3 · Migration
@@ -38,6 +38,6 @@ export default async function MigrationPage() {
         </p>
       </header>
       <MigrationWizard />
-    </main>
+    </div>
   );
 }

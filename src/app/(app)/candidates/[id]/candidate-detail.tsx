@@ -123,7 +123,7 @@ export function CandidateDetail({
   ];
 
   return (
-    <main className="mx-auto flex max-w-4xl flex-col gap-6 p-6">
+    <div className="mx-auto flex max-w-4xl flex-col gap-6 p-6">
       <div aria-live="polite" className="sr-only">
         {announcement}
       </div>
@@ -136,6 +136,6 @@ export function CandidateDetail({
       />
 
       <DetailTabs tabs={tabs} />
-    </main>
+    </div>
   );
 }

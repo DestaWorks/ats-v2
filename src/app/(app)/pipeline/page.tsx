@@ -1,5 +1,4 @@
 import { Suspense } from "react";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { TRACKS, type Track } from "@/lib/constants";
 import { getCurrentUser } from "@/server/auth/guards";
@@ -34,29 +33,12 @@ export default async function PipelinePage({
   const clients = clientRows.map((c) => ({ id: c.id, name: c.name }));
 
   return (
-    <main className="mx-auto flex max-w-[1600px] flex-col gap-5 p-6">
-      <header className="flex items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-navy">Pipeline</h1>
-          <p className="text-sm text-gray">
-            {board.meta.active} active · {board.meta.overdue} overdue · {board.meta.stuck} stuck
-          </p>
-        </div>
-        {/* Anchors (next/link), not <button>s — kept inline; mirror the primary/secondary sm Button look. */}
-        <div className="flex items-center gap-2">
-          <Link
-            href="/candidates/new"
-            className="rounded-md bg-navy px-3 py-1.5 text-sm font-semibold text-white transition hover:opacity-90"
-          >
-            + Add candidate
-          </Link>
-          <Link
-            href="/dashboard"
-            className="rounded-md border border-black/15 px-3 py-1.5 text-sm font-semibold text-charcoal transition hover:bg-black/5"
-          >
-            Dashboard
-          </Link>
-        </div>
+    <div className="mx-auto flex max-w-[1600px] flex-col gap-5 p-6">
+      <header>
+        <h1 className="text-2xl font-bold text-navy">Pipeline</h1>
+        <p className="text-sm text-gray">
+          {board.meta.active} active · {board.meta.overdue} overdue · {board.meta.stuck} stuck
+        </p>
       </header>
 
       <Suspense
@@ -68,6 +50,6 @@ export default async function PipelinePage({
       >
         <PipelineBoard initial={board} clients={clients} />
       </Suspense>
-    </main>
+    </div>
   );
 }
