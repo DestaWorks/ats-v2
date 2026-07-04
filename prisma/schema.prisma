@@ -129,17 +129,40 @@ model ActivityLog {
 // encrypted at rest at the repository boundary when `FIELD_ENCRYPTION_KEY` is set.
 
 model Client {
-  id         String      @id @default(cuid())
-  legacyId   String?     @unique
+  id         String       @id @default(cuid())
+  legacyId   String?      @unique
   name       String
   capacity   Int?
-  createdAt  DateTime    @default(now())
-  updatedAt  DateTime    @updatedAt
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
   deletedAt  DateTime?
   candidates Candidate[]
+  rules      ClientRules? // 1:1 back-relation — per-client scoring/matching rules
 
   @@index([deletedAt])
   @@map("clients")
+}
+
+/// Per-client scoring/matching rules — DATA, not code (DECISIONS: scoring rules live in a table,
+/// consumed by the pure `scoreCandidate(candidate, clientRules)` / `getAutoDisqualify`). Exactly one
+/// row per Client (1:1); deleting a Client cascades its rules. Empty arrays mean "no constraint on
+/// this dimension" (that dimension contributes nothing to `max`). Editing UI is a later (CRM) wave;
+/// seeded from `BASE_CLIENT_RULES` for now.
+model ClientRules {
+  id             String   @id @default(cuid())
+  clientId       String   @unique
+  client         Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  states         String[] @default([]) // e.g. ["CT","NJ"] — matched against candidate.licenseState
+  creds          String[] @default([]) // e.g. ["PMHNP","MD"] — matched against candidate.credential
+  pops           String[] @default([]) // populations, e.g. ["Child/Adolescent"]
+  settings       String[] @default([]) // e.g. ["Hybrid","Outpatient"]
+  priority       String? // "HIGH" | "MED" | "STANDARD" (display / future weighting)
+  autoDisqualify String[] @default([]) // human-readable hard-DQ reasons (feeds getAutoDisqualify context)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([clientId])
+  @@map("client_rules")
 }
 
 model Candidate {

@@ -114,6 +114,11 @@ export interface CandidateListItemDTO {
   statusLabel: string;
   licenseStatus: string;
   daysInStage: number;
+  /**
+   * Candidate's fit for the assigned client as a `pct` (0–100), or `null` when there's nothing to
+   * score against. The list is sorted by this desc (nulls last). `null` renders as "—", not "0%".
+   */
+  score: number | null;
 }
 
 /**
@@ -135,6 +140,18 @@ export interface CandidateDetailDTO {
   notes: NoteDTO[]; // already role-scoped server-side
   stageHistory: StageEventDTO[]; // recent 10, desc
   canVerifyCredentials: boolean;
+  /**
+   * Fit breakdown for the assigned client — `pct`/`score`/`max`, the soft `flags` (why it isn't 100),
+   * and the ADVISORY `autoDisqualify` reasons (display-only — NEVER an automatic status change).
+   * `null` when there's nothing to score against (no client / no rules / the rules constrain nothing).
+   */
+  scoring: {
+    pct: number;
+    score: number;
+    max: number;
+    flags: string[];
+    autoDisqualify: string[];
+  } | null;
 }
 
 // --- request schemas (server validates; client reuses) ----------------------

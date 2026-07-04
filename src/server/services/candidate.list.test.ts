@@ -12,6 +12,7 @@ import type { AuthUser } from "@/server/auth/guards";
 const h = vi.hoisted(() => ({
   candidateRepo: { list: vi.fn() },
   clientRepo: { list: vi.fn() },
+  clientRulesRepo: { list: vi.fn() },
 }));
 
 vi.mock("server-only", () => ({}));
@@ -22,6 +23,12 @@ vi.mock("@/server/repositories/candidate.repository", () => ({
 vi.mock("@/server/repositories/client.repository", () => ({
   clientRepository: h.clientRepo,
 }));
+vi.mock("@/server/repositories/client-rules.repository", async () => {
+  const actual = await vi.importActual<
+    typeof import("@/server/repositories/client-rules.repository")
+  >("@/server/repositories/client-rules.repository");
+  return { ...actual, clientRulesRepository: h.clientRulesRepo };
+});
 
 import { candidateService } from "./candidate.service";
 
@@ -53,8 +60,24 @@ function row(overrides: Record<string, unknown> = {}) {
 beforeEach(() => {
   h.candidateRepo.list.mockReset();
   h.clientRepo.list.mockReset();
+  h.clientRulesRepo.list.mockReset();
   h.clientRepo.list.mockResolvedValue([{ id: "cl1", name: "Sterling Institute" }]);
+  h.clientRulesRepo.list.mockResolvedValue([]);
 });
+
+/** A `client_rules` row for `cl1` = Sterling Institute. */
+function sterlingRules() {
+  return {
+    id: "r1",
+    clientId: "cl1",
+    states: ["CT"],
+    creds: ["PMHNP", "MD"],
+    pops: ["Child/Adolescent"],
+    settings: ["Hybrid", "Outpatient"],
+    priority: "HIGH",
+    autoDisqualify: [],
+  };
+}
 
 describe("candidateService.listCandidates", () => {
   it("maps rows to PII-gated list items (never licenseNumber, even WITH viewCredentials)", async () => {
@@ -90,6 +113,61 @@ describe("candidateService.listCandidates", () => {
       search: "jane",
       take: 100,
     });
+  });
+
+  it("folds the fit pct onto each list item and sorts by score desc (nulls last)", async () => {
+    h.clientRulesRepo.list.mockResolvedValue([sterlingRules()]);
+    // Repo returns createdAt-desc; the service re-sorts by score. Intentionally UNSORTED input.
+    h.candidateRepo.list.mockResolvedValue([
+      row({
+        id: "mid",
+        clientId: "cl1",
+        licenseState: "NJ",
+        credential: "PMHNP",
+        population: "Adult",
+        setting: "Telehealth",
+        licenseStatus: "Active",
+      }), // 40
+      row({ id: "nul", clientId: null }), // null (no client)
+      row({
+        id: "hi",
+        clientId: "cl1",
+        licenseState: "CT",
+        credential: "PMHNP",
+        population: "Child/Adolescent",
+        setting: "Hybrid",
+        licenseStatus: "Active",
+      }), // 100
+    ]);
+    const list = await candidateService.listCandidates({}, associate);
+    expect(list.candidates.map((c) => c.id)).toEqual(["hi", "mid", "nul"]);
+    expect(list.candidates.map((c) => c.score)).toEqual([100, 40, null]);
+  });
+
+  it("keeps the repository createdAt-desc order for equal scores (stable sort)", async () => {
+    h.clientRulesRepo.list.mockResolvedValue([sterlingRules()]);
+    // Two identical-fit candidates (both 40): the repo's createdAt-desc order must be preserved.
+    const eq = (id: string) =>
+      row({
+        id,
+        clientId: "cl1",
+        licenseState: "NJ",
+        credential: "PMHNP",
+        population: "Adult",
+        setting: "Telehealth",
+        licenseStatus: "Active",
+      });
+    h.candidateRepo.list.mockResolvedValue([eq("first"), eq("second")]);
+    const list = await candidateService.listCandidates({}, associate);
+    expect(list.candidates.map((c) => c.id)).toEqual(["first", "second"]);
+    expect(list.candidates.every((c) => c.score === 40)).toBe(true);
+  });
+
+  it("scores null when the assigned client has no rules row", async () => {
+    h.clientRulesRepo.list.mockResolvedValue([]); // no rules seeded
+    h.candidateRepo.list.mockResolvedValue([row({ id: "x", clientId: "cl1" })]);
+    const list = await candidateService.listCandidates({}, associate);
+    expect(list.candidates[0]!.score).toBeNull();
   });
 
   it("reports capped=false below the cap and capped=true at the ceiling", async () => {

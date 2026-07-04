@@ -7,6 +7,7 @@ import { ALL_STATUS_CODES, statusLabel, type CandidateStatus } from "@/lib/const
 import type { CandidateCardDTO } from "@/lib/validation/pipeline";
 import { cn } from "@/lib/utils/cn";
 import { Badge } from "@/components/ui/badge";
+import { ScoreBadge } from "@/components/ui/score-badge";
 import { TRACK_BADGE, licenseDotClass } from "./lib/status-style";
 
 /** Timing badge — overdue (red) / stuck (orange) / plain days-in-stage (gray). */
@@ -92,9 +93,12 @@ export function CandidateCard({
           {card.licenseState ? ` · ${card.licenseState}` : ""}
         </p>
 
-        <p className="mt-0.5 text-xs text-charcoal">
-          {card.clientName ?? <span className="text-gray italic">Unassigned</span>}
-        </p>
+        <div className="mt-0.5 flex items-center justify-between gap-2">
+          <p className="text-xs text-charcoal">
+            {card.clientName ?? <span className="text-gray italic">Unassigned</span>}
+          </p>
+          <ScoreBadge score={card.score} />
+        </div>
 
         <div className="mt-2 flex items-center justify-between gap-2">
           <span className="flex items-center gap-1">

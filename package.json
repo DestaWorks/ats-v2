@@ -22,6 +22,7 @@
     "db:studio": "prisma studio",
     "db:seed": "NODE_OPTIONS=--conditions=react-server tsx scripts/seed-owner.ts",
     "db:seed:clients": "NODE_OPTIONS=--conditions=react-server tsx scripts/seed-clients.ts",
+    "db:seed:rules": "NODE_OPTIONS=--conditions=react-server tsx scripts/seed-rules.ts",
     "db:seed:demo": "NODE_OPTIONS=--conditions=react-server tsx scripts/seed-demo.ts",
     "db:status": "NODE_OPTIONS=--conditions=react-server tsx scripts/db-status.ts"
   },

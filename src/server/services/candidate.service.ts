@@ -27,11 +27,19 @@ import { requireUser, type AuthUser } from "@/server/auth/guards";
 import { writeAudit } from "@/server/db/audit";
 import { withTransaction } from "@/server/db/with-transaction";
 import { candidateRepository, type CandidateRow } from "@/server/repositories/candidate.repository";
-import { clientRepository } from "@/server/repositories/client.repository";
+import { clientRepository, type ClientRow } from "@/server/repositories/client.repository";
+import {
+  clientRulesRepository,
+  toClientRules,
+  type ClientRulesRow,
+} from "@/server/repositories/client-rules.repository";
 import { documentRepository } from "@/server/repositories/document.repository";
 import { noteRepository } from "@/server/repositories/note.repository";
 import { stageHistoryRepository } from "@/server/repositories/stage-history.repository";
 import { checkStageGate } from "@/lib/rules/stage-gates";
+import { scoreCandidate } from "@/lib/rules/scoring";
+import { getAutoDisqualify } from "@/lib/rules/disqualify";
+import type { ClientRules } from "@/lib/rules/types";
 import { getDaysInStage, isOverdue, isStuck } from "@/lib/rules/stage-timing";
 import { AppError } from "@/server/http/app-error";
 import { visibleNotes, toNoteDTO } from "./note.service";
@@ -70,15 +78,64 @@ const BOARD_COLUMN_CAP = 50;
 const ATTENTION_LIMIT = 8;
 
 /**
+ * Build the `clientId → ClientRules` map the scorer consumes, joining the small `client_rules` table
+ * to the `clients` name map ONCE per read (mirrors the `clientId → name` map already built). A rules
+ * row whose client is absent (e.g. soft-deleted) is skipped — an orphan can't be scored/named.
+ * `priority` / `autoDisqualify` are dropped here (not part of the scoring interface — see
+ * `toClientRules`); `getCandidateDetail` reads them separately from the row when it needs the DQ list.
+ */
+function buildRulesMap(
+  clients: ClientRow[],
+  rulesRows: ClientRulesRow[],
+): Map<string, ClientRules> {
+  const nameById = new Map(clients.map((c) => [c.id, c.name] as const));
+  const out = new Map<string, ClientRules>();
+  for (const r of rulesRows) {
+    const name = nameById.get(r.clientId);
+    if (!name) continue;
+    out.set(r.clientId, toClientRules(r, name));
+  }
+  return out;
+}
+
+/** A rules row that constrains none of the four matchable dimensions offers no client-specific fit. */
+function constrainsNothing(rules: ClientRules): boolean {
+  return rules.states.length + rules.creds.length + rules.pops.length + rules.settings.length === 0;
+}
+
+/**
+ * The candidate's fit `pct` for its ASSIGNED client, or `null` when there is nothing to score
+ * against: no client assigned, the client has no rules row, or the rules constrain nothing
+ * (e.g. *Future Potential Clients*, all arrays empty). `null` renders as "—", never as "0%";
+ * a real `0` (the client DOES constrain dimensions but the candidate matched none) still renders.
+ *
+ * NOTE on the "constrains nothing" case: the pure `scoreCandidate` ALWAYS adds 10 to `max` for the
+ * candidate-intrinsic license dimension, so `max === 0` is unreachable for a non-null rules row.
+ * A client whose four matchable arrays (states/creds/pops/settings) are all empty therefore offers
+ * NO client-specific fit — only the license floor would score, which is identical for every client —
+ * so we report `null` rather than a misleading license-only pct. The `max === 0` guard is kept as
+ * defense-in-depth. (Reuses the locked pure rule unchanged; the guard lives in the service.)
+ */
+function scoreFor(row: CandidateRow, rulesByClient: Map<string, ClientRules>): number | null {
+  if (!row.clientId) return null;
+  const rules = rulesByClient.get(row.clientId);
+  if (!rules || constrainsNothing(rules)) return null;
+  const { pct, max } = scoreCandidate(toRuleCandidate(row), rules);
+  return max > 0 ? pct : null;
+}
+
+/**
  * Project a raw candidate row onto the client-safe `CandidateCardDTO`. Runs through
  * `toCandidateDTO` first (the PII boundary) — the card type omits `licenseNumber` entirely, so
- * it can never reach a card regardless of viewer role. Timing is derived from `stageEnteredAt`.
+ * it can never reach a card regardless of viewer role. Timing is derived from `stageEnteredAt`;
+ * `score` (the precomputed fit `pct`, or `null`) is passed in by the service.
  */
 function toCard(
   row: CandidateRow,
   viewer: AuthUser,
   clientNames: Map<string, string>,
   now: Date,
+  score: number | null,
 ): CandidateCardDTO {
   const dto = toCandidateDTO(row, viewer);
   const status = dto.status as CandidateStatus;
@@ -96,6 +153,7 @@ function toCard(
     daysInStage: getDaysInStage(dto.stageEnteredAt, now),
     isOverdue: isOverdue(status, dto.stageEnteredAt, now),
     isStuck: isStuck(dto.stageEnteredAt, now),
+    score,
   };
 }
 
@@ -109,6 +167,7 @@ function toListItem(
   viewer: AuthUser,
   clientNames: Map<string, string>,
   now: Date,
+  score: number | null,
 ): CandidateListItemDTO {
   const dto = toCandidateDTO(row, viewer);
   const status = dto.status as CandidateStatus;
@@ -122,6 +181,7 @@ function toListItem(
     statusLabel: statusLabel(status),
     licenseStatus: dto.licenseStatus,
     daysInStage: getDaysInStage(dto.stageEnteredAt, now),
+    score,
   };
 }
 
@@ -238,16 +298,37 @@ export const candidateService = {
     const candidate = await candidateRepository.findById(id);
     if (!candidate) throw new AppError("NOT_FOUND", "Candidate not found");
 
-    const [documents, notes, history, clients] = await Promise.all([
+    const [documents, notes, history, clients, rulesRows] = await Promise.all([
       documentRepository.listByCandidate(id),
       noteRepository.listByCandidate(id),
       stageHistoryRepository.listByCandidate(id),
       clientRepository.list(),
+      clientRulesRepository.list(),
     ]);
 
     const clientName = candidate.clientId
       ? (new Map(clients.map((c) => [c.id, c.name])).get(candidate.clientId) ?? null)
       : null;
+
+    // Scoring block (S-4/S-7): compute the fit + flags for the assigned client and the ADVISORY
+    // auto-DQ reasons. `null` when there's nothing to score against (no client / no rules / max 0).
+    // Auto-DQ is display-only — it NEVER mutates the candidate's status (that stays a human `move`).
+    const rulesByClient = buildRulesMap(clients, rulesRows);
+    const rules = candidate.clientId ? (rulesByClient.get(candidate.clientId) ?? null) : null;
+    const ruleCandidate = toRuleCandidate(candidate);
+    const raw = scoreCandidate(ruleCandidate, rules);
+    // Non-null only when the client constrains at least one matchable dimension (see `scoreFor`) —
+    // a constrains-nothing client offers no client-specific fit to explain.
+    const scoring =
+      rules && !constrainsNothing(rules) && raw.max > 0
+        ? {
+            pct: raw.pct,
+            score: raw.score,
+            max: raw.max,
+            flags: raw.flags,
+            autoDisqualify: getAutoDisqualify(ruleCandidate, rules),
+          }
+        : null;
 
     return {
       candidate: toCandidateProfileDTO(toCandidateDTO(candidate, viewer)),
@@ -256,6 +337,7 @@ export const candidateService = {
       notes: visibleNotes(notes, viewer).map(toNoteDTO),
       stageHistory: history.slice(0, 10).map(toStageEventDTO),
       canVerifyCredentials: hasCapability(viewer.role, "viewCredentials"),
+      scoring,
     };
   },
 
@@ -303,13 +385,26 @@ export const candidateService = {
    * resolved via a one-shot in-memory join over the small `clients` table (as `listBoard` does).
    */
   async listCandidates(filters: BoardFilters = {}, viewer: AuthUser): Promise<CandidateListDTO> {
-    const [rows, clients] = await Promise.all([
+    const [rows, clients, rulesRows] = await Promise.all([
       candidateRepository.list({ ...filters, take: LIST_CAP }),
       clientRepository.list(),
+      clientRulesRepository.list(),
     ]);
     const clientNames = new Map(clients.map((c) => [c.id, c.name]));
+    const rulesByClient = buildRulesMap(clients, rulesRows);
     const now = new Date();
-    const candidates = rows.map((row) => toListItem(row, viewer, clientNames, now));
+    const candidates = rows.map((row) =>
+      toListItem(row, viewer, clientNames, now, scoreFor(row, rulesByClient)),
+    );
+    // Sort by fit desc (nulls last). Score is a computed field (not a DB column), so it can't be a
+    // Prisma `orderBy` — sort the ≤LIST_CAP loaded rows here. `Array.sort` is stable (Node ≥ 12), so
+    // equal scores keep the repository's `createdAt desc` order (page-local, not a global top-N).
+    candidates.sort((a, b) => {
+      if (a.score === b.score) return 0;
+      if (a.score === null) return 1;
+      if (b.score === null) return -1;
+      return b.score - a.score;
+    });
     return { candidates, count: candidates.length, capped: candidates.length >= LIST_CAP };
   },
 
@@ -320,10 +415,11 @@ export const candidateService = {
    * filtered to those actually overdue/stuck. AuthZ is the caller's; `viewer` drives the card PII gate.
    */
   async dashboardStats(viewer: AuthUser): Promise<DashboardStatsDTO> {
-    const [grouped, staleRows, clients] = await Promise.all([
+    const [grouped, staleRows, clients, rulesRows] = await Promise.all([
       candidateRepository.groupByStatus(),
       candidateRepository.listStaleActive(ATTENTION_LIMIT),
       clientRepository.list(),
+      clientRulesRepository.list(),
     ]);
 
     const countByStatus = new Map<string, number>();
@@ -343,9 +439,10 @@ export const candidateService = {
     }));
 
     const clientNames = new Map(clients.map((c) => [c.id, c.name]));
+    const rulesByClient = buildRulesMap(clients, rulesRows);
     const now = new Date();
     const attention = staleRows
-      .map((row) => toCard(row, viewer, clientNames, now))
+      .map((row) => toCard(row, viewer, clientNames, now, scoreFor(row, rulesByClient)))
       .filter((c) => c.isOverdue || c.isStuck);
 
     return { total, active, terminal: total - active, columns, attention };
@@ -365,11 +462,13 @@ export const candidateService = {
     viewer: AuthUser,
     opts: { includeTerminal?: boolean } = {},
   ): Promise<BoardResponse> {
-    const [rows, clients] = await Promise.all([
+    const [rows, clients, rulesRows] = await Promise.all([
       candidateRepository.list(filters),
       clientRepository.list(),
+      clientRulesRepository.list(),
     ]);
     const clientNames = new Map(clients.map((c) => [c.id, c.name]));
+    const rulesByClient = buildRulesMap(clients, rulesRows);
     const now = new Date();
 
     const cardsByStatus = new Map<CandidateStatus, CandidateCardDTO[]>();
@@ -377,7 +476,7 @@ export const candidateService = {
     let overdue = 0;
     let stuck = 0;
     for (const row of rows) {
-      const card = toCard(row, viewer, clientNames, now);
+      const card = toCard(row, viewer, clientNames, now, scoreFor(row, rulesByClient));
       const bucket = cardsByStatus.get(card.status);
       if (bucket) bucket.push(card);
       else cardsByStatus.set(card.status, [card]);

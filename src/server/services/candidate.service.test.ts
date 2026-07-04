@@ -23,6 +23,7 @@ const h = vi.hoisted(() => ({
   docRepo: { listByCandidate: vi.fn() },
   noteRepo: { listByCandidate: vi.fn(), create: vi.fn() },
   clientRepo: { list: vi.fn() },
+  clientRulesRepo: { list: vi.fn() },
   writeAudit: vi.fn(),
 }));
 
@@ -39,6 +40,12 @@ vi.mock("@/server/repositories/document.repository", () => ({
 }));
 vi.mock("@/server/repositories/note.repository", () => ({ noteRepository: h.noteRepo }));
 vi.mock("@/server/repositories/client.repository", () => ({ clientRepository: h.clientRepo }));
+vi.mock("@/server/repositories/client-rules.repository", async () => {
+  const actual = await vi.importActual<
+    typeof import("@/server/repositories/client-rules.repository")
+  >("@/server/repositories/client-rules.repository");
+  return { ...actual, clientRulesRepository: h.clientRulesRepo };
+});
 vi.mock("@/server/db/audit", () => ({ writeAudit: h.writeAudit }));
 vi.mock("@/server/db/with-transaction", () => ({
   withTransaction: (fn: (tx: unknown) => unknown) => fn(h.fakeTx),
@@ -102,13 +109,31 @@ beforeEach(() => {
   h.docRepo.listByCandidate.mockReset();
   h.noteRepo.listByCandidate.mockReset();
   h.clientRepo.list.mockReset();
+  h.clientRulesRepo.list.mockReset();
   h.writeAudit.mockReset();
   // Detail composition defaults (individual tests override as needed).
   h.docRepo.listByCandidate.mockResolvedValue([]);
   h.noteRepo.listByCandidate.mockResolvedValue([]);
   h.stageRepo.listByCandidate.mockResolvedValue([]);
   h.clientRepo.list.mockResolvedValue([{ id: "cl1", name: "Acme Health" }]);
+  // No rules by default → detail `scoring` is null; scoring tests override with a rules row.
+  h.clientRulesRepo.list.mockResolvedValue([]);
 });
+
+/** A `client_rules` row for `cl1` = Acme Health, matched to `fullCandidate` (NJ / PMHNP). */
+function acmeRules(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "r1",
+    clientId: "cl1",
+    states: ["NJ"],
+    creds: ["PMHNP", "MD"],
+    pops: [],
+    settings: [],
+    priority: "MED",
+    autoDisqualify: [],
+    ...overrides,
+  };
+}
 
 describe("candidateService.move", () => {
   it("throws NOT_FOUND when the candidate does not exist", async () => {
@@ -398,6 +423,41 @@ describe("candidateService.getCandidateDetail", () => {
     await expect(
       candidateService.getCandidateDetail("missing", h.owner as AuthUser),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("attaches a scoring block (pct/score/max/flags) for a client-assigned candidate", async () => {
+    // NJ / PMHNP / Active vs NJ+PMHNP rules → state 30 + cred 30 + license 10 = 70/70 → pct 100.
+    h.candidateRepo.findById.mockResolvedValue(fullCandidate());
+    h.clientRulesRepo.list.mockResolvedValue([acmeRules()]);
+    const detail = await candidateService.getCandidateDetail("c1", h.owner as AuthUser);
+    expect(detail.scoring).not.toBeNull();
+    expect(detail.scoring!.pct).toBe(100);
+    expect(detail.scoring!.max).toBe(70);
+    expect(Array.isArray(detail.scoring!.flags)).toBe(true);
+    expect(detail.scoring!.flags).toHaveLength(0);
+    expect(detail.scoring!.autoDisqualify).toEqual([]);
+  });
+
+  it("populates scoring.autoDisqualify (advisory) for an expired-license candidate", async () => {
+    h.candidateRepo.findById.mockResolvedValue(fullCandidate({ licenseStatus: "Expired" }));
+    h.clientRulesRepo.list.mockResolvedValue([acmeRules()]);
+    const detail = await candidateService.getCandidateDetail("c1", h.owner as AuthUser);
+    expect(detail.scoring!.autoDisqualify).toContain("License expired");
+    expect(detail.scoring!.flags).toContain("License expired");
+  });
+
+  it("scoring is null when the candidate has no client", async () => {
+    h.candidateRepo.findById.mockResolvedValue(fullCandidate({ clientId: null }));
+    h.clientRulesRepo.list.mockResolvedValue([acmeRules()]);
+    const detail = await candidateService.getCandidateDetail("c1", h.owner as AuthUser);
+    expect(detail.scoring).toBeNull();
+  });
+
+  it("scoring is null when the assigned client has no rules row", async () => {
+    h.candidateRepo.findById.mockResolvedValue(fullCandidate());
+    h.clientRulesRepo.list.mockResolvedValue([]); // no rules seeded
+    const detail = await candidateService.getCandidateDetail("c1", h.owner as AuthUser);
+    expect(detail.scoring).toBeNull();
   });
 });
 

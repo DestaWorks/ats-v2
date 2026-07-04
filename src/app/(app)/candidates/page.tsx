@@ -5,6 +5,7 @@ import { getCurrentUser } from "@/server/auth/guards";
 import { candidateService } from "@/server/services/candidate.service";
 import { clientRepository } from "@/server/repositories/client.repository";
 import { Badge } from "@/components/ui/badge";
+import { ScoreBadge } from "@/components/ui/score-badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Table, Td } from "@/components/ui/table";
 import { ListFilters } from "./list-filters";
@@ -51,6 +52,7 @@ export default async function CandidatesPage({
               ? `Showing the first ${list.count} candidates — narrow with filters to find more.`
               : `${list.count} ${list.count === 1 ? "candidate" : "candidates"}`}
           </p>
+          <p className="text-xs text-gray">Sorted by fit score — best matches first.</p>
         </div>
         <Link
           href="/candidates/new"
@@ -70,7 +72,16 @@ export default async function CandidatesPage({
       ) : (
         <Table
           caption="Candidates"
-          columns={["Name", "Credential", "Track", "Client", "Status", "License", "Days in stage"]}
+          columns={[
+            "Name",
+            "Credential",
+            "Track",
+            "Client",
+            "Score",
+            "Status",
+            "License",
+            "Days in stage",
+          ]}
         >
           {list.candidates.map((c) => (
             <tr key={c.id} className="transition hover:bg-black/[0.03]">
@@ -87,6 +98,9 @@ export default async function CandidatesPage({
                 <Badge tone="neutral">{c.track}</Badge>
               </Td>
               <Td>{c.clientName ?? <span className="text-gray italic">Unassigned</span>}</Td>
+              <Td>
+                <ScoreBadge score={c.score} />
+              </Td>
               <Td>{c.statusLabel}</Td>
               <Td>
                 <Badge tone={c.licenseStatus === "Active" ? "success" : "neutral"}>

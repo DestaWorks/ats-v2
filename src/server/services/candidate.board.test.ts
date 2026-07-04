@@ -16,6 +16,7 @@ const h = vi.hoisted(() => ({
     listStaleActive: vi.fn(),
   },
   clientRepo: { list: vi.fn() },
+  clientRulesRepo: { list: vi.fn() },
 }));
 
 vi.mock("server-only", () => ({}));
@@ -26,6 +27,13 @@ vi.mock("@/server/repositories/candidate.repository", () => ({
 vi.mock("@/server/repositories/client.repository", () => ({
   clientRepository: h.clientRepo,
 }));
+vi.mock("@/server/repositories/client-rules.repository", async () => {
+  const actual = await vi.importActual<
+    typeof import("@/server/repositories/client-rules.repository")
+  >("@/server/repositories/client-rules.repository");
+  // Mock only the Prisma-touching `list`; the pure `toClientRules` mapper runs for real.
+  return { ...actual, clientRulesRepository: h.clientRulesRepo };
+});
 
 import { candidateService } from "./candidate.service";
 
@@ -59,7 +67,88 @@ function row(overrides: Record<string, unknown> = {}) {
 beforeEach(() => {
   h.candidateRepo.list.mockReset();
   h.clientRepo.list.mockReset();
+  h.clientRulesRepo.list.mockReset();
   h.clientRepo.list.mockResolvedValue([{ id: "cl1", name: "Sterling Institute" }]);
+  // Default: no rules seeded → every card scores null (existing assertions are score-agnostic).
+  h.clientRulesRepo.list.mockResolvedValue([]);
+});
+
+/** A `client_rules` row for `cl1` = Sterling Institute (states/creds/pops/settings drive scoring). */
+function sterlingRules(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "r1",
+    clientId: "cl1",
+    states: ["CT"],
+    creds: ["PMHNP", "PMHNP-BC", "MD", "DO", "PsyD", "PhD"],
+    pops: ["Child/Adolescent"],
+    settings: ["Hybrid", "Outpatient"],
+    priority: "HIGH",
+    autoDisqualify: ["No CT license"],
+    ...overrides,
+  };
+}
+
+describe("candidateService.listBoard — scoring", () => {
+  it("folds the fit pct onto the card for a client with rules", async () => {
+    h.clientRulesRepo.list.mockResolvedValue([sterlingRules()]);
+    h.candidateRepo.list.mockResolvedValue([
+      // Full match: CT / PMHNP / Child-Adolescent / Hybrid / Active → 100/100.
+      row({
+        id: "full",
+        clientId: "cl1",
+        licenseState: "CT",
+        credential: "PMHNP",
+        population: "Child/Adolescent",
+        setting: "Hybrid",
+        licenseStatus: "Active",
+      }),
+      // Mismatch on state + population + setting: only credential (30) + license (10) = 40/100.
+      row({
+        id: "partial",
+        clientId: "cl1",
+        licenseState: "NJ",
+        credential: "PMHNP",
+        population: "Adult",
+        setting: "Telehealth",
+        licenseStatus: "Active",
+      }),
+    ]);
+    const board = await candidateService.listBoard({}, viewer);
+    const cards = board.columns.find((c) => c.status === "NEW_CANDIDATE")!.candidates;
+    expect(cards.find((c) => c.id === "full")!.score).toBe(100);
+    expect(cards.find((c) => c.id === "partial")!.score).toBe(40);
+  });
+
+  it("scores null when the candidate has no client", async () => {
+    h.clientRulesRepo.list.mockResolvedValue([sterlingRules()]);
+    h.candidateRepo.list.mockResolvedValue([row({ id: "noclient", clientId: null })]);
+    const board = await candidateService.listBoard({}, viewer);
+    const card = board.columns.find((c) => c.status === "NEW_CANDIDATE")!.candidates[0]!;
+    expect(card.score).toBeNull();
+  });
+
+  it("scores null when the assigned client has no rules row", async () => {
+    h.clientRulesRepo.list.mockResolvedValue([]); // no rules at all
+    h.candidateRepo.list.mockResolvedValue([row({ id: "norules", clientId: "cl1" })]);
+    const board = await candidateService.listBoard({}, viewer);
+    const card = board.columns.find((c) => c.status === "NEW_CANDIDATE")!.candidates[0]!;
+    expect(card.score).toBeNull();
+  });
+
+  it("scores null (not a license-only pct) when the client's rules constrain nothing", async () => {
+    // Empty-rules client (e.g. Future Potential Clients): all four matchable arrays empty. The pure
+    // rule would still score the license floor (max 10), but `scoreFor` reports null because there's
+    // no client-SPECIFIC fit to show — even for an Active-license candidate that would otherwise be 100%.
+    h.clientRulesRepo.list.mockResolvedValue([
+      sterlingRules({ states: [], creds: [], pops: [], settings: [] }),
+    ]);
+    h.candidateRepo.list.mockResolvedValue([
+      row({ id: "empty", clientId: "cl1", licenseStatus: "Active" }),
+    ]);
+    const board = await candidateService.listBoard({}, viewer);
+    const card = board.columns.find((c) => c.status === "NEW_CANDIDATE")!.candidates[0]!;
+    expect(card.score).toBeNull();
+  });
 });
 
 describe("candidateService.listBoard", () => {

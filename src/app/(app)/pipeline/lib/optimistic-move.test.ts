@@ -17,6 +17,7 @@ function card(id: string, status: CandidateCardDTO["status"], over = false): Can
     daysInStage: over ? 9 : 1,
     isOverdue: over,
     isStuck: over,
+    score: null,
   };
 }
 
