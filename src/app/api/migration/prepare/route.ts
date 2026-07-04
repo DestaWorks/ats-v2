@@ -4,6 +4,11 @@ import { apiHandler, json } from "@/server/http/api-handler";
 import { migrationService } from "@/server/services/migration.service";
 
 /**
+ * Allow the ETL prepare (parse + transform + dedupe of a large export) up to the platform maximum.
+ */
+export const maxDuration = 300;
+
+/**
  * POST /api/migration/prepare — parse + transform + dedupe the legacy Sheet export into a diffable
  * `ImportReport`. Writes NOTHING. Guarded by `requireCapability("bulkImport")` (a leadership
  * capability). The client re-uploads the same `content` to /commit (stateless hand-off, E-7).

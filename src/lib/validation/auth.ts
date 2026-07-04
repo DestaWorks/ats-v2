@@ -12,10 +12,12 @@ export const signInSchema = z.object({
 });
 export type SignInInput = z.infer<typeof signInSchema>;
 
+// Upper bounds on the PUBLIC (unauthenticated) access-request fields — a cheap guard against a
+// resource-exhaustion / payload-bloat abuse of the one endpoint anyone can hit without an account.
 export const accessRequestSchema = z.object({
-  name: z.string().min(1, "Name is required"),
+  name: z.string().min(1, "Name is required").max(200, "Keep it under 200 characters"),
   email: z.email("Enter a valid email address"),
-  organization: z.string().optional(),
-  message: z.string().max(1000, "Keep it under 1000 characters").optional(),
+  organization: z.string().max(200, "Keep it under 200 characters").optional(),
+  message: z.string().max(2000, "Keep it under 2000 characters").optional(),
 });
 export type AccessRequestInput = z.infer<typeof accessRequestSchema>;

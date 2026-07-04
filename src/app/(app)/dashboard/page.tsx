@@ -11,33 +11,28 @@ import { FunnelBar } from "./funnel-bar";
 import { StatCard } from "./stat-card";
 
 /**
- * Dashboard (RSC). Reads the funnel-grouped board directly (`candidateService.listBoard`) and
- * renders the pipeline funnel (bar per active stage), headline stats (active / overdue / stuck),
- * a "needs attention" list (overdue + stuck cards — the board DTO carries no `createdAt`, so this
- * is more useful than an arbitrary "recent"), and a prominent link into the board.
+ * Dashboard (RSC). Reads a lightweight summary (`candidateService.dashboardStats`) that gets its
+ * per-stage counts from a Prisma `groupBy` and its "needs attention" list from a small targeted
+ * query — it never loads the whole candidate table. Renders the pipeline funnel (bar per active
+ * stage), headline stats (total / active / terminal), the attention list (overdue + stuck cards),
+ * and a prominent link into the board.
  */
 export default async function DashboardPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/sign-in");
 
-  const board = await candidateService.listBoard({}, user);
-  const maxCount = board.columns.reduce((m, c) => Math.max(m, c.count), 0);
-
-  const attention: CandidateCardDTO[] = board.columns
-    .flatMap((c) => c.candidates)
-    .filter((c) => c.isOverdue || c.isStuck)
-    .sort((a, b) => b.daysInStage - a.daysInStage)
-    .slice(0, 8);
+  const stats = await candidateService.dashboardStats(user);
+  const maxCount = stats.columns.reduce((m, c) => Math.max(m, c.count), 0);
+  const attention: CandidateCardDTO[] = stats.attention;
 
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-6 p-8">
       <h1 className="text-2xl font-bold text-navy">Dashboard</h1>
 
-      <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatCard label="Total" value={board.meta.total} />
-        <StatCard label="Active" value={board.meta.active} />
-        <StatCard label="Overdue" value={board.meta.overdue} tone="red" />
-        <StatCard label="Stuck >7d" value={board.meta.stuck} tone="orange" />
+      <section className="grid grid-cols-3 gap-3">
+        <StatCard label="Total" value={stats.total} />
+        <StatCard label="Active" value={stats.active} />
+        <StatCard label="Terminal" value={stats.terminal} />
       </section>
 
       <Card as="section" className="p-5">
@@ -51,14 +46,14 @@ export default async function DashboardPage() {
             Open pipeline board →
           </Link>
         </div>
-        {board.meta.active === 0 ? (
+        {stats.active === 0 ? (
           <EmptyState
             title="No active candidates"
             description="Add candidates via the résumé flow to populate the pipeline."
           />
         ) : (
           <div className="flex flex-col gap-2">
-            {board.columns.map((col) => (
+            {stats.columns.map((col) => (
               <FunnelBar
                 key={col.status}
                 status={col.status}

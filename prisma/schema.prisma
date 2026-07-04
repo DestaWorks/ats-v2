@@ -125,7 +125,8 @@ model ActivityLog {
 // migrations. Status is a stable CODE + numeric `stageOrder` mirror (never the label). Actor
 // columns are plain `String` ids (mirrors `activity_log.actor`) — legacy actors may not
 // resolve to a `User` row at ETL. Soft-delete (`deletedAt`) is filtered by default at the
-// repository layer. `licenseNumber` is sensitive PII — DTO-gated (`viewCredentials`).
+// repository layer. `licenseNumber` is sensitive PII — DTO-gated (`viewCredentials`) and
+// encrypted at rest at the repository boundary when `FIELD_ENCRYPTION_KEY` is set.
 
 model Client {
   id         String      @id @default(cuid())
@@ -162,7 +163,7 @@ model Candidate {
   outreachAttempts    Int             @default(0)
   // license / verification
   licenseState        String?
-  licenseNumber       String? // SENSITIVE — DTO-gated + encrypted
+  licenseNumber       String? // SENSITIVE — DTO-gated + encrypted at rest when FIELD_ENCRYPTION_KEY is set
   licenseStatus       String          @default("Not Verified")
   licenseExpiry       DateTime?
   licenseVerifiedAt   DateTime?
@@ -216,7 +217,8 @@ model Document {
   storageKey String? // Supabase object path — NULL until Wave 6
   legacyUrl  String? // legacy Google Drive URL, carried at ETL
 
-  // captured extraction (SENSITIVE — DTO-gated on viewCredentials; never logged)
+  // captured extraction (SENSITIVE — DTO-gated on viewCredentials; never logged; encrypted at
+  // rest at the repository boundary when FIELD_ENCRYPTION_KEY is set)
   extractedText String?
   extractedData Json?
 

@@ -24,7 +24,14 @@ export type ImportFormat = z.infer<typeof importFormatSchema>;
  */
 export const importInputSchema = z.object({
   format: importFormatSchema,
-  content: z.string().min(1).max(MAX_IMPORT_BYTES),
+  // Hard cap on the request body — a clear, actionable error beats an opaque platform 413.
+  content: z
+    .string()
+    .min(1, "The import file is empty.")
+    .max(
+      MAX_IMPORT_BYTES,
+      "The import file is too large (max 10 MB). Split it and import in batches.",
+    ),
   filename: z.string().min(1).max(255).optional(),
   checksum: z.string().length(64).optional(),
 });

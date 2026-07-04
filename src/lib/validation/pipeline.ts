@@ -65,6 +65,25 @@ export interface BulkMoveResponse {
   blocked: { id: string; reason: string }[];
 }
 
+/** One active-stage funnel bar for the dashboard (count comes from a `groupBy`, not a full load). */
+export interface DashboardStatColumn {
+  status: CandidateStatus;
+  label: string;
+  count: number;
+}
+
+/**
+ * Dashboard summary — headline counts (from a per-status `groupBy`), the active-stage funnel, and a
+ * SMALL "needs attention" list (overdue/stuck), computed WITHOUT loading the whole candidate table.
+ */
+export interface DashboardStatsDTO {
+  total: number;
+  active: number;
+  terminal: number;
+  columns: DashboardStatColumn[];
+  attention: CandidateCardDTO[];
+}
+
 // --- request schemas (server validates; client may reuse) -------------------
 
 const candidateStatusSchema = z.enum(

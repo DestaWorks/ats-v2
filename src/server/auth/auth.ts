@@ -41,6 +41,20 @@ export const auth = betterAuth({
       role: { type: "string", required: false, defaultValue: "Associate", input: false },
     },
   },
+  // Brute-force hardening: Better Auth's built-in limiter. Its default in-memory store is
+  // per-instance/best-effort (production should back it with the DB/secondary storage), but sign-in
+  // is the top brute-force surface so we tighten it here. Better Auth activates rate limiting in
+  // production by default; `enabled: true` also turns it on for staging. The email/password sign-in
+  // path (`/sign-in/email`) gets a strict custom rule; other endpoints use the sane global default.
+  rateLimit: {
+    enabled: true,
+    window: 60, // seconds
+    max: 100, // global default per window
+    customRules: {
+      "/sign-in/email": { window: 60, max: 5 },
+      "/sign-in/social": { window: 60, max: 10 },
+    },
+  },
   // Dev only: trust localhost on whatever port `next dev` picks. In production the real
   // origin (BETTER_AUTH_URL = zyx.com / staging.zyx.com) is trusted automatically.
   ...(process.env.NODE_ENV !== "production"

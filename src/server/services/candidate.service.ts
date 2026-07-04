@@ -20,7 +20,12 @@ import type {
   VerifyLicenseInput,
 } from "@/lib/validation/candidate";
 import type { CandidateListDTO, CandidateListItemDTO } from "@/lib/validation/candidate";
-import type { BoardResponse, BulkMoveResponse, CandidateCardDTO } from "@/lib/validation/pipeline";
+import type {
+  BoardResponse,
+  BulkMoveResponse,
+  CandidateCardDTO,
+  DashboardStatsDTO,
+} from "@/lib/validation/pipeline";
 import { requireUser, type AuthUser } from "@/server/auth/guards";
 import { writeAudit } from "@/server/db/audit";
 import { withTransaction } from "@/server/db/with-transaction";
@@ -53,6 +58,16 @@ export interface BoardFilters {
  * the ceiling is hit the DTO carries `capped: true` and the UI shows a "showing first N" note.
  */
 const LIST_CAP = 100;
+
+/**
+ * Per-column ceiling on the board payload. The board still counts every candidate (the column
+ * header shows the TRUE total), but each column ships at most this many CARDS — so a 1,000-row stage
+ * can't dump 1,000 cards onto the client. Full load-more pagination is a later follow-up.
+ */
+const BOARD_COLUMN_CAP = 50;
+
+/** How many "needs attention" candidates the dashboard surfaces (a small, targeted read). */
+const ATTENTION_LIMIT = 8;
 
 /**
  * Project a raw candidate row onto the client-safe `CandidateCardDTO`. Runs through
@@ -377,6 +392,44 @@ export const candidateService = {
   },
 
   /**
+   * Dashboard summary WITHOUT loading the whole candidate table (audit perf finding). Per-status
+   * counts come from a Prisma `groupBy` (the funnel + total/active/terminal); the "needs attention"
+   * list is a SMALL targeted read of the oldest-in-stage active candidates (`take: ATTENTION_LIMIT`)
+   * filtered to those actually overdue/stuck. AuthZ is the caller's; `viewer` drives the card PII gate.
+   */
+  async dashboardStats(viewer: AuthUser): Promise<DashboardStatsDTO> {
+    const [grouped, staleRows, clients] = await Promise.all([
+      candidateRepository.groupByStatus(),
+      candidateRepository.listStaleActive(ATTENTION_LIMIT),
+      clientRepository.list(),
+    ]);
+
+    const countByStatus = new Map<string, number>();
+    for (const g of grouped) countByStatus.set(g.status, g._count._all);
+
+    let total = 0;
+    let active = 0;
+    for (const [status, n] of countByStatus) {
+      total += n;
+      if (isCandidateStatus(status) && !isTerminalStatus(status)) active += n;
+    }
+
+    const columns = ACTIVE_STATUS_CODES.map((status) => ({
+      status,
+      label: statusLabel(status),
+      count: countByStatus.get(status) ?? 0,
+    }));
+
+    const clientNames = new Map(clients.map((c) => [c.id, c.name]));
+    const now = new Date();
+    const attention = staleRows
+      .map((row) => toCard(row, viewer, clientNames, now))
+      .filter((c) => c.isOverdue || c.isStuck);
+
+    return { total, active, terminal: total - active, columns, attention };
+  },
+
+  /**
    * Read the pipeline board — funnel-grouped candidates with derived stage timing. AuthZ is the
    * caller's (route `requireUser()` / RSC `getCurrentUser()`); `viewer` is passed in for the PII
    * boundary. Returns exactly the 9 active columns (order 0..8, empties present), a terminal
@@ -413,24 +466,25 @@ export const candidateService = {
       }
     }
 
+    // Per-column cap: `count` is the TRUE total; `candidates` is at most `BOARD_COLUMN_CAP` cards.
     const columns = ACTIVE_STATUS_CODES.map((status) => {
-      const candidates = cardsByStatus.get(status) ?? [];
+      const all = cardsByStatus.get(status) ?? [];
       return {
         status,
         label: statusLabel(status),
         stageOrder: statusOrder(status),
-        count: candidates.length,
-        candidates,
+        count: all.length,
+        candidates: all.slice(0, BOARD_COLUMN_CAP),
       };
     });
 
     const terminal = TERMINAL_STATUS_CODES.map((status) => {
-      const candidates = cardsByStatus.get(status) ?? [];
+      const all = cardsByStatus.get(status) ?? [];
       return {
         status,
         label: statusLabel(status),
-        count: candidates.length,
-        ...(opts.includeTerminal ? { candidates } : {}),
+        count: all.length,
+        ...(opts.includeTerminal ? { candidates: all.slice(0, BOARD_COLUMN_CAP) } : {}),
       };
     });
 
