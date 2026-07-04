@@ -141,6 +141,37 @@ export const updateCandidateSchema = z
 export type UpdateCandidateInput = z.infer<typeof updateCandidateSchema>;
 
 /**
+ * Body for `POST /api/candidates` — manually create a candidate (Wave 2.4, Module 5). Mirrors
+ * `updateCandidateSchema` but `name` is REQUIRED and `track` carries a default, so a bare `{ name }`
+ * is a valid create. `.strict()` rejects any unknown or forbidden key: `status`/`stageOrder` and
+ * pipeline timing stay owned by `move` (every interactive create starts at `NEW_CANDIDATE`, stage 0),
+ * and `licenseExpiry`/verification columns stay owned by `verify-license` — so a create can never drop
+ * a candidate mid-pipeline or forge a verification. `licenseNumber` is accepted here only for a viewer
+ * with `viewCredentials`; the route rejects it (403) otherwise (mirrors the PATCH gate).
+ */
+export const createCandidateSchema = z
+  .object({
+    name: z.string().trim().min(1).max(200),
+    email: z.string().trim().email().max(200).nullish(),
+    phone: z.string().trim().max(50).nullish(),
+    city: z.string().trim().max(120).nullish(),
+    state: z.enum(US_STATES).nullish(),
+    employer: z.string().trim().max(200).nullish(),
+    yearsExp: z.number().int().min(0).max(80).nullish(),
+    credential: z.enum(CREDENTIALS).nullish(),
+    population: z.enum(POPULATIONS).nullish(),
+    setting: z.enum(SETTINGS).nullish(),
+    track: z.enum(TRACKS).default("Clinical"),
+    source: z.enum(SOURCES).nullish(),
+    tags: z.array(z.enum(TAGS)).max(20).optional(),
+    licenseState: z.enum(US_STATES).nullish(),
+    clientId: z.string().min(1).nullish(),
+    licenseNumber: z.string().trim().max(100).nullish(), // route rejects unless viewCredentials
+  })
+  .strict();
+export type CreateCandidateInput = z.infer<typeof createCandidateSchema>;
+
+/**
  * Body for `POST /api/candidates/:id/verify-license`. Sets the verification status (+ optional
  * expiry / number); the service stamps who/when. `licenseNumber` requires `viewCredentials`.
  */
