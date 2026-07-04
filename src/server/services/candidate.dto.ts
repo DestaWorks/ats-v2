@@ -7,7 +7,7 @@ import {
   type Track,
 } from "@/lib/constants";
 import type { CandidateRow } from "@/server/repositories/candidate.repository";
-import type { RuleCandidate } from "@/server/rules/types";
+import type { RuleCandidate } from "@/lib/rules/types";
 
 /** Minimal viewer shape the DTO needs — only the role drives the PII gate. */
 export interface DtoViewer {

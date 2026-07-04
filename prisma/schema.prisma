@@ -142,47 +142,48 @@ model Client {
 }
 
 model Candidate {
-  id       String  @id @default(cuid())
-  legacyId String? @unique
+  id                  String          @id @default(cuid())
+  legacyId            String?         @unique
   // identity / contact (PII)
-  name     String
-  email    String?
-  phone    String?
-  city     String?
-  state    String?
-  employer String?
-  yearsExp Int?
+  name                String
+  email               String?
+  phone               String?
+  city                String?
+  state               String?
+  employer            String?
+  yearsExp            Int?
   // clinical profile (scoring/gate inputs)
-  credential       String?
-  population       String?
-  setting          String?
-  track            String   @default("Clinical")
-  source           String?
-  tags             String[] @default([])
-  outreachAttempts Int      @default(0)
+  credential          String?
+  population          String?
+  setting             String?
+  track               String          @default("Clinical")
+  source              String?
+  tags                String[]        @default([])
+  outreachAttempts    Int             @default(0)
   // license / verification
   licenseState        String?
   licenseNumber       String? // SENSITIVE — DTO-gated + encrypted
-  licenseStatus       String    @default("Not Verified")
+  licenseStatus       String          @default("Not Verified")
   licenseExpiry       DateTime?
   licenseVerifiedAt   DateTime?
   licenseVerifiedById String?
   // pipeline (code + ordinal + denormalized timing)
-  status         String   @default("NEW_CANDIDATE")
-  stageOrder     Int      @default(0)
-  stageEnteredAt DateTime @default(now())
-  placedAt       DateTime?
+  status              String          @default("NEW_CANDIDATE")
+  stageOrder          Int             @default(0)
+  stageEnteredAt      DateTime        @default(now())
+  placedAt            DateTime?
   // client
-  clientId String?
-  client   Client? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  clientId            String?
+  client              Client?         @relation(fields: [clientId], references: [id], onDelete: SetNull)
   // lifecycle
-  createdById  String?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  deletedAt    DateTime?
-  deletedById  String?
-  stageHistory StageHistory[]
-  documents    Document[]
+  createdById         String?
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  deletedAt           DateTime?
+  deletedById         String?
+  stageHistory        StageHistory[]
+  documents           Document[]
+  notes               CandidateNote[]
 
   @@index([status])
   @@index([clientId])
@@ -206,7 +207,7 @@ model Document {
   candidate   Candidate? @relation(fields: [candidateId], references: [id], onDelete: Cascade)
 
   // classification (validated vs DOCUMENT_TYPES in zod; stored as String)
-  type             String  @default("resume")
+  type             String @default("resume")
   originalFilename String
   mimeType         String
   sizeBytes        Int?
@@ -230,6 +231,33 @@ model Document {
   @@index([deletedAt])
   @@index([type])
   @@map("documents")
+}
+
+// Candidate notes (Wave 2.2). Body is user text — stored RAW and rendered as escaped plain text
+// client-side (NEVER dangerouslySetInnerHTML — fixes the legacy stored-XSS). noteType is a two-value
+// vocab (internal | external) validated in zod. Role-scoped visibility is enforced SERVER-SIDE in the
+// read (server/services/note.service.ts), never shipped-then-hidden. Cascade: a note is candidate PII,
+// so a hard purge takes its notes with it.
+model CandidateNote {
+  id          String    @id @default(cuid())
+  legacyId    String?   @unique // deferred ETL backfill (idempotent upsert)
+  candidateId String
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  authorId   String // acting user's id (mirrors activity_log.actor)
+  authorName String? // denormalized display name (legacy notes may lack a User row)
+  body       String // RAW user text — never rendered as HTML
+  noteType   String  @default("internal") // internal | external (validated vs constant union in zod)
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  deletedById String?
+
+  @@index([candidateId])
+  @@index([candidateId, createdAt])
+  @@index([deletedAt])
+  @@map("candidate_notes")
 }
 
 model StageHistory {

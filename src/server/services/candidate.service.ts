@@ -2,6 +2,7 @@ import "server-only";
 import {
   ACTIVE_STATUS_CODES,
   TERMINAL_STATUS_CODES,
+  hasCapability,
   isCandidateStatus,
   isTerminalStatus,
   statusLabel,
@@ -10,17 +11,32 @@ import {
   type LicenseStatus,
   type Track,
 } from "@/lib/constants";
+import type {
+  CandidateDetailDTO,
+  CandidateProfileDTO,
+  DocumentSummaryDTO,
+  StageEventDTO,
+  UpdateCandidateInput,
+  VerifyLicenseInput,
+} from "@/lib/validation/candidate";
 import type { BoardResponse, BulkMoveResponse, CandidateCardDTO } from "@/lib/validation/pipeline";
 import { requireUser, type AuthUser } from "@/server/auth/guards";
 import { writeAudit } from "@/server/db/audit";
 import { withTransaction } from "@/server/db/with-transaction";
 import { candidateRepository, type CandidateRow } from "@/server/repositories/candidate.repository";
 import { clientRepository } from "@/server/repositories/client.repository";
-import { stageHistoryRepository } from "@/server/repositories/stage-history.repository";
-import { checkStageGate } from "@/server/rules/stage-gates";
-import { getDaysInStage, isOverdue, isStuck } from "@/server/rules/stage-timing";
+import { documentRepository } from "@/server/repositories/document.repository";
+import { noteRepository } from "@/server/repositories/note.repository";
+import {
+  stageHistoryRepository,
+  type StageHistoryRow,
+} from "@/server/repositories/stage-history.repository";
+import { checkStageGate } from "@/lib/rules/stage-gates";
+import { getDaysInStage, isOverdue, isStuck } from "@/lib/rules/stage-timing";
 import { AppError } from "@/server/http/app-error";
-import { toCandidateDTO, toRuleCandidate } from "./candidate.dto";
+import { visibleNotes, toNoteDTO } from "./note.service";
+import { toDocumentDTO, type DocumentDTO } from "./document.dto";
+import { toCandidateDTO, toRuleCandidate, type CandidateDTO } from "./candidate.dto";
 
 /** Filters accepted by the board read (a subset of the repository's list filters). */
 export interface BoardFilters {
@@ -93,6 +109,96 @@ export interface CandidateCreateInput {
 /** Editable fields. `status`/pipeline timing are owned by `move` (denormalization contract). */
 export type CandidateUpdateInput = Partial<Omit<CandidateCreateInput, "legacyId">>;
 
+/** ISO-serialize a nullable Date for the wire (both `Response.json` and the RSC produce strings). */
+function isoOrNull(d: Date | null | undefined): string | null {
+  return d ? d.toISOString() : null;
+}
+
+/**
+ * Project the PII-gated candidate DTO onto the serialized `CandidateProfileDTO` (ISO string dates).
+ * `licenseNumber` is carried ONLY when `toCandidateDTO` included it (viewer had `viewCredentials`) —
+ * the gate is inherited from the DTO, never re-decided here.
+ */
+function toCandidateProfileDTO(dto: CandidateDTO): CandidateProfileDTO {
+  const profile: CandidateProfileDTO = {
+    id: dto.id,
+    name: dto.name,
+    email: dto.email,
+    phone: dto.phone,
+    city: dto.city,
+    state: dto.state,
+    employer: dto.employer,
+    yearsExp: dto.yearsExp,
+    credential: dto.credential,
+    population: dto.population,
+    setting: dto.setting,
+    track: dto.track,
+    source: dto.source,
+    tags: dto.tags,
+    outreachAttempts: dto.outreachAttempts,
+    licenseState: dto.licenseState,
+    licenseStatus: dto.licenseStatus,
+    licenseExpiry: isoOrNull(dto.licenseExpiry),
+    licenseVerifiedAt: isoOrNull(dto.licenseVerifiedAt),
+    licenseVerifiedById: dto.licenseVerifiedById,
+    status: dto.status,
+    stageOrder: dto.stageOrder,
+    stageEnteredAt: dto.stageEnteredAt.toISOString(),
+    placedAt: isoOrNull(dto.placedAt),
+    clientId: dto.clientId,
+    createdById: dto.createdById,
+    createdAt: dto.createdAt.toISOString(),
+    updatedAt: dto.updatedAt.toISOString(),
+  };
+  // Present only when the gate let it through (key absence, not null, means "hidden").
+  if ("licenseNumber" in dto) profile.licenseNumber = dto.licenseNumber;
+  return profile;
+}
+
+/** Project the PII-gated document DTO onto the serialized `DocumentSummaryDTO`. */
+function toDocumentSummaryDTO(dto: DocumentDTO): DocumentSummaryDTO {
+  const summary: DocumentSummaryDTO = {
+    id: dto.id,
+    candidateId: dto.candidateId,
+    type: dto.type,
+    originalFilename: dto.originalFilename,
+    mimeType: dto.mimeType,
+    sizeBytes: dto.sizeBytes,
+    storageKey: dto.storageKey,
+    legacyUrl: dto.legacyUrl,
+    createdAt: dto.createdAt.toISOString(),
+  };
+  // Both fields ride together through the same `viewCredentials` gate in `toDocumentDTO`.
+  if ("extractedText" in dto) summary.extractedText = dto.extractedText;
+  if ("extractedData" in dto) summary.extractedData = dto.extractedData;
+  return summary;
+}
+
+/** Project a stage-history row onto the serialized `StageEventDTO` (actor-name resolve deferred). */
+function toStageEventDTO(row: StageHistoryRow): StageEventDTO {
+  return {
+    id: row.id,
+    fromStatus: row.fromStatus,
+    toStatus: row.toStatus,
+    fromStageOrder: row.fromStageOrder,
+    toStageOrder: row.toStageOrder,
+    enteredAt: row.enteredAt.toISOString(),
+    actorId: row.actorId,
+  };
+}
+
+/**
+ * Narrow a full candidate row to just the keys present in `input`, for a small audit snapshot.
+ * before/after may hold PII — audit rows are `viewAudit`-gated (see `db/audit.ts`) and never logged.
+ */
+function pickAudited(row: CandidateRow, input: CandidateUpdateInput): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const key of Object.keys(input) as (keyof CandidateUpdateInput)[]) {
+    out[key] = (row as Record<string, unknown>)[key];
+  }
+  return out;
+}
+
 /**
  * Candidate business logic. Services orchestrate repositories + pure rules and own authZ; they
  * never touch Prisma directly.
@@ -116,11 +222,30 @@ export const candidateService = {
     });
   },
 
-  async update(id: string, input: CandidateUpdateInput) {
-    await requireUser();
+  /**
+   * Edit a candidate's PROFILE fields (identity/contact/clinical + `licenseState`/`clientId`).
+   * Status / pipeline timing stay owned by `move`; license VERIFICATION fields stay owned by
+   * `verifyLicense` — the zod schema at the route (`updateCandidateSchema.strict()`) rejects those
+   * keys, so a pipeline/verification field can never route through here. Edit is an audited PII
+   * mutation, so the repo update + `writeAudit` (before/after of the CHANGED keys only) run in one
+   * transaction. `user` is the acting caller (route `requireUser()`); the `licenseNumber` gate is
+   * enforced at the route before this is reached (design D-5).
+   */
+  async update(id: string, input: UpdateCandidateInput, user: AuthUser) {
     const existing = await candidateRepository.findById(id);
     if (!existing) throw new AppError("NOT_FOUND", "Candidate not found");
-    return candidateRepository.update(id, input);
+    return withTransaction(async (tx) => {
+      const updated = await candidateRepository.update(id, input, tx);
+      await writeAudit(tx, {
+        entity: "candidate",
+        entityId: id,
+        actor: user.id,
+        action: "update",
+        before: pickAudited(existing, input),
+        after: pickAudited(updated, input),
+      });
+      return updated;
+    });
   },
 
   async softDelete(id: string) {
@@ -128,6 +253,75 @@ export const candidateService = {
     const existing = await candidateRepository.findById(id);
     if (!existing) throw new AppError("NOT_FOUND", "Candidate not found");
     return candidateRepository.softDelete(id, user.id);
+  },
+
+  /**
+   * Read one candidate's full profile — the single composite the detail page needs (candidate +
+   * documents + role-scoped notes + recent stage history + clientName), in one `CandidateDetailDTO`.
+   * The RSC calls this DIRECTLY (no self-fetch); authZ is the caller's (`getCurrentUser()`), and
+   * `viewer` drives the PII gate. Every PII boundary is REUSED, not re-implemented: `toCandidateDTO`
+   * omits `licenseNumber`, `toDocumentDTO` omits `extractedText`/`extractedData`, both unless the
+   * viewer holds `viewCredentials`; note visibility is `visibleNotes` (server-side, §3.2).
+   */
+  async getCandidateDetail(id: string, viewer: AuthUser): Promise<CandidateDetailDTO> {
+    const candidate = await candidateRepository.findById(id);
+    if (!candidate) throw new AppError("NOT_FOUND", "Candidate not found");
+
+    const [documents, notes, history, clients] = await Promise.all([
+      documentRepository.listByCandidate(id),
+      noteRepository.listByCandidate(id),
+      stageHistoryRepository.listByCandidate(id),
+      clientRepository.list(),
+    ]);
+
+    const clientName = candidate.clientId
+      ? (new Map(clients.map((c) => [c.id, c.name])).get(candidate.clientId) ?? null)
+      : null;
+
+    return {
+      candidate: toCandidateProfileDTO(toCandidateDTO(candidate, viewer)),
+      clientName,
+      documents: documents.map((d) => toDocumentSummaryDTO(toDocumentDTO(d, viewer))),
+      notes: visibleNotes(notes, viewer).map(toNoteDTO),
+      stageHistory: history.slice(0, 10).map(toStageEventDTO),
+      canVerifyCredentials: hasCapability(viewer.role, "viewCredentials"),
+    };
+  },
+
+  /**
+   * Verify a candidate's license — sets `licenseStatus` (+ optional `licenseExpiry`/`licenseNumber`)
+   * and stamps WHO/WHEN (`licenseVerifiedById`/`licenseVerifiedAt`). License status DRIVES the stage
+   * gates (INITIAL_SCREENING needs verified, SUBMITTED needs `Active`), so this is a load-bearing
+   * pipeline action — OPEN TO OPERATORS (`requireUser` at the route), matching legacy. Writing
+   * `licenseNumber` still requires `viewCredentials` (enforced at the route, design D-6). The update
+   * + audit run in one transaction.
+   */
+  async verifyLicense(id: string, input: VerifyLicenseInput, user: AuthUser) {
+    const existing = await candidateRepository.findById(id);
+    if (!existing) throw new AppError("NOT_FOUND", "Candidate not found");
+    const now = new Date();
+    return withTransaction(async (tx) => {
+      const updated = await candidateRepository.update(
+        id,
+        {
+          licenseStatus: input.licenseStatus,
+          ...(input.licenseExpiry !== undefined ? { licenseExpiry: input.licenseExpiry } : {}),
+          ...(input.licenseNumber !== undefined ? { licenseNumber: input.licenseNumber } : {}),
+          licenseVerifiedAt: now,
+          licenseVerifiedById: user.id,
+        },
+        tx,
+      );
+      await writeAudit(tx, {
+        entity: "candidate",
+        entityId: id,
+        actor: user.id,
+        action: "verify_license",
+        before: { licenseStatus: existing.licenseStatus, licenseExpiry: existing.licenseExpiry },
+        after: { licenseStatus: updated.licenseStatus, licenseExpiry: updated.licenseExpiry },
+      });
+      return updated;
+    });
   },
 
   /**

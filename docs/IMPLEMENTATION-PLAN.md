@@ -187,24 +187,21 @@ share a database.** *(`zyx.com` below is a placeholder for the real domain.)*
 - [ ] **Deferred to follow-up:** table view + sortable columns; `saved_views` model + saved views + filter chips (mine/overdue/stuck/hot/verify); bulk-select UI (endpoint ships now); AI health strip (`server/ai/pipeline-health`); card scoring (needs `client_rules`); client-side gate pre-check (dim invalid targets); TanStack Query.
 - **Done-when:** recruiters work candidates; gates block invalid moves; every move audited. *(Core loop ✅; legacy retirement waits on the deferred views.)*
 
-### 2.2 Candidate Detail — notes (brings ONLY note tables)
-- [ ] Add `candidate_notes` + `mentions` models → migrate.
-- [ ] Notes service: add note (sanitize text — **fix XSS**), role-scoped visibility **server-side**.
-- [ ] Mentions service: parse @mentions → notify.
-- [ ] `POST /api/candidates/:id/notes`, `GET .../notes`, mention get/mark-read routes.
-- [ ] Port Notes tab + @mention autocomplete 1:1.
-- [ ] Port outreach-history panel 1:1.
-- [ ] **ETL: backfill `candidate_notes`** from the Sheet — `legacy_id` idempotent upsert, keep-newest+flag on conflict; freeze the notes source at final backfill.
-- **Done-when:** notes safe + role-scoped; mentions notify; historical notes migrated.
+### 2.2 Candidate Detail — notes (brings ONLY note tables)  🟡 *(notes done — mentions/outreach/ETL deferred; design `docs/design/wave-2.3-candidate-detail.md`)*
+- [x] Add `candidate_notes` model → migrated (`add_candidate_notes`). *(mentions model deferred.)*
+- [x] Notes service: add note (**XSS fixed** — bodies stored raw, rendered as escaped React text; `dangerouslySetInnerHTML` banned via `react/no-danger`), role-scoped visibility **server-side** (`visibleNotes`); author from the session, not the client. Audited.
+- [x] `POST /api/candidates/:id/notes`, `GET .../notes` routes.
+- [x] Port Notes tab (list + composer).
+- [ ] **Deferred:** `mentions` model + mentions service + @mention autocomplete + notify; outreach-history panel; notes ETL backfill.
+- **Done-when:** notes safe + role-scoped ✅ *(mentions/historical notes deferred)*.
 
-### 2.3 Candidate Detail — the rest (Module 4)
-- [ ] `PATCH /api/candidates/:id` (edit) + `POST .../verify-license` routes.
-- [ ] Port header + track-editor pill 1:1.
-- [ ] Port stage-mover + validation UI 1:1.
-- [ ] Port Details tab + License tab (track-aware) 1:1.
-- [ ] Port Resume tab (storage preview) 1:1.
-- [ ] Auto-handoff to Operate on "Started" — **with idempotency key** (fix dup bug).
-- **Done-when:** full record editable; handoff idempotent.
+### 2.3 Candidate Detail — the rest (Module 4)  🟡 *(core done — handoff deferred)*
+- [x] `PATCH /api/candidates/:id` (edit, audited, `licenseNumber` gated on `viewCredentials`) + `POST .../verify-license` routes.
+- [x] Header + stage-mover (client gate pre-check + server-authoritative move). Board card → **View profile** link.
+- [x] Details tab (edit form) + License tab (track-aware verify) + Résumé tab (documents list; byte preview → W6).
+- [x] Read layer: `getCandidateDetail` (PII-gated composite: candidate + documents + notes + stage history). Reviewed (architect→backend→frontend→review; M1 rules→`lib/rules` isomorphic move + M2 `react/no-danger` + N3 URL allowlist fixed). **253 tests, build green.**
+- [ ] **Deferred:** track-editor pill; auto-handoff to Operate on "Started" (idempotency key).
+- **Done-when:** full record editable ✅ *(handoff deferred)*.
 
 ### 2.4 Add Candidate (Module 5)
 - [ ] `POST /api/candidates` route + zod input.

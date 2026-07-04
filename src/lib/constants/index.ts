@@ -11,3 +11,4 @@ export * from "./clients";
 export * from "./documents";
 export * from "./states";
 export * from "./lead-status";
+export * from "./notes";
