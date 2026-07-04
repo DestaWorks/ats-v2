@@ -1,6 +1,12 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { TRACKS, isCandidateStatus, type CandidateStatus, type Track } from "@/lib/constants";
+import {
+  TRACKS,
+  hasCapability,
+  isCandidateStatus,
+  type CandidateStatus,
+  type Track,
+} from "@/lib/constants";
 import { getCurrentUser } from "@/server/auth/guards";
 import { candidateService } from "@/server/services/candidate.service";
 import { clientRepository } from "@/server/repositories/client.repository";
@@ -8,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScoreBadge } from "@/components/ui/score-badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Table, Td } from "@/components/ui/table";
+import { AddCandidateButton } from "../add-candidate-modal";
 import { ListFilters } from "./list-filters";
 
 /**
@@ -41,6 +48,7 @@ export default async function CandidatesPage({
     clientRepository.list(),
   ]);
   const clients = clientRows.map((c) => ({ id: c.id, name: c.name }));
+  const canEditCredential = hasCapability(user.role, "viewCredentials");
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-5 p-6">
@@ -54,12 +62,7 @@ export default async function CandidatesPage({
           </p>
           <p className="text-xs text-gray">Sorted by fit score — best matches first.</p>
         </div>
-        <Link
-          href="/candidates/new"
-          className="rounded-md bg-navy px-3 py-1.5 text-sm font-semibold text-white transition hover:opacity-90 focus-visible:ring-2 focus-visible:ring-navy focus-visible:outline-none"
-        >
-          + Add candidate
-        </Link>
+        <AddCandidateButton clients={clients} canEditCredential={canEditCredential} size="sm" />
       </header>
 
       <ListFilters clients={clients} />

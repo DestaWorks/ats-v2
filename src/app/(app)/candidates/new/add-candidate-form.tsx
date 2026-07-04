@@ -45,9 +45,12 @@ const emptyToNullNumber = (v: unknown) =>
 export function AddCandidateForm({
   clients,
   canEditCredential,
+  onCancel,
 }: {
   clients: ClientOption[];
   canEditCredential: boolean;
+  /** How Cancel behaves: provided (modal) → close the dialog; omitted (standalone page) → go to /pipeline. */
+  onCancel?: () => void;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -258,7 +261,7 @@ export function AddCandidateForm({
           type="button"
           variant="secondary"
           disabled={pending}
-          onClick={() => router.push("/pipeline")}
+          onClick={() => (onCancel ? onCancel() : router.push("/pipeline"))}
         >
           Cancel
         </Button>
