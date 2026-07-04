@@ -136,15 +136,15 @@ share a database.** *(`zyx.com` below is a placeholder for the real domain.)*
 - [x] Candidate repository: `create`, `findById`, `findByLegacyId`/`upsertByLegacyId` (ETL, idempotent), `list` (filters: status/track/client/search/tags), `update`, `softDelete`, `restore` — **soft-delete excluded by default at the repository layer** (not a global Prisma extension, so Better Auth models are untouched). Plus `stage-history` repo, `withTransaction` helper, `toCandidateDTO` (PII boundary — `licenseNumber` gated on `viewCredentials`), `toRuleCandidate` mapper, and `candidateService` (`create` forced to `NEW_CANDIDATE`; `move` = server-authoritative `checkStageGate` → atomic update+history+`writeAudit`).
 - **Done-when:** ✅ candidate + client + stage_history tables exist; `candidates.clientId` FK resolves to a seeded client; repo/service/DTO tested (**90 tests green**); reviewed (architect→backend→review; 1 gate-bypass fixed). *(audit lives in 0.5.)*
 
-### 1.2 Parse Resume (Module 8)
-- [ ] `server/ai/parse-resume` — Claude endpoint returning zod-validated structured data.
-- [ ] `POST /api/resume/extract` route.
-- [ ] Port PDF upload + role-picker UI 1:1; pdf.js text extract on client.
-- [ ] Port the inline-editable review UI 1:1.
-- [ ] Port the 3 resume layouts (clinical/prescriber/operations) 1:1.
-- [ ] `résumé→profile` matching helper with a **confidence threshold + manual-confirm** step — below threshold never silently attaches to an existing candidate (no wrong-person PII merges).
-- [ ] Test: upload PDF → structured data; low-confidence match requires explicit confirmation.
-- **Done-when:** upload a résumé → structured candidate data → saved; matches above threshold auto-suggest, below threshold require manual confirm.
+### 1.2 Parse Resume (Module 8)  ✅ *(done — design `docs/design/wave-1.2-parse-resume.md`)*
+- [x] `server/ai/parse-resume` — zod-validated structured extraction. **Provider-agnostic** (owner directive): `AI_MODEL` `"provider/model"` config string (Claude/OpenAI/Gemini via the Vercel AI SDK) — swap providers with one env var, no code change. Key-gated (`resumeExtractionEnabled`).
+- [x] `POST /api/resume/extract` route (+ `POST /api/resume/save`) — `apiHandler` + `requireUser` + zod.
+- [x] PDF upload + role-picker UI; **client-side pdf.js** text extraction (worker via `new URL(...import.meta.url)`).
+- [x] Inline-editable review UI — react-hook-form + zod (not contentEditable) with add/remove-row editing (OQ-4).
+- [x] 3 résumé layouts (clinical/prescriber/operations).
+- [x] `résumé→profile` matching (`resume.match.ts`): email-exact → auto-attach (email dedupe, D-8); name-fuzzy ≥ threshold → **manual confirm**; else new. **Server recomputes the match** and never attaches below threshold / to a non-re-matching `confirmedCandidateId` (no wrong-person PII merge). Brings the **`documents` table** (deferred from 1.1) — PII-gated DTO (`extractedData`/`extractedText` behind `viewCredentials`).
+- [x] Tests: mapper, match threshold (incl. no-silent-merge + IDOR refusal), routes (auth/key-absent/mocked provider), client confirm-gate. Reviewed (architect→backend+provider-refactor→frontend→review; M1 auto/decline contract fixed). **134 tests, build green.**
+- **Done-when:** ✅ upload a résumé → structured candidate data → saved; email match auto-attaches (dedupe), fuzzy match requires explicit confirm, no match creates new. *(Activates when an `AI_MODEL` provider key is set — same key-agnostic pattern as Google OAuth.)*
 
 ### 1.3 Bulk Import / Candidate ETL (Module 20)
 - [ ] Importer service: parse Sheet export (CSV/JSON).

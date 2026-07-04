@@ -8,5 +8,6 @@ export * from "./pipeline-status";
 export * from "./roles";
 export * from "./candidate";
 export * from "./clients";
+export * from "./documents";
 export * from "./states";
 export * from "./lead-status";
