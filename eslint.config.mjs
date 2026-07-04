@@ -16,6 +16,9 @@ const eslintConfig = [
   // is added as those layers land; `import "server-only"` guards the rest at build time.
   {
     rules: {
+      // Ban raw-HTML injection app-wide — the load-bearing guard for the notes stored-XSS fix
+      // (Wave 2.2) and everywhere user/candidate text renders. Use escaped React children instead.
+      "react/no-danger": "error",
       "import/no-restricted-paths": [
         "error",
         {

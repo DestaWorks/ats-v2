@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { ALL_STATUS_CODES, statusLabel, type CandidateStatus } from "@/lib/constants";
@@ -105,6 +106,16 @@ export function CandidateCard({
           </span>
           <TimingBadge card={card} />
         </div>
+      </div>
+
+      {/* Footer controls sit OUTSIDE the drag listeners so click/keyboard work without drag ambiguity. */}
+      <div className="flex items-center justify-between gap-2 border-t border-black/5 px-3 py-1.5">
+        <Link
+          href={`/candidates/${card.id}`}
+          className="text-[11px] font-semibold text-navy hover:underline"
+        >
+          View profile
+        </Link>
       </div>
 
       <div className="border-t border-black/5 px-3 py-1.5">

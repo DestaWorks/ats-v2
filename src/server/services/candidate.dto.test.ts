@@ -11,9 +11,9 @@ vi.mock("server-only", () => ({}));
 
 import { toCandidateDTO, toRuleCandidate } from "./candidate.dto";
 import type { CandidateRow } from "@/server/repositories/candidate.repository";
-import { scoreCandidate } from "@/server/rules/scoring";
-import { checkStageGate } from "@/server/rules/stage-gates";
-import type { ClientRules } from "@/server/rules/types";
+import { scoreCandidate } from "@/lib/rules/scoring";
+import { checkStageGate } from "@/lib/rules/stage-gates";
+import type { ClientRules } from "@/lib/rules/types";
 
 const row: CandidateRow = {
   id: "c1",
