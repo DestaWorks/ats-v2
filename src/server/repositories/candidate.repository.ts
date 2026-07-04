@@ -1,13 +1,26 @@
 import "server-only";
 import type { Candidate, Prisma } from "@/generated/prisma/client";
-import type { CandidateStatus, Track } from "@/lib/constants";
+import {
+  ACTIVE_STATUS_CODES,
+  statusSlaDays,
+  type CandidateStatus,
+  type LicenseStatus,
+  type Track,
+} from "@/lib/constants";
+import type { ListOrderBy, PageCursor } from "@/lib/validation/cursor";
 import { prisma } from "@/server/db/prisma";
 import { decryptField, encryptField } from "@/server/db/field-crypto";
 
 /** A raw candidate row (Prisma model). Services/DTOs map this to API shapes. */
 export type CandidateRow = Candidate;
 
-/** Filters for `list`. Soft-deleted rows are excluded unless `includeDeleted` is set. */
+/** In-stage threshold (days) that marks a candidate "stuck" — mirrors the `isStuck` default. */
+export const STUCK_DAYS = 7;
+/** Terminal stages start at order 9; "stuck" only applies to active stages (order < 9). */
+const FIRST_TERMINAL_ORDER = 9;
+const MS_PER_DAY = 86_400_000;
+
+/** Filters for `list`/`count`/`groupByStatusFiltered`. Soft-deleted rows are excluded unless `includeDeleted`. */
 export interface CandidateListFilters {
   status?: CandidateStatus;
   track?: Track;
@@ -16,9 +29,115 @@ export interface CandidateListFilters {
   search?: string;
   /** Match candidates carrying any of these tags. */
   tags?: string[];
+  /** Equality on the license verification status. */
+  licenseStatus?: LicenseStatus;
+  /** "My candidates" — the service resolves this from `viewer.id` (never a client-supplied id). */
+  createdById?: string;
+  /** In-stage > `STUCK_DAYS` and still active (order < 9). Threshold predicate (§3.1). */
+  stuck?: boolean;
+  /** Past the per-stage SLA — an OR over the active stages that have one (§3.2). */
+  overdue?: boolean;
   includeDeleted?: boolean;
-  /** Cap the number of rows returned (bounds a browse/report read). */
+  /** Keyset cursor — the service decodes it; the repo turns it into a `WHERE (sortkey, id) ≷ cursor`. */
+  cursor?: PageCursor;
+  /** Sort order + keyset direction (default `createdAt_desc`). */
+  orderBy?: ListOrderBy;
+  /** Cap the number of rows returned (callers pass `pageSize + 1` to detect `hasMore`). */
   take?: number;
+  /** "Now" for the `stuck`/`overdue` thresholds — the service passes one clock per request. */
+  now?: Date;
+}
+
+/**
+ * DB-expressible `overdue` predicate — an OR over the active stages that carry an SLA
+ * (`STARTED_DAY1` + all terminals have `slaDays: null` → never overdue). Exact against
+ * `isOverdue`'s `stageEnteredAt < now - slaDays*24h` boundary (OQ-2: agrees to sub-hour tolerance).
+ */
+export function overdueWhere(now: Date): Prisma.CandidateWhereInput {
+  const clauses = ACTIVE_STATUS_CODES.map((status) => ({ status, sla: statusSlaDays(status) }))
+    .filter((s): s is { status: CandidateStatus; sla: number } => s.sla !== null)
+    .map(({ status, sla }) => ({
+      status,
+      stageEnteredAt: { lt: new Date(now.getTime() - sla * MS_PER_DAY) },
+    }));
+  return { OR: clauses };
+}
+
+/** DB-expressible `stuck` predicate — in-stage > `STUCK_DAYS` AND still active (order < 9). */
+export function stuckWhere(now: Date): Prisma.CandidateWhereInput {
+  return {
+    stageEnteredAt: { lt: new Date(now.getTime() - STUCK_DAYS * MS_PER_DAY) },
+    stageOrder: { lt: FIRST_TERMINAL_ORDER },
+  };
+}
+
+/**
+ * Build the shared `where` for a candidate read from the filter set. Everything AND-combines
+ * (OQ-3): the OR-bearing predicates (`search`, `overdue`) go into an `AND: [...]` array so they
+ * never clobber each other or a keyset OR. Soft-deleted rows are excluded unless `includeDeleted`.
+ */
+export function buildCandidateWhere(
+  filters: CandidateListFilters,
+  now: Date,
+): Prisma.CandidateWhereInput {
+  const where: Prisma.CandidateWhereInput = {};
+  const and: Prisma.CandidateWhereInput[] = [];
+  if (!filters.includeDeleted) where.deletedAt = null;
+  if (filters.status) where.status = filters.status;
+  if (filters.track) where.track = filters.track;
+  if (filters.clientId) where.clientId = filters.clientId;
+  if (filters.licenseStatus) where.licenseStatus = filters.licenseStatus;
+  if (filters.createdById) where.createdById = filters.createdById;
+  if (filters.tags && filters.tags.length > 0) where.tags = { hasSome: filters.tags };
+  if (filters.search) {
+    and.push({
+      OR: [
+        { name: { contains: filters.search, mode: "insensitive" } },
+        { email: { contains: filters.search, mode: "insensitive" } },
+      ],
+    });
+  }
+  if (filters.stuck) and.push(stuckWhere(now));
+  if (filters.overdue) and.push(overdueWhere(now));
+  if (and.length > 0) where.AND = and;
+  return where;
+}
+
+/** The `[sortKey, id]` orderBy tuple for a sort order (id breaks ties deterministically). */
+function orderByClause(orderBy: ListOrderBy): Prisma.CandidateOrderByWithRelationInput[] {
+  switch (orderBy) {
+    case "createdAt_asc":
+      return [{ createdAt: "asc" }, { id: "asc" }];
+    case "name_asc":
+      return [{ name: "asc" }, { id: "asc" }];
+    case "createdAt_desc":
+    default:
+      return [{ createdAt: "desc" }, { id: "desc" }];
+  }
+}
+
+/** The keyset predicate `WHERE (sortkey, id) ≷ cursor` for the sort direction. */
+function keysetWhere(cursor: PageCursor, orderBy: ListOrderBy): Prisma.CandidateWhereInput {
+  if (orderBy === "name_asc") {
+    return {
+      OR: [{ name: { gt: cursor.value } }, { name: cursor.value, id: { gt: cursor.id } }],
+    };
+  }
+  const dt = new Date(cursor.value);
+  if (orderBy === "createdAt_asc") {
+    return { OR: [{ createdAt: { gt: dt } }, { createdAt: dt, id: { gt: cursor.id } }] };
+  }
+  return { OR: [{ createdAt: { lt: dt } }, { createdAt: dt, id: { lt: cursor.id } }] };
+}
+
+/** Merge an extra AND clause into a where, normalizing `AND` to an array. */
+function andMerge(
+  where: Prisma.CandidateWhereInput,
+  clause: Prisma.CandidateWhereInput,
+): Prisma.CandidateWhereInput {
+  const existing = where.AND;
+  const arr = Array.isArray(existing) ? existing : existing ? [existing] : [];
+  return { ...where, AND: [...arr, clause] };
 }
 
 /** Resolve the client to use — the transaction client when composing writes, else the singleton. */
@@ -95,25 +214,32 @@ export const candidateRepository = {
     );
   },
 
+  /**
+   * The core read. Builds the shared `where` (`buildCandidateWhere`), applies the keyset predicate
+   * from `cursor` and the `[sortKey, id]` `orderBy` tuple, and fetches `take` rows (callers pass
+   * `pageSize + 1` so the service can detect `hasMore` + derive `nextCursor`). Returns decrypted
+   * rows (unchanged crypto path). Sort defaults to `createdAt_desc` (Newest first).
+   */
   async list(filters: CandidateListFilters = {}, tx?: Prisma.TransactionClient) {
-    const where: Prisma.CandidateWhereInput = {};
-    if (!filters.includeDeleted) where.deletedAt = null;
-    if (filters.status) where.status = filters.status;
-    if (filters.track) where.track = filters.track;
-    if (filters.clientId) where.clientId = filters.clientId;
-    if (filters.tags && filters.tags.length > 0) where.tags = { hasSome: filters.tags };
-    if (filters.search) {
-      where.OR = [
-        { name: { contains: filters.search, mode: "insensitive" } },
-        { email: { contains: filters.search, mode: "insensitive" } },
-      ];
-    }
+    const now = filters.now ?? new Date();
+    const orderBy = filters.orderBy ?? "createdAt_desc";
+    let where = buildCandidateWhere(filters, now);
+    if (filters.cursor) where = andMerge(where, keysetWhere(filters.cursor, orderBy));
     const rows = await db(tx).candidate.findMany({
       where,
-      orderBy: { createdAt: "desc" },
+      orderBy: orderByClause(orderBy),
       ...(filters.take !== undefined ? { take: filters.take } : {}),
     });
     return rows.map(decryptRow);
+  },
+
+  /**
+   * True filtered total for the same `where` as `list` (minus cursor/orderBy/take) — the list's
+   * `total` denominator and the board's per-status count fallback. No PII columns → no crypto.
+   */
+  count(filters: CandidateListFilters = {}, tx?: Prisma.TransactionClient) {
+    const now = filters.now ?? new Date();
+    return db(tx).candidate.count({ where: buildCandidateWhere(filters, now) });
   },
 
   /**
@@ -124,6 +250,21 @@ export const candidateRepository = {
     return db(tx).candidate.groupBy({
       by: ["status"],
       where: { deletedAt: null },
+      _count: { _all: true },
+    });
+  },
+
+  /**
+   * Per-status counts with the shared (non-status) board filters applied — the board's TRUE
+   * per-column totals in ONE query. `status` is intentionally dropped (the board groups ACROSS
+   * statuses); every other filter (track/client/search/tags/licenseStatus/mine/overdue/stuck) counts.
+   */
+  groupByStatusFiltered(filters: CandidateListFilters = {}, tx?: Prisma.TransactionClient) {
+    const now = filters.now ?? new Date();
+    // Drop `status` — the board groups ACROSS statuses; every other filter still counts.
+    return db(tx).candidate.groupBy({
+      by: ["status"],
+      where: buildCandidateWhere({ ...filters, status: undefined }, now),
       _count: { _all: true },
     });
   },

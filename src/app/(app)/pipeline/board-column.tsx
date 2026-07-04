@@ -5,6 +5,8 @@ import { statusSlaDays, type CandidateStatus } from "@/lib/constants";
 import type { BoardColumn as BoardColumnData, CandidateCardDTO } from "@/lib/validation/pipeline";
 import { cn } from "@/lib/utils/cn";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { filterHotLocal } from "../candidates/lib/list-pagination";
 import { CandidateCard } from "./candidate-card";
 import { STATUS_BG } from "./lib/status-style";
 
@@ -13,14 +15,25 @@ export function BoardColumn({
   onMove,
   busy,
   isDragActive,
+  hotOnly = false,
+  onLoadMore,
+  loadingMore = false,
 }: {
   column: BoardColumnData;
   onMove: (card: CandidateCardDTO, toStatus: CandidateStatus) => void;
   busy?: boolean;
   isDragActive?: boolean;
+  /** Page-local "Hot" lens — filters only the RENDERED cards (footer counts stay honest). */
+  hotOnly?: boolean;
+  /** Load the next per-column keyset page (present only when this column `hasMore`). */
+  onLoadMore?: (status: CandidateStatus) => void;
+  loadingMore?: boolean;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: column.status });
   const sla = statusSlaDays(column.status);
+  const loaded = column.candidates.length;
+  const cards = hotOnly ? filterHotLocal(column.candidates) : column.candidates;
+  const remaining = Math.max(0, column.count - loaded);
 
   return (
     <section
@@ -50,22 +63,36 @@ export function BoardColumn({
       )}
 
       <ul className="flex min-h-24 flex-1 flex-col gap-2 p-3 pt-2">
-        {column.candidates.length === 0 ? (
+        {cards.length === 0 ? (
           <li className="rounded-lg border border-dashed border-black/10 px-3 py-6 text-center text-xs text-gray">
-            Empty
+            {hotOnly && loaded > 0 ? "No hot candidates on this page" : "Empty"}
           </li>
         ) : (
-          column.candidates.map((card) => (
+          cards.map((card) => (
             <CandidateCard key={card.id} card={card} onMove={onMove} busy={busy} />
           ))
         )}
       </ul>
 
-      {/* The board caps cards per column; when the true total exceeds what shipped, say so. */}
-      {column.count > column.candidates.length ? (
-        <p className="border-t border-black/5 px-3 py-2 text-center text-[10px] text-gray">
-          Showing {column.candidates.length} of {column.count}
-        </p>
+      {/* Per-column pagination footer: honest "N of M" (loaded of true total) + a keyset Load more. */}
+      {remaining > 0 ? (
+        <div className="flex flex-col items-center gap-1.5 border-t border-black/5 px-3 py-2">
+          <p className="text-[10px] text-gray">
+            Showing {loaded} of {column.count}
+          </p>
+          {column.hasMore && onLoadMore ? (
+            <Button
+              type="button"
+              variant="secondary"
+              size="xs"
+              loading={loadingMore}
+              onClick={() => onLoadMore(column.status)}
+              className="w-full"
+            >
+              {loadingMore ? "Loading…" : `Load ${remaining} more`}
+            </Button>
+          ) : null}
+        </div>
       ) : null}
     </section>
   );

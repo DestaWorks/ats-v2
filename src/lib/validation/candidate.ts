@@ -122,14 +122,22 @@ export interface CandidateListItemDTO {
 }
 
 /**
- * The `/candidates` browse payload. `candidates` is capped server-side (see `LIST_CAP`); `capped`
- * is true when that ceiling was hit (the UI shows a "showing first N" note), addressing the audit's
- * unbounded-list finding for this screen.
+ * The `/candidates` browse payload — now a REAL cursor page (search-pagination wave). `candidates`
+ * is one page (`LIST_PAGE`), ordered by a DB field (default `createdAt desc` — score is a displayed
+ * column, NOT the paginate key); `nextCursor`/`hasMore` drive "Load more"; `total` is the true
+ * filtered count (the honest "Showing N of M" denominator).
+ *
+ * `count`/`capped` are RETAINED for the current RSC table (backward compat): `count` = rows in this
+ * page, `capped` mirrors `hasMore`. They are superseded by `total`/`hasMore` and will be dropped once
+ * the list UI adopts load-more.
  */
 export interface CandidateListDTO {
   candidates: CandidateListItemDTO[];
   count: number;
   capped: boolean;
+  nextCursor: string | null;
+  hasMore: boolean;
+  total: number;
 }
 
 /** The single composite payload the RSC loads and seeds the client detail page with. */

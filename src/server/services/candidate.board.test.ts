@@ -1,17 +1,23 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import type { AuthUser } from "@/server/auth/guards";
+import { decodeCursor } from "@/lib/validation/cursor";
 
 /**
- * Proves `candidateService.listBoard` groups candidates into the funnel board WITHOUT a DB: the 9
- * active stages are always present (empties included, order 0..8), terminal states are summarized
- * (counts always; card lists only when `includeTerminal`), stage timing (overdue/stuck/daysInStage)
- * is derived from `stageEnteredAt`, `clientName` is resolved from the batch-loaded client map, and
- * a card NEVER carries `licenseNumber`. We mock the two repositories; timing + the PII DTO run for real.
+ * Proves `candidateService.listBoard` builds the funnel board WITHOUT a DB, now via PER-COLUMN
+ * KEYSET reads instead of a single load-all-then-group: the 9 active stages are always present
+ * (empties included, order 0..8), each column's TRUE `count` comes from ONE filtered `groupBy`,
+ * each column ships one keyset page (≤ BOARD_PAGE) with its own `nextCursor`/`hasMore`, terminal
+ * states are summarized (counts always; card lists + cursor only when `includeTerminal`),
+ * `meta.overdue`/`meta.stuck` come from targeted COUNT queries (not a full scan), a card NEVER
+ * carries `licenseNumber`, and a `status` filter focuses one column's query. `listColumn` serves
+ * the per-column load-more. We mock the repositories; timing + the PII DTO + cursor codec run for real.
  */
 
 const h = vi.hoisted(() => ({
   candidateRepo: {
     list: vi.fn(),
+    count: vi.fn(),
+    groupByStatusFiltered: vi.fn(),
     groupByStatus: vi.fn(),
     listStaleActive: vi.fn(),
   },
@@ -31,7 +37,6 @@ vi.mock("@/server/repositories/client-rules.repository", async () => {
   const actual = await vi.importActual<
     typeof import("@/server/repositories/client-rules.repository")
   >("@/server/repositories/client-rules.repository");
-  // Mock only the Prisma-touching `list`; the pure `toClientRules` mapper runs for real.
   return { ...actual, clientRulesRepository: h.clientRulesRepo };
 });
 
@@ -44,7 +49,7 @@ function daysAgo(n: number) {
   return new Date(Date.now() - n * DAY);
 }
 
-/** A candidate row with the fields the DTO + timing read (incl. sensitive `licenseNumber`). */
+/** A candidate row with the fields the DTO + timing + cursor read (incl. sensitive `licenseNumber`). */
 function row(overrides: Record<string, unknown> = {}) {
   return {
     id: "c",
@@ -60,17 +65,27 @@ function row(overrides: Record<string, unknown> = {}) {
     status: "NEW_CANDIDATE",
     stageOrder: 0,
     stageEnteredAt: new Date(),
+    createdAt: new Date("2026-06-01T00:00:00.000Z"),
     ...overrides,
   };
 }
 
+/** Mock the per-column reads + the filtered groupBy from a `status → rows` map. */
+function seedBoard(byStatus: Record<string, Record<string, unknown>[]>) {
+  h.candidateRepo.list.mockImplementation(async (f: { status?: string }) =>
+    f.status ? (byStatus[f.status] ?? []) : [],
+  );
+  h.candidateRepo.groupByStatusFiltered.mockResolvedValue(
+    Object.entries(byStatus).map(([status, rows]) => ({ status, _count: { _all: rows.length } })),
+  );
+}
+
 beforeEach(() => {
-  h.candidateRepo.list.mockReset();
-  h.clientRepo.list.mockReset();
-  h.clientRulesRepo.list.mockReset();
-  h.clientRepo.list.mockResolvedValue([{ id: "cl1", name: "Sterling Institute" }]);
-  // Default: no rules seeded → every card scores null (existing assertions are score-agnostic).
-  h.clientRulesRepo.list.mockResolvedValue([]);
+  h.candidateRepo.list.mockReset().mockResolvedValue([]);
+  h.candidateRepo.count.mockReset().mockResolvedValue(0);
+  h.candidateRepo.groupByStatusFiltered.mockReset().mockResolvedValue([]);
+  h.clientRepo.list.mockReset().mockResolvedValue([{ id: "cl1", name: "Sterling Institute" }]);
+  h.clientRulesRepo.list.mockReset().mockResolvedValue([]);
 });
 
 /** A `client_rules` row for `cl1` = Sterling Institute (states/creds/pops/settings drive scoring). */
@@ -91,28 +106,30 @@ function sterlingRules(overrides: Record<string, unknown> = {}) {
 describe("candidateService.listBoard — scoring", () => {
   it("folds the fit pct onto the card for a client with rules", async () => {
     h.clientRulesRepo.list.mockResolvedValue([sterlingRules()]);
-    h.candidateRepo.list.mockResolvedValue([
-      // Full match: CT / PMHNP / Child-Adolescent / Hybrid / Active → 100/100.
-      row({
-        id: "full",
-        clientId: "cl1",
-        licenseState: "CT",
-        credential: "PMHNP",
-        population: "Child/Adolescent",
-        setting: "Hybrid",
-        licenseStatus: "Active",
-      }),
-      // Mismatch on state + population + setting: only credential (30) + license (10) = 40/100.
-      row({
-        id: "partial",
-        clientId: "cl1",
-        licenseState: "NJ",
-        credential: "PMHNP",
-        population: "Adult",
-        setting: "Telehealth",
-        licenseStatus: "Active",
-      }),
-    ]);
+    seedBoard({
+      NEW_CANDIDATE: [
+        // Full match: CT / PMHNP / Child-Adolescent / Hybrid / Active → 100/100.
+        row({
+          id: "full",
+          clientId: "cl1",
+          licenseState: "CT",
+          credential: "PMHNP",
+          population: "Child/Adolescent",
+          setting: "Hybrid",
+          licenseStatus: "Active",
+        }),
+        // Mismatch on state + population + setting: credential (30) + license (10) = 40/100.
+        row({
+          id: "partial",
+          clientId: "cl1",
+          licenseState: "NJ",
+          credential: "PMHNP",
+          population: "Adult",
+          setting: "Telehealth",
+          licenseStatus: "Active",
+        }),
+      ],
+    });
     const board = await candidateService.listBoard({}, viewer);
     const cards = board.columns.find((c) => c.status === "NEW_CANDIDATE")!.candidates;
     expect(cards.find((c) => c.id === "full")!.score).toBe(100);
@@ -121,58 +138,61 @@ describe("candidateService.listBoard — scoring", () => {
 
   it("scores null when the candidate has no client", async () => {
     h.clientRulesRepo.list.mockResolvedValue([sterlingRules()]);
-    h.candidateRepo.list.mockResolvedValue([row({ id: "noclient", clientId: null })]);
+    seedBoard({ NEW_CANDIDATE: [row({ id: "noclient", clientId: null })] });
     const board = await candidateService.listBoard({}, viewer);
-    const card = board.columns.find((c) => c.status === "NEW_CANDIDATE")!.candidates[0]!;
-    expect(card.score).toBeNull();
+    expect(
+      board.columns.find((c) => c.status === "NEW_CANDIDATE")!.candidates[0]!.score,
+    ).toBeNull();
   });
 
   it("scores null when the assigned client has no rules row", async () => {
     h.clientRulesRepo.list.mockResolvedValue([]); // no rules at all
-    h.candidateRepo.list.mockResolvedValue([row({ id: "norules", clientId: "cl1" })]);
+    seedBoard({ NEW_CANDIDATE: [row({ id: "norules", clientId: "cl1" })] });
     const board = await candidateService.listBoard({}, viewer);
-    const card = board.columns.find((c) => c.status === "NEW_CANDIDATE")!.candidates[0]!;
-    expect(card.score).toBeNull();
+    expect(
+      board.columns.find((c) => c.status === "NEW_CANDIDATE")!.candidates[0]!.score,
+    ).toBeNull();
   });
 
   it("scores null (not a license-only pct) when the client's rules constrain nothing", async () => {
-    // Empty-rules client (e.g. Future Potential Clients): all four matchable arrays empty. The pure
-    // rule would still score the license floor (max 10), but `scoreFor` reports null because there's
-    // no client-SPECIFIC fit to show — even for an Active-license candidate that would otherwise be 100%.
     h.clientRulesRepo.list.mockResolvedValue([
       sterlingRules({ states: [], creds: [], pops: [], settings: [] }),
     ]);
-    h.candidateRepo.list.mockResolvedValue([
-      row({ id: "empty", clientId: "cl1", licenseStatus: "Active" }),
-    ]);
+    seedBoard({ NEW_CANDIDATE: [row({ id: "empty", clientId: "cl1", licenseStatus: "Active" })] });
     const board = await candidateService.listBoard({}, viewer);
-    const card = board.columns.find((c) => c.status === "NEW_CANDIDATE")!.candidates[0]!;
-    expect(card.score).toBeNull();
+    expect(
+      board.columns.find((c) => c.status === "NEW_CANDIDATE")!.candidates[0]!.score,
+    ).toBeNull();
   });
 });
 
 describe("candidateService.listBoard", () => {
   beforeEach(() => {
-    h.candidateRepo.list.mockResolvedValue([
-      row({ id: "a", status: "NEW_CANDIDATE", stageOrder: 0, clientId: "cl1" }),
-      // 30 days in NEW_CANDIDATE (SLA 3) → overdue AND stuck.
-      row({ id: "b", status: "NEW_CANDIDATE", stageOrder: 0, stageEnteredAt: daysAgo(30) }),
-      row({ id: "c", status: "SUBMITTED_TO_CLIENT", stageOrder: 4 }),
-      row({ id: "d", status: "NOT_QUALIFIED", stageOrder: 9 }),
-      row({ id: "e", status: "FUTURE_PIPELINE", stageOrder: 12, stageEnteredAt: daysAgo(30) }),
-    ]);
+    seedBoard({
+      NEW_CANDIDATE: [
+        row({ id: "a", status: "NEW_CANDIDATE", stageOrder: 0, clientId: "cl1" }),
+        row({ id: "b", status: "NEW_CANDIDATE", stageOrder: 0, stageEnteredAt: daysAgo(30) }),
+      ],
+      SUBMITTED_TO_CLIENT: [row({ id: "c", status: "SUBMITTED_TO_CLIENT", stageOrder: 4 })],
+      NOT_QUALIFIED: [row({ id: "d", status: "NOT_QUALIFIED", stageOrder: 9 })],
+      FUTURE_PIPELINE: [row({ id: "e", status: "FUTURE_PIPELINE", stageOrder: 12 })],
+    });
+    // meta.overdue / meta.stuck now come from targeted COUNT queries, not an in-memory scan.
+    h.candidateRepo.count.mockImplementation(async (f: { overdue?: boolean; stuck?: boolean }) =>
+      f.overdue ? 1 : f.stuck ? 1 : 0,
+    );
   });
 
-  it("returns exactly the 9 active columns in order 0..8, empties included", async () => {
+  it("returns exactly the 9 active columns in order 0..8, empties included (true counts)", async () => {
     const board = await candidateService.listBoard({}, viewer);
     expect(board.columns).toHaveLength(9);
     expect(board.columns.map((c) => c.stageOrder)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8]);
-
     const newCol = board.columns.find((c) => c.status === "NEW_CANDIDATE")!;
-    expect(newCol.count).toBe(2);
+    expect(newCol.count).toBe(2); // from the filtered groupBy
     expect(newCol.candidates).toHaveLength(2);
+    expect(newCol.hasMore).toBe(false);
+    expect(newCol.nextCursor).toBeNull();
     expect(board.columns.find((c) => c.status === "SUBMITTED_TO_CLIENT")!.count).toBe(1);
-    // An empty active stage is still present with a zero count.
     expect(board.columns.find((c) => c.status === "OFFER_ACCEPTED")!.count).toBe(0);
   });
 
@@ -184,15 +204,16 @@ describe("candidateService.listBoard", () => {
     expect(notQ.candidates).toBeUndefined();
   });
 
-  it("includes terminal card lists when includeTerminal is set", async () => {
+  it("includes terminal card lists (+ cursor) when includeTerminal is set", async () => {
     const board = await candidateService.listBoard({}, viewer, { includeTerminal: true });
     const notQ = board.terminal.find((t) => t.status === "NOT_QUALIFIED")!;
     expect(notQ.candidates).toHaveLength(1);
+    expect(notQ.hasMore).toBe(false);
   });
 
-  it("computes meta (total/active/overdue/stuck) over active cards only", async () => {
+  it("computes meta: total/active from the groupBy, overdue/stuck from count queries", async () => {
     const board = await candidateService.listBoard({}, viewer);
-    // 5 total, 3 active (2 NEW + 1 SUBMITTED); the 30-day NEW card is both overdue and stuck.
+    // groupBy totals: 2 NEW + 1 SUBMITTED + 1 NOT_QUALIFIED + 1 FUTURE = 5 total, 3 active.
     expect(board.meta).toEqual({ total: 5, active: 3, overdue: 1, stuck: 1 });
   });
 
@@ -202,34 +223,80 @@ describe("candidateService.listBoard", () => {
     const withClient = cards.find((c) => c.id === "a")!;
     expect(withClient.clientName).toBe("Sterling Institute");
     expect(cards.find((c) => c.id === "b")!.clientName).toBeNull();
-    // The card projection structurally omits licenseNumber regardless of viewer role.
     expect(withClient).not.toHaveProperty("licenseNumber");
   });
 
-  it("forwards filters to the repository list", async () => {
+  it("a status filter focuses ONE column — only that column's query runs, with shared filters", async () => {
     await candidateService.listBoard(
       { track: "Operations", clientId: "cl1", search: "jane", status: "NEW_CANDIDATE" },
       viewer,
     );
-    expect(h.candidateRepo.list).toHaveBeenCalledWith({
+    // Focus → exactly one per-column read (the other 8 short-circuit to []).
+    expect(h.candidateRepo.list).toHaveBeenCalledTimes(1);
+    const [args] = h.candidateRepo.list.mock.calls[0]!;
+    expect(args).toMatchObject({
       track: "Operations",
       clientId: "cl1",
       search: "jane",
       status: "NEW_CANDIDATE",
+      orderBy: "createdAt_desc",
+      take: 26, // BOARD_PAGE (25) + 1
     });
   });
 
-  it("caps a column's cards at 50 but reports the TRUE total count", async () => {
-    // 60 candidates all in NEW_CANDIDATE — more than the per-column cap.
-    const many = Array.from({ length: 60 }, (_, i) =>
+  it("paginates a column at BOARD_PAGE (25) with the TRUE total from groupBy", async () => {
+    const many = Array.from({ length: 26 }, (_, i) =>
       row({ id: `n${i}`, status: "NEW_CANDIDATE", stageOrder: 0 }),
     );
-    h.candidateRepo.list.mockResolvedValue(many);
+    h.candidateRepo.list.mockImplementation(async (f: { status?: string }) =>
+      f.status === "NEW_CANDIDATE" ? many : [],
+    );
+    h.candidateRepo.groupByStatusFiltered.mockResolvedValue([
+      { status: "NEW_CANDIDATE", _count: { _all: 60 } },
+    ]);
     const board = await candidateService.listBoard({}, viewer);
     const newCol = board.columns.find((c) => c.status === "NEW_CANDIDATE")!;
     expect(newCol.count).toBe(60); // true total
-    expect(newCol.candidates).toHaveLength(50); // capped payload
+    expect(newCol.candidates).toHaveLength(25); // one keyset page
+    expect(newCol.hasMore).toBe(true);
+    expect(decodeCursor(newCol.nextCursor!, "createdAt_desc")!.id).toBe("n24"); // last of page
     expect(board.meta.total).toBe(60);
+  });
+});
+
+describe("candidateService.listColumn (per-column load-more)", () => {
+  it("returns a ColumnPageDTO for one status, walking the cursor + resolving mine", async () => {
+    const many = Array.from({ length: 26 }, (_, i) =>
+      row({ id: `s${i}`, status: "INITIAL_SCREENING", stageOrder: 2 }),
+    );
+    h.candidateRepo.list.mockResolvedValue(many);
+    const page = await candidateService.listColumn("INITIAL_SCREENING", { mine: true }, viewer, {
+      kind: "createdAt",
+      value: "2026-06-01T00:00:00.000Z",
+      id: "s0",
+    });
+    expect(page.status).toBe("INITIAL_SCREENING");
+    expect(page.items).toHaveLength(25);
+    expect(page.hasMore).toBe(true);
+    expect(decodeCursor(page.nextCursor!, "createdAt_desc")!.id).toBe("s24");
+    const [args] = h.candidateRepo.list.mock.calls[0]!;
+    expect(args).toMatchObject({
+      status: "INITIAL_SCREENING",
+      orderBy: "createdAt_desc",
+      take: 26,
+    });
+    expect(args.createdById).toBe("u1"); // mine → viewer.id
+    expect(args.cursor).toMatchObject({ id: "s0" });
+  });
+
+  it("last page → hasMore false, nextCursor null", async () => {
+    h.candidateRepo.list.mockResolvedValue([
+      row({ id: "only", status: "DESTA_REVIEW", stageOrder: 3 }),
+    ]);
+    const page = await candidateService.listColumn("DESTA_REVIEW", {}, viewer);
+    expect(page.items).toHaveLength(1);
+    expect(page.hasMore).toBe(false);
+    expect(page.nextCursor).toBeNull();
   });
 });
 
@@ -266,7 +333,6 @@ describe("candidateService.dashboardStats", () => {
 
   it("surfaces only overdue/stuck candidates from the targeted stale read", async () => {
     const stats = await candidateService.dashboardStats(viewer);
-    // The 30-day-old NEW card is overdue/stuck; the fresh one is not.
     expect(stats.attention.map((c) => c.id)).toEqual(["old"]);
     expect(h.candidateRepo.listStaleActive).toHaveBeenCalledWith(8);
   });

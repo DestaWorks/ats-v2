@@ -54,14 +54,19 @@ export function moveCardBetweenColumns(
   const moved = projectMoved(card, toStatus);
   const targetIsActive = !isTerminalStatus(toStatus);
 
+  // `count` is the column's TRUE total (from the server `groupBy`), while `candidates` is only the
+  // loaded page (≤ BOARD_PAGE). So adjust `count` by ±1 — never derive it from `candidates.length`,
+  // which would collapse a paginated column's total and hide its "Load more" (B1).
   const next = columns.map((col) => {
     if (col.status === fromStatus) {
-      const candidates = col.candidates.filter((c) => c.id !== cardId);
-      return { ...col, candidates, count: candidates.length };
+      return {
+        ...col,
+        candidates: col.candidates.filter((c) => c.id !== cardId),
+        count: Math.max(0, col.count - 1),
+      };
     }
     if (targetIsActive && col.status === toStatus) {
-      const candidates = [moved, ...col.candidates];
-      return { ...col, candidates, count: candidates.length };
+      return { ...col, candidates: [moved, ...col.candidates], count: col.count + 1 };
     }
     return col;
   });
@@ -70,9 +75,15 @@ export function moveCardBetweenColumns(
 }
 
 /**
- * Apply a move to the whole board for the optimistic reducer: relocate the card, re-derive
- * `meta.active/overdue/stuck` from the columns, and bump the target terminal's count (and its
+ * Apply a move to the whole board for the optimistic reducer: relocate the card, adjust
+ * `meta.active/overdue/stuck` by the move's DELTA, and bump the target terminal's count (and its
  * card list when it was loaded). Returns the input board unchanged on a no-op.
+ *
+ * `meta` is adjusted by delta — NOT re-summed from the columns, because overdue/stuck came from
+ * full-table server counts while only a page of cards is loaded (re-summing would undercount, M1).
+ * A move always leaves an active source column; the card lands with fresh timing (`projectMoved`
+ * clears overdue/stuck), so: `active −1` iff the target is terminal; `overdue/stuck −1` iff the
+ * moved card was overdue/stuck.
  */
 export function applyBoardMove(
   board: BoardResponse,
@@ -83,9 +94,9 @@ export function applyBoardMove(
   if (!card || card.status === toStatus) return board;
 
   const { columns } = moveCardBetweenColumns(board.columns, cardId, toStatus);
-  const active = columns.reduce((n, c) => n + c.count, 0);
-  const overdue = columns.reduce((n, c) => n + c.candidates.filter((x) => x.isOverdue).length, 0);
-  const stuck = columns.reduce((n, c) => n + c.candidates.filter((x) => x.isStuck).length, 0);
+  const active = board.meta.active - (isTerminalStatus(toStatus) ? 1 : 0);
+  const overdue = board.meta.overdue - (card.isOverdue ? 1 : 0);
+  const stuck = board.meta.stuck - (card.isStuck ? 1 : 0);
 
   let terminal = board.terminal;
   if (isTerminalStatus(toStatus)) {

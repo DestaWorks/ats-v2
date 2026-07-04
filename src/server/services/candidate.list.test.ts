@@ -1,16 +1,19 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import type { AuthUser } from "@/server/auth/guards";
+import { decodeCursor } from "@/lib/validation/cursor";
 
 /**
- * Proves `candidateService.listCandidates` builds the PII-gated `/candidates` browse list WITHOUT a
- * DB: rows carry NO `licenseNumber` (the projection runs through `toCandidateDTO`, even for a viewer
- * WITH `viewCredentials`), the read is CAPPED at 100 rows via the repository `take` (and `capped`
- * flips when the ceiling is hit), `clientName` resolves from the batch-loaded client map, and the
- * caller's filters are forwarded verbatim. We mock the two repositories; the DTO + timing run for real.
+ * Proves `candidateService.listCandidates` builds the PII-gated, CURSOR-PAGINATED `/candidates`
+ * browse list WITHOUT a DB: rows carry NO `licenseNumber` (the projection runs through
+ * `toCandidateDTO`, even for a viewer WITH `viewCredentials`), the read fetches `LIST_PAGE + 1` rows
+ * (keyset, default `createdAt desc`) so `hasMore`/`nextCursor`/`total` are exact, there is
+ * DELIBERATELY NO global score sort (order == DB order — score is a displayed column), `mine`
+ * resolves to `viewer.id` server-side, and `clientName` resolves from the batch-loaded client map.
+ * We mock the repositories; the DTO + timing + cursor codec run for real.
  */
 
 const h = vi.hoisted(() => ({
-  candidateRepo: { list: vi.fn() },
+  candidateRepo: { list: vi.fn(), count: vi.fn() },
   clientRepo: { list: vi.fn() },
   clientRulesRepo: { list: vi.fn() },
 }));
@@ -37,7 +40,7 @@ const owner: AuthUser = { id: "o1", email: "o@desta.works", name: "O", role: "Ow
 
 const DAY = 86_400_000;
 
-/** A candidate row with the fields the list DTO + timing read (incl. sensitive `licenseNumber`). */
+/** A candidate row with the fields the list DTO + timing + cursor read (incl. sensitive PII). */
 function row(overrides: Record<string, unknown> = {}) {
   return {
     id: "c",
@@ -53,16 +56,16 @@ function row(overrides: Record<string, unknown> = {}) {
     status: "NEW_CANDIDATE",
     stageOrder: 0,
     stageEnteredAt: new Date(),
+    createdAt: new Date("2026-06-01T00:00:00.000Z"),
     ...overrides,
   };
 }
 
 beforeEach(() => {
-  h.candidateRepo.list.mockReset();
-  h.clientRepo.list.mockReset();
-  h.clientRulesRepo.list.mockReset();
-  h.clientRepo.list.mockResolvedValue([{ id: "cl1", name: "Sterling Institute" }]);
-  h.clientRulesRepo.list.mockResolvedValue([]);
+  h.candidateRepo.list.mockReset().mockResolvedValue([]);
+  h.candidateRepo.count.mockReset().mockResolvedValue(0);
+  h.clientRepo.list.mockReset().mockResolvedValue([{ id: "cl1", name: "Sterling Institute" }]);
+  h.clientRulesRepo.list.mockReset().mockResolvedValue([]);
 });
 
 /** A `client_rules` row for `cl1` = Sterling Institute. */
@@ -84,6 +87,7 @@ describe("candidateService.listCandidates", () => {
     h.candidateRepo.list.mockResolvedValue([
       row({ id: "a", clientId: "cl1", stageEnteredAt: new Date(Date.now() - 5 * DAY) }),
     ]);
+    h.candidateRepo.count.mockResolvedValue(1);
     // Owner HAS viewCredentials — the row still structurally omits licenseNumber.
     const list = await candidateService.listCandidates({}, owner);
     expect(list.candidates).toHaveLength(1);
@@ -96,28 +100,41 @@ describe("candidateService.listCandidates", () => {
 
   it("resolves clientName to null when the candidate has no client", async () => {
     h.candidateRepo.list.mockResolvedValue([row({ id: "b", clientId: null })]);
+    h.candidateRepo.count.mockResolvedValue(1);
     const list = await candidateService.listCandidates({}, associate);
     expect(list.candidates[0]!.clientName).toBeNull();
   });
 
-  it("caps the read at 100 rows via the repository `take` and forwards filters verbatim", async () => {
+  it("fetches LIST_PAGE+1 with default createdAt_desc + no cursor; forwards filters", async () => {
     h.candidateRepo.list.mockResolvedValue([row()]);
+    h.candidateRepo.count.mockResolvedValue(1);
     await candidateService.listCandidates(
       { track: "Operations", status: "NEW_CANDIDATE", clientId: "cl1", search: "jane" },
       associate,
     );
-    expect(h.candidateRepo.list).toHaveBeenCalledWith({
+    const [args] = h.candidateRepo.list.mock.calls[0]!;
+    expect(args).toMatchObject({
       track: "Operations",
       status: "NEW_CANDIDATE",
       clientId: "cl1",
       search: "jane",
-      take: 100,
+      orderBy: "createdAt_desc",
+      take: 51, // LIST_PAGE (50) + 1
     });
+    expect(args.cursor).toBeUndefined();
   });
 
-  it("folds the fit pct onto each list item and sorts by score desc (nulls last)", async () => {
+  it("returns total from the count query (true filtered denominator)", async () => {
+    h.candidateRepo.list.mockResolvedValue([row()]);
+    h.candidateRepo.count.mockResolvedValue(347);
+    const list = await candidateService.listCandidates({}, associate);
+    expect(list.total).toBe(347);
+  });
+
+  it("folds the fit pct onto each item WITHOUT re-sorting — order stays the DB order", async () => {
     h.clientRulesRepo.list.mockResolvedValue([sterlingRules()]);
-    // Repo returns createdAt-desc; the service re-sorts by score. Intentionally UNSORTED input.
+    // DB order is [mid(40), nul(null), hi(100)]. A score sort would flip it to [hi, mid, nul];
+    // the new list must preserve the DB order (score is a displayed column, not the paginate key).
     h.candidateRepo.list.mockResolvedValue([
       row({
         id: "mid",
@@ -127,8 +144,8 @@ describe("candidateService.listCandidates", () => {
         population: "Adult",
         setting: "Telehealth",
         licenseStatus: "Active",
-      }), // 40
-      row({ id: "nul", clientId: null }), // null (no client)
+      }),
+      row({ id: "nul", clientId: null }),
       row({
         id: "hi",
         clientId: "cl1",
@@ -137,50 +154,61 @@ describe("candidateService.listCandidates", () => {
         population: "Child/Adolescent",
         setting: "Hybrid",
         licenseStatus: "Active",
-      }), // 100
+      }),
     ]);
+    h.candidateRepo.count.mockResolvedValue(3);
     const list = await candidateService.listCandidates({}, associate);
-    expect(list.candidates.map((c) => c.id)).toEqual(["hi", "mid", "nul"]);
-    expect(list.candidates.map((c) => c.score)).toEqual([100, 40, null]);
-  });
-
-  it("keeps the repository createdAt-desc order for equal scores (stable sort)", async () => {
-    h.clientRulesRepo.list.mockResolvedValue([sterlingRules()]);
-    // Two identical-fit candidates (both 40): the repo's createdAt-desc order must be preserved.
-    const eq = (id: string) =>
-      row({
-        id,
-        clientId: "cl1",
-        licenseState: "NJ",
-        credential: "PMHNP",
-        population: "Adult",
-        setting: "Telehealth",
-        licenseStatus: "Active",
-      });
-    h.candidateRepo.list.mockResolvedValue([eq("first"), eq("second")]);
-    const list = await candidateService.listCandidates({}, associate);
-    expect(list.candidates.map((c) => c.id)).toEqual(["first", "second"]);
-    expect(list.candidates.every((c) => c.score === 40)).toBe(true);
+    expect(list.candidates.map((c) => c.id)).toEqual(["mid", "nul", "hi"]); // DB order
+    expect(list.candidates.map((c) => c.score)).toEqual([40, null, 100]); // scores still shown
   });
 
   it("scores null when the assigned client has no rules row", async () => {
     h.clientRulesRepo.list.mockResolvedValue([]); // no rules seeded
     h.candidateRepo.list.mockResolvedValue([row({ id: "x", clientId: "cl1" })]);
+    h.candidateRepo.count.mockResolvedValue(1);
     const list = await candidateService.listCandidates({}, associate);
     expect(list.candidates[0]!.score).toBeNull();
   });
 
-  it("reports capped=false below the cap and capped=true at the ceiling", async () => {
-    h.candidateRepo.list.mockResolvedValueOnce([row(), row()]);
-    const under = await candidateService.listCandidates({}, associate);
-    expect(under.count).toBe(2);
-    expect(under.capped).toBe(false);
+  it("hasMore + nextCursor at a full page; sliced to LIST_PAGE (capped mirrors hasMore)", async () => {
+    const rows = Array.from({ length: 51 }, (_, i) => row({ id: `c${i}` }));
+    h.candidateRepo.list.mockResolvedValue(rows);
+    h.candidateRepo.count.mockResolvedValue(200);
+    const list = await candidateService.listCandidates({}, associate);
+    expect(list.candidates).toHaveLength(50);
+    expect(list.hasMore).toBe(true);
+    expect(list.total).toBe(200);
+    // nextCursor targets the LAST returned row (index 49), not the dropped 51st.
+    expect(decodeCursor(list.nextCursor!, "createdAt_desc")!.id).toBe("c49");
+    // Backward-compat mirror for the current RSC table.
+    expect(list.count).toBe(50);
+    expect(list.capped).toBe(true);
+  });
 
-    h.candidateRepo.list.mockResolvedValueOnce(
-      Array.from({ length: 100 }, (_, i) => row({ id: `c${i}` })),
+  it("last page: no extra row → hasMore false, nextCursor null, capped false", async () => {
+    h.candidateRepo.list.mockResolvedValue([row({ id: "a" }), row({ id: "b" })]);
+    h.candidateRepo.count.mockResolvedValue(2);
+    const list = await candidateService.listCandidates({}, associate);
+    expect(list.hasMore).toBe(false);
+    expect(list.nextCursor).toBeNull();
+    expect(list.capped).toBe(false);
+    expect(list.count).toBe(2);
+  });
+
+  it("resolves `mine` to viewer.id server-side and forwards sort + cursor", async () => {
+    h.candidateRepo.list.mockResolvedValue([]);
+    h.candidateRepo.count.mockResolvedValue(0);
+    await candidateService.listCandidates(
+      {
+        mine: true,
+        sort: "createdAt_asc",
+        cursor: { kind: "createdAt", value: "2026-06-01T00:00:00.000Z", id: "x" },
+      },
+      associate,
     );
-    const full = await candidateService.listCandidates({}, associate);
-    expect(full.count).toBe(100);
-    expect(full.capped).toBe(true);
+    const [args] = h.candidateRepo.list.mock.calls[0]!;
+    expect(args.createdById).toBe("u1"); // never a client-supplied id
+    expect(args.orderBy).toBe("createdAt_asc");
+    expect(args.cursor).toMatchObject({ id: "x" });
   });
 });
