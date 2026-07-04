@@ -1,13 +1,64 @@
 import "server-only";
-import { statusOrder, isCandidateStatus, type CandidateStatus } from "@/lib/constants";
+import {
+  ACTIVE_STATUS_CODES,
+  TERMINAL_STATUS_CODES,
+  isCandidateStatus,
+  isTerminalStatus,
+  statusLabel,
+  statusOrder,
+  type CandidateStatus,
+  type LicenseStatus,
+  type Track,
+} from "@/lib/constants";
+import type { BoardResponse, BulkMoveResponse, CandidateCardDTO } from "@/lib/validation/pipeline";
 import { requireUser, type AuthUser } from "@/server/auth/guards";
 import { writeAudit } from "@/server/db/audit";
 import { withTransaction } from "@/server/db/with-transaction";
-import { candidateRepository } from "@/server/repositories/candidate.repository";
+import { candidateRepository, type CandidateRow } from "@/server/repositories/candidate.repository";
+import { clientRepository } from "@/server/repositories/client.repository";
 import { stageHistoryRepository } from "@/server/repositories/stage-history.repository";
 import { checkStageGate } from "@/server/rules/stage-gates";
+import { getDaysInStage, isOverdue, isStuck } from "@/server/rules/stage-timing";
 import { AppError } from "@/server/http/app-error";
-import { toRuleCandidate } from "./candidate.dto";
+import { toCandidateDTO, toRuleCandidate } from "./candidate.dto";
+
+/** Filters accepted by the board read (a subset of the repository's list filters). */
+export interface BoardFilters {
+  status?: CandidateStatus;
+  track?: Track;
+  clientId?: string;
+  search?: string;
+}
+
+/**
+ * Project a raw candidate row onto the client-safe `CandidateCardDTO`. Runs through
+ * `toCandidateDTO` first (the PII boundary) — the card type omits `licenseNumber` entirely, so
+ * it can never reach a card regardless of viewer role. Timing is derived from `stageEnteredAt`.
+ */
+function toCard(
+  row: CandidateRow,
+  viewer: AuthUser,
+  clientNames: Map<string, string>,
+  now: Date,
+): CandidateCardDTO {
+  const dto = toCandidateDTO(row, viewer);
+  const status = dto.status as CandidateStatus;
+  return {
+    id: dto.id,
+    name: dto.name,
+    track: dto.track as Track,
+    credential: dto.credential,
+    licenseState: dto.licenseState,
+    licenseStatus: dto.licenseStatus as LicenseStatus,
+    clientId: dto.clientId,
+    clientName: dto.clientId ? (clientNames.get(dto.clientId) ?? null) : null,
+    status,
+    stageOrder: dto.stageOrder,
+    daysInStage: getDaysInStage(dto.stageEnteredAt, now),
+    isOverdue: isOverdue(status, dto.stageEnteredAt, now),
+    isStuck: isStuck(dto.stageEnteredAt, now),
+  };
+}
 
 /**
  * Domain input for creating a candidate. Interactive creates ALWAYS start at `NEW_CANDIDATE`
@@ -77,6 +128,100 @@ export const candidateService = {
     const existing = await candidateRepository.findById(id);
     if (!existing) throw new AppError("NOT_FOUND", "Candidate not found");
     return candidateRepository.softDelete(id, user.id);
+  },
+
+  /**
+   * Read the pipeline board — funnel-grouped candidates with derived stage timing. AuthZ is the
+   * caller's (route `requireUser()` / RSC `getCurrentUser()`); `viewer` is passed in for the PII
+   * boundary. Returns exactly the 9 active columns (order 0..8, empties present), a terminal
+   * summary (counts always; card lists only when `includeTerminal`), and aggregate `meta`.
+   *
+   * `clientName` is resolved by fetching the small `clients` table once into an `id → name` map
+   * (in-memory join) — this avoids a per-row Prisma join and keeps the shared `list` untouched.
+   */
+  async listBoard(
+    filters: BoardFilters = {},
+    viewer: AuthUser,
+    opts: { includeTerminal?: boolean } = {},
+  ): Promise<BoardResponse> {
+    const [rows, clients] = await Promise.all([
+      candidateRepository.list(filters),
+      clientRepository.list(),
+    ]);
+    const clientNames = new Map(clients.map((c) => [c.id, c.name]));
+    const now = new Date();
+
+    const cardsByStatus = new Map<CandidateStatus, CandidateCardDTO[]>();
+    let active = 0;
+    let overdue = 0;
+    let stuck = 0;
+    for (const row of rows) {
+      const card = toCard(row, viewer, clientNames, now);
+      const bucket = cardsByStatus.get(card.status);
+      if (bucket) bucket.push(card);
+      else cardsByStatus.set(card.status, [card]);
+      if (!isTerminalStatus(card.status)) {
+        active += 1;
+        if (card.isOverdue) overdue += 1;
+        if (card.isStuck) stuck += 1;
+      }
+    }
+
+    const columns = ACTIVE_STATUS_CODES.map((status) => {
+      const candidates = cardsByStatus.get(status) ?? [];
+      return {
+        status,
+        label: statusLabel(status),
+        stageOrder: statusOrder(status),
+        count: candidates.length,
+        candidates,
+      };
+    });
+
+    const terminal = TERMINAL_STATUS_CODES.map((status) => {
+      const candidates = cardsByStatus.get(status) ?? [];
+      return {
+        status,
+        label: statusLabel(status),
+        count: candidates.length,
+        ...(opts.includeTerminal ? { candidates } : {}),
+      };
+    });
+
+    return { columns, terminal, meta: { total: rows.length, active, overdue, stuck } };
+  },
+
+  /**
+   * Move many candidates INTO `toStatus`. Partial success, NO gate bypass: each id runs the same
+   * server-authoritative `move` (gate → txn update + stage_history + audit) in ITS OWN
+   * transaction, so one blocked (or missing) candidate never rolls back the valid moves. Gate
+   * blocks and not-found land in `blocked` with the reason string; anything unexpected re-throws.
+   */
+  async bulkMove(
+    ids: string[],
+    toStatus: CandidateStatus,
+    user: AuthUser,
+  ): Promise<BulkMoveResponse> {
+    const moved: string[] = [];
+    const blocked: { id: string; reason: string }[] = [];
+    for (const id of ids) {
+      try {
+        await candidateService.move(id, toStatus, user);
+        moved.push(id);
+      } catch (err) {
+        // Expected per-candidate outcomes (gate block, not found, unknown status) are collected,
+        // not thrown — a bulk sweep must not lose the valid moves. Unexpected errors bubble up.
+        if (
+          err instanceof AppError &&
+          (err.code === "STAGE_BLOCKED" || err.code === "NOT_FOUND" || err.code === "BAD_REQUEST")
+        ) {
+          blocked.push({ id, reason: err.message });
+        } else {
+          throw err;
+        }
+      }
+    }
+    return { moved, blocked };
   },
 
   /**

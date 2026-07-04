@@ -176,19 +176,16 @@ share a database.** *(`zyx.com` below is a placeholder for the real domain.)*
 > to the new app — there is never a window where a legacy promote writes a candidate the new
 > pipeline can't see.
 
-### 2.1 Pipeline (Module 3) — brings `saved_views`
-- [ ] Candidate service: `move(id, toStatus)` — enforce `STAGE_REQUIRED`, write `stage_history` + audit, in a transaction.
-- [ ] `GET /api/candidates` (list + filters) route.
-- [ ] `POST /api/candidates/:id/move` route (gated).
-- [ ] `POST /api/candidates/bulk-move` route (gated — **no bypass**).
-- [ ] Port kanban board + cards 1:1; wire drag-drop → move endpoint.
-- [ ] Port table view + sortable columns 1:1.
-- [ ] Add `saved_views` model → migrate; port filter chips (mine/overdue/stuck/hot/verify) + **saved views** (shareable filters live in URL `searchParams` + `saved_views`, not localStorage).
-- [ ] Port bulk-select + bulk actions.
-- [ ] AI health strip: `server/ai/pipeline-health` + endpoint + UI.
-- [ ] `useCandidates` + `useMoveCandidate` hooks (TanStack Query).
-- [ ] Tests: move gating (single + bulk); e2e move.
-- **Done-when:** recruiters work candidates; gates block invalid moves; every move audited. **Retire legacy kanban+table.**
+### 2.1 Pipeline (Module 3) — brings `saved_views`  🟡 *(core board done — design `docs/design/wave-2.1-pipeline.md`; polish deferred)*
+- [x] Candidate service: `move(id, toStatus)` — `STAGE_REQUIRED` gate, `stage_history` + audit, in a transaction *(shipped Wave 1.1)*.
+- [x] `GET /api/candidates` — **funnel-grouped** board data + filters (track/client/search/includeTerminal).
+- [x] `POST /api/candidates/:id/move` route (gated; returns only pipeline fields — no PII).
+- [x] `POST /api/candidates/bulk-move` route (gated, **no bypass**, per-id txn, partial-success summary).
+- [x] Kanban board + cards + drag-drop → move (dnd-kit, React 19 `useOptimistic`, snap-back + toast on `STAGE_BLOCKED`); terminal-state side rail; per-card status-`<select>` fallback (keyboard/terminal moves). Real **dashboard** (funnel bars + Total/Active/Overdue/Stuck + needs-attention + CTA) replaces the 0.3 placeholder.
+- [x] Filters in URL `searchParams` (shareable). Demo-seed tooling (`pnpm db:seed:demo`, `db:status`) for local testing.
+- [x] Tests: move gating (single + bulk STAGE_BLOCKED), funnel grouping, exact optimistic-revert, no-PII-on-move. Reviewed (architect→backend→frontend→review; M1 PII-over-return fixed, M2 client gate pre-check deferred w/ sign-off). **161 tests, build green.**
+- [ ] **Deferred to follow-up:** table view + sortable columns; `saved_views` model + saved views + filter chips (mine/overdue/stuck/hot/verify); bulk-select UI (endpoint ships now); AI health strip (`server/ai/pipeline-health`); card scoring (needs `client_rules`); client-side gate pre-check (dim invalid targets); TanStack Query.
+- **Done-when:** recruiters work candidates; gates block invalid moves; every move audited. *(Core loop ✅; legacy retirement waits on the deferred views.)*
 
 ### 2.2 Candidate Detail — notes (brings ONLY note tables)
 - [ ] Add `candidate_notes` + `mentions` models → migrate.
