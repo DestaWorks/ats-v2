@@ -40,6 +40,7 @@ import { cn } from "@/lib/utils/cn";
 import { Badge } from "@/components/ui/badge";
 import { ScoreBadge } from "@/components/ui/score-badge";
 import { Card } from "@/components/ui/card";
+import { Modal } from "@/components/ui/modal";
 import { Table, Td } from "@/components/ui/table";
 import { useZodForm } from "@/lib/forms/use-zod-form";
 import { signInSchema, type SignInInput } from "@/lib/validation/auth";
@@ -83,6 +84,9 @@ export default function StyleguidePage() {
     formState: { errors, isSubmitting },
   } = form;
   const onSubmit = (data: SignInInput) => toast.success(`Valid form → ${data.email}`);
+
+  // --- Modal (native <dialog>) ---
+  const [modalOpen, setModalOpen] = useState(false);
 
   // --- dnd-kit sortable ---
   const [items, setItems] = useState([
@@ -274,6 +278,28 @@ export default function StyleguidePage() {
             />
           </Field>
         </div>
+      </Section>
+
+      <Section title="Modal (native <dialog>)">
+        <p className="text-xs text-gray">
+          Built on the native <code>&lt;dialog&gt;</code> element — focus trap, ESC-to-close,
+          focus-return, and a <code>::backdrop</code> for free. Backdrop click and the × button also
+          close it.
+        </p>
+        <Button className="self-start" onClick={() => setModalOpen(true)}>
+          Open modal
+        </Button>
+        <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Example dialog">
+          <div className="flex flex-col gap-3">
+            <p className="text-sm text-charcoal">
+              A centered, `Card`-like panel. Press <kbd>Esc</kbd>, click the backdrop, or use the ×
+              to dismiss — focus returns to the trigger.
+            </p>
+            <Button variant="secondary" className="self-start" onClick={() => setModalOpen(false)}>
+              Close
+            </Button>
+          </div>
+        </Modal>
       </Section>
 
       <Section title="Drag & drop (dnd-kit — keyboard accessible)">

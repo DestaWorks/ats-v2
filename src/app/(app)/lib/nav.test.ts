@@ -10,12 +10,17 @@ describe("activeNavHref", () => {
     expect(activeNavHref("/candidates", HREFS)).toBe("/candidates");
   });
 
-  it("prefers the LONGEST match so /candidates/new beats /candidates", () => {
-    expect(activeNavHref("/candidates/new", HREFS)).toBe("/candidates/new");
+  it("prefers the LONGEST match when prefixes overlap", () => {
+    // The helper stays general even though the base items no longer overlap.
+    const hrefs = ["/candidates", "/candidates/new"];
+    expect(activeNavHref("/candidates/new", hrefs)).toBe("/candidates/new");
   });
 
-  it("keeps a nested detail path under its browse item", () => {
+  it("keeps nested paths under the /candidates browse item", () => {
+    // Add-candidate is now a modal (no /candidates/new nav entry), so its route — and any
+    // candidate detail route — resolves to the browse item.
     expect(activeNavHref("/candidates/abc123", HREFS)).toBe("/candidates");
+    expect(activeNavHref("/candidates/new", HREFS)).toBe("/candidates");
   });
 
   it("matches the capability-gated Import item when present", () => {

@@ -17,17 +17,16 @@ export interface NavItem {
 export const BASE_NAV_ITEMS: readonly NavItem[] = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/pipeline", label: "Pipeline" },
-  { href: "/candidates/new", label: "Add candidate" },
   { href: "/candidates", label: "Candidates" },
   { href: "/resume", label: "Parse Résumé" },
 ];
 
 /**
  * Which nav href is "active" for the current path — the LONGEST item that the path either equals or
- * sits under (`/foo/…`). Longest-match disambiguates overlapping prefixes: on `/candidates/new`
- * both `/candidates` and `/candidates/new` match, and the more specific `/candidates/new` wins; on
- * `/candidates/abc123` only `/candidates` matches (the detail page lives under the browse item).
- * Returns `null` when nothing matches (e.g. an `(app)` route with no nav entry).
+ * sits under (`/foo/…`). Longest-match disambiguates overlapping prefixes when they exist; with the
+ * base items, `/candidates/new` and `/candidates/abc123` both fall under the `/candidates` browse
+ * item (the detail + add pages live under it — "Add candidate" is now a modal trigger, not a nav
+ * destination). Returns `null` when nothing matches (e.g. an `(app)` route with no nav entry).
  */
 export function activeNavHref(pathname: string, hrefs: readonly string[]): string | null {
   let best: string | null = null;

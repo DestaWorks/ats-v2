@@ -1,18 +1,23 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/server/auth/guards";
 import { hasCapability } from "@/lib/constants";
+import { clientRepository } from "@/server/repositories/client.repository";
 import { AppNav } from "./app-nav";
 import { BASE_NAV_ITEMS, type NavItem } from "./lib/nav";
 
 /**
- * App-shell layout for every `(app)` route (server component). Two jobs:
+ * App-shell layout for every `(app)` route (server component). Three jobs:
  *
  * 1. **Auth safety-net.** A single `getCurrentUser()` guard → `redirect("/sign-in")` so no future
  *    `(app)` page can fail open. Individual pages keep their own `getCurrentUser()` (they need the
  *    user object for data + capability flags); this is an additional guard, not a replacement.
- * 2. **Chrome.** A persistent, capability-gated top nav (client `AppNav`) + a skip-to-content link,
- *    with page content in a single `<main id="content">` (the skip target). The **Import** link is
- *    appended only for viewers with `bulkImport` — UI hiding is UX; the route stays server-guarded.
+ * 2. **Chrome.** A persistent, capability-gated **left sidebar** (client `AppNav`) + a
+ *    skip-to-content link, with page content in a single `<main id="content">` (the skip target) to
+ *    the sidebar's right. The **Import** link is appended only for viewers with `bulkImport` — UI
+ *    hiding is UX; the route stays server-guarded.
+ * 3. **Add-candidate data.** Loads the clients list (+ derives `viewCredentials` clearance) here in
+ *    the RSC and passes it to the sidebar's "+ Add candidate" modal trigger, so the client sidebar
+ *    never imports `src/server/**`.
  */
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();
@@ -23,6 +28,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     items.push({ href: "/migration", label: "Import" });
   }
 
+  const clientRows = await clientRepository.list();
+  const clients = clientRows.map((c) => ({ id: c.id, name: c.name }));
+  const canEditCredential = hasCapability(user.role, "viewCredentials");
+
   return (
     <>
       <a
@@ -31,8 +40,18 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       >
         Skip to content
       </a>
-      <AppNav items={items} userName={user.name} userRole={user.role} />
-      <main id="content">{children}</main>
+      <div className="flex min-h-screen flex-col md:flex-row">
+        <AppNav
+          items={items}
+          userName={user.name}
+          userRole={user.role}
+          clients={clients}
+          canEditCredential={canEditCredential}
+        />
+        <main id="content" className="min-w-0 flex-1">
+          {children}
+        </main>
+      </div>
     </>
   );
 }
