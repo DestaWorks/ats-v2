@@ -5,22 +5,23 @@ import { CSS } from "@dnd-kit/utilities";
 import { ALL_STATUS_CODES, statusLabel, type CandidateStatus } from "@/lib/constants";
 import type { CandidateCardDTO } from "@/lib/validation/pipeline";
 import { cn } from "@/lib/utils/cn";
+import { Badge } from "@/components/ui/badge";
 import { TRACK_BADGE, licenseDotClass } from "./lib/status-style";
 
 /** Timing badge — overdue (red) / stuck (orange) / plain days-in-stage (gray). */
 function TimingBadge({ card }: { card: CandidateCardDTO }) {
   if (card.isOverdue) {
     return (
-      <span className="rounded bg-red/10 px-1.5 py-0.5 text-[11px] font-semibold text-red">
+      <Badge tone="danger" size="sm" pill={false}>
         overdue · {card.daysInStage}d
-      </span>
+      </Badge>
     );
   }
   if (card.isStuck) {
     return (
-      <span className="rounded bg-orange/10 px-1.5 py-0.5 text-[11px] font-semibold text-orange">
+      <Badge tone="amber" size="sm" pill={false}>
         stuck · {card.daysInStage}d
-      </span>
+      </Badge>
     );
   }
   return <span className="text-[11px] font-medium text-gray">{card.daysInStage}d in stage</span>;
@@ -73,6 +74,8 @@ export function CandidateCard({
       >
         <div className="flex items-start justify-between gap-2">
           <h3 className="font-serif text-sm font-semibold text-charcoal">{card.name}</h3>
+          {/* Track chip left inline: unique style (font-bold, text-[10px], tracking-wide) with a
+              dynamic per-track color from status-style.ts — doesn't map onto Badge's tones. */}
           <span
             className={cn(
               "shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold tracking-wide",

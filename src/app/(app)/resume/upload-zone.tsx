@@ -3,6 +3,7 @@
 import { useId, useRef, useState } from "react";
 import { RESUME_VARIANT_LABELS, type ResumeVariant } from "@/lib/constants/documents";
 import { Spinner } from "@/components/ui/spinner";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils/cn";
 
 /**
@@ -51,13 +52,9 @@ export function UploadZone({
           Step 2 — Upload résumé for{" "}
           <span className="text-navy">{RESUME_VARIANT_LABELS[variant]}</span>
         </p>
-        <button
-          type="button"
-          onClick={onChangeRole}
-          className="rounded-md px-2 py-1 text-xs font-medium text-gray transition hover:bg-black/5"
-        >
+        <Button type="button" variant="ghost" size="xs" onClick={onChangeRole}>
           ← Change role
-        </button>
+        </Button>
       </div>
 
       {/* Drop zone wraps a real, focusable file input (keyboard + SR accessible). */}
@@ -140,6 +137,8 @@ export function UploadZone({
       ) : null}
 
       <div className="flex gap-2">
+        {/* Left inline: this is the only button using disabled:opacity-40 (vs the shared
+            Button's disabled:opacity-50) — a genuinely unique disabled state, kept for parity. */}
         <button
           type="button"
           disabled={!canExtract}

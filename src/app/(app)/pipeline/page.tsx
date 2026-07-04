@@ -42,6 +42,7 @@ export default async function PipelinePage({
             {board.meta.active} active · {board.meta.overdue} overdue · {board.meta.stuck} stuck
           </p>
         </div>
+        {/* An anchor (next/link), not a <button> — kept inline; mirrors the secondary/sm Button look. */}
         <Link
           href="/dashboard"
           className="rounded-md border border-black/15 px-3 py-1.5 text-sm font-semibold text-charcoal transition hover:bg-black/5"

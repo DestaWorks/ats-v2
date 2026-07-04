@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { TRACKS } from "@/lib/constants";
+import { Button } from "@/components/ui/button";
 
 export interface ClientOption {
   id: string;
@@ -104,13 +105,9 @@ export function BoardFilters({ clients }: { clients: ClientOption[] }) {
       </label>
 
       {hasFilters ? (
-        <button
-          type="button"
-          onClick={clearAll}
-          className="rounded-md border border-black/15 px-3 py-1.5 text-sm font-semibold text-charcoal transition hover:bg-black/5"
-        >
+        <Button type="button" variant="secondary" size="sm" onClick={clearAll}>
           Clear
-        </button>
+        </Button>
       ) : null}
     </div>
   );

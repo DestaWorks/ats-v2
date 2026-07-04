@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/server/auth/guards";
 import { candidateService } from "@/server/services/candidate.service";
 import type { CandidateCardDTO } from "@/lib/validation/pipeline";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils/cn";
 import { STATUS_BG } from "../pipeline/lib/status-style";
 import { FunnelBar } from "./funnel-bar";
@@ -48,9 +49,10 @@ export default async function DashboardPage() {
         <StatCard label="Stuck >7d" value={board.meta.stuck} tone="orange" />
       </section>
 
-      <section className="rounded-xl border border-black/5 bg-white p-5">
+      <Card as="section" className="p-5">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-sm font-bold tracking-wide text-navy uppercase">Pipeline funnel</h2>
+          {/* An anchor (next/link), not a <button> — kept inline; it mirrors the primary/sm Button look. */}
           <Link
             href="/pipeline"
             className="rounded-md bg-navy px-3 py-1.5 text-sm font-semibold text-white transition hover:opacity-90"
@@ -76,9 +78,9 @@ export default async function DashboardPage() {
             ))}
           </div>
         )}
-      </section>
+      </Card>
 
-      <section className="rounded-xl border border-black/5 bg-white p-5">
+      <Card as="section" className="p-5">
         <h2 className="mb-3 text-sm font-bold tracking-wide text-navy uppercase">
           Needs attention
         </h2>
@@ -102,7 +104,7 @@ export default async function DashboardPage() {
             ))}
           </ul>
         )}
-      </section>
+      </Card>
     </main>
   );
 }

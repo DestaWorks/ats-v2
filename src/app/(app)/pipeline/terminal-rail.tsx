@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { cn } from "@/lib/utils/cn";
+import { Card } from "@/components/ui/card";
 import type { BoardTerminal } from "@/lib/validation/pipeline";
 import { STATUS_BG } from "./lib/status-style";
 
@@ -29,12 +30,11 @@ export function TerminalRail({
   }
 
   return (
-    <aside
-      aria-label="Terminal states"
-      className="flex w-56 shrink-0 flex-col gap-2 rounded-xl border border-black/5 bg-white p-3"
-    >
+    <Card as="aside" aria-label="Terminal states" className="flex w-56 shrink-0 flex-col gap-2 p-3">
       <div className="flex items-center justify-between">
         <h2 className="text-xs font-bold tracking-wide text-gray uppercase">Terminal</h2>
+        {/* Left inline: a bespoke compact navy text-toggle (rounded/px-1.5/text-[11px]/hover:bg-navy/5)
+            — a one-off style that doesn't match a Button variant. */}
         <button
           type="button"
           onClick={toggle}
@@ -76,6 +76,6 @@ export function TerminalRail({
           </li>
         ))}
       </ul>
-    </aside>
+    </Card>
   );
 }

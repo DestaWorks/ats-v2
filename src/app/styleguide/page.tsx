@@ -32,6 +32,9 @@ import { Spinner } from "@/components/ui/spinner";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
 import { Field } from "@/components/ui/field";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
 import { useZodForm } from "@/lib/forms/use-zod-form";
 import { signInSchema, type SignInInput } from "@/lib/validation/auth";
 
@@ -108,6 +111,61 @@ export default function StyleguidePage() {
         </p>
       </header>
 
+      <Section title="Buttons">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="primary">Primary</Button>
+          <Button variant="success">Success</Button>
+          <Button variant="secondary">Secondary</Button>
+          <Button variant="ghost">Ghost</Button>
+          <Button variant="link">Link</Button>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button size="xs">xs</Button>
+          <Button size="sm">sm</Button>
+          <Button size="md">md</Button>
+          <Button size="lg">lg</Button>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button loading>Saving…</Button>
+          <Button variant="success" loading>
+            Saving…
+          </Button>
+          <Button disabled>Disabled</Button>
+          <Button variant="secondary" disabled>
+            Disabled
+          </Button>
+        </div>
+      </Section>
+
+      <Section title="Badges">
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge tone="neutral">neutral</Badge>
+          <Badge tone="navy">navy</Badge>
+          <Badge tone="success">success</Badge>
+          <Badge tone="amber">amber</Badge>
+          <Badge tone="danger">danger</Badge>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge tone="neutral">12</Badge>
+          <Badge tone="danger" size="sm" pill={false}>
+            overdue · 9d
+          </Badge>
+          <Badge tone="amber" size="sm" pill={false}>
+            stuck · 7d
+          </Badge>
+        </div>
+      </Section>
+
+      <Section title="Cards">
+        <Card className="p-4">
+          <p className="text-xs font-semibold tracking-wide text-gray uppercase">Card</p>
+          <p className="mt-1 text-sm text-charcoal">
+            The shared panel container — <code>rounded-xl border bg-white</code>. Polymorphic via{" "}
+            <code>as</code> (section / aside) and padding/layout come from <code>className</code>.
+          </p>
+        </Card>
+      </Section>
+
       <Section title="Display states">
         <div className="flex flex-col gap-2">
           <Skeleton className="h-4 w-3/4" />
@@ -144,13 +202,9 @@ export default function StyleguidePage() {
               className="rounded-md border border-black/15 px-3 py-2 text-sm focus:ring-2 focus:ring-navy focus:outline-none"
             />
           </Field>
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="self-start rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
-          >
+          <Button type="submit" disabled={isSubmitting} className="self-start">
             Validate
-          </button>
+          </Button>
         </form>
       </Section>
 
