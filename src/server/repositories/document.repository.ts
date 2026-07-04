@@ -50,6 +50,25 @@ export const documentRepository = {
     });
   },
 
+  /**
+   * ETL-ONLY, intentionally delete-agnostic (mirrors the candidate repo): returns a soft-deleted
+   * row too so the one-shot migration re-upserts an existing document instead of duplicating it.
+   */
+  findByLegacyId(legacyId: string, tx?: Prisma.TransactionClient) {
+    return db(tx).document.findUnique({ where: { legacyId } });
+  },
+
+  /** ETL upsert keyed on the legacy Sheet ResumeFileID — idempotent re-runs (Wave 1.3 §5). */
+  upsertByLegacyId(legacyId: string, data: DocumentCreateData, tx?: Prisma.TransactionClient) {
+    const { extractedData, ...rest } = data;
+    const json = extractedData as Prisma.InputJsonValue;
+    return db(tx).document.upsert({
+      where: { legacyId },
+      create: { ...rest, legacyId, extractedData: json },
+      update: { ...rest, extractedData: json },
+    });
+  },
+
   listByCandidate(candidateId: string, tx?: Prisma.TransactionClient) {
     return db(tx).document.findMany({
       where: { candidateId, deletedAt: null },
