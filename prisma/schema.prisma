@@ -115,6 +115,12 @@ model ActivityLog {
 
   @@index([entity, entityId])
   @@index([actor, at])
+  // Wave 2.5 Activity Log (AL-2): the whole-log `at desc` sort + date-range scans, and the
+  // action-filtered sort (action is the highest-selectivity filter). `entity` (~3 values) and
+  // `actor`-scoped reads intentionally ride `[at,id]` / the existing `[actor,at]` — keeping
+  // write-amplification minimal on this append-only, high-write table.
+  @@index([at, id])
+  @@index([action, at, id])
   @@map("activity_log")
 }
 

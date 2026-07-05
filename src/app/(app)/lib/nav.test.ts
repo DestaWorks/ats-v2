@@ -33,6 +33,12 @@ describe("activeNavHref", () => {
     expect(activeNavHref("/migration", withImport)).toBe("/migration");
   });
 
+  it("matches the capability-gated Activity item when present (layout-appended, not base)", () => {
+    expect(BASE_NAV_ITEMS.some((i) => i.href === "/activity")).toBe(false);
+    const withActivity = [...HREFS, "/activity"];
+    expect(activeNavHref("/activity", withActivity)).toBe("/activity");
+  });
+
   it("returns null when no item matches", () => {
     expect(activeNavHref("/settings", HREFS)).toBeNull();
   });
