@@ -66,4 +66,21 @@ describe("cursor codec", () => {
     // The same payload is a VALID name cursor (names are free text).
     expect(decodeCursor(bad, "name_asc")).toEqual({ kind: "name", value: "not-a-date", id: "c1" });
   });
+
+  it("round-trips an at_desc cursor (value = ISO timestamp, id tiebreak) — Activity Log", () => {
+    const auditRow = { at: new Date("2026-06-01T12:34:56.000Z"), id: "al_xyz789" };
+    const encoded = encodeCursor(auditRow, "at_desc");
+    expect(encoded).not.toMatch(/[+/=]/);
+    expect(decodeCursor(encoded, "at_desc")).toEqual({
+      kind: "at",
+      value: "2026-06-01T12:34:56.000Z",
+      id: "al_xyz789",
+    });
+    expect(orderByKind("at_desc")).toBe("at");
+  });
+
+  it("rejects an at_desc cursor whose value is not a real date", () => {
+    const bad = Buffer.from(JSON.stringify(["not-a-date", "a1"])).toString("base64url");
+    expect(decodeCursor(bad, "at_desc")).toBeNull();
+  });
 });

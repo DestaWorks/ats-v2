@@ -23,6 +23,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (hasCapability(user.role, "bulkImport")) {
     items.push({ href: "/migration", label: "Import" });
   }
+  if (hasCapability(user.role, "viewAudit")) {
+    items.push({ href: "/activity", label: "Activity" });
+  }
 
   return (
     <>

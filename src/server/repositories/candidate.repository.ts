@@ -190,6 +190,27 @@ export const candidateRepository = {
   },
 
   /**
+   * Batch-resolve candidate ids → `{ id, name, deletedAt }` in ONE query (mirrors
+   * `userRepository.namesByIds`) — for LABELING an id (e.g. the Activity Log's `entity=candidate`
+   * rows) without loading full rows. De-dupes; short-circuits on an empty set. `includeDeleted`
+   * bypasses the soft-delete filter so a SINCE-deleted candidate still labels (its `deletedAt`
+   * lets the caller suppress the link). `name` is not an encrypted column — no `decryptRow` needed.
+   */
+  async namesByIds(
+    ids: string[],
+    opts?: { includeDeleted?: boolean },
+    tx?: Prisma.TransactionClient,
+  ): Promise<Map<string, { id: string; name: string; deletedAt: Date | null }>> {
+    const unique = [...new Set(ids)];
+    if (unique.length === 0) return new Map();
+    const rows = await db(tx).candidate.findMany({
+      where: { id: { in: unique }, ...(opts?.includeDeleted ? {} : { deletedAt: null }) },
+      select: { id: true, name: true, deletedAt: true },
+    });
+    return new Map(rows.map((r) => [r.id, r] as const));
+  },
+
+  /**
    * ETL-ONLY, intentionally delete-agnostic: returns a soft-deleted row too, so the one-shot
    * migration re-upserts an existing (even trashed) record instead of creating a duplicate.
    * UI/read paths must NOT use this — they go through `findById`/`list` (which exclude deleted).
