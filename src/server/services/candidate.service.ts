@@ -13,6 +13,8 @@ import {
 } from "@/lib/constants";
 import type {
   CandidateDetailDTO,
+  CandidateTrashDTO,
+  CandidateTrashItemDTO,
   UpdateCandidateInput,
   VerifyLicenseInput,
 } from "@/lib/validation/candidate";
@@ -30,6 +32,7 @@ import { writeAudit } from "@/server/db/audit";
 import { withTransaction } from "@/server/db/with-transaction";
 import { candidateRepository, type CandidateRow } from "@/server/repositories/candidate.repository";
 import { clientRepository, type ClientRow } from "@/server/repositories/client.repository";
+import { userRepository } from "@/server/repositories/user.repository";
 import {
   clientRulesRepository,
   toClientRules,
@@ -52,6 +55,7 @@ import {
   toDocumentSummaryDTO,
   toRuleCandidate,
   toStageEventDTO,
+  type CandidateDTO,
 } from "./candidate.dto";
 
 /**
@@ -119,6 +123,12 @@ const BOARD_PAGE = 25;
 
 /** How many "needs attention" candidates the dashboard surfaces (a small, targeted read). */
 const ATTENTION_LIMIT = 8;
+
+/**
+ * Cap on the `/trash` read. Trash is a manual admin surface with no cursor pagination in v1, so a
+ * generous ceiling keeps a runaway trash from loading unbounded rows (D-1 / §1). Newest-deleted first.
+ */
+const TRASH_PAGE = 200;
 
 /**
  * Build the `clientId → ClientRules` map the scorer consumes, joining the small `client_rules` table
@@ -229,6 +239,31 @@ function toListItem(
 }
 
 /**
+ * Project a PII-gated candidate DTO onto a `/trash` row. The DTO has ALREADY passed through
+ * `toCandidateDTO` (the PII boundary — no `licenseNumber`), so this only resolves the display
+ * joins: `clientName` from the batch client map, `deletedByName` from the batch user-name map
+ * (falls back to `null` for an absent/removed actor), and `statusLabel` from the stored status
+ * (unchanged by delete). `deletedAt` is a non-null Date on a trashed row (guaranteed by `listDeleted`).
+ */
+function toTrashItem(
+  dto: CandidateDTO,
+  clientNames: Map<string, string>,
+  actorNames: Map<string, string>,
+): CandidateTrashItemDTO {
+  const status = dto.status as CandidateStatus;
+  return {
+    id: dto.id,
+    name: dto.name,
+    credential: dto.credential,
+    clientName: dto.clientId ? (clientNames.get(dto.clientId) ?? null) : null,
+    status,
+    statusLabel: statusLabel(status),
+    deletedAt: (dto.deletedAt as Date).toISOString(),
+    deletedByName: dto.deletedById ? (actorNames.get(dto.deletedById) ?? null) : null,
+  };
+}
+
+/**
  * Domain input for creating a candidate. Interactive creates ALWAYS start at `NEW_CANDIDATE`
  * (stage 0) — status is intentionally NOT accepted here, so a create can never drop a candidate
  * mid-pipeline and skip the stage gate / stage-history / `placedAt` contract. Status only advances
@@ -322,11 +357,106 @@ export const candidateService = {
     });
   },
 
+  /**
+   * Soft-delete → Trash. Open to any operator (`requireUser`) — reversible, matching the pipeline
+   * authZ model. NOW audited (action `delete`, mirrors `update`'s trail): the repo `softDelete` +
+   * `writeAudit` run in one transaction so the trail can never drift. `findById` (which excludes
+   * already-deleted rows) is the existence/idempotency guard — a missing OR already-trashed candidate
+   * → `NOT_FOUND` (you can't re-trash a trashed candidate).
+   */
   async softDelete(id: string) {
     const user = await requireUser();
     const existing = await candidateRepository.findById(id);
     if (!existing) throw new AppError("NOT_FOUND", "Candidate not found");
-    return candidateRepository.softDelete(id, user.id);
+    return withTransaction(async (tx) => {
+      const deleted = await candidateRepository.softDelete(id, user.id, tx);
+      await writeAudit(tx, {
+        entity: "candidate",
+        entityId: id,
+        actor: user.id,
+        action: "delete",
+        before: { deletedAt: null },
+        after: { deletedAt: deleted.deletedAt, deletedById: user.id, status: existing.status },
+      });
+      return deleted;
+    });
+  },
+
+  /**
+   * Restore a soft-deleted candidate from Trash. Open to any operator (`requireUser` at the route,
+   * `user` forwarded here) — reversible, matching `softDelete`. Loads the row WITH
+   * `includeDeleted` (the default read excludes trashed rows); a missing row → `NOT_FOUND`, a LIVE
+   * (non-trashed) row → `CONFLICT` (nothing to restore). Only clears `deletedAt`/`deletedById` — the
+   * candidate returns to EXACTLY the stage it left (status/stageOrder/stageEnteredAt untouched, D-9).
+   * Audited (action `restore`) in the same transaction as the repo `restore`.
+   */
+  async restore(id: string, user: AuthUser) {
+    const existing = await candidateRepository.findById(id, { includeDeleted: true });
+    if (!existing) throw new AppError("NOT_FOUND", "Candidate not found");
+    if (existing.deletedAt === null) throw new AppError("CONFLICT", "Candidate is not in Trash");
+    return withTransaction(async (tx) => {
+      const restored = await candidateRepository.restore(id, tx);
+      await writeAudit(tx, {
+        entity: "candidate",
+        entityId: id,
+        actor: user.id,
+        action: "restore",
+        before: { deletedAt: existing.deletedAt, deletedById: existing.deletedById },
+        after: { deletedAt: null, status: restored.status },
+      });
+      return restored;
+    });
+  },
+
+  /**
+   * PERMANENTLY purge a candidate — the irreversible, cascading hard delete (documents, notes, stage
+   * history all `onDelete: Cascade`). SERVER-AUTHORITATIVE gate: requires `purgeCandidate` (Owner /
+   * Admin only, `roles.ts`) even though the route also `requireCapability`s it — the service is safe
+   * by itself. TWO-STEP SAFETY (D-4): purge acts ONLY on an already-soft-deleted candidate — a live
+   * one throws `CONFLICT`, so there is no one-click permanent delete anywhere. The audit (action
+   * `purge`) is written BEFORE the delete in the same transaction; `activity_log` has no FK to
+   * `Candidate`, so the permanent-deletion event survives the cascade. Returns only `{ id }` (the
+   * record is gone — never echo PII).
+   */
+  async purge(id: string, user: AuthUser) {
+    if (!hasCapability(user.role, "purgeCandidate")) {
+      throw new AppError("FORBIDDEN", "You don't have permission to purge candidates");
+    }
+    const existing = await candidateRepository.findById(id, { includeDeleted: true });
+    if (!existing) throw new AppError("NOT_FOUND", "Candidate not found");
+    if (existing.deletedAt === null) {
+      throw new AppError("CONFLICT", "Only trashed candidates can be purged");
+    }
+    return withTransaction(async (tx) => {
+      await writeAudit(tx, {
+        entity: "candidate",
+        entityId: id,
+        actor: user.id,
+        action: "purge",
+        before: { name: existing.name, status: existing.status, deletedAt: existing.deletedAt },
+      });
+      await candidateRepository.purge(id, tx); // cascades documents / notes / stage history
+      return { id };
+    });
+  },
+
+  /**
+   * The `/trash` payload — soft-deleted candidates (newest-deleted first), PII-gated. AuthZ is the
+   * caller's (RSC `getCurrentUser()` / route `requireUser`); `viewer` drives the PII boundary via
+   * `toCandidateDTO` (no `licenseNumber`, ever, on a trash row). `clientName` is resolved from a
+   * one-shot client map; `deletedByName` from a SINGLE batched user-name lookup
+   * (`userRepository.namesByIds`) rather than N per-row queries.
+   */
+  async listTrash(viewer: AuthUser): Promise<CandidateTrashDTO> {
+    const rows = await candidateRepository.listDeleted(TRASH_PAGE);
+    const clients = await clientRepository.list();
+    const clientNames = new Map(clients.map((c) => [c.id, c.name]));
+    const actorIds = rows.map((r) => r.deletedById).filter((id): id is string => id !== null);
+    const actorNames = await userRepository.namesByIds(actorIds);
+    const items = rows.map((row) =>
+      toTrashItem(toCandidateDTO(row, viewer), clientNames, actorNames),
+    );
+    return { items };
   },
 
   /**

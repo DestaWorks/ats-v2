@@ -308,4 +308,29 @@ export const candidateRepository = {
       }),
     );
   },
+
+  /**
+   * PERMANENT hard delete — cascades to documents, notes, and stage history (all `onDelete: Cascade`
+   * to `Candidate`). Irreversible; ONLY the capability-gated purge service path reaches this. No
+   * crypto (the row is being destroyed, not read). The `activity_log` has no FK to `Candidate`, so
+   * a purge audit row written in the same transaction survives the cascade.
+   */
+  async purge(id: string, tx?: Prisma.TransactionClient) {
+    return db(tx).candidate.delete({ where: { id } });
+  },
+
+  /**
+   * The Trash read: ONLY soft-deleted rows (`deletedAt != null`), newest-deleted first. A dedicated
+   * method rather than a `list`/`buildCandidateWhere` filter — Trash sorts by `deletedAt desc` (not
+   * the keyset createdAt/name machinery) and the set is small, so there is no cursor pagination in
+   * v1. `take` caps a runaway trash. Returns decrypted rows (services then PII-gate via `toCandidateDTO`).
+   */
+  async listDeleted(take?: number, tx?: Prisma.TransactionClient) {
+    const rows = await db(tx).candidate.findMany({
+      where: { deletedAt: { not: null } },
+      orderBy: { deletedAt: "desc" },
+      ...(take !== undefined ? { take } : {}),
+    });
+    return rows.map(decryptRow);
+  },
 };

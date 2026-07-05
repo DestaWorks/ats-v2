@@ -5,6 +5,7 @@ import type { CandidateDetailDTO, CandidateProfileDTO } from "@/lib/validation/c
 import { Badge } from "@/components/ui/badge";
 import { ScoreBadge } from "@/components/ui/score-badge";
 import { StageMover } from "./stage-mover";
+import { DeleteCandidateButton } from "./delete-candidate-button";
 import type { MovedFields } from "./lib/detail-fetch";
 
 /**
@@ -47,7 +48,14 @@ export function DetailHeader({
           </p>
         </div>
 
-        <StageMover candidate={candidate} onMoved={onMoved} announce={announce} />
+        <div className="flex flex-col items-end gap-3">
+          <StageMover candidate={candidate} onMoved={onMoved} announce={announce} />
+          <DeleteCandidateButton
+            candidateId={candidate.id}
+            candidateName={candidate.name}
+            announce={announce}
+          />
+        </div>
       </div>
     </header>
   );

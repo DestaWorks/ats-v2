@@ -140,6 +140,29 @@ export interface CandidateListDTO {
   total: number;
 }
 
+/**
+ * One row in the `/trash` view — a PII-gated summary of a soft-deleted candidate (Wave 2.5).
+ * Mirrors the server `toCandidateDTO` boundary: NO `licenseNumber` (Trash never surfaces sensitive
+ * PII). `statusLabel` is the display string for the status the candidate held AT deletion (delete
+ * never touches `status`). `deletedByName` is the resolved actor display name, or `null` when the
+ * actor is unknown / since-removed.
+ */
+export interface CandidateTrashItemDTO {
+  id: string;
+  name: string;
+  credential: string | null;
+  clientName: string | null;
+  status: string; // stable code
+  statusLabel: string; // status at deletion (unchanged by delete)
+  deletedAt: string; // ISO
+  deletedByName: string | null;
+}
+
+/** The `/trash` payload — soft-deleted candidates, newest-deleted first. */
+export interface CandidateTrashDTO {
+  items: CandidateTrashItemDTO[];
+}
+
 /** The single composite payload the RSC loads and seeds the client detail page with. */
 export interface CandidateDetailDTO {
   candidate: CandidateProfileDTO;

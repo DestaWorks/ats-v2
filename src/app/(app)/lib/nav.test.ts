@@ -8,6 +8,11 @@ describe("activeNavHref", () => {
     expect(activeNavHref("/dashboard", HREFS)).toBe("/dashboard");
     expect(activeNavHref("/pipeline", HREFS)).toBe("/pipeline");
     expect(activeNavHref("/candidates", HREFS)).toBe("/candidates");
+    expect(activeNavHref("/trash", HREFS)).toBe("/trash");
+  });
+
+  it("includes Trash as a base nav item (visible to all operators)", () => {
+    expect(BASE_NAV_ITEMS.some((i) => i.href === "/trash" && i.label === "Trash")).toBe(true);
   });
 
   it("prefers the LONGEST match when prefixes overlap", () => {

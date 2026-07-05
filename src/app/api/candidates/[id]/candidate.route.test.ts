@@ -11,6 +11,7 @@ import { AppError } from "@/server/http/app-error";
 const h = vi.hoisted(() => ({
   session: null as { user: { id: string; email: string; name: string; role?: string } } | null,
   update: vi.fn(),
+  softDelete: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
@@ -18,10 +19,10 @@ vi.mock("next/headers", () => ({ headers: async () => new Headers() }));
 vi.mock("@/server/auth/auth", () => ({ auth: { api: { getSession: async () => h.session } } }));
 vi.mock("@/server/db/prisma", () => ({ prisma: {} }));
 vi.mock("@/server/services/candidate.service", () => ({
-  candidateService: { update: h.update },
+  candidateService: { update: h.update, softDelete: h.softDelete },
 }));
 
-import { PATCH } from "./route";
+import { PATCH, DELETE } from "./route";
 
 function req(body: unknown) {
   return new Request("http://localhost/api/candidates/c1", {
@@ -34,6 +35,7 @@ const ctx = { params: Promise.resolve({ id: "c1" }) };
 beforeEach(() => {
   h.session = { user: { id: "u1", email: "u@desta.works", name: "U", role: "Associate" } };
   h.update.mockReset();
+  h.softDelete.mockReset();
 });
 
 describe("PATCH /api/candidates/:id", () => {
@@ -110,5 +112,32 @@ describe("PATCH /api/candidates/:id", () => {
     const res = await PATCH(req({ credential: "NOT_A_CRED" }), ctx);
     expect(res.status).toBe(422);
     expect(h.update).not.toHaveBeenCalled();
+  });
+});
+
+function delReq() {
+  return new Request("http://localhost/api/candidates/c1", { method: "DELETE" });
+}
+
+describe("DELETE /api/candidates/:id — soft-delete", () => {
+  it("returns 401 when signed out and does not soft-delete", async () => {
+    h.session = null;
+    const res = await DELETE(delReq(), ctx);
+    expect(res.status).toBe(401);
+    expect(h.softDelete).not.toHaveBeenCalled();
+  });
+
+  it("200 happy path — soft-deletes and returns { ok, id } (no PII)", async () => {
+    h.softDelete.mockResolvedValue({ id: "c1", deletedAt: new Date() });
+    const res = await DELETE(delReq(), ctx);
+    expect(res.status).toBe(200);
+    expect(h.softDelete).toHaveBeenCalledWith("c1");
+    expect(await res.json()).toEqual({ ok: true, id: "c1" });
+  });
+
+  it("maps a service NOT_FOUND to 404", async () => {
+    h.softDelete.mockRejectedValue(new AppError("NOT_FOUND", "Candidate not found"));
+    const res = await DELETE(delReq(), ctx);
+    expect(res.status).toBe(404);
   });
 });

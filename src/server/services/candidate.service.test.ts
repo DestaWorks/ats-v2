@@ -18,12 +18,16 @@ const h = vi.hoisted(() => ({
     create: vi.fn(),
     update: vi.fn(),
     softDelete: vi.fn(),
+    restore: vi.fn(),
+    purge: vi.fn(),
+    listDeleted: vi.fn(),
   },
   stageRepo: { add: vi.fn(), listByCandidate: vi.fn() },
   docRepo: { listByCandidate: vi.fn() },
   noteRepo: { listByCandidate: vi.fn(), create: vi.fn() },
   clientRepo: { list: vi.fn() },
   clientRulesRepo: { list: vi.fn() },
+  userRepo: { namesByIds: vi.fn() },
   writeAudit: vi.fn(),
 }));
 
@@ -40,6 +44,7 @@ vi.mock("@/server/repositories/document.repository", () => ({
 }));
 vi.mock("@/server/repositories/note.repository", () => ({ noteRepository: h.noteRepo }));
 vi.mock("@/server/repositories/client.repository", () => ({ clientRepository: h.clientRepo }));
+vi.mock("@/server/repositories/user.repository", () => ({ userRepository: h.userRepo }));
 vi.mock("@/server/repositories/client-rules.repository", async () => {
   const actual = await vi.importActual<
     typeof import("@/server/repositories/client-rules.repository")
@@ -104,6 +109,11 @@ beforeEach(() => {
   h.candidateRepo.findById.mockReset();
   h.candidateRepo.update.mockReset();
   h.candidateRepo.softDelete.mockReset();
+  h.candidateRepo.restore.mockReset();
+  h.candidateRepo.purge.mockReset();
+  h.candidateRepo.listDeleted.mockReset();
+  h.userRepo.namesByIds.mockReset();
+  h.userRepo.namesByIds.mockResolvedValue(new Map());
   h.stageRepo.add.mockReset();
   h.stageRepo.listByCandidate.mockReset();
   h.docRepo.listByCandidate.mockReset();
@@ -281,21 +291,184 @@ describe("candidateService.bulkMove", () => {
 });
 
 describe("candidateService.softDelete", () => {
-  it("sets deletedAt + deletedById via the repository", async () => {
-    h.candidateRepo.findById.mockResolvedValue(candidate());
-    h.candidateRepo.softDelete.mockResolvedValue({ id: "c1", deletedAt: new Date() });
+  it("sets deletedAt + deletedById via the repository AND writes a `delete` audit in one txn", async () => {
+    const deletedAt = new Date();
+    h.candidateRepo.findById.mockResolvedValue(candidate({ status: "CLIENT_INTERVIEW" }));
+    h.candidateRepo.softDelete.mockResolvedValue({ id: "c1", deletedAt });
 
     await candidateService.softDelete("c1");
 
-    expect(h.candidateRepo.softDelete).toHaveBeenCalledWith("c1", "u1");
+    // repo mutation runs on the shared tx
+    const [sid, actor, stx] = h.candidateRepo.softDelete.mock.calls[0]!;
+    expect(sid).toBe("c1");
+    expect(actor).toBe("u1");
+    expect(stx).toBe(h.fakeTx);
+
+    // audit row, same tx, action "delete"
+    expect(h.writeAudit).toHaveBeenCalledTimes(1);
+    const [atx, auditParams] = h.writeAudit.mock.calls[0]!;
+    expect(atx).toBe(h.fakeTx);
+    expect(auditParams).toMatchObject({
+      entity: "candidate",
+      entityId: "c1",
+      actor: "u1",
+      action: "delete",
+    });
   });
 
-  it("throws NOT_FOUND when the candidate does not exist", async () => {
+  it("throws NOT_FOUND when the candidate is missing or already deleted (idempotent)", async () => {
     h.candidateRepo.findById.mockResolvedValue(null);
     await expect(candidateService.softDelete("missing")).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
     expect(h.candidateRepo.softDelete).not.toHaveBeenCalled();
+    expect(h.writeAudit).not.toHaveBeenCalled();
+  });
+});
+
+describe("candidateService.restore", () => {
+  it("restores a trashed candidate and writes a `restore` audit (status untouched)", async () => {
+    h.candidateRepo.findById.mockResolvedValue(
+      candidate({ status: "CLIENT_INTERVIEW", deletedAt: new Date(), deletedById: "u9" }),
+    );
+    h.candidateRepo.restore.mockResolvedValue({ id: "c1", status: "CLIENT_INTERVIEW" });
+
+    await candidateService.restore("c1", h.owner as AuthUser);
+
+    // loads WITH includeDeleted (default read excludes trashed rows)
+    expect(h.candidateRepo.findById).toHaveBeenCalledWith("c1", { includeDeleted: true });
+    const [rid, rtx] = h.candidateRepo.restore.mock.calls[0]!;
+    expect(rid).toBe("c1");
+    expect(rtx).toBe(h.fakeTx);
+    const [atx, auditParams] = h.writeAudit.mock.calls[0]!;
+    expect(atx).toBe(h.fakeTx);
+    expect(auditParams).toMatchObject({ action: "restore", entityId: "c1", actor: "o1" });
+  });
+
+  it("throws CONFLICT restoring a live (non-trashed) candidate", async () => {
+    h.candidateRepo.findById.mockResolvedValue(candidate({ deletedAt: null }));
+    await expect(candidateService.restore("c1", h.owner as AuthUser)).rejects.toMatchObject({
+      code: "CONFLICT",
+    });
+    expect(h.candidateRepo.restore).not.toHaveBeenCalled();
+    expect(h.writeAudit).not.toHaveBeenCalled();
+  });
+
+  it("throws NOT_FOUND when the candidate does not exist", async () => {
+    h.candidateRepo.findById.mockResolvedValue(null);
+    await expect(candidateService.restore("missing", h.owner as AuthUser)).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
+    expect(h.candidateRepo.restore).not.toHaveBeenCalled();
+  });
+});
+
+describe("candidateService.purge", () => {
+  it("requires purgeCandidate — a non-holder gets FORBIDDEN and the candidate is untouched", async () => {
+    // h.user is an Associate (no purgeCandidate). Guard fires BEFORE any read/mutation.
+    await expect(candidateService.purge("c1", h.user as AuthUser)).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+    expect(h.candidateRepo.findById).not.toHaveBeenCalled();
+    expect(h.candidateRepo.purge).not.toHaveBeenCalled();
+  });
+
+  it("throws CONFLICT purging a live (non-trashed) candidate (two-step gate)", async () => {
+    h.candidateRepo.findById.mockResolvedValue(candidate({ deletedAt: null }));
+    await expect(candidateService.purge("c1", h.owner as AuthUser)).rejects.toMatchObject({
+      code: "CONFLICT",
+    });
+    expect(h.candidateRepo.purge).not.toHaveBeenCalled();
+    expect(h.writeAudit).not.toHaveBeenCalled();
+  });
+
+  it("throws NOT_FOUND when the candidate does not exist", async () => {
+    h.candidateRepo.findById.mockResolvedValue(null);
+    await expect(candidateService.purge("missing", h.owner as AuthUser)).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
+    expect(h.candidateRepo.purge).not.toHaveBeenCalled();
+  });
+
+  it("for an Owner on a trashed candidate: cascades (repo.purge) + writes a `purge` audit in one txn", async () => {
+    h.candidateRepo.findById.mockResolvedValue(
+      candidate({ name: "Jane Doe", deletedAt: new Date() }),
+    );
+    h.candidateRepo.purge.mockResolvedValue({ id: "c1" });
+
+    const result = await candidateService.purge("c1", h.owner as AuthUser);
+    expect(result).toEqual({ id: "c1" });
+
+    // audit is written BEFORE the delete, same tx (survives the cascade — no FK)
+    expect(h.writeAudit).toHaveBeenCalledTimes(1);
+    const [atx, auditParams] = h.writeAudit.mock.calls[0]!;
+    expect(atx).toBe(h.fakeTx);
+    expect(auditParams).toMatchObject({ action: "purge", entityId: "c1", actor: "o1" });
+    const [pid, ptx] = h.candidateRepo.purge.mock.calls[0]!;
+    expect(pid).toBe("c1");
+    expect(ptx).toBe(h.fakeTx);
+    // audit ordering: writeAudit invoked before repo.purge
+    expect(h.writeAudit.mock.invocationCallOrder[0]!).toBeLessThan(
+      h.candidateRepo.purge.mock.invocationCallOrder[0]!,
+    );
+  });
+});
+
+describe("candidateService.listTrash", () => {
+  it("returns only soft-deleted candidates, PII-gated, with deletedByName resolved", async () => {
+    const deletedAt = new Date("2026-07-02T00:00:00.000Z");
+    h.candidateRepo.listDeleted.mockResolvedValue([
+      {
+        id: "c1",
+        name: "Jane Doe",
+        credential: "PMHNP",
+        status: "CLIENT_INTERVIEW",
+        clientId: "cl1",
+        licenseNumber: "LIC-SECRET",
+        deletedAt,
+        deletedById: "u9",
+      },
+    ]);
+    h.userRepo.namesByIds.mockResolvedValue(new Map([["u9", "Deleter Person"]]));
+
+    // Viewer WITHOUT viewCredentials (Associate) → licenseNumber must be gated out.
+    const trash = await candidateService.listTrash(h.user as AuthUser);
+
+    expect(h.candidateRepo.listDeleted).toHaveBeenCalledTimes(1);
+    // single batched name lookup for the actor ids
+    expect(h.userRepo.namesByIds).toHaveBeenCalledWith(["u9"]);
+    expect(trash.items).toEqual([
+      {
+        id: "c1",
+        name: "Jane Doe",
+        credential: "PMHNP",
+        clientName: "Acme Health",
+        status: "CLIENT_INTERVIEW",
+        statusLabel: expect.any(String),
+        deletedAt: "2026-07-02T00:00:00.000Z",
+        deletedByName: "Deleter Person",
+      },
+    ]);
+    expect(JSON.stringify(trash)).not.toContain("LIC-SECRET");
+  });
+
+  it("falls back to null deletedByName when the actor is unknown / removed", async () => {
+    h.candidateRepo.listDeleted.mockResolvedValue([
+      {
+        id: "c2",
+        name: "John Roe",
+        credential: null,
+        status: "NEW_CANDIDATE",
+        clientId: null,
+        deletedAt: new Date("2026-07-03T00:00:00.000Z"),
+        deletedById: "gone",
+      },
+    ]);
+    h.userRepo.namesByIds.mockResolvedValue(new Map());
+
+    const trash = await candidateService.listTrash(h.owner as AuthUser);
+    expect(trash.items[0]!.deletedByName).toBeNull();
+    expect(trash.items[0]!.clientName).toBeNull();
   });
 });
 
