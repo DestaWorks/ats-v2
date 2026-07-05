@@ -12,13 +12,15 @@ export interface NavItem {
 /**
  * The base nav (in display order). The capability-gated **Import** item is appended by the layout
  * only for viewers with `bulkImport` — it is intentionally NOT here, so an ungated render can never
- * surface it.
+ * surface it. **Trash** is a base item: soft-delete/restore are open to every operator (the
+ * separately capability-gated Purge action lives inside the page), so all operators see it.
  */
 export const BASE_NAV_ITEMS: readonly NavItem[] = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/pipeline", label: "Pipeline" },
   { href: "/candidates", label: "Candidates" },
   { href: "/resume", label: "Parse Résumé" },
+  { href: "/trash", label: "Trash" },
 ];
 
 /**

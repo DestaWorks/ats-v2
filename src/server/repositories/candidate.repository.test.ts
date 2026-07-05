@@ -11,11 +11,14 @@ const h = vi.hoisted(() => ({
   findMany: vi.fn(),
   count: vi.fn(),
   groupBy: vi.fn(),
+  delete: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/server/db/prisma", () => ({
-  prisma: { candidate: { findMany: h.findMany, count: h.count, groupBy: h.groupBy } },
+  prisma: {
+    candidate: { findMany: h.findMany, count: h.count, groupBy: h.groupBy, delete: h.delete },
+  },
 }));
 // Crypto is a passthrough here — these tests never assert on encrypted columns.
 vi.mock("@/server/db/field-crypto", () => ({
@@ -39,6 +42,33 @@ beforeEach(() => {
   h.findMany.mockReset().mockResolvedValue([]);
   h.count.mockReset().mockResolvedValue(0);
   h.groupBy.mockReset().mockResolvedValue([]);
+  h.delete.mockReset().mockResolvedValue({ id: "c1" });
+});
+
+describe("purge — permanent hard delete", () => {
+  it("calls candidate.delete keyed on the id (cascade is a DB-level FK concern)", async () => {
+    await candidateRepository.purge("c1");
+    expect(h.delete).toHaveBeenCalledWith({ where: { id: "c1" } });
+  });
+});
+
+describe("listDeleted — the Trash read", () => {
+  it("queries ONLY soft-deleted rows, newest-deleted first", async () => {
+    await candidateRepository.listDeleted();
+    expect(h.findMany).toHaveBeenCalledWith({
+      where: { deletedAt: { not: null } },
+      orderBy: { deletedAt: "desc" },
+    });
+  });
+
+  it("applies the `take` cap when given", async () => {
+    await candidateRepository.listDeleted(200);
+    expect(h.findMany).toHaveBeenCalledWith({
+      where: { deletedAt: { not: null } },
+      orderBy: { deletedAt: "desc" },
+      take: 200,
+    });
+  });
 });
 
 describe("buildCandidateWhere — filters AND-combine", () => {

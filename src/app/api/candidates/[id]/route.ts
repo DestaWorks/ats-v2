@@ -24,3 +24,17 @@ export const PATCH = apiHandler<{ params: Promise<{ id: string }> }>(async (req,
   const updated = await candidateService.update(id, input, user);
   return json({ candidate: toCandidateDTO(updated, user) });
 });
+
+/**
+ * DELETE /api/candidates/:id — soft-delete a candidate (→ Trash). The canonical "delete this
+ * candidate" action; reversible, so open to any operator (`requireUser` — the service self-gates
+ * too). No body (id from params). The candidate disappears from every default view (board / list /
+ * dashboard) at once (`deletedAt: null` filter) and can be restored from `/trash`. Returns
+ * `{ ok, id }` — never candidate PII. 401 unauth; 404 missing / already-deleted (idempotent).
+ */
+export const DELETE = apiHandler<{ params: Promise<{ id: string }> }>(async (_req, ctx) => {
+  await requireUser();
+  const { id } = await ctx.params;
+  await candidateService.softDelete(id);
+  return json({ ok: true, id });
+});
