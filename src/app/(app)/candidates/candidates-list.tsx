@@ -1,7 +1,20 @@
+"use client";
+
+import { useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import type { CandidateListDTO } from "@/lib/validation/candidate";
-import type { ListSort } from "@/lib/validation/pipeline";
-import type { CandidateStatus, LicenseStatus, Track } from "@/lib/constants";
+import type { BulkMoveResponse, ListSort } from "@/lib/validation/pipeline";
+import {
+  ALL_STATUS_CODES,
+  statusLabel,
+  type CandidateStatus,
+  type LicenseStatus,
+  type Track,
+} from "@/lib/constants";
+import { postJson, messageForFailure } from "@/lib/api/client";
+import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ScoreBadge } from "@/components/ui/score-badge";
 import { Table, Td } from "@/components/ui/table";
@@ -10,13 +23,15 @@ import { cn } from "@/lib/utils/cn";
 import { STATUS_BG, TRACK_BADGE, licenseDotClass } from "../pipeline/lib/status-style";
 
 /**
- * Server-rendered `/candidates` browse table. Everything is resolved by the backend
- * (`candidateService.listCandidates`) — filtering, sorting, and OFFSET pagination — and this
- * component only RENDERS the page it's handed and turns interactions into URL navigations:
+ * `/candidates` browse table. Everything DATA-side is resolved by the backend
+ * (`candidateService.listCandidates`) — filtering, sorting, OFFSET pagination — and this component
+ * renders the page it's handed, turning read interactions into URL navigations:
  *  - the **Score** and **Created** column headers are `<Link>`s that flip the server `sort`
  *    (`fit` / `newest`↔`oldest`) and reset to page 1, with a direction arrow on the active one;
  *  - the numbered **pager** (Prev · 1 2 3 · Next) is `<Link>`s that change `?page=`.
- * No client state, no accumulation, no page-local score toggles — the RSC re-reads on every change.
+ * The ONLY client state is the bulk-move selection (checkboxes → `POST /api/candidates/bulk-move`,
+ * the server-gated partial-success endpoint); after a move the RSC re-reads via `router.refresh()`.
+ * Selection is page-local — it prunes itself whenever the visible rows change.
  */
 
 type SearchParams = Record<string, string | string[] | undefined>;
@@ -53,12 +68,7 @@ function pageItems(current: number, total: number): (number | "gap")[] {
 /** A directional sort arrow (points down for desc; rotated for asc). */
 function SortArrow({ asc }: { asc?: boolean }) {
   return (
-    <svg
-      viewBox="0 0 12 12"
-      fill="none"
-      aria-hidden
-      className={cn("h-3 w-3", asc && "rotate-180")}
-    >
+    <svg viewBox="0 0 12 12" fill="none" aria-hidden className={cn("h-3 w-3", asc && "rotate-180")}>
       <path
         d="M6 2.5v7M3 6.5 6 9.5l3-3"
         stroke="currentColor"
@@ -74,10 +84,7 @@ function SortArrow({ asc }: { asc?: boolean }) {
 function SortIdle() {
   return (
     <svg viewBox="0 0 12 12" fill="none" aria-hidden className="h-3 w-3 text-gray/50">
-      <path
-        d="M6 1.5 3.5 4h5L6 1.5ZM6 10.5 3.5 8h5L6 10.5Z"
-        fill="currentColor"
-      />
+      <path d="M6 1.5 3.5 4h5L6 1.5ZM6 10.5 3.5 8h5L6 10.5Z" fill="currentColor" />
     </svg>
   );
 }
@@ -90,6 +97,63 @@ export function CandidatesList({
   searchParams: SearchParams;
 }) {
   const { candidates, total, page, pageSize, totalPages, hasPrev, hasNext } = list;
+  const router = useRouter();
+
+  // Bulk-move selection — page-local. Prune stale ids whenever the visible rows change
+  // (page/filter/sort navigation swaps the rows under a persistent client component).
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  const [bulkStatus, setBulkStatus] = useState("");
+  const [moving, startMoving] = useTransition();
+  const idsKey = useMemo(() => candidates.map((c) => c.id).join("|"), [candidates]);
+  useEffect(() => {
+    const visible = new Set(idsKey.split("|"));
+    setSelected((prev) => new Set([...prev].filter((id) => visible.has(id))));
+  }, [idsKey]);
+
+  const allSelected = candidates.length > 0 && candidates.every((c) => selected.has(c.id));
+
+  function toggleRow(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAll() {
+    setSelected(allSelected ? new Set() : new Set(candidates.map((c) => c.id)));
+  }
+
+  function applyBulkMove() {
+    const ids = [...selected];
+    const toStatus = bulkStatus as CandidateStatus;
+    if (ids.length === 0 || !bulkStatus) return;
+    startMoving(async () => {
+      const result = await postJson<BulkMoveResponse>("/api/candidates/bulk-move", {
+        ids,
+        toStatus,
+      });
+      if (!result.ok) {
+        toast.error(messageForFailure(result.failure));
+        return;
+      }
+      const { moved, blocked } = result.data;
+      if (moved.length > 0) {
+        toast.success(`Moved ${moved.length} to ${statusLabel(toStatus)}`);
+      }
+      if (blocked.length > 0) {
+        // Blocked rows stay put — name each one with the server's gate reason.
+        const nameById = new Map(candidates.map((c) => [c.id, c.name]));
+        toast.error(`${blocked.length} blocked`, {
+          description: blocked.map((b) => `${nameById.get(b.id) ?? b.id}: ${b.reason}`).join(" · "),
+        });
+      }
+      setSelected(new Set());
+      setBulkStatus("");
+      router.refresh(); // the RSC re-reads the page (statuses, counts, filters)
+    });
+  }
 
   const raw = one(searchParams.sort);
   const sort: ListSort = raw === "oldest" ? "oldest" : raw === "fit" ? "fit" : "newest";
@@ -215,11 +279,66 @@ export function CandidatesList({
     </>
   );
 
+  // Select-all header checkbox — a real control, so the column header is a node, not a string.
+  const selectHeader = (
+    <input
+      type="checkbox"
+      checked={allSelected}
+      onChange={toggleAll}
+      aria-label={allSelected ? "Deselect all on this page" : "Select all on this page"}
+      className="h-4 w-4 accent-navy"
+    />
+  );
+
+  // Bulk-move bar — appears in the table toolbar only while rows are selected.
+  const bulkBar =
+    selected.size > 0 ? (
+      <>
+        <span className="text-sm font-semibold text-charcoal tabular-nums">
+          {selected.size} selected
+        </span>
+        <select
+          value={bulkStatus}
+          onChange={(e) => setBulkStatus(e.target.value)}
+          aria-label="Move selected candidates to stage"
+          className="rounded-md border border-black/10 bg-white px-2 py-1.5 text-sm focus:ring-2 focus:ring-navy focus:outline-none"
+        >
+          <option value="">Move to stage…</option>
+          {ALL_STATUS_CODES.map((code) => (
+            <option key={code} value={code}>
+              {statusLabel(code)}
+            </option>
+          ))}
+        </select>
+        <Button
+          type="button"
+          size="sm"
+          disabled={!bulkStatus}
+          loading={moving}
+          onClick={applyBulkMove}
+        >
+          Move
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          disabled={moving}
+          onClick={() => setSelected(new Set())}
+        >
+          Clear
+        </Button>
+        <span className="text-xs text-gray">Gates still apply — blocked moves are reported.</span>
+      </>
+    ) : undefined;
+
   return (
     <Table
       caption="Candidates"
+      toolbar={bulkBar}
       footer={footer}
       columns={[
+        selectHeader,
         "Name",
         "Credential",
         "Track",
@@ -235,7 +354,22 @@ export function CandidatesList({
       {candidates.map((c) => {
         const track = TRACK_BADGE[c.track as Track];
         return (
-          <tr key={c.id} className="transition hover:bg-black/[0.03]">
+          <tr
+            key={c.id}
+            className={cn(
+              "transition hover:bg-black/[0.03]",
+              selected.has(c.id) && "bg-navy/[0.04]",
+            )}
+          >
+            <Td>
+              <input
+                type="checkbox"
+                checked={selected.has(c.id)}
+                onChange={() => toggleRow(c.id)}
+                aria-label={`Select ${c.name}`}
+                className="h-4 w-4 accent-navy"
+              />
+            </Td>
             <Td>
               {/* Serif = a person; the rest of the row is their (sans) data. */}
               <Link
