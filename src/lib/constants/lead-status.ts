@@ -3,6 +3,8 @@
  * (legacy `SL_STATUSES`). Leads are promoted into a Candidate.
  */
 
+import type { BadgeTone } from "@/components/ui/badge";
+
 export const LEAD_STATUSES = [
   "Sourced",
   "Outreach 1",
@@ -28,3 +30,33 @@ export const INACTIVE_LEAD_STATUSES: readonly LeadStatus[] = [
   "Promoted",
   "Future Collaboration",
 ];
+
+/** The channels an outreach attempt can be logged on (validated vs this union in zod). */
+export const OUTREACH_CHANNELS = ["email", "phone", "linkedin", "other"] as const;
+export type OutreachChannel = (typeof OUTREACH_CHANNELS)[number];
+
+export function isOutreachChannel(value: string): value is OutreachChannel {
+  return (OUTREACH_CHANNELS as readonly string[]).includes(value);
+}
+
+/**
+ * `Badge` tone per lead status (L-9) — isomorphic, tones limited to the Badge union. Active outreach
+ * reads `navy`, the final chase `amber`, responded/promoted `success`, and dead ends `danger`.
+ */
+export const LEAD_STATUS_TONE: Record<LeadStatus, BadgeTone> = {
+  Sourced: "neutral",
+  "Outreach 1": "navy",
+  "Outreach 2": "navy",
+  "Outreach 3 (Final)": "amber",
+  "Responded — Hot": "success",
+  "Responded — Cold": "neutral",
+  "No Response": "danger",
+  "Bad Fit": "danger",
+  "Future Collaboration": "neutral",
+  Promoted: "success",
+};
+
+/** `Badge` tone for a raw lead-status string; unknown/legacy statuses fall back to `neutral`. */
+export function leadStatusTone(status: string): BadgeTone {
+  return isLeadStatus(status) ? LEAD_STATUS_TONE[status] : "neutral";
+}

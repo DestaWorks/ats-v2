@@ -25,11 +25,15 @@ export const AUDIT_ACTIONS = [
   "purge",
   "import",
   "commit",
+  // Sourcing (Wave 2.6) — the source-lead funnel writes these.
+  "log_outreach",
+  "respond",
+  "promote",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
 /** Every audit `entity` the services write today. */
-export const AUDIT_ENTITIES = ["candidate", "document", "import_batch"] as const;
+export const AUDIT_ENTITIES = ["candidate", "document", "import_batch", "source_lead"] as const;
 export type AuditEntity = (typeof AUDIT_ENTITIES)[number];
 
 export function isAuditAction(value: string): value is AuditAction {
@@ -53,6 +57,9 @@ export const AUDIT_ACTION_LABEL: Record<AuditAction, string> = {
   purge: "Purge",
   import: "Import",
   commit: "Commit import",
+  log_outreach: "Log outreach",
+  respond: "Mark responded",
+  promote: "Promote lead",
 };
 
 /** Human labels for the known entities (the filter select + the row Entity column). */
@@ -60,6 +67,7 @@ export const AUDIT_ENTITY_LABEL: Record<AuditEntity, string> = {
   candidate: "Candidate",
   document: "Document",
   import_batch: "Import batch",
+  source_lead: "Source lead",
 };
 
 /**
@@ -78,6 +86,9 @@ export const AUDIT_ACTION_TONE: Record<AuditAction, BadgeTone> = {
   purge: "danger",
   import: "amber",
   commit: "amber",
+  log_outreach: "neutral",
+  respond: "navy",
+  promote: "success",
 };
 
 /** Humanize a raw action string ("verify_license" → "Verify license"); tolerant of legacy/ETL codes. */
