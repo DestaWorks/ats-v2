@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Select } from "@/components/ui/select";
 import { Modal } from "@/components/ui/modal";
-import { deleteLead, postOutreach, postPromote, postRespond } from "./lib/lead-fetch";
+import { deleteLead, postOutreach, postPromote, postRespond, postRestore } from "./lib/lead-fetch";
 import { leadActionState } from "./lib/leads-query";
 
 type OpenModal = "outreach" | "promote" | "delete" | null;
@@ -104,6 +104,34 @@ export function LeadRowActions({
         close();
       }
     });
+  }
+
+  function restore() {
+    startTransition(async () => {
+      const result = await postRestore(lead.id);
+      if (result.ok) {
+        toast.success(`${lead.name} restored`);
+        onUpdated(result.data.lead);
+      } else {
+        toast.error(messageForFailure(result.failure));
+      }
+    });
+  }
+
+  // A soft-deleted row offers exactly one action: bring it back (mirrors the legacy Restore).
+  if (lead.deletedAt) {
+    return (
+      <Button
+        type="button"
+        size="xs"
+        variant="secondary"
+        loading={pending}
+        onClick={restore}
+        aria-label={`Restore ${lead.name}`}
+      >
+        Restore
+      </Button>
+    );
   }
 
   return (

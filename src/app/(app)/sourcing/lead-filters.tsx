@@ -2,6 +2,7 @@
 
 import { LEAD_STATUSES, SOURCES } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
+import { FilterChip } from "../lib/filter-chip";
 import { FilterField, FilterToolbar, FiltersPopover } from "../lib/filter-toolbar";
 import { useUrlFilters } from "../lib/use-url-filters";
 
@@ -18,12 +19,18 @@ export function LeadFilters() {
 
   const status = f.get("status");
   const source = f.get("source");
+  const showDeleted = f.flag("deleted");
 
   const popoverCount = (status ? 1 : 0) + (source ? 1 : 0);
-  const hasFilters = Boolean(popoverCount || f.get("search"));
+  const hasFilters = Boolean(popoverCount || f.get("search") || showDeleted);
 
   return (
     <FilterToolbar search={f.search} onSearchChange={f.setSearch} searchLabel="Search leads">
+      {/* Include soft-deleted leads — they render flagged, each with a Restore action. */}
+      <FilterChip pressed={showDeleted} onToggle={() => f.toggleFlag("deleted", !showDeleted)}>
+        Show deleted
+      </FilterChip>
+
       <FiltersPopover count={popoverCount}>
         <FilterField
           label="Status"

@@ -40,6 +40,8 @@ export interface LeadListFilters {
   status?: string;
   source?: string;
   search?: string;
+  /** "Show deleted" — include soft-deleted rows (they render flagged, with Restore). */
+  includeDeleted?: boolean;
   cursor?: PageCursor;
 }
 
@@ -59,6 +61,7 @@ function toLeadListItem(row: LeadRow, clientNames: Map<string, string>): LeadLis
     targetClientName: row.clientId ? (clientNames.get(row.clientId) ?? null) : null,
     promotedCandidateId: row.promotedCandidateId,
     createdAt: toIso(row.createdAt),
+    deletedAt: isoOrNull(row.deletedAt),
   };
 }
 
@@ -303,5 +306,29 @@ export const leadService = {
       });
     });
     return { id };
+  },
+
+  /**
+   * Restore a soft-deleted lead — mirrors `candidateService.restore`: the lead returns EXACTLY as
+   * it was (status/outreach untouched; only the delete markers clear). A missing lead → NOT_FOUND;
+   * a live (not-deleted) lead → CONFLICT. Repo `restore` + a `restore` audit in one transaction.
+   */
+  async restore(id: string, user: AuthUser): Promise<LeadDetailDTO> {
+    const existing = await leadRepository.findById(id, { includeDeleted: true });
+    if (!existing) throw new AppError("NOT_FOUND", "Lead not found");
+    if (existing.deletedAt === null) throw new AppError("CONFLICT", "Lead is not deleted");
+    const restored = await withTransaction(async (tx) => {
+      const lead = await leadRepository.restore(id, tx);
+      await writeAudit(tx, {
+        entity: "source_lead",
+        entityId: id,
+        actor: user.id,
+        action: "restore",
+        before: { deletedAt: existing.deletedAt, deletedById: existing.deletedById },
+        after: { deletedAt: null, status: lead.status },
+      });
+      return lead;
+    });
+    return loadDetail(restored);
   },
 };

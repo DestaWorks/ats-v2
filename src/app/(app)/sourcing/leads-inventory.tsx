@@ -100,9 +100,21 @@ export function LeadsInventory({
           columns={["Name", "Contact", "Status", "Outreach", "Last outreach", "Source", "Actions"]}
         >
           {rows.map((lead) => (
-            <tr key={lead.id} className="transition hover:bg-black/[0.03]">
+            <tr
+              key={lead.id}
+              className={
+                lead.deletedAt
+                  ? "bg-red/5 opacity-70 transition"
+                  : "transition hover:bg-black/[0.03]"
+              }
+            >
               <Td>
                 <span className="font-semibold text-navy">{lead.name}</span>
+                {lead.deletedAt ? (
+                  <Badge tone="danger" size="sm" className="ml-1.5 align-middle">
+                    Deleted
+                  </Badge>
+                ) : null}
                 {lead.credential ? (
                   <span className="block text-xs text-gray">{lead.credential}</span>
                 ) : null}

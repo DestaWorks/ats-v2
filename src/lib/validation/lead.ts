@@ -34,6 +34,8 @@ export interface LeadListItemDTO {
   targetClientName: string | null;
   promotedCandidateId: string | null; // present once promoted → the row links to the candidate
   createdAt: string; // ISO
+  /** Soft-delete marker (ISO) — non-null only in the "Show deleted" view; drives row styling + Restore. */
+  deletedAt: string | null;
 }
 
 /** The `/sourcing` list payload — one keyset page + the honest filtered total. */
@@ -121,6 +123,8 @@ export const leadListQuerySchema = z.object({
   status: z.enum(LEAD_STATUSES).optional(),
   source: z.string().trim().min(1).max(120).optional(),
   search: z.string().trim().min(1).max(100).optional(),
+  /** "Show deleted" — include soft-deleted leads (they render flagged, with a Restore action). */
+  deleted: z.preprocess((v) => v === "1" || v === "true", z.boolean()).optional(),
   cursor: z.string().min(1).optional(),
 });
 export type LeadListQuery = z.infer<typeof leadListQuerySchema>;

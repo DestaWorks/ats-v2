@@ -9,7 +9,7 @@ import type { LeadStatus } from "@/lib/constants";
 import { canLogOutreach, canPromote, canRespond } from "@/lib/rules/lead-lifecycle";
 
 /** The server-backed filters carried into a load-more request (mirrors `leadListQuerySchema`). */
-export const LEAD_SERVER_PARAMS = ["status", "source", "search"] as const;
+export const LEAD_SERVER_PARAMS = ["status", "source", "search", "deleted"] as const;
 
 /**
  * Assemble the load-more query string for `GET /api/leads/list` — carries the current URL filters

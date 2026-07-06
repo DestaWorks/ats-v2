@@ -14,10 +14,11 @@ import { leadService } from "@/server/services/lead.service";
 export const GET = apiHandler(async (req: Request) => {
   await requireUser();
   const params = new URL(req.url).searchParams;
-  const { cursor, ...filters } = leadListQuerySchema.parse({
+  const { cursor, deleted, ...filters } = leadListQuerySchema.parse({
     status: params.get("status") ?? undefined,
     source: params.get("source") ?? undefined,
     search: params.get("search") ?? undefined,
+    deleted: params.get("deleted") ?? undefined,
     cursor: params.get("cursor") ?? undefined,
   });
 
@@ -27,6 +28,6 @@ export const GET = apiHandler(async (req: Request) => {
     if (!decoded) throw new AppError("BAD_REQUEST", "Invalid cursor");
   }
 
-  const list = await leadService.list({ ...filters, cursor: decoded });
+  const list = await leadService.list({ ...filters, includeDeleted: deleted, cursor: decoded });
   return json(list);
 });

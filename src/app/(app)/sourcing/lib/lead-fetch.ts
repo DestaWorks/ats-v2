@@ -43,6 +43,11 @@ export function postPromote(id: string): Promise<ApiResult<{ candidateId: string
   return postJson(`/api/leads/${id}/promote`, {});
 }
 
+/** Restore a soft-deleted lead (clears the delete markers). Returns the fresh detail. */
+export function postRestore(id: string): Promise<ApiResult<{ lead: LeadDetailDTO }>> {
+  return postJson(`/api/leads/${id}/restore`, {});
+}
+
 /** Soft-delete the lead (→ reversible trash). Returns `{ ok, id }` or an `ApiFailure`. */
 export async function deleteLead(id: string): Promise<ApiResult<{ ok: true; id: string }>> {
   const res = await fetch(`/api/leads/${id}`, {

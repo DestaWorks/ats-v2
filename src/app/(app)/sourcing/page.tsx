@@ -31,15 +31,16 @@ export default async function SourcingPage({
     rawStatus && isLeadStatus(rawStatus) ? rawStatus : undefined;
   const source = one(sp.source)?.trim() || undefined;
   const search = one(sp.search)?.trim() || undefined;
+  const showDeleted = one(sp.deleted) === "1";
 
   const [list, clientRows] = await Promise.all([
-    leadService.list({ status, source, search }),
+    leadService.list({ status, source, search, includeDeleted: showDeleted }),
     clientRepository.list(),
   ]);
   const clients = clientRows.map((c) => ({ id: c.id, name: c.name }));
 
   // Remount the client list whenever a SERVER filter changes so it re-seeds from page 1.
-  const listKey = [status, source, search].join("|");
+  const listKey = [status, source, search, showDeleted].join("|");
 
   return (
     <div className="flex flex-col gap-5 px-8 py-6">

@@ -20,6 +20,7 @@ const h = vi.hoisted(() => ({
     update: vi.fn(),
     markPromoted: vi.fn(),
     softDelete: vi.fn(),
+    restore: vi.fn(),
     logOutreach: vi.fn(),
     listOutreach: vi.fn(),
   },
@@ -345,6 +346,49 @@ describe("leadService.softDelete", () => {
       code: "NOT_FOUND",
     });
     expect(h.leadRepo.softDelete).not.toHaveBeenCalled();
+    expect(h.writeAudit).not.toHaveBeenCalled();
+  });
+});
+
+describe("leadService.restore", () => {
+  it("clears the delete markers + audits `restore` in one txn; status untouched", async () => {
+    const deletedAt = new Date("2026-07-01T00:00:00.000Z");
+    h.leadRepo.findById.mockResolvedValue(
+      lead({ status: "Outreach 2", deletedAt, deletedById: "u9" }),
+    );
+    h.leadRepo.restore.mockResolvedValue(lead({ status: "Outreach 2" }));
+
+    const detail = await leadService.restore("l1", h.user as AuthUser);
+    expect(detail.status).toBe("Outreach 2"); // exactly as it left
+    expect(detail.deletedAt).toBeNull();
+
+    // findById must INCLUDE trashed rows (that's the whole point).
+    expect(h.leadRepo.findById.mock.calls[0]![1]).toMatchObject({ includeDeleted: true });
+    const [rid, rtx] = h.leadRepo.restore.mock.calls[0]!;
+    expect(rid).toBe("l1");
+    expect(rtx).toBe(h.fakeTx);
+
+    const [, audit] = h.writeAudit.mock.calls[0]!;
+    expect(audit).toMatchObject({
+      action: "restore",
+      entity: "source_lead",
+      entityId: "l1",
+      actor: "u1",
+      before: { deletedAt, deletedById: "u9" },
+    });
+  });
+
+  it("NOT_FOUND when missing; CONFLICT when the lead is not deleted", async () => {
+    h.leadRepo.findById.mockResolvedValue(null);
+    await expect(leadService.restore("missing", h.user as AuthUser)).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
+
+    h.leadRepo.findById.mockResolvedValue(lead()); // live lead — deletedAt null
+    await expect(leadService.restore("l1", h.user as AuthUser)).rejects.toMatchObject({
+      code: "CONFLICT",
+    });
+    expect(h.leadRepo.restore).not.toHaveBeenCalled();
     expect(h.writeAudit).not.toHaveBeenCalled();
   });
 });

@@ -142,6 +142,14 @@ export const leadRepository = {
     });
   },
 
+  /** Clear the soft-delete markers — the lead returns exactly as it was (status untouched). */
+  restore(id: string, tx?: Prisma.TransactionClient) {
+    return db(tx).sourceLead.update({
+      where: { id },
+      data: { deletedAt: null, deletedById: null },
+    });
+  },
+
   /**
    * Log one outreach attempt: insert the `OutreachAttempt` row AND apply the lead's denormalized
    * outreach columns (the computed next `status`, `outreachCount +1`, `lastOutreachAt`) in the same
