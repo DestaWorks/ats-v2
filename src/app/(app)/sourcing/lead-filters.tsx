@@ -1,68 +1,34 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { LEAD_STATUSES, SOURCES } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
+import { FilterField, FilterToolbar, FiltersPopover } from "../lib/filter-toolbar";
+import { useUrlFilters } from "../lib/use-url-filters";
 
 /**
- * Status / source / search filters for the `/sourcing` inventory, all reflected in the URL
- * `searchParams` (shareable) — mirrors the `/candidates` `ListFilters` pattern. Each change
- * `router.replace`s the URL; the RSC reads those params and re-reads page 1 of the (keyset) list, and
- * the list is remounted (keyed on the filter signature) so it re-seeds. Status + source are
- * dropdowns (the server matches source on exact equality); free-text search is debounced (~300ms) so
- * typing doesn't thrash the URL. Client component — imports no `src/server/**`.
+ * Status / source / search filters for the `/sourcing` inventory — built on the shared
+ * `FilterToolbar`/`useUrlFilters` primitives (same bar as the candidates list + pipeline board). All
+ * state lives in the URL `searchParams` (shareable); each change `router.replace`s the URL, the RSC
+ * re-reads page 1 of the (keyset) list, and the list is remounted (keyed on the filter signature) so
+ * it re-seeds. Status + Source are dropdowns in the popover (the server matches source on exact
+ * equality); free-text search is debounced (~300ms). Client component — imports no `src/server/**`.
  */
 export function LeadFilters() {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
+  const f = useUrlFilters();
 
-  const status = searchParams.get("status") ?? "";
-  const source = searchParams.get("source") ?? "";
-  const urlSearch = searchParams.get("search") ?? "";
+  const status = f.get("status");
+  const source = f.get("source");
 
-  const [search, setSearch] = useState(urlSearch);
-  const firstRun = useRef(true);
-
-  // Keep the input in sync when the URL changes elsewhere (e.g. Clear).
-  useEffect(() => setSearch(urlSearch), [urlSearch]);
-
-  function setParam(key: string, value: string) {
-    const params = new URLSearchParams(searchParams.toString());
-    if (value) params.set(key, value);
-    else params.delete(key);
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
-  }
-
-  // Debounce the free-text search into the URL.
-  useEffect(() => {
-    if (firstRun.current) {
-      firstRun.current = false;
-      return;
-    }
-    const handle = setTimeout(() => {
-      if (search.trim() !== urlSearch) setParam("search", search.trim());
-    }, 300);
-    return () => clearTimeout(handle);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search]);
-
-  const hasFilters = Boolean(status || source || urlSearch);
-
-  function clearAll() {
-    setSearch("");
-    router.replace(pathname, { scroll: false });
-  }
+  const popoverCount = (status ? 1 : 0) + (source ? 1 : 0);
+  const hasFilters = Boolean(popoverCount || f.get("search"));
 
   return (
-    <div className="flex flex-wrap items-end gap-3">
-      <label className="flex flex-col gap-1 text-xs font-medium text-charcoal">
-        Status
-        <select
+    <FilterToolbar search={f.search} onSearchChange={f.setSearch} searchLabel="Search leads">
+      <FiltersPopover count={popoverCount}>
+        <FilterField
+          label="Status"
           value={status}
-          onChange={(e) => setParam("status", e.target.value)}
-          className="rounded-md border border-black/10 bg-white px-2 py-1.5 text-sm"
+          onChange={(e) => f.setParam("status", e.target.value)}
         >
           <option value="">All statuses</option>
           {LEAD_STATUSES.map((s) => (
@@ -70,15 +36,12 @@ export function LeadFilters() {
               {s}
             </option>
           ))}
-        </select>
-      </label>
+        </FilterField>
 
-      <label className="flex flex-col gap-1 text-xs font-medium text-charcoal">
-        Source
-        <select
+        <FilterField
+          label="Source"
           value={source}
-          onChange={(e) => setParam("source", e.target.value)}
-          className="rounded-md border border-black/10 bg-white px-2 py-1.5 text-sm"
+          onChange={(e) => f.setParam("source", e.target.value)}
         >
           <option value="">All sources</option>
           {SOURCES.map((s) => (
@@ -86,25 +49,14 @@ export function LeadFilters() {
               {s}
             </option>
           ))}
-        </select>
-      </label>
-
-      <label className="flex flex-col gap-1 text-xs font-medium text-charcoal">
-        Search
-        <input
-          type="search"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Name or email…"
-          className="w-56 rounded-md border border-black/10 bg-white px-2 py-1.5 text-sm"
-        />
-      </label>
+        </FilterField>
+      </FiltersPopover>
 
       {hasFilters ? (
-        <Button type="button" variant="secondary" size="sm" onClick={clearAll}>
+        <Button type="button" variant="ghost" size="sm" onClick={f.clearAll}>
           Clear
         </Button>
       ) : null}
-    </div>
+    </FilterToolbar>
   );
 }

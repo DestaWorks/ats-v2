@@ -11,7 +11,6 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Table, Td } from "@/components/ui/table";
 import { AddLeadButton, type ClientOption } from "./add-lead-modal";
-import { LeadFilters } from "./lead-filters";
 import { LeadRowActions } from "./lead-row-actions";
 import { fetchLeadsPage } from "./lib/lead-fetch";
 
@@ -79,15 +78,11 @@ export function LeadsInventory({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <LeadFilters />
-        <AddLeadButton clients={clients} onAdded={prependLead} size="sm" />
-      </div>
-
-      <div className="flex items-center">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <span className="text-xs text-gray">
           Showing {rows.length} of {total}
         </span>
+        <AddLeadButton clients={clients} onAdded={prependLead} size="sm" />
       </div>
 
       <div aria-live="polite" className="sr-only">

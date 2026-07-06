@@ -3,6 +3,7 @@ import { isLeadStatus, type LeadStatus } from "@/lib/constants";
 import { getCurrentUser } from "@/server/auth/guards";
 import { leadService } from "@/server/services/lead.service";
 import { clientRepository } from "@/server/repositories/client.repository";
+import { LeadFilters } from "./lead-filters";
 import { LeadsInventory } from "./leads-inventory";
 
 /**
@@ -41,7 +42,7 @@ export default async function SourcingPage({
   const listKey = [status, source, search].join("|");
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-5 p-6">
+    <div className="mx-auto flex max-w-7xl flex-col gap-5 px-8 py-6">
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-navy">Sourcing</h1>
@@ -51,6 +52,8 @@ export default async function SourcingPage({
           </p>
         </div>
       </header>
+
+      <LeadFilters />
 
       <LeadsInventory key={listKey} initial={list} clients={clients} />
     </div>
