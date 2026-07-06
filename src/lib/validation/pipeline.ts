@@ -41,6 +41,11 @@ export interface CandidateCardDTO {
    * never as "0%"; a real `0` is a legitimate low score and DOES render.
    */
   score: number | null;
+  /**
+   * ADVISORY auto-disqualify reasons (`getAutoDisqualify` — expired/under-investigation license,
+   * client state mismatch). Display-only: never moves a candidate. Empty when clear.
+   */
+  dqFlags: string[];
 }
 
 /**

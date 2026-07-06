@@ -207,6 +207,16 @@ function scoreFor(row: CandidateRow, rulesByClient: Map<string, ClientRules>): n
 }
 
 /**
+ * ADVISORY auto-disqualify reasons for a row (board card / list row indicator — mirrors the detail
+ * scoring block). License-based reasons apply with or without a client; the state-mismatch check
+ * needs the assigned client's rules. Display-only — NEVER mutates status (that stays a human move).
+ */
+function dqFor(row: CandidateRow, rulesByClient: Map<string, ClientRules>): string[] {
+  const rules = row.clientId ? (rulesByClient.get(row.clientId) ?? null) : null;
+  return getAutoDisqualify(toRuleCandidate(row), rules);
+}
+
+/**
  * Project a raw candidate row onto the client-safe `CandidateCardDTO`. Runs through
  * `toCandidateDTO` first (the PII boundary) — the card type omits `licenseNumber` entirely, so
  * it can never reach a card regardless of viewer role. Timing is derived from `stageEnteredAt`;
@@ -218,6 +228,7 @@ function toCard(
   clientNames: Map<string, string>,
   now: Date,
   score: number | null,
+  dqFlags: string[],
 ): CandidateCardDTO {
   const dto = toCandidateDTO(row, viewer);
   const status = dto.status as CandidateStatus;
@@ -236,6 +247,7 @@ function toCard(
     isOverdue: isOverdue(status, dto.stageEnteredAt, now),
     isStuck: isStuck(dto.stageEnteredAt, now),
     score,
+    dqFlags,
   };
 }
 
@@ -250,6 +262,7 @@ function toListItem(
   clientNames: Map<string, string>,
   now: Date,
   score: number | null,
+  dqFlags: string[],
 ): CandidateListItemDTO {
   const dto = toCandidateDTO(row, viewer);
   const status = dto.status as CandidateStatus;
@@ -265,6 +278,7 @@ function toListItem(
     daysInStage: getDaysInStage(dto.stageEnteredAt, now),
     createdAt: dto.createdAt.toISOString(),
     score,
+    dqFlags,
   };
 }
 
@@ -650,7 +664,7 @@ export const candidateService = {
         now,
       });
       const candidates = rows.map((row) =>
-        toListItem(row, viewer, clientNames, now, scoreFor(row, rulesByClient)),
+        toListItem(row, viewer, clientNames, now, scoreFor(row, rulesByClient), dqFor(row, rulesByClient)),
       );
       return { candidates, ...meta };
     }
@@ -662,7 +676,9 @@ export const candidateService = {
     if (sort === "fit") scored = sortByFit(scored);
     const meta = pageMeta(scored.length, requestedPage, LIST_PAGE);
     const pageRows = scored.slice((meta.page - 1) * LIST_PAGE, meta.page * LIST_PAGE);
-    const candidates = pageRows.map((s) => toListItem(s.row, viewer, clientNames, now, s.score));
+    const candidates = pageRows.map((s) =>
+      toListItem(s.row, viewer, clientNames, now, s.score, dqFor(s.row, rulesByClient)),
+    );
     return { candidates, ...meta };
   },
 
@@ -700,7 +716,7 @@ export const candidateService = {
     const rulesByClient = buildRulesMap(clients, rulesRows);
     const now = new Date();
     const attention = staleRows
-      .map((row) => toCard(row, viewer, clientNames, now, scoreFor(row, rulesByClient)))
+      .map((row) => toCard(row, viewer, clientNames, now, scoreFor(row, rulesByClient), dqFor(row, rulesByClient)))
       .filter((c) => c.isOverdue || c.isStuck);
 
     return { total, active, terminal: total - active, columns, attention };
@@ -754,7 +770,7 @@ export const candidateService = {
     const clientNames = new Map(clients.map((c) => [c.id, c.name]));
     const rulesByClient = buildRulesMap(clients, rulesRows);
     const cardOf = (row: CandidateRow) =>
-      toCard(row, viewer, clientNames, now, scoreFor(row, rulesByClient));
+      toCard(row, viewer, clientNames, now, scoreFor(row, rulesByClient), dqFor(row, rulesByClient));
 
     const countByStatus = new Map<string, number>();
     for (const g of grouped) countByStatus.set(g.status, g._count._all);
@@ -827,7 +843,7 @@ export const candidateService = {
     const hasMore = rows.length > BOARD_PAGE;
     const pageRows = hasMore ? rows.slice(0, BOARD_PAGE) : rows;
     const items = pageRows.map((row) =>
-      toCard(row, viewer, clientNames, now, scoreFor(row, rulesByClient)),
+      toCard(row, viewer, clientNames, now, scoreFor(row, rulesByClient), dqFor(row, rulesByClient)),
     );
     const nextCursor = hasMore
       ? encodeCursor(pageRows[pageRows.length - 1]!, "createdAt_desc")

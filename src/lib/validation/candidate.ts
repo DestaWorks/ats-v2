@@ -121,6 +121,8 @@ export interface CandidateListItemDTO {
    * score against. The list is sorted by this desc (nulls last). `null` renders as "—", not "0%".
    */
   score: number | null;
+  /** ADVISORY auto-disqualify reasons (display-only, never auto-moves). Empty when clear. */
+  dqFlags: string[];
 }
 
 /**

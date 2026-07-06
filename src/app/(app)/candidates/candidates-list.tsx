@@ -228,6 +228,7 @@ export function CandidatesList({
         "Status",
         "License",
         "Days in stage",
+        "Flags",
         createdHeader,
       ]}
     >
@@ -290,6 +291,20 @@ export function CandidatesList({
               </span>
             </Td>
             <Td className="text-gray tabular-nums">{c.daysInStage}d</Td>
+            <Td>
+              {/* Advisory auto-DQ count (legacy ⚠ column) — reasons in the tooltip; display-only. */}
+              {c.dqFlags.length > 0 ? (
+                <span
+                  className="font-semibold text-red"
+                  title={c.dqFlags.join(" · ")}
+                  aria-label={`${c.dqFlags.length} disqualify ${c.dqFlags.length === 1 ? "flag" : "flags"}: ${c.dqFlags.join("; ")}`}
+                >
+                  ⚠ {c.dqFlags.length}
+                </span>
+              ) : (
+                <span className="text-gray">—</span>
+              )}
+            </Td>
             <Td className="whitespace-nowrap text-gray tabular-nums">{formatDate(c.createdAt)}</Td>
           </tr>
         );

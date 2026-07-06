@@ -74,6 +74,14 @@ export function CandidateCardContent({ card }: { card: CandidateCardDTO }) {
         </span>
         <TimingBadge card={card} />
       </div>
+
+      {/* Advisory auto-DQ hint — first reason only (legacy parity); display-only, never auto-moves. */}
+      {card.dqFlags.length > 0 ? (
+        <p className="mt-1.5 text-[11px] text-red italic" title={card.dqFlags.join(" · ")}>
+          ⚠ {card.dqFlags[0]}
+          {card.dqFlags.length > 1 ? ` (+${card.dqFlags.length - 1})` : ""}
+        </p>
+      ) : null}
     </>
   );
 }
@@ -91,7 +99,13 @@ export function CandidateCard({
     id: card.id,
     attributes: { roleDescription: "draggable candidate card" },
   });
-  const accent = card.isOverdue || card.isStuck ? "border-l-orange" : "border-l-transparent";
+  // Left-border accent — advisory DQ (red) outranks timing (orange), matching the legacy board.
+  const accent =
+    card.dqFlags.length > 0
+      ? "border-l-red"
+      : card.isOverdue || card.isStuck
+        ? "border-l-orange"
+        : "border-l-transparent";
   const selectId = `move-${card.id}`;
 
   const ariaLabel = [

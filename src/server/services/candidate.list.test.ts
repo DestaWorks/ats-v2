@@ -202,6 +202,21 @@ describe("candidateService.listCandidates — DB path (newest/oldest)", () => {
     expect(list.candidates[0]!.score).toBeNull();
   });
 
+  it("carries ADVISORY dqFlags — license reasons without a client, state mismatch with rules", async () => {
+    h.clientRulesRepo.list.mockResolvedValue([sterlingRules()]);
+    h.candidateRepo.list.mockResolvedValue([
+      row({ id: "expired", clientId: null, licenseStatus: "Expired" }),
+      row({ id: "mismatch", clientId: "cl1", licenseState: "NJ" }), // Sterling wants CT
+      row({ id: "clean", clientId: "cl1", licenseState: "CT" }),
+    ]);
+    h.candidateRepo.count.mockResolvedValue(3);
+    const list = await candidateService.listCandidates({}, associate);
+    const byId = new Map(list.candidates.map((c) => [c.id, c.dqFlags]));
+    expect(byId.get("expired")).toEqual(["License expired"]); // no client needed
+    expect(byId.get("mismatch")![0]).toMatch(/License state \(NJ\) does not match/);
+    expect(byId.get("clean")).toEqual([]);
+  });
+
   it("resolves `mine` to viewer.id server-side (never a client-supplied id)", async () => {
     await candidateService.listCandidates({ mine: true, sort: "oldest" }, associate);
     const [args] = h.candidateRepo.list.mock.calls[0]!;
