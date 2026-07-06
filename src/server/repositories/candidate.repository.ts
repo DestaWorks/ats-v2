@@ -31,7 +31,13 @@ export interface CandidateListFilters {
   tags?: string[];
   /** Equality on the license verification status. */
   licenseStatus?: LicenseStatus;
-  /** "My candidates" — the service resolves this from `viewer.id` (never a client-supplied id). */
+  /** Equality on the candidate source (canonical `SOURCES` value). */
+  source?: string;
+  /** Inclusive `createdAt` lower bound (service passes a UTC day start). */
+  addedFrom?: Date;
+  /** EXCLUSIVE `createdAt` upper bound (service passes the start of the day AFTER the `to` date). */
+  addedTo?: Date;
+  /** Owner filter — the service resolves `mine` to `viewer.id`, or passes an explicit owner id. */
   createdById?: string;
   /** In-stage > `STUCK_DAYS` and still active (order < 9). Threshold predicate (§3.1). */
   stuck?: boolean;
@@ -89,7 +95,14 @@ export function buildCandidateWhere(
   if (filters.track) where.track = filters.track;
   if (filters.clientId) where.clientId = filters.clientId;
   if (filters.licenseStatus) where.licenseStatus = filters.licenseStatus;
+  if (filters.source) where.source = filters.source;
   if (filters.createdById) where.createdById = filters.createdById;
+  if (filters.addedFrom || filters.addedTo) {
+    where.createdAt = {
+      ...(filters.addedFrom ? { gte: filters.addedFrom } : {}),
+      ...(filters.addedTo ? { lt: filters.addedTo } : {}),
+    };
+  }
   if (filters.tags && filters.tags.length > 0) where.tags = { hasSome: filters.tags };
   if (filters.search) {
     and.push({

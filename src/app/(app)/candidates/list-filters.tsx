@@ -1,12 +1,17 @@
 "use client";
 
-import { ALL_STATUS_CODES, LICENSE_STATUSES, TRACKS, statusLabel } from "@/lib/constants";
+import { ALL_STATUS_CODES, LICENSE_STATUSES, SOURCES, TRACKS, statusLabel } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import { FilterChip } from "../lib/filter-chip";
 import { FilterField, FilterToolbar, FiltersPopover, TagFilter } from "../lib/filter-toolbar";
 import { useUrlFilters } from "../lib/use-url-filters";
 
 export interface ClientOption {
+  id: string;
+  name: string;
+}
+
+export interface OwnerOption {
   id: string;
   name: string;
 }
@@ -20,13 +25,23 @@ export interface ClientOption {
  * (Track / Client / Status / License / Tags) live in the popover with an active-count badge. Sort
  * (newest/oldest/fit) is driven by the table's column headers, not here.
  */
-export function ListFilters({ clients }: { clients: ClientOption[] }) {
+export function ListFilters({
+  clients,
+  owners,
+}: {
+  clients: ClientOption[];
+  owners: OwnerOption[];
+}) {
   const f = useUrlFilters({ resetPage: true });
 
   const track = f.get("track");
   const clientId = f.get("clientId");
   const status = f.get("status");
   const licenseStatus = f.get("licenseStatus");
+  const source = f.get("source");
+  const ownerId = f.get("ownerId");
+  const addedFrom = f.get("addedFrom");
+  const addedTo = f.get("addedTo");
   const sort = f.get("sort") || "newest";
   const overdue = f.flag("overdue");
   const stuck = f.flag("stuck");
@@ -39,6 +54,9 @@ export function ListFilters({ clients }: { clients: ClientOption[] }) {
     (clientId ? 1 : 0) +
     (status ? 1 : 0) +
     (licenseStatus ? 1 : 0) +
+    (source ? 1 : 0) +
+    (ownerId ? 1 : 0) +
+    (addedFrom || addedTo ? 1 : 0) +
     f.tags.length;
 
   const hasFilters = Boolean(
@@ -112,6 +130,54 @@ export function ListFilters({ clients }: { clients: ClientOption[] }) {
             </option>
           ))}
         </FilterField>
+
+        <FilterField
+          label="Source"
+          value={source}
+          onChange={(e) => f.setParam("source", e.target.value)}
+        >
+          <option value="">All sources</option>
+          {SOURCES.map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+        </FilterField>
+
+        <FilterField
+          label="Added by"
+          value={ownerId}
+          onChange={(e) => f.setParam("ownerId", e.target.value)}
+        >
+          <option value="">All owners</option>
+          {owners.map((o) => (
+            <option key={o.id} value={o.id}>
+              {o.name}
+            </option>
+          ))}
+        </FilterField>
+
+        {/* Added-date range — server treats each bound as an inclusive UTC day. */}
+        <div className="grid grid-cols-2 gap-2">
+          <label className="flex flex-col gap-1 text-xs font-medium text-charcoal">
+            Added from
+            <input
+              type="date"
+              value={addedFrom}
+              onChange={(e) => f.setParam("addedFrom", e.target.value)}
+              className="w-full rounded-md border border-black/10 bg-white px-2 py-1.5 text-sm focus:ring-2 focus:ring-navy focus:outline-none"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-xs font-medium text-charcoal">
+            Added to
+            <input
+              type="date"
+              value={addedTo}
+              onChange={(e) => f.setParam("addedTo", e.target.value)}
+              className="w-full rounded-md border border-black/10 bg-white px-2 py-1.5 text-sm focus:ring-2 focus:ring-navy focus:outline-none"
+            />
+          </label>
+        </div>
 
         <TagFilter active={f.tags} onToggle={f.toggleTag} />
       </FiltersPopover>

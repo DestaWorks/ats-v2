@@ -191,6 +191,13 @@ export const listQuerySchema = z.object({
   search: z.string().trim().min(1).max(100).optional(),
   tags: tagsParamSchema,
   licenseStatus: z.enum(LICENSE_STATUSES).optional(),
+  /** Equality on the candidate source (canonical `SOURCES` value; free text tolerated for legacy rows). */
+  source: z.string().trim().min(1).max(120).optional(),
+  /** View-as owner (user id). `mine` wins when both are set. */
+  ownerId: z.string().min(1).optional(),
+  /** Added-date range — interpreted as UTC day-bounds (inclusive) by the service. */
+  addedFrom: z.coerce.date().optional(),
+  addedTo: z.coerce.date().optional(),
   mine: boolFlagSchema,
   overdue: boolFlagSchema,
   stuck: boolFlagSchema,

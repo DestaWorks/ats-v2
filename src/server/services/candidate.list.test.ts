@@ -223,6 +223,27 @@ describe("candidateService.listCandidates — DB path (newest/oldest)", () => {
     expect(args.createdById).toBe("u1");
     expect(args.orderBy).toBe("createdAt_asc");
   });
+
+  it("maps source/owner/date-range filters — UTC day-bounds, mine wins over ownerId", async () => {
+    await candidateService.listCandidates(
+      {
+        source: "LinkedIn",
+        ownerId: "other-user",
+        addedFrom: new Date("2026-06-01T15:30:00.000Z"),
+        addedTo: new Date("2026-06-30T04:00:00.000Z"),
+      },
+      associate,
+    );
+    const [args] = h.candidateRepo.list.mock.calls[0]!;
+    expect(args.source).toBe("LinkedIn");
+    expect(args.createdById).toBe("other-user"); // explicit view-as owner
+    expect(args.addedFrom).toEqual(new Date("2026-06-01T00:00:00.000Z")); // widened to day start
+    expect(args.addedTo).toEqual(new Date("2026-07-01T00:00:00.000Z")); // exclusive next-day start
+
+    h.candidateRepo.list.mockClear();
+    await candidateService.listCandidates({ ownerId: "other-user", mine: true }, associate);
+    expect(h.candidateRepo.list.mock.calls[0]![0].createdById).toBe("u1"); // mine wins
+  });
 });
 
 describe("candidateService.listCandidates — score path (fit / hot)", () => {

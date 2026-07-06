@@ -73,6 +73,13 @@ export interface SharedListFilters {
   search?: string;
   tags?: string[];
   licenseStatus?: LicenseStatus;
+  /** Equality on the candidate source (canonical `SOURCES` value). */
+  source?: string;
+  /** View-as owner — filter to candidates added by this user id. `mine` wins when both are set. */
+  ownerId?: string;
+  /** Added-date range (any time within the given UTC days, inclusive). */
+  addedFrom?: Date;
+  addedTo?: Date;
   /** "My candidates" — translated to `createdById === viewer.id` by the service. */
   mine?: boolean;
   overdue?: boolean;
@@ -100,6 +107,16 @@ export interface ListFilters extends SharedListFilters {
  * viewer's id server-side (the ONLY place `createdById` is set from a session, never the client).
  * `status` is threaded through separately by each caller (the list keeps it; the board strips it).
  */
+/** Widen a date to the START of its UTC day (inclusive `from` bound; mirrors audit.service). */
+function utcDayStart(d: Date): Date {
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+}
+
+/** The start of the NEXT UTC day — an exclusive upper bound that makes the `to` day inclusive. */
+function utcNextDayStart(d: Date): Date {
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1));
+}
+
 function toRepoFilters(filters: SharedListFilters, viewer: AuthUser) {
   return {
     track: filters.track,
@@ -107,7 +124,12 @@ function toRepoFilters(filters: SharedListFilters, viewer: AuthUser) {
     search: filters.search,
     tags: filters.tags,
     licenseStatus: filters.licenseStatus,
-    createdById: filters.mine ? viewer.id : undefined,
+    source: filters.source,
+    // `mine` always resolves to the SESSION user (never a client-supplied id); the explicit
+    // view-as `ownerId` filter is just a filter over data every operator can already see.
+    createdById: filters.mine ? viewer.id : filters.ownerId,
+    addedFrom: filters.addedFrom ? utcDayStart(filters.addedFrom) : undefined,
+    addedTo: filters.addedTo ? utcNextDayStart(filters.addedTo) : undefined,
     overdue: filters.overdue,
     stuck: filters.stuck,
   };

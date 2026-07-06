@@ -12,18 +12,18 @@ import type { ListSort } from "@/lib/validation/pipeline";
 import { getCurrentUser } from "@/server/auth/guards";
 import { candidateService } from "@/server/services/candidate.service";
 import { clientRepository } from "@/server/repositories/client.repository";
+import { userRepository } from "@/server/repositories/user.repository";
 import { AddCandidateButton } from "../add-candidate-modal";
 import { CandidatesList } from "./candidates-list";
 import { ListFilters } from "./list-filters";
 
 /**
- * Candidates browse (RSC) — a searchable, filterable, CURSOR-PAGINATED flat list, distinct from the
- * funnel board. Guards with `getCurrentUser()` (the `(app)` layout also guards — defence in depth),
- * SSR-renders page 1 of the PII-gated list (`candidateService.listCandidates` — no self-fetch;
+ * Candidates browse (RSC) — a searchable, filterable, SERVER OFFSET-paginated flat list, distinct
+ * from the funnel board. Guards with `getCurrentUser()` (the `(app)` layout also guards — defence in
+ * depth), server-renders the requested page (`candidateService.listCandidates` — no self-fetch;
  * `viewer` drives the license-number gate + resolves `mine`), and seeds the filters from URL
- * `searchParams` so a shared link lands pre-filtered. The client `<CandidatesList>` accumulates
- * further keyset pages (Load more) and owns the page-local fit/hot toggles; it is REMOUNTED whenever
- * a server filter/sort changes (keyed on the filter signature) so it always starts from page 1.
+ * `searchParams` so a shared link lands pre-filtered. Every filter/sort/page interaction is a URL
+ * change this RSC re-reads — nothing is filtered or paginated client-side.
  */
 export default async function CandidatesPage({
   searchParams,
@@ -57,8 +57,15 @@ export default async function CandidatesPage({
   const sort: ListSort = rawSort === "oldest" ? "oldest" : rawSort === "fit" ? "fit" : "newest";
   const hot = flag(sp.hot);
   const page = Math.max(1, Number.parseInt(one(sp.page) ?? "", 10) || 1);
+  // Added-date range — invalid dates fall back to "no bound" (same tolerance as the other params).
+  const date = (v: string | string[] | undefined) => {
+    const raw = one(v);
+    if (!raw) return undefined;
+    const d = new Date(raw);
+    return Number.isNaN(d.getTime()) ? undefined : d;
+  };
 
-  const [list, clientRows] = await Promise.all([
+  const [list, clientRows, userRows] = await Promise.all([
     candidateService.listCandidates(
       {
         track,
@@ -67,6 +74,10 @@ export default async function CandidatesPage({
         search: one(sp.search),
         tags,
         licenseStatus,
+        source: one(sp.source),
+        ownerId: one(sp.ownerId),
+        addedFrom: date(sp.addedFrom),
+        addedTo: date(sp.addedTo),
         mine: flag(sp.mine),
         overdue: flag(sp.overdue),
         stuck: flag(sp.stuck),
@@ -77,8 +88,10 @@ export default async function CandidatesPage({
       user,
     ),
     clientRepository.list(),
+    userRepository.list(),
   ]);
   const clients = clientRows.map((c) => ({ id: c.id, name: c.name }));
+  const owners = userRows.map((u) => ({ id: u.id, name: u.name }));
   const canEditCredential = hasCapability(user.role, "viewCredentials");
 
   return (
@@ -94,7 +107,7 @@ export default async function CandidatesPage({
         <AddCandidateButton clients={clients} canEditCredential={canEditCredential} size="sm" />
       </header>
 
-      <ListFilters clients={clients} />
+      <ListFilters clients={clients} owners={owners} />
 
       <CandidatesList list={list} searchParams={sp} />
     </div>

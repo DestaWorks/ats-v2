@@ -28,4 +28,15 @@ export const userRepository = {
     });
     return new Map(rows.map((r) => [r.id, r.name] as const));
   },
+
+  /**
+   * All users as `{ id, name }` options, sorted by name — feeds the "view as owner" filter
+   * dropdown. Display names only (no email/PII); the user table is small (fixed team).
+   */
+  list(tx?: Prisma.TransactionClient) {
+    return db(tx).user.findMany({
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    });
+  },
 };
