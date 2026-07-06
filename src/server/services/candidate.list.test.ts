@@ -1,15 +1,16 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import type { AuthUser } from "@/server/auth/guards";
-import { decodeCursor } from "@/lib/validation/cursor";
 
 /**
- * Proves `candidateService.listCandidates` builds the PII-gated, CURSOR-PAGINATED `/candidates`
- * browse list WITHOUT a DB: rows carry NO `licenseNumber` (the projection runs through
- * `toCandidateDTO`, even for a viewer WITH `viewCredentials`), the read fetches `LIST_PAGE + 1` rows
- * (keyset, default `createdAt desc`) so `hasMore`/`nextCursor`/`total` are exact, there is
- * DELIBERATELY NO global score sort (order == DB order — score is a displayed column), `mine`
- * resolves to `viewer.id` server-side, and `clientName` resolves from the batch-loaded client map.
- * We mock the repositories; the DTO + timing + cursor codec run for real.
+ * Proves `candidateService.listCandidates` builds the PII-gated `/candidates` browse list WITHOUT a
+ * DB, resolving EVERYTHING server-side:
+ *  - rows carry NO `licenseNumber` (projection runs through `toCandidateDTO`, even WITH viewCredentials);
+ *  - the **DB path** (newest/oldest, Hot off) paginates in SQL — `count` + a `skip`/`take` page,
+ *    preserving DB order (score is a displayed column);
+ *  - the **score path** (`sort: "fit"` or `hot: true`) loads the full filtered set, scores it, and
+ *    filters/sorts/slices in memory (`take`/`skip` NOT sent to the repo, no `count` query);
+ *  - `page` is clamped to `[1, totalPages]`; `mine` resolves to `viewer.id` server-side.
+ * We mock the repositories; the DTO + timing + scoring run for real.
  */
 
 const h = vi.hoisted(() => ({
@@ -35,12 +36,14 @@ vi.mock("@/server/repositories/client-rules.repository", async () => {
 
 import { candidateService } from "./candidate.service";
 
+const PAGE_SIZE = 25;
+
 const associate: AuthUser = { id: "u1", email: "u@desta.works", name: "U", role: "Associate" };
 const owner: AuthUser = { id: "o1", email: "o@desta.works", name: "O", role: "Owner" };
 
 const DAY = 86_400_000;
 
-/** A candidate row with the fields the list DTO + timing + cursor read (incl. sensitive PII). */
+/** A candidate row with the fields the list DTO + timing + scoring read (incl. sensitive PII). */
 function row(overrides: Record<string, unknown> = {}) {
   return {
     id: "c",
@@ -82,13 +85,37 @@ function sterlingRules() {
   };
 }
 
-describe("candidateService.listCandidates", () => {
+/** DB order [mid=40, nul=null, hi=100] against Sterling's rules — used by the sort/hot tests. */
+function threeScored() {
+  return [
+    row({
+      id: "mid",
+      clientId: "cl1",
+      licenseState: "NJ",
+      credential: "PMHNP",
+      population: "Adult",
+      setting: "Telehealth",
+      licenseStatus: "Active",
+    }),
+    row({ id: "nul", clientId: null }),
+    row({
+      id: "hi",
+      clientId: "cl1",
+      licenseState: "CT",
+      credential: "PMHNP",
+      population: "Child/Adolescent",
+      setting: "Hybrid",
+      licenseStatus: "Active",
+    }),
+  ];
+}
+
+describe("candidateService.listCandidates — DB path (newest/oldest)", () => {
   it("maps rows to PII-gated list items (never licenseNumber, even WITH viewCredentials)", async () => {
     h.candidateRepo.list.mockResolvedValue([
       row({ id: "a", clientId: "cl1", stageEnteredAt: new Date(Date.now() - 5 * DAY) }),
     ]);
     h.candidateRepo.count.mockResolvedValue(1);
-    // Owner HAS viewCredentials — the row still structurally omits licenseNumber.
     const list = await candidateService.listCandidates({}, owner);
     expect(list.candidates).toHaveLength(1);
     const item = list.candidates[0]!;
@@ -105,7 +132,7 @@ describe("candidateService.listCandidates", () => {
     expect(list.candidates[0]!.clientName).toBeNull();
   });
 
-  it("fetches LIST_PAGE+1 with default createdAt_desc + no cursor; forwards filters", async () => {
+  it("paginates in SQL — default page 1 → skip 0, take pageSize, createdAt_desc, no cursor/keyset", async () => {
     h.candidateRepo.list.mockResolvedValue([row()]);
     h.candidateRepo.count.mockResolvedValue(1);
     await candidateService.listCandidates(
@@ -119,96 +146,99 @@ describe("candidateService.listCandidates", () => {
       clientId: "cl1",
       search: "jane",
       orderBy: "createdAt_desc",
-      take: 51, // LIST_PAGE (50) + 1
+      skip: 0,
+      take: PAGE_SIZE,
     });
     expect(args.cursor).toBeUndefined();
   });
 
-  it("returns total from the count query (true filtered denominator)", async () => {
+  it("page 2 → skip = pageSize; reports offset pager meta", async () => {
     h.candidateRepo.list.mockResolvedValue([row()]);
-    h.candidateRepo.count.mockResolvedValue(347);
-    const list = await candidateService.listCandidates({}, associate);
-    expect(list.total).toBe(347);
+    h.candidateRepo.count.mockResolvedValue(100);
+    const list = await candidateService.listCandidates({ page: 2 }, associate);
+    const [args] = h.candidateRepo.list.mock.calls[0]!;
+    expect(args.skip).toBe(PAGE_SIZE);
+    expect(list).toMatchObject({
+      total: 100,
+      page: 2,
+      pageSize: PAGE_SIZE,
+      totalPages: 4,
+      hasPrev: true,
+      hasNext: true,
+    });
+  });
+
+  it("clamps an out-of-range page down to the last page", async () => {
+    h.candidateRepo.list.mockResolvedValue([row()]);
+    h.candidateRepo.count.mockResolvedValue(10); // 1 page at pageSize 25
+    const list = await candidateService.listCandidates({ page: 5 }, associate);
+    const [args] = h.candidateRepo.list.mock.calls[0]!;
+    expect(args.skip).toBe(0);
+    expect(list.page).toBe(1);
+    expect(list.hasNext).toBe(false);
+  });
+
+  it("maps sort=oldest → createdAt_asc", async () => {
+    h.candidateRepo.list.mockResolvedValue([row()]);
+    h.candidateRepo.count.mockResolvedValue(1);
+    await candidateService.listCandidates({ sort: "oldest" }, associate);
+    expect(h.candidateRepo.list.mock.calls[0]![0].orderBy).toBe("createdAt_asc");
   });
 
   it("folds the fit pct onto each item WITHOUT re-sorting — order stays the DB order", async () => {
     h.clientRulesRepo.list.mockResolvedValue([sterlingRules()]);
-    // DB order is [mid(40), nul(null), hi(100)]. A score sort would flip it to [hi, mid, nul];
-    // the new list must preserve the DB order (score is a displayed column, not the paginate key).
-    h.candidateRepo.list.mockResolvedValue([
-      row({
-        id: "mid",
-        clientId: "cl1",
-        licenseState: "NJ",
-        credential: "PMHNP",
-        population: "Adult",
-        setting: "Telehealth",
-        licenseStatus: "Active",
-      }),
-      row({ id: "nul", clientId: null }),
-      row({
-        id: "hi",
-        clientId: "cl1",
-        licenseState: "CT",
-        credential: "PMHNP",
-        population: "Child/Adolescent",
-        setting: "Hybrid",
-        licenseStatus: "Active",
-      }),
-    ]);
+    h.candidateRepo.list.mockResolvedValue(threeScored());
     h.candidateRepo.count.mockResolvedValue(3);
     const list = await candidateService.listCandidates({}, associate);
     expect(list.candidates.map((c) => c.id)).toEqual(["mid", "nul", "hi"]); // DB order
-    expect(list.candidates.map((c) => c.score)).toEqual([40, null, 100]); // scores still shown
+    expect(list.candidates.map((c) => c.score)).toEqual([40, null, 100]);
   });
 
   it("scores null when the assigned client has no rules row", async () => {
-    h.clientRulesRepo.list.mockResolvedValue([]); // no rules seeded
+    h.clientRulesRepo.list.mockResolvedValue([]);
     h.candidateRepo.list.mockResolvedValue([row({ id: "x", clientId: "cl1" })]);
     h.candidateRepo.count.mockResolvedValue(1);
     const list = await candidateService.listCandidates({}, associate);
     expect(list.candidates[0]!.score).toBeNull();
   });
 
-  it("hasMore + nextCursor at a full page; sliced to LIST_PAGE (capped mirrors hasMore)", async () => {
-    const rows = Array.from({ length: 51 }, (_, i) => row({ id: `c${i}` }));
-    h.candidateRepo.list.mockResolvedValue(rows);
-    h.candidateRepo.count.mockResolvedValue(200);
-    const list = await candidateService.listCandidates({}, associate);
-    expect(list.candidates).toHaveLength(50);
-    expect(list.hasMore).toBe(true);
-    expect(list.total).toBe(200);
-    // nextCursor targets the LAST returned row (index 49), not the dropped 51st.
-    expect(decodeCursor(list.nextCursor!, "createdAt_desc")!.id).toBe("c49");
-    // Backward-compat mirror for the current RSC table.
-    expect(list.count).toBe(50);
-    expect(list.capped).toBe(true);
-  });
-
-  it("last page: no extra row → hasMore false, nextCursor null, capped false", async () => {
-    h.candidateRepo.list.mockResolvedValue([row({ id: "a" }), row({ id: "b" })]);
-    h.candidateRepo.count.mockResolvedValue(2);
-    const list = await candidateService.listCandidates({}, associate);
-    expect(list.hasMore).toBe(false);
-    expect(list.nextCursor).toBeNull();
-    expect(list.capped).toBe(false);
-    expect(list.count).toBe(2);
-  });
-
-  it("resolves `mine` to viewer.id server-side and forwards sort + cursor", async () => {
-    h.candidateRepo.list.mockResolvedValue([]);
-    h.candidateRepo.count.mockResolvedValue(0);
-    await candidateService.listCandidates(
-      {
-        mine: true,
-        sort: "createdAt_asc",
-        cursor: { kind: "createdAt", value: "2026-06-01T00:00:00.000Z", id: "x" },
-      },
-      associate,
-    );
+  it("resolves `mine` to viewer.id server-side (never a client-supplied id)", async () => {
+    await candidateService.listCandidates({ mine: true, sort: "oldest" }, associate);
     const [args] = h.candidateRepo.list.mock.calls[0]!;
-    expect(args.createdById).toBe("u1"); // never a client-supplied id
+    expect(args.createdById).toBe("u1");
     expect(args.orderBy).toBe("createdAt_asc");
-    expect(args.cursor).toMatchObject({ id: "x" });
+  });
+});
+
+describe("candidateService.listCandidates — score path (fit / hot)", () => {
+  it("sort=fit loads the FULL filtered set (no skip/take, no count) and sorts by score desc, nulls last", async () => {
+    h.clientRulesRepo.list.mockResolvedValue([sterlingRules()]);
+    h.candidateRepo.list.mockResolvedValue(threeScored());
+    const list = await candidateService.listCandidates({ sort: "fit" }, associate);
+    expect(list.candidates.map((c) => c.id)).toEqual(["hi", "mid", "nul"]); // score desc, nulls last
+    expect(list.candidates.map((c) => c.score)).toEqual([100, 40, null]);
+    expect(list.total).toBe(3);
+    const [args] = h.candidateRepo.list.mock.calls[0]!;
+    expect(args.skip).toBeUndefined();
+    expect(args.take).toBeUndefined();
+    expect(h.candidateRepo.count).not.toHaveBeenCalled();
+  });
+
+  it("hot filters to score ≥ HOT_SCORE across the whole set; total is the hot count", async () => {
+    h.clientRulesRepo.list.mockResolvedValue([sterlingRules()]);
+    h.candidateRepo.list.mockResolvedValue(threeScored());
+    const list = await candidateService.listCandidates({ hot: true }, associate);
+    expect(list.candidates.map((c) => c.id)).toEqual(["hi"]); // only 100 ≥ 80
+    expect(list.total).toBe(1);
+    expect(h.candidateRepo.count).not.toHaveBeenCalled();
+  });
+
+  it("hot + fit compose, and the page clamps to the filtered length", async () => {
+    h.clientRulesRepo.list.mockResolvedValue([sterlingRules()]);
+    h.candidateRepo.list.mockResolvedValue(threeScored());
+    const list = await candidateService.listCandidates({ hot: true, sort: "fit", page: 9 }, associate);
+    expect(list.candidates.map((c) => c.id)).toEqual(["hi"]);
+    expect(list.page).toBe(1);
+    expect(list.totalPages).toBe(1);
   });
 });

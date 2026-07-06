@@ -1,25 +1,22 @@
-import { listQuerySchema, listSortToOrderBy } from "@/lib/validation/pipeline";
-import { decodeCursor } from "@/lib/validation/cursor";
+import { listQuerySchema } from "@/lib/validation/pipeline";
 import { requireUser } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
-import { AppError } from "@/server/http/app-error";
 import { candidateService } from "@/server/services/candidate.service";
 
 /**
- * GET /api/candidates/list — the flat `/candidates` browse list's LOAD-MORE endpoint. The RSC still
- * renders the FIRST page directly (SSR, no fetch flash) via `candidateService.listCandidates`; this
- * route serves subsequent keyset pages. Guarded by `requireUser()` — `viewer` drives the PII gate
- * (`toCandidateDTO` omits `licenseNumber`) AND resolves `mine` (`createdById === viewer.id`, never a
- * client-supplied id).
+ * GET /api/candidates/list — JSON parity for the flat `/candidates` browse list (the RSC renders the
+ * same data server-side; this endpoint serves programmatic/AJAX callers). Guarded by `requireUser()`
+ * — `viewer` drives the PII gate (`toCandidateDTO` omits `licenseNumber`) AND resolves `mine`
+ * (`createdById === viewer.id`, never a client-supplied id).
  *
- * Filters mirror the board (track/clientId/status/search/tags/licenseStatus/mine/overdue/stuck) plus
- * a DB-backed `sort` (Newest/Oldest — Name A–Z deferred, OQ-4) and an opaque keyset `cursor`
- * (malformed → 400). Returns the `CandidateListDTO` cursor page (`items`/`nextCursor`/`hasMore`/`total`).
+ * Everything resolves server-side: filters (track/clientId/status/search/tags/licenseStatus/mine/
+ * overdue/stuck), the `hot` score filter, a `sort` (newest/oldest/fit), and `page` (1-based OFFSET).
+ * Returns the offset `CandidateListDTO` (`candidates`/`total`/`page`/`pageSize`/`totalPages`/…).
  */
 export const GET = apiHandler(async (req: Request) => {
   const user = await requireUser();
   const params = new URL(req.url).searchParams;
-  const { sort, cursor, ...filters } = listQuerySchema.parse({
+  const query = listQuerySchema.parse({
     status: params.get("status") ?? undefined,
     track: params.get("track") ?? undefined,
     clientId: params.get("clientId") ?? undefined,
@@ -29,20 +26,11 @@ export const GET = apiHandler(async (req: Request) => {
     mine: params.get("mine") ?? undefined,
     overdue: params.get("overdue") ?? undefined,
     stuck: params.get("stuck") ?? undefined,
+    hot: params.get("hot") ?? undefined,
     sort: params.get("sort") ?? undefined,
-    cursor: params.get("cursor") ?? undefined,
+    page: params.get("page") ?? undefined,
   });
 
-  const orderBy = listSortToOrderBy(sort);
-  let decoded;
-  if (cursor) {
-    decoded = decodeCursor(cursor, orderBy);
-    if (!decoded) throw new AppError("BAD_REQUEST", "Invalid cursor");
-  }
-
-  const list = await candidateService.listCandidates(
-    { ...filters, sort: orderBy, cursor: decoded },
-    user,
-  );
+  const list = await candidateService.listCandidates(query, user);
   return json(list);
 });

@@ -6,7 +6,7 @@ import type { BoardColumn as BoardColumnData, CandidateCardDTO } from "@/lib/val
 import { cn } from "@/lib/utils/cn";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { filterHotLocal } from "../candidates/lib/list-pagination";
+import { filterHotLocal } from "../lib/list-local";
 import { CandidateCard } from "./candidate-card";
 import { STATUS_BG } from "./lib/status-style";
 

@@ -189,12 +189,22 @@ export const listQuerySchema = z.object({
   mine: boolFlagSchema,
   overdue: boolFlagSchema,
   stuck: boolFlagSchema,
-  sort: z.enum(["newest", "oldest"]).default("newest"),
-  cursor: z.string().min(1).optional(),
+  /** Score-based server filter (fit ≥ HOT_SCORE). Computed server-side over the full filtered set. */
+  hot: boolFlagSchema,
+  /** `newest`/`oldest` are DB-native (createdAt); `fit` sorts by the computed fit score, desc. */
+  sort: z.enum(["newest", "oldest", "fit"]).default("newest"),
+  /** 1-based page for OFFSET pagination. Anything not a positive int falls back to page 1. */
+  page: z.coerce.number().int().min(1).catch(1),
 });
 export type ListQuery = z.infer<typeof listQuerySchema>;
 
-/** Map the list's `sort` query value to the repository's keyset `orderBy`. */
-export function listSortToOrderBy(sort: "newest" | "oldest"): "createdAt_desc" | "createdAt_asc" {
+/** The list's user-facing sort options. `newest`/`oldest` are DB sorts; `fit` sorts by score. */
+export type ListSort = "newest" | "oldest" | "fit";
+
+/**
+ * Map the list's `sort` to the repository's DB `orderBy`. `fit` has no DB column, so it uses
+ * `createdAt_desc` as its STABLE base order — the service re-sorts the scored set by fit on top.
+ */
+export function listSortToOrderBy(sort: ListSort): "createdAt_desc" | "createdAt_asc" {
   return sort === "oldest" ? "createdAt_asc" : "createdAt_desc";
 }

@@ -8,7 +8,7 @@ import {
   type LicenseStatus,
   type Track,
 } from "@/lib/constants";
-import { listSortToOrderBy } from "@/lib/validation/pipeline";
+import type { ListSort } from "@/lib/validation/pipeline";
 import { getCurrentUser } from "@/server/auth/guards";
 import { candidateService } from "@/server/services/candidate.service";
 import { clientRepository } from "@/server/repositories/client.repository";
@@ -53,7 +53,10 @@ export default async function CandidatesPage({
         .map((t) => t.trim())
         .filter(Boolean)
     : undefined;
-  const sort = one(sp.sort) === "oldest" ? "oldest" : "newest";
+  const rawSort = one(sp.sort);
+  const sort: ListSort = rawSort === "oldest" ? "oldest" : rawSort === "fit" ? "fit" : "newest";
+  const hot = flag(sp.hot);
+  const page = Math.max(1, Number.parseInt(one(sp.page) ?? "", 10) || 1);
 
   const [list, clientRows] = await Promise.all([
     candidateService.listCandidates(
@@ -67,7 +70,9 @@ export default async function CandidatesPage({
         mine: flag(sp.mine),
         overdue: flag(sp.overdue),
         stuck: flag(sp.stuck),
-        sort: listSortToOrderBy(sort),
+        hot,
+        sort,
+        page,
       },
       user,
     ),
@@ -76,38 +81,22 @@ export default async function CandidatesPage({
   const clients = clientRows.map((c) => ({ id: c.id, name: c.name }));
   const canEditCredential = hasCapability(user.role, "viewCredentials");
 
-  // Remount the client list whenever a SERVER filter/sort changes so it re-seeds from page 1.
-  const listKey = [
-    track,
-    status,
-    one(sp.clientId),
-    one(sp.search),
-    tags?.join("+"),
-    licenseStatus,
-    flag(sp.mine),
-    flag(sp.overdue),
-    flag(sp.stuck),
-    sort,
-  ].join("|");
-
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-5 p-6">
+    <div className="mx-auto flex max-w-7xl flex-col gap-5 px-8 py-6">
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-navy">Candidates</h1>
           <p className="text-sm text-gray">
             {list.total} {list.total === 1 ? "candidate" : "candidates"}
           </p>
-          <p className="text-xs text-gray">
-            {sort === "oldest" ? "Oldest first" : "Newest first"} — score shown per row.
-          </p>
+          <p className="text-xs text-gray">Score shown per row.</p>
         </div>
         <AddCandidateButton clients={clients} canEditCredential={canEditCredential} size="sm" />
       </header>
 
       <ListFilters clients={clients} />
 
-      <CandidatesList key={listKey} initial={list} />
+      <CandidatesList list={list} searchParams={sp} />
     </div>
   );
 }

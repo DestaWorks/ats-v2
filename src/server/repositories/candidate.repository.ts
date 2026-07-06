@@ -42,8 +42,10 @@ export interface CandidateListFilters {
   cursor?: PageCursor;
   /** Sort order + keyset direction (default `createdAt_desc`). */
   orderBy?: ListOrderBy;
-  /** Cap the number of rows returned (callers pass `pageSize + 1` to detect `hasMore`). */
+  /** Cap the number of rows returned (keyset callers pass `pageSize + 1`; offset callers pass `pageSize`). */
   take?: number;
+  /** OFFSET skip for numbered pagination (the list uses `skip`/`take`; the board uses keyset). */
+  skip?: number;
   /** "Now" for the `stuck`/`overdue` thresholds — the service passes one clock per request. */
   now?: Date;
 }
@@ -249,6 +251,7 @@ export const candidateRepository = {
     const rows = await db(tx).candidate.findMany({
       where,
       orderBy: orderByClause(orderBy),
+      ...(filters.skip !== undefined ? { skip: filters.skip } : {}),
       ...(filters.take !== undefined ? { take: filters.take } : {}),
     });
     return rows.map(decryptRow);

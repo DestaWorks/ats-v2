@@ -29,6 +29,55 @@ function TimingBadge({ card }: { card: CandidateCardDTO }) {
   return <span className="text-[11px] font-medium text-gray">{card.daysInStage}d in stage</span>;
 }
 
+/**
+ * The visual body of a pipeline card — name · track · credential · client · score · license · timing.
+ * Shared by the interactive `CandidateCard` and the drag overlay so the DRAG PREVIEW matches the real
+ * card exactly (previously the overlay showed only name + track, so a dragged card looked truncated).
+ * Purely presentational: no drag listeners, no footer actions.
+ */
+export function CandidateCardContent({ card }: { card: CandidateCardDTO }) {
+  const track = TRACK_BADGE[card.track];
+  return (
+    <>
+      <div className="flex items-start justify-between gap-2">
+        <h3 className="font-serif text-sm font-semibold text-charcoal">{card.name}</h3>
+        {/* Track chip — a bespoke per-track color from status-style.ts (doesn't map onto Badge's tones). */}
+        <span
+          className={cn(
+            "shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold tracking-wide",
+            track.className,
+          )}
+        >
+          {track.label}
+        </span>
+      </div>
+
+      <p className="mt-1 text-xs text-gray">
+        {card.credential ?? "—"}
+        {card.licenseState ? ` · ${card.licenseState}` : ""}
+      </p>
+
+      <div className="mt-0.5 flex items-center justify-between gap-2">
+        <p className="text-xs text-charcoal">
+          {card.clientName ?? <span className="text-gray italic">Unassigned</span>}
+        </p>
+        <ScoreBadge score={card.score} />
+      </div>
+
+      <div className="mt-2 flex items-center justify-between gap-2">
+        <span className="flex items-center gap-1">
+          <span
+            aria-hidden
+            className={cn("h-2 w-2 rounded-full", licenseDotClass(card.licenseStatus))}
+          />
+          <span className="text-[11px] text-gray">{card.licenseStatus}</span>
+        </span>
+        <TimingBadge card={card} />
+      </div>
+    </>
+  );
+}
+
 export function CandidateCard({
   card,
   onMove,
@@ -42,7 +91,6 @@ export function CandidateCard({
     id: card.id,
     attributes: { roleDescription: "draggable candidate card" },
   });
-  const track = TRACK_BADGE[card.track];
   const accent = card.isOverdue || card.isStuck ? "border-l-orange" : "border-l-transparent";
   const selectId = `move-${card.id}`;
 
@@ -74,42 +122,7 @@ export function CandidateCard({
         {...listeners}
         aria-label={ariaLabel}
       >
-        <div className="flex items-start justify-between gap-2">
-          <h3 className="font-serif text-sm font-semibold text-charcoal">{card.name}</h3>
-          {/* Track chip left inline: unique style (font-bold, text-[10px], tracking-wide) with a
-              dynamic per-track color from status-style.ts — doesn't map onto Badge's tones. */}
-          <span
-            className={cn(
-              "shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold tracking-wide",
-              track.className,
-            )}
-          >
-            {track.label}
-          </span>
-        </div>
-
-        <p className="mt-1 text-xs text-gray">
-          {card.credential ?? "—"}
-          {card.licenseState ? ` · ${card.licenseState}` : ""}
-        </p>
-
-        <div className="mt-0.5 flex items-center justify-between gap-2">
-          <p className="text-xs text-charcoal">
-            {card.clientName ?? <span className="text-gray italic">Unassigned</span>}
-          </p>
-          <ScoreBadge score={card.score} />
-        </div>
-
-        <div className="mt-2 flex items-center justify-between gap-2">
-          <span className="flex items-center gap-1">
-            <span
-              aria-hidden
-              className={cn("h-2 w-2 rounded-full", licenseDotClass(card.licenseStatus))}
-            />
-            <span className="text-[11px] text-gray">{card.licenseStatus}</span>
-          </span>
-          <TimingBadge card={card} />
-        </div>
+        <CandidateCardContent card={card} />
       </div>
 
       {/* Footer controls sit OUTSIDE the drag listeners so click/keyboard work without drag ambiguity. */}

@@ -2,6 +2,7 @@ import "server-only";
 import type { Prisma } from "@/generated/prisma/client";
 import {
   ACTIVE_STATUS_CODES,
+  HOT_SCORE,
   TERMINAL_STATUS_CODES,
   hasCapability,
   isCandidateStatus,
@@ -27,7 +28,8 @@ import type {
   ColumnPageDTO,
   DashboardStatsDTO,
 } from "@/lib/validation/pipeline";
-import { encodeCursor, type ListOrderBy, type PageCursor } from "@/lib/validation/cursor";
+import { encodeCursor, type PageCursor } from "@/lib/validation/cursor";
+import { listSortToOrderBy, type ListSort } from "@/lib/validation/pipeline";
 import { requireUser, type AuthUser } from "@/server/auth/guards";
 import { writeAudit } from "@/server/db/audit";
 import { withTransaction } from "@/server/db/with-transaction";
@@ -82,12 +84,15 @@ export interface BoardFilters extends SharedListFilters {
   status?: CandidateStatus;
 }
 
-/** Filters accepted by the flat list read — the shared set + a DB sort + a keyset cursor. */
+/** Filters accepted by the flat list read — the shared set + a sort + the Hot filter + a 1-based page. */
 export interface ListFilters extends SharedListFilters {
   status?: CandidateStatus;
-  /** DB-backed sort (default `createdAt_desc` = Newest first). Score is NOT a paginate key. */
-  sort?: ListOrderBy;
-  cursor?: PageCursor;
+  /** `newest`/`oldest` (DB createdAt) or `fit` (computed score, desc). Default `newest`. */
+  sort?: ListSort;
+  /** Score ≥ `HOT_SCORE`. Server-side over the FULL filtered set (score is computed, not a column). */
+  hot?: boolean;
+  /** 1-based page for OFFSET pagination (clamped to `[1, totalPages]`). */
+  page?: number;
 }
 
 /**
@@ -108,12 +113,35 @@ function toRepoFilters(filters: SharedListFilters, viewer: AuthUser) {
   };
 }
 
+/** Page size for the `/candidates` browse read — one OFFSET page of the numbered-pager flat table. */
+const LIST_PAGE = 25;
+
+/** Clamp a requested 1-based page to `[1, totalPages]` and derive the pager flags for the DTO. */
+function pageMeta(total: number, requestedPage: number, pageSize: number) {
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const page = Math.min(Math.max(1, requestedPage), totalPages);
+  return { total, page, pageSize, totalPages, hasPrev: page > 1, hasNext: page < totalPages };
+}
+
 /**
- * Page size for the `/candidates` browse read — one keyset page of the flat table (OQ-5). The read
- * fetches `LIST_PAGE + 1` rows to detect `hasMore`; the DTO carries `nextCursor`/`hasMore`/`total`
- * so the UI can "Load more" through the whole (filtered) set instead of hitting an unreachable cap.
+ * Stable sort of scored rows by fit DESC, nulls last (a `null` score means "nothing to score
+ * against", so it always sinks below any real score, including a real `0`). Ties — and the whole
+ * null group — keep their incoming (DB `orderBy`) order, so `fit` is deterministic across pages.
  */
-const LIST_PAGE = 50;
+function sortByFit<T>(scored: { row: T; score: number | null }[]): { row: T; score: number | null }[] {
+  return scored
+    .map((entry, index) => ({ entry, index }))
+    .sort((a, b) => {
+      const as = a.entry.score;
+      const bs = b.entry.score;
+      if (as === null && bs === null) return a.index - b.index;
+      if (as === null) return 1;
+      if (bs === null) return -1;
+      if (bs !== as) return bs - as;
+      return a.index - b.index;
+    })
+    .map((e) => e.entry);
+}
 
 /**
  * Per-column page size for the board (OQ-5). Each active column ships one keyset page of at most
@@ -235,6 +263,7 @@ function toListItem(
     statusLabel: statusLabel(status),
     licenseStatus: dto.licenseStatus,
     daysInStage: getDaysInStage(dto.stageEnteredAt, now),
+    createdAt: dto.createdAt.toISOString(),
     score,
   };
 }
@@ -579,41 +608,62 @@ export const candidateService = {
   },
 
   /**
-   * Read the `/candidates` browse list — a flat, PII-gated, CURSOR-PAGINATED table (distinct from
-   * the funnel board). AuthZ is the caller's (RSC `getCurrentUser()` / route `requireUser()`);
+   * Read the `/candidates` browse list — a flat, PII-gated, server OFFSET-paginated table (distinct
+   * from the funnel board). AuthZ is the caller's (RSC `getCurrentUser()` / route `requireUser()`);
    * `viewer` drives the PII gate (`toCandidateDTO` omits `licenseNumber`) AND resolves `mine`.
    *
-   * Pagination: fetches `LIST_PAGE + 1` rows so `hasMore` is exact, ordered by a DB field (default
-   * `createdAt desc`). There is DELIBERATELY NO global score sort — score is computed + returned per
-   * row (a displayed column), but the page ORDER is the DB order; a page-local "fit" re-order is a
-   * UI concern. `total` is a true filtered count for an honest "Showing N of M". `clientName` is
-   * resolved via a one-shot in-memory join over the small `clients` table (as `listBoard` does).
+   * EVERYTHING resolves server-side. Two execution paths, one contract:
+   *  - **DB path** (`newest`/`oldest`, no Hot): cheap SQL — `count` + a `skip`/`take` `ORDER BY
+   *    createdAt` page. Score is computed only for the page's rows (a displayed column).
+   *  - **Score path** (`fit` sort OR Hot filter): score is COMPUTED per client-rules, not a DB
+   *    column, so it can't be an SQL `ORDER BY`/`WHERE`. We load the full filtered set (ordered by a
+   *    stable DB base), score it, apply Hot (≥ `HOT_SCORE`) and/or the fit sort in memory, then slice
+   *    the requested page. Fine at ATS scale (hundreds–low-thousands); always fresh (rules stay data).
+   *
+   * `total` is the true post-filter count (the Hot filter's denominator is the in-memory count).
+   * `page` is clamped to `[1, totalPages]`. `clientName` is a one-shot in-memory join over `clients`.
    */
   async listCandidates(filters: ListFilters = {}, viewer: AuthUser): Promise<CandidateListDTO> {
     const now = new Date();
-    const orderBy: ListOrderBy = filters.sort ?? "createdAt_desc";
+    const sort: ListSort = filters.sort ?? "newest";
+    const hot = filters.hot ?? false;
+    const requestedPage = Math.max(1, filters.page ?? 1);
+    const baseOrder = listSortToOrderBy(sort);
     const repoFilters = { ...toRepoFilters(filters, viewer), status: filters.status };
-    const [rows, total, clients, rulesRows] = await Promise.all([
-      candidateRepository.list({
-        ...repoFilters,
-        cursor: filters.cursor,
-        orderBy,
-        take: LIST_PAGE + 1,
-        now,
-      }),
-      candidateRepository.count({ ...repoFilters, now }),
+
+    const [clients, rulesRows] = await Promise.all([
       clientRepository.list(),
       clientRulesRepository.list(),
     ]);
-    const hasMore = rows.length > LIST_PAGE;
-    const page = hasMore ? rows.slice(0, LIST_PAGE) : rows;
     const clientNames = new Map(clients.map((c) => [c.id, c.name]));
     const rulesByClient = buildRulesMap(clients, rulesRows);
-    const candidates = page.map((row) =>
-      toListItem(row, viewer, clientNames, now, scoreFor(row, rulesByClient)),
-    );
-    const nextCursor = hasMore ? encodeCursor(page[page.length - 1]!, orderBy) : null;
-    return { candidates, count: candidates.length, capped: hasMore, hasMore, nextCursor, total };
+
+    // DB path — sort is DB-native and Hot is off, so paginate in SQL.
+    if (sort !== "fit" && !hot) {
+      const total = await candidateRepository.count({ ...repoFilters, now });
+      const meta = pageMeta(total, requestedPage, LIST_PAGE);
+      const rows = await candidateRepository.list({
+        ...repoFilters,
+        orderBy: baseOrder,
+        skip: (meta.page - 1) * LIST_PAGE,
+        take: LIST_PAGE,
+        now,
+      });
+      const candidates = rows.map((row) =>
+        toListItem(row, viewer, clientNames, now, scoreFor(row, rulesByClient)),
+      );
+      return { candidates, ...meta };
+    }
+
+    // Score path — Hot and/or fit need the computed score across the WHOLE filtered set.
+    const allRows = await candidateRepository.list({ ...repoFilters, orderBy: baseOrder, now });
+    let scored = allRows.map((row) => ({ row, score: scoreFor(row, rulesByClient) }));
+    if (hot) scored = scored.filter((s) => s.score !== null && s.score >= HOT_SCORE);
+    if (sort === "fit") scored = sortByFit(scored);
+    const meta = pageMeta(scored.length, requestedPage, LIST_PAGE);
+    const pageRows = scored.slice((meta.page - 1) * LIST_PAGE, meta.page * LIST_PAGE);
+    const candidates = pageRows.map((s) => toListItem(s.row, viewer, clientNames, now, s.score));
+    return { candidates, ...meta };
   },
 
   /**
