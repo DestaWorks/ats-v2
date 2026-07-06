@@ -1,4 +1,5 @@
 import "server-only";
+import type { Prisma } from "@/generated/prisma/client";
 import {
   ACTIVE_STATUS_CODES,
   TERMINAL_STATUS_CODES,
@@ -320,15 +321,42 @@ function pickAudited(row: CandidateRow, input: CandidateUpdateInput): Record<str
  * Wave 2.5, separate from this soft delete.
  */
 export const candidateService = {
-  async create(input: CandidateCreateInput) {
-    const user = await requireUser();
-    // Every interactive create starts New (stage 0). No status arg → no gate bypass.
-    return candidateRepository.create({
+  /**
+   * Create a candidate. COMPOSABLE (OQ-1): `opts.user` lets a caller (e.g. `leadService.promote`)
+   * supply the already-authenticated actor instead of re-`requireUser`ing, and `opts.tx` lets it run
+   * the insert INSIDE an existing transaction so the create is atomic with the caller's other writes
+   * (the lead → Promoted flip). Called bare — `create(input)` — it self-`requireUser`s and opens its
+   * OWN transaction (backward-compatible with the manual-create route).
+   *
+   * The forced-field contract lives here in ONE place: every interactive create starts New (stage 0,
+   * `createdById = user.id`) — no `status` arg, so a create can never drop a candidate mid-pipeline
+   * and skip the gate. NOW audited (action `create`) so a manually-created OR promoted candidate has
+   * a creation trail (interactive create previously wrote none — OQ-2).
+   */
+  async create(
+    input: CandidateCreateInput,
+    opts?: { user?: AuthUser; tx?: Prisma.TransactionClient },
+  ) {
+    const user = opts?.user ?? (await requireUser());
+    const data: Prisma.CandidateUncheckedCreateInput = {
       ...input,
       status: "NEW_CANDIDATE",
       stageOrder: statusOrder("NEW_CANDIDATE"),
       createdById: user.id,
-    });
+    };
+    const run = async (tx: Prisma.TransactionClient) => {
+      const created = await candidateRepository.create(data, tx);
+      await writeAudit(tx, {
+        entity: "candidate",
+        entityId: created.id,
+        actor: user.id,
+        action: "create",
+        after: { status: created.status, clientId: created.clientId },
+      });
+      return created;
+    };
+    // Compose inside the caller's tx (promote), else open our own so create + audit stay atomic.
+    return opts?.tx ? run(opts.tx) : withTransaction(run);
   },
 
   /**

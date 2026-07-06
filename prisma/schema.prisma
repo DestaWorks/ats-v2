@@ -141,9 +141,10 @@ model Client {
   capacity   Int?
   createdAt  DateTime     @default(now())
   updatedAt  DateTime     @updatedAt
-  deletedAt  DateTime?
-  candidates Candidate[]
-  rules      ClientRules? // 1:1 back-relation — per-client scoring/matching rules
+  deletedAt   DateTime?
+  candidates  Candidate[]
+  rules       ClientRules? // 1:1 back-relation — per-client scoring/matching rules
+  sourceLeads SourceLead[] @relation("LeadTargetClient") // pre-pipeline leads targeting this client
 
   @@index([deletedAt])
   @@map("clients")
@@ -214,6 +215,11 @@ model Candidate {
   stageHistory        StageHistory[]
   documents           Document[]
   notes               CandidateNote[]
+  // Sourcing (Wave 2.6) back-relations. `promotedFromLead` is the lead this candidate was promoted
+  // FROM (0/1, `@unique` on the lead side); `outreachLog` is the shared outreach table (candidate
+  // side is written later — the `outreachAttempts` Int column above is the DENORM count, not this).
+  promotedFromLead    SourceLead?       @relation("LeadPromotion")
+  outreachLog         OutreachAttempt[]
 
   @@index([status])
   @@index([clientId])
@@ -310,4 +316,84 @@ model StageHistory {
   @@index([candidateId])
   @@index([candidateId, enteredAt])
   @@map("stage_history")
+}
+
+// --- Sourcing (Wave 2.6) ---
+// Pre-pipeline lead funnel. `status` is the canonical LeadStatus LABEL (L-1), validated in zod vs
+// LEAD_STATUSES and canonicalized with `normalizeLeadStatus` on write — no numeric stage code
+// (leads have no gates/ordinal funnel). Vocab (source/credential/state/tags) is FREE TEXT here, not
+// the candidate strict-vocab enums — the promote mapper coerces to the enums (dropping non-matches).
+// Promote creates a Candidate in Postgres (D2) and back-links it (`promotedCandidateId @unique`).
+model SourceLead {
+  id       String  @id @default(cuid())
+  legacyId String? @unique // deferred ETL backfill (idempotent upsert)
+
+  // identity / contact (PII)
+  name        String
+  email       String?
+  phone       String?
+  linkedinUrl String?
+
+  // sourcing context (free text — NOT the candidate strict-vocab enums)
+  credential String? // raw job title / credential text
+  state      String?
+  source     String?
+  tags       String[] @default([])
+  notes      String?
+
+  // target client (optional) — reuses the small clients table for the promote → candidate.clientId carry
+  clientId String?
+  client   Client? @relation("LeadTargetClient", fields: [clientId], references: [id], onDelete: SetNull)
+
+  // lifecycle status + denormalized outreach (L-4)
+  status         String    @default("Sourced") // a LeadStatus LABEL
+  outreachCount  Int       @default(0) // TRUE attempt count (unbounded; status caps at O3)
+  lastOutreachAt DateTime?
+  respondedAt    DateTime?
+
+  // promote back-link (set once, on promote)
+  promotedCandidateId String?    @unique
+  promotedCandidate   Candidate? @relation("LeadPromotion", fields: [promotedCandidateId], references: [id], onDelete: SetNull)
+
+  // lifecycle
+  createdById String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  deletedById String?
+
+  outreachAttempts OutreachAttempt[]
+
+  @@index([status])
+  @@index([deletedAt])
+  @@index([email]) // dedupe/search
+  @@index([clientId])
+  @@index([deletedAt, createdAt, id]) // keyset list (createdAt_desc, id tiebreak)
+  @@map("source_leads")
+}
+
+// ONE table for BOTH lead and candidate outreach (L-3). This slice writes leadId only; candidateId
+// exists for candidate_log_outreach later (no migration then). Cascade on both FKs: an attempt is a
+// child of whichever entity owns it and is destroyed with a hard purge of that parent.
+model OutreachAttempt {
+  id       String  @id @default(cuid())
+  legacyId String? @unique // deferred ETL (splits the legacy OutreachAttempts JSON blob into rows)
+
+  leadId String?
+  lead   SourceLead? @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  candidateId String?
+  candidate   Candidate? @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  channel String // email | phone | linkedin | other (validated vs OUTREACH_CHANNELS in zod)
+  at      DateTime @default(now())
+  note    String?
+  actorId String
+
+  createdAt DateTime @default(now())
+
+  @@index([leadId])
+  @@index([candidateId])
+  @@index([actorId, at]) // DECISIONS: outreach_attempts(actor, day) — the CRM/daily-log perf index
+  @@map("outreach_attempts")
 }
