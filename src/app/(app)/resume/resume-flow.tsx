@@ -11,11 +11,11 @@ import type {
 } from "@/lib/validation/resume";
 import { Spinner } from "@/components/ui/spinner";
 import { ErrorState } from "@/components/ui/error-state";
-import { EmptyState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
 import { VariantPicker } from "./variant-picker";
 import { UploadZone } from "./upload-zone";
 import { ReviewForm } from "./review/review-form";
+import { BrandedResume } from "./branded-resume";
 import { capResumeText, extractPdfText } from "./lib/pdf-extract";
 import type { ApiErrorBody } from "@/lib/api/client";
 
@@ -55,6 +55,8 @@ export function ResumeFlow({
   const [result, setResult] = useState<ExtractResumeResponse | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [savedName, setSavedName] = useState<string | null>(null);
+  // The reviewed data as saved — feeds the branded résumé render on the saved step.
+  const [savedData, setSavedData] = useState<ResumeData | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   function resetToPick() {
@@ -65,6 +67,7 @@ export function ResumeFlow({
     setExtractedText("");
     setResult(null);
     setSavedName(null);
+    setSavedData(null);
     setError(null);
   }
 
@@ -147,6 +150,7 @@ export function ResumeFlow({
       }
       const body = (await res.json()) as { candidate?: { name?: string } };
       setSavedName(body.candidate?.name ?? "Candidate");
+      setSavedData(data);
       setStep("saved");
     } catch {
       setError("Network error saving the candidate. Please try again.");
@@ -205,16 +209,42 @@ export function ResumeFlow({
         </div>
       ) : null}
 
-      {step === "saved" ? (
-        <EmptyState
-          title={`${savedName ?? "Candidate"} saved`}
-          description={`Added to the pipeline by ${recruiterName}.`}
-          action={
-            <Button type="button" onClick={resetToPick}>
-              Convert another résumé
-            </Button>
-          }
-        />
+      {step === "saved" && variant && savedData ? (
+        <div className="flex flex-col gap-4">
+          {/* Success bar + output actions (never printed). */}
+          <div className="no-print flex flex-wrap items-center gap-2 rounded-xl border border-green/30 bg-green/5 px-4 py-3">
+            <p className="text-sm font-semibold text-green">✓ {savedName ?? "Candidate"} saved</p>
+            <p className="text-xs text-gray">Added to the pipeline by {recruiterName}.</p>
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              <Button type="button" size="sm" onClick={() => window.print()}>
+                Print / Save PDF
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                onClick={() => {
+                  const subject = `Candidate profile — ${savedData.name || savedName || ""}`;
+                  const body =
+                    `Hi,\n\nSharing ${savedData.name || "a candidate"}` +
+                    `${savedData.headerRole ? ` — ${savedData.headerRole}` : ""}.\n` +
+                    `The profile is attached.\n\n${recruiterName}\nDesta Works`;
+                  window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+                }}
+              >
+                Email…
+              </Button>
+              <Button type="button" size="sm" variant="ghost" onClick={resetToPick}>
+                Convert another
+              </Button>
+            </div>
+            <p className="w-full text-[11px] text-gray">
+              Email opens a compose draft — use Print / Save PDF first, then attach the PDF.
+            </p>
+          </div>
+
+          <BrandedResume variant={variant} data={savedData} />
+        </div>
       ) : null}
     </div>
   );
