@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { COMPACT_STATES, isCompactState } from "./states";
+import { COMPACT_STATES, STATE_BOARDS, isCompactState, stateBoardLink } from "./states";
 
 describe("states", () => {
   it("recognizes NLC compact states (ported list of 37)", () => {
@@ -15,5 +15,30 @@ describe("states", () => {
     expect(isCompactState("")).toBe(false);
     expect(isCompactState(null)).toBe(false);
     expect(isCompactState(undefined)).toBe(false);
+  });
+});
+
+describe("stateBoardLink", () => {
+  it("returns the legacy LL portal for the 4 mapped states", () => {
+    expect(Object.keys(STATE_BOARDS)).toEqual(["CT", "NJ", "FL", "MA"]);
+    expect(stateBoardLink("CT")).toEqual({
+      name: "CT eLicense Portal",
+      url: "https://www.elicense.ct.gov/",
+      mapped: true,
+    });
+    expect(stateBoardLink("NJ")?.mapped).toBe(true);
+  });
+
+  it("falls back to a license-lookup search for unmapped states", () => {
+    const link = stateBoardLink("NY");
+    expect(link?.mapped).toBe(false);
+    expect(link?.url).toContain("google.com/search");
+    expect(link?.url).toContain("NY");
+  });
+
+  it("returns null when there is no license state", () => {
+    expect(stateBoardLink(null)).toBeNull();
+    expect(stateBoardLink(undefined)).toBeNull();
+    expect(stateBoardLink("")).toBeNull();
   });
 });

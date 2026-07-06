@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { LICENSE_STATUSES } from "@/lib/constants";
+import { LICENSE_STATUSES, stateBoardLink } from "@/lib/constants";
 import {
   verifyLicenseSchema,
   type CandidateProfileDTO,
@@ -114,6 +114,29 @@ export function LicenseTab({
             <dd className="font-medium text-charcoal">{formatDate(candidate.licenseVerifiedAt)}</dd>
           </div>
         </dl>
+        {(() => {
+          // "Verify on state board" — the legacy LL portal link; search fallback for unmapped states.
+          const board = stateBoardLink(candidate.licenseState);
+          if (!board) return null;
+          return (
+            <div className="mt-4 border-t border-black/5 pt-3">
+              <p className="text-xs font-semibold text-charcoal">Verify on state board</p>
+              <a
+                href={board.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-0.5 inline-flex items-center gap-1 text-sm font-semibold text-navy hover:underline focus-visible:ring-2 focus-visible:ring-navy focus-visible:outline-none"
+              >
+                {board.name} →
+              </a>
+              {!board.mapped ? (
+                <p className="mt-0.5 text-xs text-gray">
+                  No saved portal for {candidate.licenseState} — opens a license-lookup search.
+                </p>
+              ) : null}
+            </div>
+          );
+        })()}
         <p className="mt-3 text-xs text-gray">
           License status drives the pipeline gates — Initial Screening needs a verified license and
           Submitted to Client needs an Active one.
