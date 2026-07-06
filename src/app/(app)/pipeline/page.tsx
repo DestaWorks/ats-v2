@@ -33,7 +33,7 @@ export default async function PipelinePage({
   const clients = clientRows.map((c) => ({ id: c.id, name: c.name }));
 
   return (
-    <div className="mx-auto flex max-w-[1600px] flex-col gap-5 p-6">
+    <div className="flex flex-col gap-5 px-8 py-6">
       <header>
         <h1 className="text-2xl font-bold text-navy">Pipeline</h1>
         <p className="text-sm text-gray">

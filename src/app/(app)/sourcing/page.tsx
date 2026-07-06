@@ -42,7 +42,7 @@ export default async function SourcingPage({
   const listKey = [status, source, search].join("|");
 
   return (
-    <div className="mx-auto flex max-w-7xl flex-col gap-5 px-8 py-6">
+    <div className="flex flex-col gap-5 px-8 py-6">
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-navy">Sourcing</h1>
