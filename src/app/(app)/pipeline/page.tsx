@@ -4,6 +4,7 @@ import { TRACKS, type Track } from "@/lib/constants";
 import { getCurrentUser } from "@/server/auth/guards";
 import { candidateService } from "@/server/services/candidate.service";
 import { clientRepository } from "@/server/repositories/client.repository";
+import { userRepository } from "@/server/repositories/user.repository";
 import { Spinner } from "@/components/ui/spinner";
 import { PipelineBoard } from "./pipeline-board";
 
@@ -26,11 +27,21 @@ export default async function PipelinePage({
   const rawTrack = one(sp.track);
   const track = TRACKS.includes(rawTrack as Track) ? (rawTrack as Track) : undefined;
 
-  const [board, clientRows] = await Promise.all([
-    candidateService.listBoard({ track, clientId: one(sp.clientId), search: one(sp.search) }, user),
+  const [board, clientRows, userRows] = await Promise.all([
+    candidateService.listBoard(
+      {
+        track,
+        clientId: one(sp.clientId),
+        search: one(sp.search),
+        ownerId: one(sp.ownerId),
+      },
+      user,
+    ),
     clientRepository.list(),
+    userRepository.list(),
   ]);
   const clients = clientRows.map((c) => ({ id: c.id, name: c.name }));
+  const owners = userRows.map((u) => ({ id: u.id, name: u.name }));
 
   return (
     <div className="flex flex-col gap-5 px-8 py-6">
@@ -48,7 +59,7 @@ export default async function PipelinePage({
           </div>
         }
       >
-        <PipelineBoard initial={board} clients={clients} />
+        <PipelineBoard initial={board} clients={clients} owners={owners} />
       </Suspense>
     </div>
   );

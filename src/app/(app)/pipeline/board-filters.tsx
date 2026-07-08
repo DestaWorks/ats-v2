@@ -21,12 +21,14 @@ export interface ClientOption {
  */
 export function BoardFilters({
   clients,
+  owners,
   hotOnly,
   onToggleHot,
   hideEmpty,
   onToggleHideEmpty,
 }: {
   clients: ClientOption[];
+  owners: { id: string; name: string }[];
   hotOnly: boolean;
   onToggleHot: () => void;
   hideEmpty: boolean;
@@ -37,12 +39,19 @@ export function BoardFilters({
   const track = f.get("track");
   const clientId = f.get("clientId");
   const licenseStatus = f.get("licenseStatus");
+  const ownerId = f.get("ownerId");
   const overdue = f.flag("overdue");
   const stuck = f.flag("stuck");
   const mine = f.flag("mine");
+  // "Needs verification" is a shortcut chip over the server-backed licenseStatus param.
+  const needsVerification = licenseStatus === "Not Verified";
 
   const popoverCount =
-    (track ? 1 : 0) + (clientId ? 1 : 0) + (licenseStatus ? 1 : 0) + f.tags.length;
+    (track ? 1 : 0) +
+    (clientId ? 1 : 0) +
+    (licenseStatus ? 1 : 0) +
+    (ownerId ? 1 : 0) +
+    f.tags.length;
 
   const hasFilters = Boolean(popoverCount || f.get("search") || overdue || stuck || mine);
 
@@ -56,6 +65,13 @@ export function BoardFilters({
       </FilterChip>
       <FilterChip pressed={mine} onToggle={() => f.toggleFlag("mine", !mine)}>
         My candidates
+      </FilterChip>
+      {/* Shortcut over licenseStatus=Not Verified — the license-verification work queue. */}
+      <FilterChip
+        pressed={needsVerification}
+        onToggle={() => f.setParam("licenseStatus", needsVerification ? "" : "Not Verified")}
+      >
+        Needs verification
       </FilterChip>
       {/* Page-local lens — filters the loaded cards in every column (does not re-query). */}
       <FilterChip pressed={hotOnly} onToggle={onToggleHot}>
@@ -102,6 +118,19 @@ export function BoardFilters({
           {LICENSE_STATUSES.map((ls) => (
             <option key={ls} value={ls}>
               {ls}
+            </option>
+          ))}
+        </FilterField>
+
+        <FilterField
+          label="Added by"
+          value={ownerId}
+          onChange={(e) => f.setParam("ownerId", e.target.value)}
+        >
+          <option value="">All owners</option>
+          {owners.map((o) => (
+            <option key={o.id} value={o.id}>
+              {o.name}
             </option>
           ))}
         </FilterField>

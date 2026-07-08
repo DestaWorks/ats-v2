@@ -169,6 +169,8 @@ export const boardQuerySchema = z.object({
   search: z.string().trim().min(1).max(100).optional(),
   tags: tagsParamSchema,
   licenseStatus: z.enum(LICENSE_STATUSES).optional(),
+  /** View-as owner (user id). `mine` wins when both are set (mirrors the list). */
+  ownerId: z.string().min(1).optional(),
   mine: boolFlagSchema,
   overdue: boolFlagSchema,
   stuck: boolFlagSchema,

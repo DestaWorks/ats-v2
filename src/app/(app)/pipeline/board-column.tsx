@@ -34,6 +34,11 @@ export function BoardColumn({
   const loaded = column.candidates.length;
   const cards = hotOnly ? filterHotLocal(column.candidates) : column.candidates;
   const remaining = Math.max(0, column.count - loaded);
+  // Avg days-in-stage over the LOADED cards (legacy column footer stat, honest about its basis).
+  const avgDays =
+    loaded > 0
+      ? Math.round(column.candidates.reduce((sum, c) => sum + c.daysInStage, 0) / loaded)
+      : null;
 
   return (
     <section
@@ -56,8 +61,12 @@ export function BoardColumn({
         <Badge>{column.count}</Badge>
       </header>
 
-      {sla != null ? (
-        <p className="px-3 pt-1.5 text-[10px] text-gray">SLA {sla}d</p>
+      {sla != null || avgDays != null ? (
+        <p className="px-3 pt-1.5 text-[10px] text-gray">
+          {[sla != null ? `SLA ${sla}d` : null, avgDays != null ? `avg ${avgDays}d in stage` : null]
+            .filter(Boolean)
+            .join(" · ")}
+        </p>
       ) : (
         <p className="px-3 pt-1.5 text-[10px] text-transparent select-none">.</p>
       )}

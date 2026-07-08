@@ -29,6 +29,7 @@ export const GET = apiHandler(async (req: Request) => {
     search: params.get("search") ?? undefined,
     tags: params.get("tags") ?? undefined,
     licenseStatus: params.get("licenseStatus") ?? undefined,
+    ownerId: params.get("ownerId") ?? undefined,
     mine: params.get("mine") ?? undefined,
     overdue: params.get("overdue") ?? undefined,
     stuck: params.get("stuck") ?? undefined,

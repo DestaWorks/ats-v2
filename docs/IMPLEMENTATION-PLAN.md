@@ -260,7 +260,8 @@ declared-deferred leftovers that still belong to the shipped surface.
 **P1** — Alerts panel (2.5) · @mentions + 5 note types w/ server-side role visibility (2.2) ·
 sourcing bulk/snooze/outreach-edit/lead-CSV-import (2.6) · candidate outreach log surfacing
 (`outreachAttempts` schema field unsurfaced) · trash 30-day countdown + auto-purge policy ·
-pipeline polish (owner filter, needs-verification chip, hide-empty, avg-days, park/snooze).
+pipeline polish (✅ owner filter · ✅ needs-verification chip · ✅ hide-empty · ✅ avg-days —
+**open: park/snooze**, needs a `snoozedUntil` column + product decision).
 
 **Deliberately NOT ported** (confirmed fine): non-idempotent Operate handoff (`op_add_provider` dup bug),
 client-side note hiding (now server-side), `dangerouslySetInnerHTML` notes (XSS), `UpdatedAt`-derived

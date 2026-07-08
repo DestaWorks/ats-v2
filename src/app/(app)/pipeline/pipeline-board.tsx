@@ -36,9 +36,11 @@ function findCard(board: BoardResponse, id: string): CandidateCardDTO | null {
 export function PipelineBoard({
   initial,
   clients,
+  owners,
 }: {
   initial: BoardResponse;
   clients: ClientOption[];
+  owners: { id: string; name: string }[];
 }) {
   const searchParams = useSearchParams();
   const [board, setBoard] = useState(initial);
@@ -185,6 +187,7 @@ export function PipelineBoard({
     <div className="flex flex-col gap-4">
       <BoardFilters
         clients={clients}
+        owners={owners}
         hotOnly={hotOnly}
         onToggleHot={() => setHotOnly((v) => !v)}
         hideEmpty={hideEmpty}
