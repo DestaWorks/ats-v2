@@ -55,6 +55,9 @@ export function PipelineBoard({
   const includeTerminal = useRef(false);
   const [terminalLoading, setTerminalLoading] = useState(false);
   const [hotOnly, setHotOnly] = useState(false);
+  // Page-local "Hide empty stages" (legacy pHideEmpty) — collapses 0-count columns so live stages
+  // get the width. A column stays visible if an optimistic move just landed a card in it.
+  const [hideEmpty, setHideEmpty] = useState(false);
   const [loadingColumn, setLoadingColumn] = useState<Record<string, boolean>>({});
 
   const sensors = useSensors(
@@ -180,7 +183,13 @@ export function PipelineBoard({
 
   return (
     <div className="flex flex-col gap-4">
-      <BoardFilters clients={clients} hotOnly={hotOnly} onToggleHot={() => setHotOnly((v) => !v)} />
+      <BoardFilters
+        clients={clients}
+        hotOnly={hotOnly}
+        onToggleHot={() => setHotOnly((v) => !v)}
+        hideEmpty={hideEmpty}
+        onToggleHideEmpty={() => setHideEmpty((v) => !v)}
+      />
 
       {error ? (
         <p role="alert" className="rounded-md bg-red/5 px-3 py-2 text-sm text-red">
@@ -206,18 +215,23 @@ export function PipelineBoard({
             </div>
           ) : null}
 
-          {optimisticBoard.columns.map((column) => (
-            <BoardColumn
-              key={column.status}
-              column={column}
-              onMove={onMove}
-              busy={pending}
-              isDragActive={activeCard !== null}
-              hotOnly={hotOnly}
-              onLoadMore={onLoadMoreColumn}
-              loadingMore={loadingColumn[column.status] ?? false}
-            />
-          ))}
+          {optimisticBoard.columns
+            // Hide-empty: keep a column if it has a TRUE count or an optimistically-landed card
+            // (so a drag target never vanishes mid-flight). You can't drag INTO a hidden column —
+            // same trade-off as the legacy toggle; the per-card select still reaches every stage.
+            .filter((c) => !hideEmpty || c.count > 0 || c.candidates.length > 0)
+            .map((column) => (
+              <BoardColumn
+                key={column.status}
+                column={column}
+                onMove={onMove}
+                busy={pending}
+                isDragActive={activeCard !== null}
+                hotOnly={hotOnly}
+                onLoadMore={onLoadMoreColumn}
+                loadingMore={loadingColumn[column.status] ?? false}
+              />
+            ))}
 
           <TerminalRail
             terminal={optimisticBoard.terminal}

@@ -23,10 +23,14 @@ export function BoardFilters({
   clients,
   hotOnly,
   onToggleHot,
+  hideEmpty,
+  onToggleHideEmpty,
 }: {
   clients: ClientOption[];
   hotOnly: boolean;
   onToggleHot: () => void;
+  hideEmpty: boolean;
+  onToggleHideEmpty: () => void;
 }) {
   const f = useUrlFilters();
 
@@ -56,6 +60,10 @@ export function BoardFilters({
       {/* Page-local lens — filters the loaded cards in every column (does not re-query). */}
       <FilterChip pressed={hotOnly} onToggle={onToggleHot}>
         Hot (this page)
+      </FilterChip>
+      {/* Page-local view toggle — collapses 0-count columns so live stages get the width. */}
+      <FilterChip pressed={hideEmpty} onToggle={onToggleHideEmpty}>
+        Hide empty
       </FilterChip>
 
       <FiltersPopover count={popoverCount}>
