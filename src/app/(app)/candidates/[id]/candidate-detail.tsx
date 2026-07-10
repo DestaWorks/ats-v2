@@ -32,6 +32,7 @@ export function CandidateDetail({
   taggable,
   canEditCredential,
   initialTab,
+  inModal,
 }: {
   initial: CandidateDetailDTO;
   clients: ClientOption[];
@@ -39,6 +40,8 @@ export function CandidateDetail({
   canEditCredential: boolean;
   /** Starting tab key (alerts-panel deep links); unknown/absent → first tab. */
   initialTab?: string;
+  /** True in the route-intercepted dialog rendering — the header shows Close instead of the back-link. */
+  inModal?: boolean;
 }) {
   const [candidate, setCandidate] = useState<CandidateProfileDTO>(initial.candidate);
   const [notes, setNotes] = useState<NoteDTO[]>(initial.notes);
@@ -171,6 +174,7 @@ export function CandidateDetail({
         scoring={initial.scoring}
         onMoved={onMoved}
         announce={announce}
+        inModal={inModal}
       />
 
       <DetailTabs tabs={tabs} initialKey={initialTab} />

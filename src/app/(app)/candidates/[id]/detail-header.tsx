@@ -1,22 +1,26 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { statusLabel, type CandidateStatus } from "@/lib/constants";
 import type { CandidateDetailDTO, CandidateProfileDTO } from "@/lib/validation/candidate";
 import { cn } from "@/lib/utils/cn";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { StageMover } from "./stage-mover";
 import { JourneyButton } from "./journey-modal";
-import { DeleteCandidateButton } from "./delete-candidate-button";
 import type { MovedFields } from "./lib/detail-fetch";
 
 const MS_PER_DAY = 86_400_000;
 
 /**
  * Detail header (legacy modal-header parity): serif name; the chips row (license state ·
- * credential · FILLED status pill · TRACK chip); the full-width "MOVE TO" stage-pill row; then
- * the fit line — "{pct}% match for {client}" (tone by score) + "N days in current stage".
- * `scoring` is `null` when there's nothing to score against — the match chip then hides.
+ * credential · FILLED status pill · TRACK chip); the compact "Move to" stage select; then the
+ * fit line — "{pct}% match for {client}" (tone by score) + "N days in current stage". `scoring`
+ * is `null` when there's nothing to score against — the match chip then hides. In the MODAL
+ * rendering (`inModal`) the top-right cluster is Journey + Close (legacy dialog header) and the
+ * back-link is dropped; the full page shows the back-link + Journey. (Delete is intentionally
+ * absent for now — trash entry stays on the list/board flows.)
  */
 export function DetailHeader({
   candidate,
@@ -24,13 +28,16 @@ export function DetailHeader({
   scoring,
   onMoved,
   announce,
+  inModal = false,
 }: {
   candidate: CandidateProfileDTO;
   clientName: string | null;
   scoring: CandidateDetailDTO["scoring"];
   onMoved: (fields: MovedFields) => void;
   announce: (message: string) => void;
+  inModal?: boolean;
 }) {
+  const router = useRouter();
   const daysInStage = Math.max(
     0,
     Math.floor((Date.now() - new Date(candidate.stageEnteredAt).getTime()) / MS_PER_DAY),
@@ -39,16 +46,20 @@ export function DetailHeader({
   return (
     <header className="flex flex-col gap-4 rounded-xl border border-black/5 bg-white p-6">
       <div className="flex items-center justify-between gap-3">
-        <Link href="/pipeline" className="text-sm font-semibold text-navy hover:underline">
-          ← Back to board
-        </Link>
+        {inModal ? (
+          <span aria-hidden className="text-sm" />
+        ) : (
+          <Link href="/pipeline" className="text-sm font-semibold text-navy hover:underline">
+            ← Back to board
+          </Link>
+        )}
         <div className="flex items-center gap-2">
           <JourneyButton candidateId={candidate.id} candidateName={candidate.name} />
-          <DeleteCandidateButton
-            candidateId={candidate.id}
-            candidateName={candidate.name}
-            announce={announce}
-          />
+          {inModal ? (
+            <Button type="button" size="sm" variant="secondary" onClick={() => router.back()}>
+              Close
+            </Button>
+          ) : null}
         </div>
       </div>
 

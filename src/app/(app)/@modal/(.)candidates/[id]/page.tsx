@@ -29,6 +29,7 @@ export default async function InterceptedCandidateDetail({
         taggable={taggable}
         canEditCredential={detail.canVerifyCredentials}
         initialTab={tab}
+        inModal
       />
     </RouteModal>
   );
