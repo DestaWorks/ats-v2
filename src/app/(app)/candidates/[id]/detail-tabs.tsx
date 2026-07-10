@@ -15,9 +15,17 @@ export interface TabDef {
  * to move, Home/End to jump, and focus-follows-selection (automatic activation). Each tab is wired to
  * its panel via `aria-controls`/`aria-labelledby`. Only the active panel is rendered (forms remount
  * on switch — acceptable for this slice; the seeded values come from props).
+ *
+ * `initialKey` selects the starting tab (alerts-panel deep links: `?tab=notes` / `?tab=license`);
+ * an unknown key falls back to the first tab.
  */
-export function DetailTabs({ tabs }: { tabs: TabDef[] }) {
-  const [selected, setSelected] = useState(0);
+export function DetailTabs({ tabs, initialKey }: { tabs: TabDef[]; initialKey?: string }) {
+  const [selected, setSelected] = useState(() =>
+    Math.max(
+      0,
+      tabs.findIndex((t) => t.key === initialKey),
+    ),
+  );
   const baseId = useId();
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
 

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils/cn";
 import { activeNavHref, type NavItem } from "./lib/nav";
+import { AlertsBell } from "./alerts-bell";
 import { SignOutButton } from "./sign-out-button";
 
 /**
@@ -45,6 +46,7 @@ export function AppNav({
         >
           DestaHealth ATS
         </Link>
+        <AlertsBell viewerFirstName={userName.split(" ")[0] ?? userName} />
         <button
           type="button"
           onClick={() => setMobileOpen((o) => !o)}

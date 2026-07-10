@@ -31,11 +31,14 @@ export function CandidateDetail({
   clients,
   taggable,
   canEditCredential,
+  initialTab,
 }: {
   initial: CandidateDetailDTO;
   clients: ClientOption[];
   taggable: MentionTarget[];
   canEditCredential: boolean;
+  /** Starting tab key (alerts-panel deep links); unknown/absent → first tab. */
+  initialTab?: string;
 }) {
   const [candidate, setCandidate] = useState<CandidateProfileDTO>(initial.candidate);
   const [notes, setNotes] = useState<NoteDTO[]>(initial.notes);
@@ -170,7 +173,7 @@ export function CandidateDetail({
         announce={announce}
       />
 
-      <DetailTabs tabs={tabs} />
+      <DetailTabs tabs={tabs} initialKey={initialTab} />
     </div>
   );
 }

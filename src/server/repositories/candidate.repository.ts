@@ -320,6 +320,46 @@ export const candidateRepository = {
     return rows.map(decryptRow);
   },
 
+  /**
+   * The alerts-bell derived buckets in one round of queries — viewer-scoped (`createdById`), each
+   * capped at `take` rows with its TRUE count (legacy panel: caps 5, header shows the full count).
+   * Overdue = the SAME `overdueWhere` the list/board chips use (stageEnteredAt vs per-stage SLA);
+   * new-to-review = sitting in stage 0; verification-pending = `licenseStatus: "Not Verified"`
+   * (non-null column, default covers the legacy empty case) excluding Future Pipeline. Only
+   * non-PII columns are selected → no crypto.
+   */
+  async alertBuckets(ownerId: string, take: number, now: Date, tx?: Prisma.TransactionClient) {
+    const select = {
+      id: true,
+      name: true,
+      status: true,
+      credential: true,
+      clientId: true,
+      licenseState: true,
+    } as const;
+    const bucket = async (
+      where: Prisma.CandidateWhereInput,
+      orderBy: Prisma.CandidateOrderByWithRelationInput,
+    ) => {
+      const scoped = { deletedAt: null, createdById: ownerId, ...where };
+      const [count, items] = await Promise.all([
+        db(tx).candidate.count({ where: scoped }),
+        db(tx).candidate.findMany({ where: scoped, select, orderBy, take }),
+      ]);
+      return { count, items };
+    };
+    const [overdue, newToReview, verificationPending] = await Promise.all([
+      // Longest-in-stage first — the most overdue candidates surface within the cap.
+      bucket({ AND: [overdueWhere(now)] }, { stageEnteredAt: "asc" }),
+      bucket({ status: "NEW_CANDIDATE" }, { createdAt: "desc" }),
+      bucket(
+        { licenseStatus: "Not Verified", NOT: { status: "FUTURE_PIPELINE" } },
+        { createdAt: "desc" },
+      ),
+    ]);
+    return { overdue, newToReview, verificationPending };
+  },
+
   async update(
     id: string,
     data: Prisma.CandidateUncheckedUpdateInput,

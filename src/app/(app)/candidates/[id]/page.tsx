@@ -13,11 +13,18 @@ import { CandidateDetail } from "./candidate-detail";
  * self-fetch). A NOT_FOUND (missing / soft-deleted) maps to `notFound()`. The viewer's capabilities
  * become UI hints for the client component — the server routes re-enforce them on every mutation.
  */
-export default async function CandidateDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function CandidateDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ tab?: string }>;
+}) {
   const user = await getCurrentUser();
   if (!user) redirect("/sign-in");
 
   const { id } = await params;
+  const { tab } = await searchParams;
 
   let detail;
   try {
@@ -39,6 +46,7 @@ export default async function CandidateDetailPage({ params }: { params: Promise<
       clients={clients}
       taggable={taggable}
       canEditCredential={detail.canVerifyCredentials}
+      initialTab={tab}
     />
   );
 }
