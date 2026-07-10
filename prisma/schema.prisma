@@ -32,6 +32,7 @@ model User {
   updatedAt     DateTime  @updatedAt
   sessions      Session[]
   accounts      Account[]
+  mentions      Mention[]
 
   @@map("user")
 }
@@ -296,10 +297,31 @@ model CandidateNote {
   deletedAt   DateTime?
   deletedById String?
 
+  mentions Mention[]
+
   @@index([candidateId])
   @@index([candidateId, createdAt])
   @@index([deletedAt])
   @@map("candidate_notes")
+}
+
+// One @mention notification: note author tagged `recipient` in a candidate note. Created
+// SERVER-SIDE by re-parsing the stored body (never a client-supplied recipient list — the legacy
+// `ats_notify_mention` trusted the client). `readAt` is the read state the bell/alerts panel keys
+// off (DATA-MODEL "mentions(recipient, read)"). `candidateId` is denormalized for the deep link.
+model Mention {
+  id     String        @id @default(cuid())
+  noteId String
+  note   CandidateNote @relation(fields: [noteId], references: [id], onDelete: Cascade)
+
+  candidateId String
+  recipientId String
+  recipient   User      @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+  readAt      DateTime?
+
+  @@index([recipientId, readAt])
+  @@map("mentions")
 }
 
 model StageHistory {
@@ -350,6 +372,9 @@ model SourceLead {
   outreachCount  Int       @default(0) // TRUE attempt count (unbounded; status caps at O3)
   lastOutreachAt DateTime?
   respondedAt    DateTime?
+  // Snooze: excluded from stuck-lead alerts until this date (legacy `SnoozedUntil`). Date-aware
+  // EVERYWHERE (the legacy brief checked raw truthiness — an expired snooze suppressed forever).
+  snoozedUntil   DateTime?
 
   // promote back-link (set once, on promote)
   promotedCandidateId String?    @unique

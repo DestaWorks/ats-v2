@@ -9,6 +9,7 @@
  * `viewCredentials`) — the optional fields below mirror that boundary.
  */
 import { z } from "zod";
+import type { OutreachAttemptDTO } from "./lead";
 import {
   CREDENTIALS,
   LICENSE_STATUSES,
@@ -114,30 +115,32 @@ export interface CandidateListItemDTO {
   statusLabel: string;
   licenseStatus: string;
   daysInStage: number;
+  /** When the candidate was added (ISO). Shown as the "Created" column and drives Newest/Oldest sort. */
+  createdAt: string;
   /**
    * Candidate's fit for the assigned client as a `pct` (0–100), or `null` when there's nothing to
    * score against. The list is sorted by this desc (nulls last). `null` renders as "—", not "0%".
    */
   score: number | null;
+  /** ADVISORY auto-disqualify reasons (display-only, never auto-moves). Empty when clear. */
+  dqFlags: string[];
 }
 
 /**
- * The `/candidates` browse payload — now a REAL cursor page (search-pagination wave). `candidates`
- * is one page (`LIST_PAGE`), ordered by a DB field (default `createdAt desc` — score is a displayed
- * column, NOT the paginate key); `nextCursor`/`hasMore` drive "Load more"; `total` is the true
- * filtered count (the honest "Showing N of M" denominator).
- *
- * `count`/`capped` are RETAINED for the current RSC table (backward compat): `count` = rows in this
- * page, `capped` mirrors `hasMore`. They are superseded by `total`/`hasMore` and will be dropped once
- * the list UI adopts load-more.
+ * The `/candidates` browse payload — a server OFFSET page. Every concern resolves on the server:
+ * filters (SQL `WHERE`), sort (DB `ORDER BY` for newest/oldest, in-memory fit-score sort for `fit`),
+ * and pagination (`skip`/`take`). `candidates` is exactly the requested page (`pageSize` rows, fewer
+ * on the last page); `total` is the true filtered count; `page` is clamped to `[1, totalPages]`.
+ * `hasPrev`/`hasNext` drive the pager. The client renders what it's given and only changes URL params.
  */
 export interface CandidateListDTO {
   candidates: CandidateListItemDTO[];
-  count: number;
-  capped: boolean;
-  nextCursor: string | null;
-  hasMore: boolean;
   total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  hasPrev: boolean;
+  hasNext: boolean;
 }
 
 /**
@@ -170,6 +173,11 @@ export interface CandidateDetailDTO {
   documents: DocumentSummaryDTO[];
   notes: NoteDTO[]; // already role-scoped server-side
   stageHistory: StageEventDTO[]; // recent 10, desc
+  /**
+   * Outreach history, newest first — attempts logged on the candidate PLUS the promoted-from
+   * lead's sourcing trail (shared `outreach_attempts` table). Shape shared with the lead detail.
+   */
+  outreach: OutreachAttemptDTO[];
   canVerifyCredentials: boolean;
   /**
    * Fit breakdown for the assigned client — `pct`/`score`/`max`, the soft `flags` (why it isn't 100),

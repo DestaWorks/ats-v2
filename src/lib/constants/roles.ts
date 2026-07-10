@@ -25,6 +25,7 @@ export const CAPABILITIES = [
   "viewCredentials",
   "viewCrm",
   // Admin capabilities (legacy: Admin Panel + portal config)
+  "viewAllNoteTypes", // non-internal candidate notes (legacy: literal `admin` role only)
   "manageUsers",
   "manageRoles",
   "manageAccessRequests",
@@ -44,6 +45,7 @@ const LEADERSHIP_CAPABILITIES: readonly Capability[] = [
 
 const ADMIN_CAPABILITIES: readonly Capability[] = [
   ...LEADERSHIP_CAPABILITIES,
+  "viewAllNoteTypes",
   "manageUsers",
   "manageRoles",
   "manageAccessRequests",

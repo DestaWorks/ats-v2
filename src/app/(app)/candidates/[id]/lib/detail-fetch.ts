@@ -13,6 +13,7 @@ import type {
   UpdateCandidateInput,
   VerifyLicenseInput,
 } from "@/lib/validation/candidate";
+import type { LogOutreachInput, OutreachAttemptDTO } from "@/lib/validation/lead";
 import { postJson, readFailure, type ApiResult } from "@/lib/api/client";
 
 export { messageForFailure } from "@/lib/api/client";
@@ -68,4 +69,16 @@ export async function postVerifyLicense(
 export async function postNote(id: string, input: AddNoteInput): Promise<ApiResult<NoteDTO>> {
   const res = await postJson<{ note: NoteDTO }>(`/api/candidates/${id}/notes`, input);
   return res.ok ? { ok: true, data: res.data.note } : res;
+}
+
+/** POST an outreach attempt (candidate_log_outreach). Returns the created attempt DTO. */
+export async function postOutreach(
+  id: string,
+  input: LogOutreachInput,
+): Promise<ApiResult<OutreachAttemptDTO>> {
+  const res = await postJson<{ attempt: OutreachAttemptDTO }>(
+    `/api/candidates/${id}/outreach`,
+    input,
+  );
+  return res.ok ? { ok: true, data: res.data.attempt } : res;
 }

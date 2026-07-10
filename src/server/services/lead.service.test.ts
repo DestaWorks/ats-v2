@@ -20,8 +20,16 @@ const h = vi.hoisted(() => ({
     update: vi.fn(),
     markPromoted: vi.fn(),
     softDelete: vi.fn(),
+    restore: vi.fn(),
     logOutreach: vi.fn(),
     listOutreach: vi.fn(),
+    updateOutreachAttempt: vi.fn(),
+    deleteOutreachAttempt: vi.fn(),
+    syncOutreachDenorm: vi.fn(),
+    findManyByIds: vi.fn(),
+    findManyByEmails: vi.fn(),
+    findManyByNames: vi.fn(),
+    createMany: vi.fn(),
   },
   clientRepo: { list: vi.fn() },
   userRepo: { namesByIds: vi.fn() },
@@ -346,5 +354,226 @@ describe("leadService.softDelete", () => {
     });
     expect(h.leadRepo.softDelete).not.toHaveBeenCalled();
     expect(h.writeAudit).not.toHaveBeenCalled();
+  });
+});
+
+describe("leadService.restore", () => {
+  it("clears the delete markers + audits `restore` in one txn; status untouched", async () => {
+    const deletedAt = new Date("2026-07-01T00:00:00.000Z");
+    h.leadRepo.findById.mockResolvedValue(
+      lead({ status: "Outreach 2", deletedAt, deletedById: "u9" }),
+    );
+    h.leadRepo.restore.mockResolvedValue(lead({ status: "Outreach 2" }));
+
+    const detail = await leadService.restore("l1", h.user as AuthUser);
+    expect(detail.status).toBe("Outreach 2"); // exactly as it left
+    expect(detail.deletedAt).toBeNull();
+
+    // findById must INCLUDE trashed rows (that's the whole point).
+    expect(h.leadRepo.findById.mock.calls[0]![1]).toMatchObject({ includeDeleted: true });
+    const [rid, rtx] = h.leadRepo.restore.mock.calls[0]!;
+    expect(rid).toBe("l1");
+    expect(rtx).toBe(h.fakeTx);
+
+    const [, audit] = h.writeAudit.mock.calls[0]!;
+    expect(audit).toMatchObject({
+      action: "restore",
+      entity: "source_lead",
+      entityId: "l1",
+      actor: "u1",
+      before: { deletedAt, deletedById: "u9" },
+    });
+  });
+
+  it("NOT_FOUND when missing; CONFLICT when the lead is not deleted", async () => {
+    h.leadRepo.findById.mockResolvedValue(null);
+    await expect(leadService.restore("missing", h.user as AuthUser)).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
+
+    h.leadRepo.findById.mockResolvedValue(lead()); // live lead — deletedAt null
+    await expect(leadService.restore("l1", h.user as AuthUser)).rejects.toMatchObject({
+      code: "CONFLICT",
+    });
+    expect(h.leadRepo.restore).not.toHaveBeenCalled();
+    expect(h.writeAudit).not.toHaveBeenCalled();
+  });
+});
+
+describe("leadService.snooze", () => {
+  it("sets snoozedUntil + audits `snooze`; wake (null) audits `wake`", async () => {
+    const until = new Date("2026-07-20T00:00:00.000Z");
+    h.leadRepo.findById.mockResolvedValue(lead());
+    h.leadRepo.update.mockResolvedValue(lead({ snoozedUntil: until }));
+
+    const detail = await leadService.snooze("l1", until, h.user as AuthUser);
+    expect(h.leadRepo.update).toHaveBeenCalledWith("l1", { snoozedUntil: until }, h.fakeTx);
+    expect(h.writeAudit.mock.calls[0]![1]).toMatchObject({ action: "snooze" });
+    expect(detail.snoozedUntil).toBe("2026-07-20T00:00:00.000Z");
+
+    h.leadRepo.update.mockResolvedValue(lead({ snoozedUntil: null }));
+    await leadService.snooze("l1", null, h.user as AuthUser);
+    expect(h.writeAudit.mock.calls[1]![1]).toMatchObject({ action: "wake" });
+  });
+
+  it("rejects snoozing a Promoted lead (CONFLICT); wake stays allowed", async () => {
+    h.leadRepo.findById.mockResolvedValue(lead({ status: "Promoted" }));
+    await expect(leadService.snooze("l1", new Date(), h.user as AuthUser)).rejects.toMatchObject({
+      code: "CONFLICT",
+    });
+    h.leadRepo.update.mockResolvedValue(lead({ status: "Promoted", snoozedUntil: null }));
+    await expect(leadService.snooze("l1", null, h.user as AuthUser)).resolves.toBeTruthy();
+  });
+});
+
+describe("leadService outreach edit/delete", () => {
+  it("updateOutreach patches the scoped attempt, re-syncs denorm, audits — status untouched", async () => {
+    h.leadRepo.findById.mockResolvedValue(lead({ status: "Outreach 2" }));
+    h.leadRepo.updateOutreachAttempt.mockResolvedValue(1);
+    h.leadRepo.syncOutreachDenorm.mockResolvedValue(lead({ status: "Outreach 2" }));
+
+    await leadService.updateOutreach("l1", "a1", { note: "corrected" }, h.user as AuthUser);
+    expect(h.leadRepo.updateOutreachAttempt).toHaveBeenCalledWith(
+      "l1",
+      "a1",
+      { note: "corrected" },
+      h.fakeTx,
+    );
+    expect(h.leadRepo.syncOutreachDenorm).toHaveBeenCalledWith("l1", h.fakeTx);
+    expect(h.writeAudit.mock.calls[0]![1]).toMatchObject({ action: "edit_outreach" });
+  });
+
+  it("an attempt under a DIFFERENT lead → NOT_FOUND (0-row scoped write)", async () => {
+    h.leadRepo.findById.mockResolvedValue(lead());
+    h.leadRepo.updateOutreachAttempt.mockResolvedValue(0);
+    await expect(
+      leadService.updateOutreach("l1", "not-mine", { note: "x" }, h.user as AuthUser),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("deleteOutreach removes the attempt + re-syncs; status is NOT regressed", async () => {
+    h.leadRepo.findById.mockResolvedValue(lead({ status: "Outreach 3", outreachCount: 3 }));
+    h.leadRepo.deleteOutreachAttempt.mockResolvedValue(1);
+    h.leadRepo.syncOutreachDenorm.mockResolvedValue(
+      lead({ status: "Outreach 3", outreachCount: 2 }),
+    );
+
+    const detail = await leadService.deleteOutreach("l1", "a1", h.user as AuthUser);
+    expect(h.leadRepo.deleteOutreachAttempt).toHaveBeenCalledWith("l1", "a1", h.fakeTx);
+    expect(detail.status).toBe("Outreach 3"); // never regressed by a delete
+    expect(h.writeAudit.mock.calls[0]![1]).toMatchObject({ action: "delete_outreach" });
+  });
+});
+
+describe("leadService.bulkAction", () => {
+  it("status: applies to eligible leads, SKIPS Promoted, audits per lead", async () => {
+    h.leadRepo.findManyByIds.mockResolvedValue([
+      lead({ id: "l1", status: "Sourced" }),
+      lead({ id: "l2", status: "Promoted" }),
+    ]);
+    h.leadRepo.update.mockResolvedValue(lead());
+
+    const out = await leadService.bulkAction(
+      { action: "status", ids: ["l1", "l2", "l1"], value: "Outreach 1" },
+      h.user as AuthUser,
+    );
+
+    expect(out).toEqual({ affected: 1, skipped: 1 }); // duplicate id collapsed; Promoted skipped
+    expect(h.leadRepo.update).toHaveBeenCalledTimes(1);
+    expect(h.leadRepo.update).toHaveBeenCalledWith("l1", { status: "Outreach 1" }, h.fakeTx);
+    expect(h.writeAudit.mock.calls[0]![1]).toMatchObject({
+      entityId: "l1",
+      action: "bulk_status",
+    });
+  });
+
+  it("assign validates the user exists ONCE and re-points createdById", async () => {
+    h.leadRepo.findManyByIds.mockResolvedValue([lead({ id: "l1" })]);
+    h.userRepo.namesByIds.mockResolvedValue(new Map([["u2", "Biruh"]]));
+    h.leadRepo.update.mockResolvedValue(lead());
+
+    await leadService.bulkAction(
+      { action: "assign", ids: ["l1"], value: "u2" },
+      h.user as AuthUser,
+    );
+    expect(h.leadRepo.update).toHaveBeenCalledWith("l1", { createdById: "u2" }, h.fakeTx);
+
+    h.userRepo.namesByIds.mockResolvedValue(new Map());
+    await expect(
+      leadService.bulkAction({ action: "assign", ids: ["l1"], value: "ghost" }, h.user as AuthUser),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("restore only touches actually-deleted rows", async () => {
+    h.leadRepo.findManyByIds.mockResolvedValue([
+      lead({ id: "l1", deletedAt: new Date() }),
+      lead({ id: "l2", deletedAt: null }),
+    ]);
+    h.leadRepo.restore.mockResolvedValue(lead());
+
+    const out = await leadService.bulkAction(
+      { action: "restore", ids: ["l1", "l2"] },
+      h.user as AuthUser,
+    );
+    expect(out).toEqual({ affected: 1, skipped: 1 });
+    expect(h.leadRepo.restore).toHaveBeenCalledWith("l1", h.fakeTx);
+    // restore must resolve rows INCLUDING deleted ones.
+    expect(h.leadRepo.findManyByIds).toHaveBeenCalledWith(["l1", "l2"], { includeDeleted: true });
+  });
+
+  it("outreach: logs per eligible lead with its OWN advanced status", async () => {
+    h.leadRepo.findManyByIds.mockResolvedValue([
+      lead({ id: "l1", status: "Sourced" }),
+      lead({ id: "l2", status: "Outreach 3" }),
+    ]);
+    h.leadRepo.logOutreach.mockResolvedValue({ lead: lead(), attempt: { id: "a1" } });
+
+    await leadService.bulkAction(
+      { action: "outreach", ids: ["l1", "l2"], channel: "email", note: null },
+      h.user as AuthUser,
+    );
+
+    const statuses = h.leadRepo.logOutreach.mock.calls.map((c) => c[0].status);
+    expect(statuses).toEqual(["Outreach 1", "Outreach 3"]); // advances; caps at O3
+  });
+});
+
+describe("leadService.importLeads", () => {
+  it("dedupes by email (existing + intra-batch) and by name for email-less rows", async () => {
+    h.leadRepo.findManyByEmails.mockResolvedValue([
+      { id: "x", email: "taken@x.com", name: "Taken", phone: null },
+    ]);
+    h.leadRepo.findManyByNames.mockResolvedValue([
+      { id: "y", email: null, name: "Existing Nameless", phone: null },
+    ]);
+    h.leadRepo.createMany.mockResolvedValue({ count: 2 });
+
+    const out = await leadService.importLeads(
+      {
+        rows: [
+          { name: "A", email: "taken@x.com" }, // existing email → skipped
+          { name: "B", email: "new@x.com" }, // kept
+          { name: "B2", email: "NEW@x.com" }, // intra-batch dup (case-insensitive) → skipped
+          { name: "Existing Nameless" }, // existing name → skipped
+          { name: "Fresh Nameless", clientName: "acme health" }, // kept, client resolved
+        ],
+      },
+      h.user as AuthUser,
+    );
+
+    expect(out).toEqual({ added: 2, skipped: 3 });
+    const rows = h.leadRepo.createMany.mock.calls[0]![0];
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({
+      name: "B",
+      email: "new@x.com",
+      status: "Sourced",
+      createdById: "u1",
+    });
+    expect(rows[1]).toMatchObject({ name: "Fresh Nameless", clientId: "cl1" }); // case-insensitive client match
+    expect(h.writeAudit.mock.calls[0]![1]).toMatchObject({
+      action: "bulk_import",
+      after: { added: 2, skipped: 3 },
+    });
   });
 });

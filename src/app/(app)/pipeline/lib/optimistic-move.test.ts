@@ -18,6 +18,7 @@ function card(id: string, status: CandidateCardDTO["status"], over = false): Can
     isOverdue: over,
     isStuck: over,
     score: null,
+    dqFlags: [],
   };
 }
 

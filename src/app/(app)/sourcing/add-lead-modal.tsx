@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
+import { SOURCES } from "@/lib/constants";
 import { addLeadSchema, type CreateLeadInput } from "@/lib/validation/lead";
 import { useZodForm } from "@/lib/forms/use-zod-form";
 import { messageForFailure, postJson } from "@/lib/api/client";
@@ -142,11 +143,14 @@ function AddLeadForm({
           <Input id="al-state" {...form.register("state", { setValueAs: emptyToNull })} />
         </Field>
         <Field label="Source" htmlFor="al-source" error={fieldError(form, "source")}>
-          <Input
-            id="al-source"
-            placeholder="e.g. LinkedIn, Referral"
-            {...form.register("source", { setValueAs: emptyToNull })}
-          />
+          <Select id="al-source" {...form.register("source", { setValueAs: emptyToNull })}>
+            <option value="">Select source…</option>
+            {SOURCES.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </Select>
         </Field>
         <Field label="Target client" htmlFor="al-client" error={fieldError(form, "clientId")}>
           <Select id="al-client" {...form.register("clientId", { setValueAs: emptyToNull })}>

@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
 /**
- * GET /api/candidates/list — the browse-list load-more endpoint: unauth → 401 (nothing fetched);
- * a bad filter → 422 (zod); a valid request → 200 with the `CandidateListDTO`. `sort` maps to the
- * repo orderBy; a malformed `cursor` → 400. `candidateService` is mocked (unit-tested separately);
- * auth + zod + the sort/cursor plumbing run for real off the mocked session.
+ * GET /api/candidates/list — the browse-list JSON endpoint: unauth → 401 (nothing fetched); a bad
+ * filter → 422 (zod); a valid request → 200 with the offset `CandidateListDTO`. The server resolves
+ * everything, so the route just forwards the parsed query (filters + `hot` + `sort` + `page`) to the
+ * service. `candidateService` is mocked (unit-tested separately); auth + zod run for real.
  */
 
 const h = vi.hoisted(() => ({
@@ -24,11 +24,12 @@ import { GET } from "./route";
 
 const LIST = {
   candidates: [],
-  count: 0,
-  capped: false,
-  nextCursor: null,
-  hasMore: false,
   total: 0,
+  page: 1,
+  pageSize: 25,
+  totalPages: 1,
+  hasPrev: false,
+  hasNext: false,
 };
 
 function req(query = "") {
@@ -49,36 +50,42 @@ describe("GET /api/candidates/list", () => {
   });
 
   it("422 for an invalid sort value", async () => {
-    const res = await GET(req("?sort=fit"), undefined);
+    const res = await GET(req("?sort=nope"), undefined);
     expect(res.status).toBe(422);
     expect(h.listCandidates).not.toHaveBeenCalled();
   });
 
-  it("200 and maps sort=oldest → createdAt_asc, forwards chip filters", async () => {
-    const res = await GET(req("?sort=oldest&mine=1&overdue=1"), undefined);
+  it("200 and forwards sort=oldest, chip filters, hot, and page", async () => {
+    const res = await GET(req("?sort=oldest&mine=1&overdue=1&hot=1&page=3"), undefined);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(LIST);
     const [filters] = h.listCandidates.mock.calls[0]!;
-    expect(filters).toMatchObject({ sort: "createdAt_asc", mine: true, overdue: true });
+    expect(filters).toMatchObject({
+      sort: "oldest",
+      mine: true,
+      overdue: true,
+      hot: true,
+      page: 3,
+    });
   });
 
-  it("400 on a malformed cursor", async () => {
-    const res = await GET(req("?cursor=garbage!!!"), undefined);
-    expect(res.status).toBe(400);
-    expect(h.listCandidates).not.toHaveBeenCalled();
-  });
-
-  it("decodes a valid cursor and forwards it", async () => {
-    const cursor = Buffer.from(JSON.stringify(["2026-06-01T00:00:00.000Z", "c1"])).toString(
-      "base64url",
-    );
-    const res = await GET(req(`?cursor=${cursor}`), undefined);
+  it("accepts sort=fit (the computed fit-score sort)", async () => {
+    const res = await GET(req("?sort=fit"), undefined);
     expect(res.status).toBe(200);
     const [filters] = h.listCandidates.mock.calls[0]!;
-    expect(filters.cursor).toMatchObject({
-      kind: "createdAt",
-      value: "2026-06-01T00:00:00.000Z",
-      id: "c1",
-    });
+    expect(filters.sort).toBe("fit");
+  });
+
+  it("defaults to sort=newest, page 1 when unspecified", async () => {
+    const res = await GET(req(), undefined);
+    expect(res.status).toBe(200);
+    const [filters] = h.listCandidates.mock.calls[0]!;
+    expect(filters).toMatchObject({ sort: "newest", page: 1 });
+  });
+
+  it("coerces a non-numeric page to 1", async () => {
+    await GET(req("?page=abc"), undefined);
+    const [filters] = h.listCandidates.mock.calls[0]!;
+    expect(filters.page).toBe(1);
   });
 });

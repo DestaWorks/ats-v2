@@ -15,7 +15,8 @@ export default async function ResumePage() {
 
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-6 p-6 sm:p-8">
-      <header>
+      {/* no-print: when printing the branded résumé, only the document itself lands on paper. */}
+      <header className="no-print">
         <h1 className="text-2xl font-bold text-navy">Résumé Converter</h1>
         <p className="text-sm text-gray">
           Pick the role, upload the résumé, get the finished DestaHealth profile.

@@ -3,6 +3,8 @@ import { isLeadStatus, type LeadStatus } from "@/lib/constants";
 import { getCurrentUser } from "@/server/auth/guards";
 import { leadService } from "@/server/services/lead.service";
 import { clientRepository } from "@/server/repositories/client.repository";
+import { userRepository } from "@/server/repositories/user.repository";
+import { LeadFilters } from "./lead-filters";
 import { LeadsInventory } from "./leads-inventory";
 
 /**
@@ -30,18 +32,20 @@ export default async function SourcingPage({
     rawStatus && isLeadStatus(rawStatus) ? rawStatus : undefined;
   const source = one(sp.source)?.trim() || undefined;
   const search = one(sp.search)?.trim() || undefined;
+  const showDeleted = one(sp.deleted) === "1";
 
-  const [list, clientRows] = await Promise.all([
-    leadService.list({ status, source, search }),
+  const [list, clientRows, users] = await Promise.all([
+    leadService.list({ status, source, search, includeDeleted: showDeleted }),
     clientRepository.list(),
+    userRepository.list(), // bulk "Assign owner…" options (id + display name only)
   ]);
   const clients = clientRows.map((c) => ({ id: c.id, name: c.name }));
 
   // Remount the client list whenever a SERVER filter changes so it re-seeds from page 1.
-  const listKey = [status, source, search].join("|");
+  const listKey = [status, source, search, showDeleted].join("|");
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-5 p-6">
+    <div className="flex flex-col gap-5 px-8 py-6">
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-navy">Sourcing</h1>
@@ -52,7 +56,9 @@ export default async function SourcingPage({
         </div>
       </header>
 
-      <LeadsInventory key={listKey} initial={list} clients={clients} />
+      <LeadFilters />
+
+      <LeadsInventory key={listKey} initial={list} clients={clients} users={users} />
     </div>
   );
 }

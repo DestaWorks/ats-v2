@@ -2,6 +2,7 @@ import "server-only";
 import type { Prisma } from "@/generated/prisma/client";
 import {
   ACTIVE_STATUS_CODES,
+  HOT_SCORE,
   TERMINAL_STATUS_CODES,
   hasCapability,
   isCandidateStatus,
@@ -27,12 +28,18 @@ import type {
   ColumnPageDTO,
   DashboardStatsDTO,
 } from "@/lib/validation/pipeline";
-import { encodeCursor, type ListOrderBy, type PageCursor } from "@/lib/validation/cursor";
+import { encodeCursor, type PageCursor } from "@/lib/validation/cursor";
+import { listSortToOrderBy, type ListSort } from "@/lib/validation/pipeline";
+import type { LogOutreachInput, OutreachAttemptDTO } from "@/lib/validation/lead";
 import { requireUser, type AuthUser } from "@/server/auth/guards";
 import { writeAudit } from "@/server/db/audit";
 import { withTransaction } from "@/server/db/with-transaction";
 import { candidateRepository, type CandidateRow } from "@/server/repositories/candidate.repository";
 import { clientRepository, type ClientRow } from "@/server/repositories/client.repository";
+import {
+  outreachRepository,
+  type OutreachAttemptRow,
+} from "@/server/repositories/outreach.repository";
 import { userRepository } from "@/server/repositories/user.repository";
 import {
   clientRulesRepository,
@@ -71,6 +78,13 @@ export interface SharedListFilters {
   search?: string;
   tags?: string[];
   licenseStatus?: LicenseStatus;
+  /** Equality on the candidate source (canonical `SOURCES` value). */
+  source?: string;
+  /** View-as owner — filter to candidates added by this user id. `mine` wins when both are set. */
+  ownerId?: string;
+  /** Added-date range (any time within the given UTC days, inclusive). */
+  addedFrom?: Date;
+  addedTo?: Date;
   /** "My candidates" — translated to `createdById === viewer.id` by the service. */
   mine?: boolean;
   overdue?: boolean;
@@ -82,12 +96,15 @@ export interface BoardFilters extends SharedListFilters {
   status?: CandidateStatus;
 }
 
-/** Filters accepted by the flat list read — the shared set + a DB sort + a keyset cursor. */
+/** Filters accepted by the flat list read — the shared set + a sort + the Hot filter + a 1-based page. */
 export interface ListFilters extends SharedListFilters {
   status?: CandidateStatus;
-  /** DB-backed sort (default `createdAt_desc` = Newest first). Score is NOT a paginate key. */
-  sort?: ListOrderBy;
-  cursor?: PageCursor;
+  /** `newest`/`oldest` (DB createdAt) or `fit` (computed score, desc). Default `newest`. */
+  sort?: ListSort;
+  /** Score ≥ `HOT_SCORE`. Server-side over the FULL filtered set (score is computed, not a column). */
+  hot?: boolean;
+  /** 1-based page for OFFSET pagination (clamped to `[1, totalPages]`). */
+  page?: number;
 }
 
 /**
@@ -95,6 +112,16 @@ export interface ListFilters extends SharedListFilters {
  * viewer's id server-side (the ONLY place `createdById` is set from a session, never the client).
  * `status` is threaded through separately by each caller (the list keeps it; the board strips it).
  */
+/** Widen a date to the START of its UTC day (inclusive `from` bound; mirrors audit.service). */
+function utcDayStart(d: Date): Date {
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+}
+
+/** The start of the NEXT UTC day — an exclusive upper bound that makes the `to` day inclusive. */
+function utcNextDayStart(d: Date): Date {
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1));
+}
+
 function toRepoFilters(filters: SharedListFilters, viewer: AuthUser) {
   return {
     track: filters.track,
@@ -102,18 +129,48 @@ function toRepoFilters(filters: SharedListFilters, viewer: AuthUser) {
     search: filters.search,
     tags: filters.tags,
     licenseStatus: filters.licenseStatus,
-    createdById: filters.mine ? viewer.id : undefined,
+    source: filters.source,
+    // `mine` always resolves to the SESSION user (never a client-supplied id); the explicit
+    // view-as `ownerId` filter is just a filter over data every operator can already see.
+    createdById: filters.mine ? viewer.id : filters.ownerId,
+    addedFrom: filters.addedFrom ? utcDayStart(filters.addedFrom) : undefined,
+    addedTo: filters.addedTo ? utcNextDayStart(filters.addedTo) : undefined,
     overdue: filters.overdue,
     stuck: filters.stuck,
   };
 }
 
+/** Page size for the `/candidates` browse read — one OFFSET page of the numbered-pager flat table. */
+const LIST_PAGE = 25;
+
+/** Clamp a requested 1-based page to `[1, totalPages]` and derive the pager flags for the DTO. */
+function pageMeta(total: number, requestedPage: number, pageSize: number) {
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const page = Math.min(Math.max(1, requestedPage), totalPages);
+  return { total, page, pageSize, totalPages, hasPrev: page > 1, hasNext: page < totalPages };
+}
+
 /**
- * Page size for the `/candidates` browse read — one keyset page of the flat table (OQ-5). The read
- * fetches `LIST_PAGE + 1` rows to detect `hasMore`; the DTO carries `nextCursor`/`hasMore`/`total`
- * so the UI can "Load more" through the whole (filtered) set instead of hitting an unreachable cap.
+ * Stable sort of scored rows by fit DESC, nulls last (a `null` score means "nothing to score
+ * against", so it always sinks below any real score, including a real `0`). Ties — and the whole
+ * null group — keep their incoming (DB `orderBy`) order, so `fit` is deterministic across pages.
  */
-const LIST_PAGE = 50;
+function sortByFit<T>(
+  scored: { row: T; score: number | null }[],
+): { row: T; score: number | null }[] {
+  return scored
+    .map((entry, index) => ({ entry, index }))
+    .sort((a, b) => {
+      const as = a.entry.score;
+      const bs = b.entry.score;
+      if (as === null && bs === null) return a.index - b.index;
+      if (as === null) return 1;
+      if (bs === null) return -1;
+      if (bs !== as) return bs - as;
+      return a.index - b.index;
+    })
+    .map((e) => e.entry);
+}
 
 /**
  * Per-column page size for the board (OQ-5). Each active column ships one keyset page of at most
@@ -179,6 +236,16 @@ function scoreFor(row: CandidateRow, rulesByClient: Map<string, ClientRules>): n
 }
 
 /**
+ * ADVISORY auto-disqualify reasons for a row (board card / list row indicator — mirrors the detail
+ * scoring block). License-based reasons apply with or without a client; the state-mismatch check
+ * needs the assigned client's rules. Display-only — NEVER mutates status (that stays a human move).
+ */
+function dqFor(row: CandidateRow, rulesByClient: Map<string, ClientRules>): string[] {
+  const rules = row.clientId ? (rulesByClient.get(row.clientId) ?? null) : null;
+  return getAutoDisqualify(toRuleCandidate(row), rules);
+}
+
+/**
  * Project a raw candidate row onto the client-safe `CandidateCardDTO`. Runs through
  * `toCandidateDTO` first (the PII boundary) — the card type omits `licenseNumber` entirely, so
  * it can never reach a card regardless of viewer role. Timing is derived from `stageEnteredAt`;
@@ -190,6 +257,7 @@ function toCard(
   clientNames: Map<string, string>,
   now: Date,
   score: number | null,
+  dqFlags: string[],
 ): CandidateCardDTO {
   const dto = toCandidateDTO(row, viewer);
   const status = dto.status as CandidateStatus;
@@ -208,6 +276,7 @@ function toCard(
     isOverdue: isOverdue(status, dto.stageEnteredAt, now),
     isStuck: isStuck(dto.stageEnteredAt, now),
     score,
+    dqFlags,
   };
 }
 
@@ -222,6 +291,7 @@ function toListItem(
   clientNames: Map<string, string>,
   now: Date,
   score: number | null,
+  dqFlags: string[],
 ): CandidateListItemDTO {
   const dto = toCandidateDTO(row, viewer);
   const status = dto.status as CandidateStatus;
@@ -235,7 +305,27 @@ function toListItem(
     statusLabel: statusLabel(status),
     licenseStatus: dto.licenseStatus,
     daysInStage: getDaysInStage(dto.stageEnteredAt, now),
+    createdAt: dto.createdAt.toISOString(),
     score,
+    dqFlags,
+  };
+}
+
+/**
+ * Project a shared `outreach_attempts` row onto the wire DTO (mirrors the lead service's private
+ * mapper — kept local because lead.service imports candidateService, so importing back would cycle).
+ */
+function toOutreachDTO(
+  row: OutreachAttemptRow,
+  actorNames: Map<string, string>,
+): OutreachAttemptDTO {
+  return {
+    id: row.id,
+    channel: row.channel as OutreachAttemptDTO["channel"],
+    at: row.at.toISOString(),
+    note: row.note,
+    actorId: row.actorId,
+    actorName: actorNames.get(row.actorId) ?? null,
   };
 }
 
@@ -499,13 +589,17 @@ export const candidateService = {
     const candidate = await candidateRepository.findById(id);
     if (!candidate) throw new AppError("NOT_FOUND", "Candidate not found");
 
-    const [documents, notes, history, clients, rulesRows] = await Promise.all([
+    const [documents, notes, history, clients, rulesRows, outreachRows] = await Promise.all([
       documentRepository.listByCandidate(id),
       noteRepository.listByCandidate(id),
       stageHistoryRepository.listByCandidate(id),
       clientRepository.list(),
       clientRulesRepository.list(),
+      outreachRepository.listForCandidate(id),
     ]);
+    // Attempt actors → display names in ONE batched read (mirrors the lead detail; no N+1).
+    const outreachActors = await userRepository.namesByIds(outreachRows.map((a) => a.actorId));
+    const outreach = outreachRows.map((a) => toOutreachDTO(a, outreachActors));
 
     const clientName = candidate.clientId
       ? (new Map(clients.map((c) => [c.id, c.name])).get(candidate.clientId) ?? null)
@@ -537,9 +631,44 @@ export const candidateService = {
       documents: documents.map((d) => toDocumentSummaryDTO(toDocumentDTO(d, viewer))),
       notes: visibleNotes(notes, viewer).map(toNoteDTO),
       stageHistory: history.slice(0, 10).map(toStageEventDTO),
+      outreach,
       canVerifyCredentials: hasCapability(viewer.role, "viewCredentials"),
       scoring,
     };
+  },
+
+  /**
+   * Log one outreach attempt on a CANDIDATE (`candidate_log_outreach` parity — the lead-side twin
+   * lives in `lead.service.logOutreach`). Open to any operator. In one transaction: insert the
+   * attempt (shared `outreach_attempts` table), bump the candidate's denormalized counter, and
+   * audit. Returns the fresh attempt DTO (actor name resolved) for in-place prepend.
+   */
+  async logOutreach(
+    id: string,
+    input: LogOutreachInput,
+    user: AuthUser,
+  ): Promise<OutreachAttemptDTO> {
+    const existing = await candidateRepository.findById(id);
+    if (!existing) throw new AppError("NOT_FOUND", "Candidate not found");
+    const attempt = await withTransaction(async (tx) => {
+      const created = await outreachRepository.createForCandidate(
+        id,
+        { channel: input.channel, note: input.note ?? null, actorId: user.id },
+        tx,
+      );
+      await candidateRepository.incrementOutreach(id, tx);
+      await writeAudit(tx, {
+        entity: "candidate",
+        entityId: id,
+        actor: user.id,
+        action: "log_outreach",
+        before: null,
+        after: { channel: input.channel, attemptId: created.id },
+      });
+      return created;
+    });
+    const actorNames = await userRepository.namesByIds([attempt.actorId]);
+    return toOutreachDTO(attempt, actorNames);
   },
 
   /**
@@ -579,41 +708,71 @@ export const candidateService = {
   },
 
   /**
-   * Read the `/candidates` browse list — a flat, PII-gated, CURSOR-PAGINATED table (distinct from
-   * the funnel board). AuthZ is the caller's (RSC `getCurrentUser()` / route `requireUser()`);
+   * Read the `/candidates` browse list — a flat, PII-gated, server OFFSET-paginated table (distinct
+   * from the funnel board). AuthZ is the caller's (RSC `getCurrentUser()` / route `requireUser()`);
    * `viewer` drives the PII gate (`toCandidateDTO` omits `licenseNumber`) AND resolves `mine`.
    *
-   * Pagination: fetches `LIST_PAGE + 1` rows so `hasMore` is exact, ordered by a DB field (default
-   * `createdAt desc`). There is DELIBERATELY NO global score sort — score is computed + returned per
-   * row (a displayed column), but the page ORDER is the DB order; a page-local "fit" re-order is a
-   * UI concern. `total` is a true filtered count for an honest "Showing N of M". `clientName` is
-   * resolved via a one-shot in-memory join over the small `clients` table (as `listBoard` does).
+   * EVERYTHING resolves server-side. Two execution paths, one contract:
+   *  - **DB path** (`newest`/`oldest`, no Hot): cheap SQL — `count` + a `skip`/`take` `ORDER BY
+   *    createdAt` page. Score is computed only for the page's rows (a displayed column).
+   *  - **Score path** (`fit` sort OR Hot filter): score is COMPUTED per client-rules, not a DB
+   *    column, so it can't be an SQL `ORDER BY`/`WHERE`. We load the full filtered set (ordered by a
+   *    stable DB base), score it, apply Hot (≥ `HOT_SCORE`) and/or the fit sort in memory, then slice
+   *    the requested page. Fine at ATS scale (hundreds–low-thousands); always fresh (rules stay data).
+   *
+   * `total` is the true post-filter count (the Hot filter's denominator is the in-memory count).
+   * `page` is clamped to `[1, totalPages]`. `clientName` is a one-shot in-memory join over `clients`.
    */
   async listCandidates(filters: ListFilters = {}, viewer: AuthUser): Promise<CandidateListDTO> {
     const now = new Date();
-    const orderBy: ListOrderBy = filters.sort ?? "createdAt_desc";
+    const sort: ListSort = filters.sort ?? "newest";
+    const hot = filters.hot ?? false;
+    const requestedPage = Math.max(1, filters.page ?? 1);
+    const baseOrder = listSortToOrderBy(sort);
     const repoFilters = { ...toRepoFilters(filters, viewer), status: filters.status };
-    const [rows, total, clients, rulesRows] = await Promise.all([
-      candidateRepository.list({
-        ...repoFilters,
-        cursor: filters.cursor,
-        orderBy,
-        take: LIST_PAGE + 1,
-        now,
-      }),
-      candidateRepository.count({ ...repoFilters, now }),
+
+    const [clients, rulesRows] = await Promise.all([
       clientRepository.list(),
       clientRulesRepository.list(),
     ]);
-    const hasMore = rows.length > LIST_PAGE;
-    const page = hasMore ? rows.slice(0, LIST_PAGE) : rows;
     const clientNames = new Map(clients.map((c) => [c.id, c.name]));
     const rulesByClient = buildRulesMap(clients, rulesRows);
-    const candidates = page.map((row) =>
-      toListItem(row, viewer, clientNames, now, scoreFor(row, rulesByClient)),
+
+    // DB path — sort is DB-native and Hot is off, so paginate in SQL.
+    if (sort !== "fit" && !hot) {
+      const total = await candidateRepository.count({ ...repoFilters, now });
+      const meta = pageMeta(total, requestedPage, LIST_PAGE);
+      const rows = await candidateRepository.list({
+        ...repoFilters,
+        orderBy: baseOrder,
+        skip: (meta.page - 1) * LIST_PAGE,
+        take: LIST_PAGE,
+        now,
+      });
+      const candidates = rows.map((row) =>
+        toListItem(
+          row,
+          viewer,
+          clientNames,
+          now,
+          scoreFor(row, rulesByClient),
+          dqFor(row, rulesByClient),
+        ),
+      );
+      return { candidates, ...meta };
+    }
+
+    // Score path — Hot and/or fit need the computed score across the WHOLE filtered set.
+    const allRows = await candidateRepository.list({ ...repoFilters, orderBy: baseOrder, now });
+    let scored = allRows.map((row) => ({ row, score: scoreFor(row, rulesByClient) }));
+    if (hot) scored = scored.filter((s) => s.score !== null && s.score >= HOT_SCORE);
+    if (sort === "fit") scored = sortByFit(scored);
+    const meta = pageMeta(scored.length, requestedPage, LIST_PAGE);
+    const pageRows = scored.slice((meta.page - 1) * LIST_PAGE, meta.page * LIST_PAGE);
+    const candidates = pageRows.map((s) =>
+      toListItem(s.row, viewer, clientNames, now, s.score, dqFor(s.row, rulesByClient)),
     );
-    const nextCursor = hasMore ? encodeCursor(page[page.length - 1]!, orderBy) : null;
-    return { candidates, count: candidates.length, capped: hasMore, hasMore, nextCursor, total };
+    return { candidates, ...meta };
   },
 
   /**
@@ -650,7 +809,16 @@ export const candidateService = {
     const rulesByClient = buildRulesMap(clients, rulesRows);
     const now = new Date();
     const attention = staleRows
-      .map((row) => toCard(row, viewer, clientNames, now, scoreFor(row, rulesByClient)))
+      .map((row) =>
+        toCard(
+          row,
+          viewer,
+          clientNames,
+          now,
+          scoreFor(row, rulesByClient),
+          dqFor(row, rulesByClient),
+        ),
+      )
       .filter((c) => c.isOverdue || c.isStuck);
 
     return { total, active, terminal: total - active, columns, attention };
@@ -704,7 +872,14 @@ export const candidateService = {
     const clientNames = new Map(clients.map((c) => [c.id, c.name]));
     const rulesByClient = buildRulesMap(clients, rulesRows);
     const cardOf = (row: CandidateRow) =>
-      toCard(row, viewer, clientNames, now, scoreFor(row, rulesByClient));
+      toCard(
+        row,
+        viewer,
+        clientNames,
+        now,
+        scoreFor(row, rulesByClient),
+        dqFor(row, rulesByClient),
+      );
 
     const countByStatus = new Map<string, number>();
     for (const g of grouped) countByStatus.set(g.status, g._count._all);
@@ -777,7 +952,14 @@ export const candidateService = {
     const hasMore = rows.length > BOARD_PAGE;
     const pageRows = hasMore ? rows.slice(0, BOARD_PAGE) : rows;
     const items = pageRows.map((row) =>
-      toCard(row, viewer, clientNames, now, scoreFor(row, rulesByClient)),
+      toCard(
+        row,
+        viewer,
+        clientNames,
+        now,
+        scoreFor(row, rulesByClient),
+        dqFor(row, rulesByClient),
+      ),
     );
     const nextCursor = hasMore
       ? encodeCursor(pageRows[pageRows.length - 1]!, "createdAt_desc")

@@ -14,13 +14,15 @@ import { Spinner } from "./spinner";
  * spinner + label pattern) and disables the button.
  */
 
-export type ButtonVariant = "primary" | "success" | "secondary" | "danger" | "ghost" | "link";
+export type ButtonVariant =
+  "primary" | "success" | "purple" | "secondary" | "danger" | "ghost" | "link";
 export type ButtonSize = "xs" | "sm" | "md" | "lg";
 
 /** Color + font-weight + hover per variant (padding/text-size come from `size`). */
 const VARIANT: Record<ButtonVariant, string> = {
   primary: "bg-navy text-white font-semibold hover:opacity-90",
   success: "bg-green text-white font-semibold hover:opacity-90",
+  purple: "bg-purple text-white font-semibold hover:opacity-90",
   secondary: "border border-black/15 text-charcoal font-semibold hover:bg-black/5",
   danger: "bg-red text-white font-semibold hover:opacity-90",
   ghost: "text-gray font-medium hover:bg-black/5",

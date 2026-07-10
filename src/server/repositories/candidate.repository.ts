@@ -31,7 +31,13 @@ export interface CandidateListFilters {
   tags?: string[];
   /** Equality on the license verification status. */
   licenseStatus?: LicenseStatus;
-  /** "My candidates" — the service resolves this from `viewer.id` (never a client-supplied id). */
+  /** Equality on the candidate source (canonical `SOURCES` value). */
+  source?: string;
+  /** Inclusive `createdAt` lower bound (service passes a UTC day start). */
+  addedFrom?: Date;
+  /** EXCLUSIVE `createdAt` upper bound (service passes the start of the day AFTER the `to` date). */
+  addedTo?: Date;
+  /** Owner filter — the service resolves `mine` to `viewer.id`, or passes an explicit owner id. */
   createdById?: string;
   /** In-stage > `STUCK_DAYS` and still active (order < 9). Threshold predicate (§3.1). */
   stuck?: boolean;
@@ -42,8 +48,10 @@ export interface CandidateListFilters {
   cursor?: PageCursor;
   /** Sort order + keyset direction (default `createdAt_desc`). */
   orderBy?: ListOrderBy;
-  /** Cap the number of rows returned (callers pass `pageSize + 1` to detect `hasMore`). */
+  /** Cap the number of rows returned (keyset callers pass `pageSize + 1`; offset callers pass `pageSize`). */
   take?: number;
+  /** OFFSET skip for numbered pagination (the list uses `skip`/`take`; the board uses keyset). */
+  skip?: number;
   /** "Now" for the `stuck`/`overdue` thresholds — the service passes one clock per request. */
   now?: Date;
 }
@@ -87,7 +95,14 @@ export function buildCandidateWhere(
   if (filters.track) where.track = filters.track;
   if (filters.clientId) where.clientId = filters.clientId;
   if (filters.licenseStatus) where.licenseStatus = filters.licenseStatus;
+  if (filters.source) where.source = filters.source;
   if (filters.createdById) where.createdById = filters.createdById;
+  if (filters.addedFrom || filters.addedTo) {
+    where.createdAt = {
+      ...(filters.addedFrom ? { gte: filters.addedFrom } : {}),
+      ...(filters.addedTo ? { lt: filters.addedTo } : {}),
+    };
+  }
   if (filters.tags && filters.tags.length > 0) where.tags = { hasSome: filters.tags };
   if (filters.search) {
     and.push({
@@ -249,6 +264,7 @@ export const candidateRepository = {
     const rows = await db(tx).candidate.findMany({
       where,
       orderBy: orderByClause(orderBy),
+      ...(filters.skip !== undefined ? { skip: filters.skip } : {}),
       ...(filters.take !== undefined ? { take: filters.take } : {}),
     });
     return rows.map(decryptRow);
@@ -304,6 +320,46 @@ export const candidateRepository = {
     return rows.map(decryptRow);
   },
 
+  /**
+   * The alerts-bell derived buckets in one round of queries — viewer-scoped (`createdById`), each
+   * capped at `take` rows with its TRUE count (legacy panel: caps 5, header shows the full count).
+   * Overdue = the SAME `overdueWhere` the list/board chips use (stageEnteredAt vs per-stage SLA);
+   * new-to-review = sitting in stage 0; verification-pending = `licenseStatus: "Not Verified"`
+   * (non-null column, default covers the legacy empty case) excluding Future Pipeline. Only
+   * non-PII columns are selected → no crypto.
+   */
+  async alertBuckets(ownerId: string, take: number, now: Date, tx?: Prisma.TransactionClient) {
+    const select = {
+      id: true,
+      name: true,
+      status: true,
+      credential: true,
+      clientId: true,
+      licenseState: true,
+    } as const;
+    const bucket = async (
+      where: Prisma.CandidateWhereInput,
+      orderBy: Prisma.CandidateOrderByWithRelationInput,
+    ) => {
+      const scoped = { deletedAt: null, createdById: ownerId, ...where };
+      const [count, items] = await Promise.all([
+        db(tx).candidate.count({ where: scoped }),
+        db(tx).candidate.findMany({ where: scoped, select, orderBy, take }),
+      ]);
+      return { count, items };
+    };
+    const [overdue, newToReview, verificationPending] = await Promise.all([
+      // Longest-in-stage first — the most overdue candidates surface within the cap.
+      bucket({ AND: [overdueWhere(now)] }, { stageEnteredAt: "asc" }),
+      bucket({ status: "NEW_CANDIDATE" }, { createdAt: "desc" }),
+      bucket(
+        { licenseStatus: "Not Verified", NOT: { status: "FUTURE_PIPELINE" } },
+        { createdAt: "desc" },
+      ),
+    ]);
+    return { overdue, newToReview, verificationPending };
+  },
+
   async update(
     id: string,
     data: Prisma.CandidateUncheckedUpdateInput,
@@ -328,6 +384,15 @@ export const candidateRepository = {
         data: { deletedAt: null, deletedById: null },
       }),
     );
+  },
+
+  /** Bump the denormalized outreach counter (candidate_log_outreach writes ride the same tx). */
+  incrementOutreach(id: string, tx?: Prisma.TransactionClient) {
+    return db(tx).candidate.update({
+      where: { id },
+      data: { outreachAttempts: { increment: 1 } },
+      select: { id: true, outreachAttempts: true }, // no PII columns → no crypto round-trip
+    });
   },
 
   /**

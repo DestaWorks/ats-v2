@@ -2,11 +2,17 @@ import { describe, expect, it } from "vitest";
 import { formatRelativeTime, noteTypeLabel, noteTypeTone } from "./notes-format";
 
 describe("noteTypeTone / noteTypeLabel", () => {
-  it("maps note types to tones and labels", () => {
-    expect(noteTypeTone("external")).toBe("navy");
+  it("maps the 5 legacy note types to tones and labels", () => {
     expect(noteTypeTone("internal")).toBe("neutral");
-    expect(noteTypeLabel("external")).toBe("External");
-    expect(noteTypeLabel("internal")).toBe("Internal");
+    expect(noteTypeTone("client")).toBe("amber");
+    expect(noteTypeTone("call")).toBe("success");
+    expect(noteTypeTone("email")).toBe("navy");
+    expect(noteTypeTone("text")).toBe("navy");
+    expect(noteTypeLabel("internal")).toBe("Note");
+    expect(noteTypeLabel("client")).toBe("Client note");
+    expect(noteTypeLabel("call")).toBe("Call log");
+    expect(noteTypeLabel("email")).toBe("Email log");
+    expect(noteTypeLabel("text")).toBe("Text log");
   });
 });
 

@@ -34,6 +34,14 @@ export interface LeadListItemDTO {
   targetClientName: string | null;
   promotedCandidateId: string | null; // present once promoted → the row links to the candidate
   createdAt: string; // ISO
+  /** Soft-delete marker (ISO) — non-null only in the "Show deleted" view; drives row styling + Restore. */
+  deletedAt: string | null;
+  /**
+   * Snoozed-until date (ISO) or null. A snooze in the FUTURE excludes the lead from stuck-lead
+   * alerts and shows the 💤 badge; a past date counts as awake everywhere (the legacy brief
+   * treated any non-empty value as snoozed forever — fixed here).
+   */
+  snoozedUntil: string | null;
 }
 
 /** The `/sourcing` list payload — one keyset page + the honest filtered total. */
@@ -113,6 +121,89 @@ export const respondSchema = z
 export type RespondInput = z.infer<typeof respondSchema>;
 
 /**
+ * Body for `POST /api/leads/:id/snooze` (`source_lead_snooze` parity). A date sets the snooze
+ * (excluded from stuck alerts until then); `null` wakes the lead (legacy sent `until: ""`).
+ */
+export const snoozeLeadSchema = z
+  .object({
+    until: z.coerce.date().nullable(),
+  })
+  .strict();
+export type SnoozeLeadInput = z.infer<typeof snoozeLeadSchema>;
+
+/**
+ * Body for `PATCH /api/leads/:id/outreach/:attemptId` (`source_lead_edit_outreach` parity).
+ * Partial — only supplied fields change. Editing NEVER touches the lead's status (legacy hid the
+ * status selector on edit).
+ */
+export const updateOutreachSchema = z
+  .object({
+    channel: z.enum(OUTREACH_CHANNELS).optional(),
+    note: z.string().trim().max(2000).nullish(),
+    at: z.coerce.date().optional(),
+  })
+  .strict()
+  .refine((v) => Object.values(v).some((x) => x !== undefined), {
+    message: "Provide at least one field to update",
+  });
+export type UpdateOutreachInput = z.infer<typeof updateOutreachSchema>;
+
+const bulkIds = z.array(z.string().min(1)).min(1).max(200);
+
+/**
+ * Body for `POST /api/leads/bulk` (`source_lead_bulk_action` + `source_lead_undelete` +
+ * `source_lead_bulk_log_outreach` parity, one discriminated endpoint). Promoted leads are
+ * SKIPPED server-side by status/outreach actions (their lifecycle is closed); delete/restore
+ * skip rows already in the target state. The response reports `{ affected, skipped }`.
+ */
+export const bulkLeadActionSchema = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("delete"), ids: bulkIds }).strict(),
+  z.object({ action: z.literal("restore"), ids: bulkIds }).strict(),
+  z.object({ action: z.literal("status"), ids: bulkIds, value: z.enum(LEAD_STATUSES) }).strict(),
+  z.object({ action: z.literal("assign"), ids: bulkIds, value: z.string().min(1) }).strict(),
+  z
+    .object({ action: z.literal("client"), ids: bulkIds, value: z.string().min(1).nullable() })
+    .strict(),
+  z
+    .object({
+      action: z.literal("outreach"),
+      ids: bulkIds,
+      channel: z.enum(OUTREACH_CHANNELS),
+      note: z.string().trim().max(2000).nullish(),
+    })
+    .strict(),
+]);
+export type BulkLeadActionInput = z.infer<typeof bulkLeadActionSchema>;
+
+/** One CSV/paste import row. The CLIENT sanitizes free-form cells (bad emails/URLs → null) before
+ * posting; `clientName` is resolved to a client id server-side (case-insensitive, unknown → null). */
+export const importLeadRowSchema = z
+  .object({
+    name: z.string().trim().min(1).max(200),
+    email: z.string().trim().email().max(200).nullish(),
+    phone: z.string().trim().max(50).nullish(),
+    linkedinUrl: z.string().trim().url().max(500).nullish(),
+    credential: z.string().trim().max(120).nullish(),
+    state: z.string().trim().max(60).nullish(),
+    source: z.string().trim().max(120).nullish(),
+    tags: z.array(z.string().trim().min(1).max(60)).max(20).optional(),
+    notes: z.string().trim().max(5000).nullish(),
+    clientName: z.string().trim().max(200).nullish(),
+    status: z.enum(LEAD_STATUSES).optional(),
+  })
+  .strict();
+export type ImportLeadRow = z.infer<typeof importLeadRowSchema>;
+
+/** Body for `POST /api/leads/import` — ONE chunk (the client sends ≤200-row chunks sequentially,
+ * `source_lead_bulk_import` parity). Dedup is SERVER-side: lowercased email, else name+phone. */
+export const importLeadsSchema = z
+  .object({
+    rows: z.array(importLeadRowSchema).min(1).max(200),
+  })
+  .strict();
+export type ImportLeadsInput = z.infer<typeof importLeadsSchema>;
+
+/**
  * Query for `GET /api/leads/list` (the `/sourcing` inventory load-more). All filters optional;
  * `status` is a `LeadStatus`, `source` is free text, `search` matches name/email, and `cursor` is the
  * opaque keyset cursor (decoded at the route → 400 if malformed).
@@ -121,6 +212,8 @@ export const leadListQuerySchema = z.object({
   status: z.enum(LEAD_STATUSES).optional(),
   source: z.string().trim().min(1).max(120).optional(),
   search: z.string().trim().min(1).max(100).optional(),
+  /** "Show deleted" — include soft-deleted leads (they render flagged, with a Restore action). */
+  deleted: z.preprocess((v) => v === "1" || v === "true", z.boolean()).optional(),
   cursor: z.string().min(1).optional(),
 });
 export type LeadListQuery = z.infer<typeof leadListQuerySchema>;

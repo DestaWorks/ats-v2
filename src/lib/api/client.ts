@@ -47,6 +47,14 @@ export function messageForFailure(failure: ApiFailure): string {
   return failure.message || "Something went wrong. Please try again.";
 }
 
+/** GET `url` as JSON, returning the parsed response `T` on success or an `ApiFailure`. */
+export async function getJson<T>(url: string): Promise<ApiResult<T>> {
+  const res = await fetch(url);
+  if (!res.ok) return { ok: false, failure: await readFailure(res) };
+  const data = (await res.json()) as T;
+  return { ok: true, data };
+}
+
 /** POST `body` as JSON to `url`, returning the parsed response `T` on success or an `ApiFailure`. */
 export async function postJson<T>(url: string, body: unknown): Promise<ApiResult<T>> {
   const res = await fetch(url, {

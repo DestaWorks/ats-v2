@@ -15,9 +15,17 @@ export interface TabDef {
  * to move, Home/End to jump, and focus-follows-selection (automatic activation). Each tab is wired to
  * its panel via `aria-controls`/`aria-labelledby`. Only the active panel is rendered (forms remount
  * on switch — acceptable for this slice; the seeded values come from props).
+ *
+ * `initialKey` selects the starting tab (alerts-panel deep links: `?tab=notes` / `?tab=license`);
+ * an unknown key falls back to the first tab.
  */
-export function DetailTabs({ tabs }: { tabs: TabDef[] }) {
-  const [selected, setSelected] = useState(0);
+export function DetailTabs({ tabs, initialKey }: { tabs: TabDef[]; initialKey?: string }) {
+  const [selected, setSelected] = useState(() =>
+    Math.max(
+      0,
+      tabs.findIndex((t) => t.key === initialKey),
+    ),
+  );
   const baseId = useId();
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
@@ -53,10 +61,11 @@ export function DetailTabs({ tabs }: { tabs: TabDef[] }) {
 
   return (
     <div className="flex flex-col gap-4">
+      {/* Legacy-parity pill tabs: a light track, the active tab a FILLED dark pill. */}
       <div
         role="tablist"
         aria-label="Candidate detail"
-        className="flex gap-1 border-b border-black/10"
+        className="inline-flex flex-wrap gap-1 self-start rounded-full bg-black/[0.04] p-1"
       >
         {tabs.map((tab, i) => {
           const active = i === selected;
@@ -75,10 +84,9 @@ export function DetailTabs({ tabs }: { tabs: TabDef[] }) {
               onClick={() => setSelected(i)}
               onKeyDown={onKeyDown}
               className={cn(
-                "-mb-px rounded-t-md border-b-2 px-4 py-2 text-sm font-semibold transition",
-                active
-                  ? "border-navy text-navy"
-                  : "border-transparent text-gray hover:text-charcoal",
+                "rounded-full px-4 py-1.5 text-sm font-semibold transition",
+                "focus-visible:ring-2 focus-visible:ring-navy focus-visible:outline-none",
+                active ? "bg-charcoal text-white shadow-sm" : "text-gray hover:text-charcoal",
               )}
             >
               {tab.label}

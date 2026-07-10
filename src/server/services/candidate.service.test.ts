@@ -21,7 +21,9 @@ const h = vi.hoisted(() => ({
     restore: vi.fn(),
     purge: vi.fn(),
     listDeleted: vi.fn(),
+    incrementOutreach: vi.fn(),
   },
+  outreachRepo: { listForCandidate: vi.fn(), createForCandidate: vi.fn() },
   stageRepo: { add: vi.fn(), listByCandidate: vi.fn() },
   docRepo: { listByCandidate: vi.fn() },
   noteRepo: { listByCandidate: vi.fn(), create: vi.fn() },
@@ -45,6 +47,9 @@ vi.mock("@/server/repositories/document.repository", () => ({
 vi.mock("@/server/repositories/note.repository", () => ({ noteRepository: h.noteRepo }));
 vi.mock("@/server/repositories/client.repository", () => ({ clientRepository: h.clientRepo }));
 vi.mock("@/server/repositories/user.repository", () => ({ userRepository: h.userRepo }));
+vi.mock("@/server/repositories/outreach.repository", () => ({
+  outreachRepository: h.outreachRepo,
+}));
 vi.mock("@/server/repositories/client-rules.repository", async () => {
   const actual = await vi.importActual<
     typeof import("@/server/repositories/client-rules.repository")
@@ -112,6 +117,10 @@ beforeEach(() => {
   h.candidateRepo.restore.mockReset();
   h.candidateRepo.purge.mockReset();
   h.candidateRepo.listDeleted.mockReset();
+  h.candidateRepo.incrementOutreach.mockReset();
+  h.outreachRepo.listForCandidate.mockReset();
+  h.outreachRepo.createForCandidate.mockReset();
+  h.outreachRepo.listForCandidate.mockResolvedValue([]);
   h.userRepo.namesByIds.mockReset();
   h.userRepo.namesByIds.mockResolvedValue(new Map());
   h.stageRepo.add.mockReset();
@@ -631,6 +640,109 @@ describe("candidateService.getCandidateDetail", () => {
     h.clientRulesRepo.list.mockResolvedValue([]); // no rules seeded
     const detail = await candidateService.getCandidateDetail("c1", h.owner as AuthUser);
     expect(detail.scoring).toBeNull();
+  });
+
+  it("includes the outreach log (serialized, actor names batch-resolved)", async () => {
+    h.candidateRepo.findById.mockResolvedValue(fullCandidate());
+    h.outreachRepo.listForCandidate.mockResolvedValue([
+      {
+        id: "a1",
+        channel: "phone",
+        at: new Date("2026-07-01T12:00:00.000Z"),
+        note: "Left a voicemail",
+        actorId: "u1",
+      },
+      {
+        id: "a2",
+        channel: "email",
+        at: new Date("2026-06-20T09:00:00.000Z"),
+        note: null,
+        actorId: "u2",
+      },
+    ]);
+    h.userRepo.namesByIds.mockResolvedValue(new Map([["u1", "Test User"]]));
+
+    const detail = await candidateService.getCandidateDetail("c1", h.owner as AuthUser);
+
+    expect(h.outreachRepo.listForCandidate).toHaveBeenCalledWith("c1");
+    expect(h.userRepo.namesByIds).toHaveBeenCalledWith(["u1", "u2"]);
+    expect(detail.outreach).toEqual([
+      {
+        id: "a1",
+        channel: "phone",
+        at: "2026-07-01T12:00:00.000Z",
+        note: "Left a voicemail",
+        actorId: "u1",
+        actorName: "Test User",
+      },
+      {
+        id: "a2",
+        channel: "email",
+        at: "2026-06-20T09:00:00.000Z",
+        note: null,
+        actorId: "u2",
+        actorName: null, // unknown/removed actor → null, never a crash
+      },
+    ]);
+  });
+});
+
+describe("candidateService.logOutreach", () => {
+  it("inserts the attempt + bumps the counter + audits atomically (same tx)", async () => {
+    h.candidateRepo.findById.mockResolvedValue(fullCandidate());
+    h.outreachRepo.createForCandidate.mockResolvedValue({
+      id: "a1",
+      channel: "phone",
+      at: new Date("2026-07-10T10:00:00.000Z"),
+      note: "Left a voicemail",
+      actorId: "u1",
+    });
+    h.userRepo.namesByIds.mockResolvedValue(new Map([["u1", "Test User"]]));
+
+    const dto = await candidateService.logOutreach(
+      "c1",
+      { channel: "phone", note: "Left a voicemail" },
+      h.user as AuthUser,
+    );
+
+    // insert — actor from the SESSION user, on the shared tx.
+    expect(h.outreachRepo.createForCandidate).toHaveBeenCalledWith(
+      "c1",
+      { channel: "phone", note: "Left a voicemail", actorId: "u1" },
+      h.fakeTx,
+    );
+    // denormalized counter bumped in the same tx.
+    expect(h.candidateRepo.incrementOutreach).toHaveBeenCalledWith("c1", h.fakeTx);
+    // audit row (same tx) — channel + attempt id, no note PII in the audit payload.
+    expect(h.writeAudit).toHaveBeenCalledTimes(1);
+    const [atx, params] = h.writeAudit.mock.calls[0]!;
+    expect(atx).toBe(h.fakeTx);
+    expect(params).toMatchObject({
+      entity: "candidate",
+      entityId: "c1",
+      actor: "u1",
+      action: "log_outreach",
+      after: { channel: "phone", attemptId: "a1" },
+    });
+    // returned DTO is serialized + actor-name-resolved for in-place prepend.
+    expect(dto).toEqual({
+      id: "a1",
+      channel: "phone",
+      at: "2026-07-10T10:00:00.000Z",
+      note: "Left a voicemail",
+      actorId: "u1",
+      actorName: "Test User",
+    });
+  });
+
+  it("throws NOT_FOUND (no writes) when the candidate is missing/soft-deleted", async () => {
+    h.candidateRepo.findById.mockResolvedValue(null);
+    await expect(
+      candidateService.logOutreach("missing", { channel: "email" }, h.user as AuthUser),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(h.outreachRepo.createForCandidate).not.toHaveBeenCalled();
+    expect(h.candidateRepo.incrementOutreach).not.toHaveBeenCalled();
+    expect(h.writeAudit).not.toHaveBeenCalled();
   });
 });
 

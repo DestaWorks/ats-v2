@@ -17,14 +17,13 @@ import { toast } from "sonner";
 import { statusLabel, type CandidateStatus } from "@/lib/constants";
 import type { BoardResponse, CandidateCardDTO } from "@/lib/validation/pipeline";
 import { Spinner } from "@/components/ui/spinner";
-import { FilterChip } from "../lib/filter-chip";
-import { mergePage } from "../candidates/lib/list-pagination";
+import { mergePage } from "../lib/list-local";
 import { BoardColumn } from "./board-column";
 import { BoardFilters, type ClientOption } from "./board-filters";
+import { CandidateCardContent } from "./candidate-card";
 import { TerminalRail } from "./terminal-rail";
 import { applyBoardMove } from "./lib/optimistic-move";
 import { fetchBoard, fetchColumnPage, postMove } from "./lib/board-fetch";
-import { TRACK_BADGE } from "./lib/status-style";
 
 function findCard(board: BoardResponse, id: string): CandidateCardDTO | null {
   for (const col of board.columns) {
@@ -37,9 +36,11 @@ function findCard(board: BoardResponse, id: string): CandidateCardDTO | null {
 export function PipelineBoard({
   initial,
   clients,
+  owners,
 }: {
   initial: BoardResponse;
   clients: ClientOption[];
+  owners: { id: string; name: string }[];
 }) {
   const searchParams = useSearchParams();
   const [board, setBoard] = useState(initial);
@@ -56,6 +57,9 @@ export function PipelineBoard({
   const includeTerminal = useRef(false);
   const [terminalLoading, setTerminalLoading] = useState(false);
   const [hotOnly, setHotOnly] = useState(false);
+  // Page-local "Hide empty stages" (legacy pHideEmpty) — collapses 0-count columns so live stages
+  // get the width. A column stays visible if an optimistic move just landed a card in it.
+  const [hideEmpty, setHideEmpty] = useState(false);
   const [loadingColumn, setLoadingColumn] = useState<Record<string, boolean>>({});
 
   const sensors = useSensors(
@@ -181,14 +185,14 @@ export function PipelineBoard({
 
   return (
     <div className="flex flex-col gap-4">
-      <BoardFilters clients={clients} />
-
-      {/* Page-local "Hot" lens — filters the loaded cards in every column (does not re-query). */}
-      <div className="flex flex-wrap items-center gap-2">
-        <FilterChip pressed={hotOnly} onToggle={() => setHotOnly((v) => !v)}>
-          Hot (this page)
-        </FilterChip>
-      </div>
+      <BoardFilters
+        clients={clients}
+        owners={owners}
+        hotOnly={hotOnly}
+        onToggleHot={() => setHotOnly((v) => !v)}
+        hideEmpty={hideEmpty}
+        onToggleHideEmpty={() => setHideEmpty((v) => !v)}
+      />
 
       {error ? (
         <p role="alert" className="rounded-md bg-red/5 px-3 py-2 text-sm text-red">
@@ -214,18 +218,23 @@ export function PipelineBoard({
             </div>
           ) : null}
 
-          {optimisticBoard.columns.map((column) => (
-            <BoardColumn
-              key={column.status}
-              column={column}
-              onMove={onMove}
-              busy={pending}
-              isDragActive={activeCard !== null}
-              hotOnly={hotOnly}
-              onLoadMore={onLoadMoreColumn}
-              loadingMore={loadingColumn[column.status] ?? false}
-            />
-          ))}
+          {optimisticBoard.columns
+            // Hide-empty: keep a column if it has a TRUE count or an optimistically-landed card
+            // (so a drag target never vanishes mid-flight). You can't drag INTO a hidden column —
+            // same trade-off as the legacy toggle; the per-card select still reaches every stage.
+            .filter((c) => !hideEmpty || c.count > 0 || c.candidates.length > 0)
+            .map((column) => (
+              <BoardColumn
+                key={column.status}
+                column={column}
+                onMove={onMove}
+                busy={pending}
+                isDragActive={activeCard !== null}
+                hotOnly={hotOnly}
+                onLoadMore={onLoadMoreColumn}
+                loadingMore={loadingColumn[column.status] ?? false}
+              />
+            ))}
 
           <TerminalRail
             terminal={optimisticBoard.terminal}
@@ -236,17 +245,9 @@ export function PipelineBoard({
 
         <DragOverlay>
           {activeCard ? (
-            <div className="w-72 rounded-lg border border-navy/30 bg-white p-3 shadow-lg">
-              <div className="flex items-center justify-between gap-2">
-                <span className="font-serif text-sm font-semibold text-charcoal">
-                  {activeCard.name}
-                </span>
-                <span
-                  className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${TRACK_BADGE[activeCard.track].className}`}
-                >
-                  {TRACK_BADGE[activeCard.track].label}
-                </span>
-              </div>
+            // Full card body so the drag preview matches the real card (shared CandidateCardContent).
+            <div className="w-72 cursor-grabbing rounded-lg border border-navy/30 border-l-4 border-l-navy/50 bg-white p-3 shadow-lg">
+              <CandidateCardContent card={activeCard} />
             </div>
           ) : null}
         </DragOverlay>

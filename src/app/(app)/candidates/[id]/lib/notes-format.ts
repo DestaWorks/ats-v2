@@ -2,17 +2,26 @@
  * Note-formatting helpers (pure, unit-tested). Presentation only — the note BODY is never touched
  * here (it's rendered as escaped React text in the component; D-3 bans HTML for note text).
  */
-import type { NoteType } from "@/lib/constants";
+import { NOTE_TYPE_LABELS, type NoteType } from "@/lib/constants";
 import type { BadgeTone } from "@/components/ui/badge";
 
-/** Badge tone for a note type: external (client-facing) reads as navy, internal as neutral. */
+/** Badge tone per note type (legacy palette intent: client=amber, call=green, email/text=navy). */
+const NOTE_TYPE_TONES: Record<NoteType, BadgeTone> = {
+  internal: "neutral",
+  client: "amber",
+  call: "success",
+  email: "navy",
+  text: "navy",
+};
+
+/** Badge tone for a note type. */
 export function noteTypeTone(noteType: NoteType): BadgeTone {
-  return noteType === "external" ? "navy" : "neutral";
+  return NOTE_TYPE_TONES[noteType] ?? "neutral";
 }
 
-/** Display label for a note type. */
+/** Display label for a note type (legacy picker labels). */
 export function noteTypeLabel(noteType: NoteType): string {
-  return noteType === "external" ? "External" : "Internal";
+  return NOTE_TYPE_LABELS[noteType] ?? NOTE_TYPE_LABELS.internal;
 }
 
 const MIN = 60_000;

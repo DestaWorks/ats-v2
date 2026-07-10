@@ -142,6 +142,14 @@ export const leadRepository = {
     });
   },
 
+  /** Clear the soft-delete markers — the lead returns exactly as it was (status untouched). */
+  restore(id: string, tx?: Prisma.TransactionClient) {
+    return db(tx).sourceLead.update({
+      where: { id },
+      data: { deletedAt: null, deletedById: null },
+    });
+  },
+
   /**
    * Log one outreach attempt: insert the `OutreachAttempt` row AND apply the lead's denormalized
    * outreach columns (the computed next `status`, `outreachCount +1`, `lastOutreachAt`) in the same
@@ -176,6 +184,78 @@ export const leadRepository = {
       where: { leadId },
       orderBy: { at: "desc" },
     });
+  },
+
+  /**
+   * Patch one attempt, scoped to its lead (`updateMany` — an id belonging to another lead is a
+   * 0-row no-op, never a cross-lead write). Returns the affected count.
+   */
+  async updateOutreachAttempt(
+    leadId: string,
+    attemptId: string,
+    data: { channel?: string; note?: string | null; at?: Date },
+    tx?: Prisma.TransactionClient,
+  ) {
+    const { count } = await db(tx).outreachAttempt.updateMany({
+      where: { id: attemptId, leadId },
+      data,
+    });
+    return count;
+  },
+
+  /** Delete one attempt, scoped to its lead. Returns the affected count. */
+  async deleteOutreachAttempt(leadId: string, attemptId: string, tx?: Prisma.TransactionClient) {
+    const { count } = await db(tx).outreachAttempt.deleteMany({
+      where: { id: attemptId, leadId },
+    });
+    return count;
+  },
+
+  /**
+   * Recompute the lead's denormalized outreach columns from the attempts table (after an edit or
+   * delete changed the underlying rows). Status is intentionally NOT touched (legacy parity —
+   * deleting an attempt never regresses the funnel; that stays a manual status change).
+   */
+  async syncOutreachDenorm(leadId: string, tx?: Prisma.TransactionClient) {
+    const agg = await db(tx).outreachAttempt.aggregate({
+      where: { leadId },
+      _count: { _all: true },
+      _max: { at: true },
+    });
+    return db(tx).sourceLead.update({
+      where: { id: leadId },
+      data: { outreachCount: agg._count._all, lastOutreachAt: agg._max.at },
+    });
+  },
+
+  /** Non-deleted leads matching any of the given ids (bulk actions resolve their working set here). */
+  findManyByIds(ids: string[], opts?: { includeDeleted?: boolean }, tx?: Prisma.TransactionClient) {
+    return db(tx).sourceLead.findMany({
+      where: { id: { in: ids }, ...(opts?.includeDeleted ? {} : { deletedAt: null }) },
+    });
+  },
+
+  /** Existing (incl. soft-deleted) leads matching any of these lowercased emails — import dedup. */
+  findManyByEmails(emails: string[], tx?: Prisma.TransactionClient) {
+    if (emails.length === 0) return Promise.resolve([]);
+    return db(tx).sourceLead.findMany({
+      where: { email: { in: emails, mode: "insensitive" } },
+      select: { id: true, email: true, name: true, phone: true },
+    });
+  },
+
+  /** Existing leads matching any of these names (import dedup fallback for email-less rows). */
+  findManyByNames(names: string[], tx?: Prisma.TransactionClient) {
+    if (names.length === 0) return Promise.resolve([]);
+    return db(tx).sourceLead.findMany({
+      where: { name: { in: names, mode: "insensitive" } },
+      select: { id: true, email: true, name: true, phone: true },
+    });
+  },
+
+  /** Bulk insert (import) — rows are pre-deduped by the service. */
+  createMany(rows: Prisma.SourceLeadCreateManyInput[], tx?: Prisma.TransactionClient) {
+    return db(tx).sourceLead.createMany({ data: rows });
   },
 
   /**

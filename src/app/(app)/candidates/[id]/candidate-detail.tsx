@@ -8,6 +8,8 @@ import type {
   UpdateCandidateInput,
   VerifyLicenseInput,
 } from "@/lib/validation/candidate";
+import type { OutreachAttemptDTO } from "@/lib/validation/lead";
+import type { MentionTarget } from "@/lib/mentions";
 import { DetailHeader } from "./detail-header";
 import { DetailTabs, type TabDef } from "./detail-tabs";
 import { DetailsTab, type ClientOption } from "./details-tab";
@@ -15,6 +17,7 @@ import { ScoringCard } from "./scoring-card";
 import { LicenseTab } from "./license-tab";
 import { ResumeTab } from "./resume-tab";
 import { NotesTab } from "./notes-tab";
+import { OutreachTab } from "./outreach-tab";
 import type { MovedFields } from "./lib/detail-fetch";
 
 /**
@@ -26,14 +29,20 @@ import type { MovedFields } from "./lib/detail-fetch";
 export function CandidateDetail({
   initial,
   clients,
+  taggable,
   canEditCredential,
+  initialTab,
 }: {
   initial: CandidateDetailDTO;
   clients: ClientOption[];
+  taggable: MentionTarget[];
   canEditCredential: boolean;
+  /** Starting tab key (alerts-panel deep links); unknown/absent → first tab. */
+  initialTab?: string;
 }) {
   const [candidate, setCandidate] = useState<CandidateProfileDTO>(initial.candidate);
   const [notes, setNotes] = useState<NoteDTO[]>(initial.notes);
+  const [outreach, setOutreach] = useState<OutreachAttemptDTO[]>(initial.outreach);
   const [announcement, setAnnouncement] = useState("");
 
   const clientNameById = useMemo(() => new Map(clients.map((c) => [c.id, c.name])), [clients]);
@@ -83,6 +92,12 @@ export function CandidateDetail({
     setNotes((prev) => [note, ...prev]);
   }
 
+  function onOutreachLogged(attempt: OutreachAttemptDTO) {
+    setOutreach((prev) => [attempt, ...prev]);
+    // Keep the profile's persisted counter in step (the server incremented it in the same tx).
+    setCandidate((prev) => ({ ...prev, outreachAttempts: prev.outreachAttempts + 1 }));
+  }
+
   const tabs: TabDef[] = [
     {
       key: "details",
@@ -121,7 +136,25 @@ export function CandidateDetail({
       key: "notes",
       label: `Notes (${notes.length})`,
       panel: (
-        <NotesTab candidateId={candidate.id} notes={notes} onAdded={onAdded} announce={announce} />
+        <NotesTab
+          candidateId={candidate.id}
+          notes={notes}
+          taggable={taggable}
+          onAdded={onAdded}
+          announce={announce}
+        />
+      ),
+    },
+    {
+      key: "outreach",
+      label: `Outreach (${outreach.length})`,
+      panel: (
+        <OutreachTab
+          candidateId={candidate.id}
+          attempts={outreach}
+          onLogged={onOutreachLogged}
+          announce={announce}
+        />
       ),
     },
   ];
@@ -140,7 +173,7 @@ export function CandidateDetail({
         announce={announce}
       />
 
-      <DetailTabs tabs={tabs} />
+      <DetailTabs tabs={tabs} initialKey={initialTab} />
     </div>
   );
 }

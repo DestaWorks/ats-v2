@@ -1,17 +1,21 @@
 "use client";
 
 import Link from "next/link";
+import { statusLabel, type CandidateStatus } from "@/lib/constants";
 import type { CandidateDetailDTO, CandidateProfileDTO } from "@/lib/validation/candidate";
+import { cn } from "@/lib/utils/cn";
 import { Badge } from "@/components/ui/badge";
-import { ScoreBadge } from "@/components/ui/score-badge";
 import { StageMover } from "./stage-mover";
 import { DeleteCandidateButton } from "./delete-candidate-button";
 import type { MovedFields } from "./lib/detail-fetch";
 
+const MS_PER_DAY = 86_400_000;
+
 /**
- * Detail header: name, credential · track · license-state chips, the client-fit `ScoreBadge`,
- * client, and the stage-mover. `scoring` is `null` when there's nothing to score against — the
- * badge then renders a muted "—".
+ * Detail header (legacy modal-header parity): serif name; the chips row (license state ·
+ * credential · FILLED status pill · TRACK chip); the full-width "MOVE TO" stage-pill row; then
+ * the fit line — "{pct}% match for {client}" (tone by score) + "N days in current stage".
+ * `scoring` is `null` when there's nothing to score against — the match chip then hides.
  */
 export function DetailHeader({
   candidate,
@@ -26,36 +30,71 @@ export function DetailHeader({
   onMoved: (fields: MovedFields) => void;
   announce: (message: string) => void;
 }) {
+  const daysInStage = Math.max(
+    0,
+    Math.floor((Date.now() - new Date(candidate.stageEnteredAt).getTime()) / MS_PER_DAY),
+  );
+
   return (
     <header className="flex flex-col gap-4 rounded-xl border border-black/5 bg-white p-6">
-      <div>
+      <div className="flex items-center justify-between gap-3">
         <Link href="/pipeline" className="text-sm font-semibold text-navy hover:underline">
           ← Back to board
         </Link>
+        <DeleteCandidateButton
+          candidateId={candidate.id}
+          candidateName={candidate.name}
+          announce={announce}
+        />
       </div>
 
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex flex-col gap-2">
-          <h1 className="font-serif text-2xl font-bold text-charcoal">{candidate.name}</h1>
-          <div className="flex flex-wrap items-center gap-2">
-            {candidate.credential ? <Badge tone="navy">{candidate.credential}</Badge> : null}
-            <Badge tone="neutral">{candidate.track}</Badge>
-            {candidate.licenseState ? <Badge tone="neutral">{candidate.licenseState}</Badge> : null}
-            <ScoreBadge score={scoring ? scoring.pct : null} />
-          </div>
-          <p className="text-sm text-charcoal">
-            {clientName ?? <span className="text-gray italic">Unassigned</span>}
-          </p>
+      <div className="flex flex-col gap-2.5">
+        <h1 className="font-serif text-2xl font-bold text-charcoal">{candidate.name}</h1>
+        <div className="flex flex-wrap items-center gap-2">
+          {candidate.licenseState ? <Badge tone="navy">{candidate.licenseState}</Badge> : null}
+          {candidate.credential ? <Badge tone="success">{candidate.credential}</Badge> : null}
+          {/* Current stage — the FILLED pill (legacy). */}
+          <span className="rounded-full bg-navy px-3 py-0.5 text-[11px] font-semibold text-white">
+            {statusLabel(candidate.status as CandidateStatus)}
+          </span>
+          <span className="rounded-full border border-green/40 bg-green/5 px-3 py-0.5 text-[11px] font-semibold tracking-wide text-green uppercase">
+            {candidate.track} track
+          </span>
         </div>
+      </div>
 
-        <div className="flex flex-col items-end gap-3">
-          <StageMover candidate={candidate} onMoved={onMoved} announce={announce} />
-          <DeleteCandidateButton
-            candidateId={candidate.id}
-            candidateName={candidate.name}
-            announce={announce}
-          />
-        </div>
+      <StageMover candidate={candidate} onMoved={onMoved} announce={announce} />
+
+      <div className="flex flex-wrap items-center gap-2">
+        {scoring ? (
+          <span
+            className={cn(
+              "rounded-lg px-3 py-1.5 text-sm",
+              scoring.pct >= 70
+                ? "bg-green/10 text-charcoal"
+                : scoring.pct >= 40
+                  ? "bg-orange/10 text-charcoal"
+                  : "bg-red/10 text-charcoal",
+            )}
+          >
+            <span
+              className={cn(
+                "font-bold",
+                scoring.pct >= 70 ? "text-green" : scoring.pct >= 40 ? "text-orange" : "text-red",
+              )}
+            >
+              {scoring.pct}% match
+            </span>{" "}
+            {clientName ? `for ${clientName}` : null}
+          </span>
+        ) : (
+          <span className="rounded-lg bg-black/[0.04] px-3 py-1.5 text-sm text-gray">
+            {clientName ?? "Unassigned"}
+          </span>
+        )}
+        <span className="rounded-lg bg-black/[0.04] px-3 py-1.5 text-sm text-charcoal">
+          {daysInStage} day{daysInStage === 1 ? "" : "s"} in current stage
+        </span>
       </div>
     </header>
   );
