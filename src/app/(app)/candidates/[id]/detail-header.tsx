@@ -45,26 +45,27 @@ export function DetailHeader({
 
   return (
     <header className="flex flex-col gap-4 rounded-xl border border-black/5 bg-white p-6">
-      <div className="flex items-center justify-between gap-3">
-        {inModal ? (
-          <span aria-hidden className="text-sm" />
-        ) : (
+      {!inModal ? (
+        <div>
           <Link href="/pipeline" className="text-sm font-semibold text-navy hover:underline">
             ← Back to board
           </Link>
-        )}
-        <div className="flex items-center gap-2">
-          <JourneyButton candidateId={candidate.id} candidateName={candidate.name} />
-          {inModal ? (
-            <Button type="button" size="sm" variant="secondary" onClick={() => router.back()}>
-              Close
-            </Button>
-          ) : null}
         </div>
-      </div>
+      ) : null}
 
       <div className="flex flex-col gap-2.5">
-        <h1 className="font-serif text-2xl font-bold text-charcoal">{candidate.name}</h1>
+        {/* Legacy dialog header: name on the left, Journey (+ Close in the modal) on the right. */}
+        <div className="flex items-start justify-between gap-3">
+          <h1 className="font-serif text-2xl font-bold text-charcoal">{candidate.name}</h1>
+          <div className="flex shrink-0 items-center gap-2">
+            <JourneyButton candidateId={candidate.id} candidateName={candidate.name} />
+            {inModal ? (
+              <Button type="button" size="sm" variant="secondary" onClick={() => router.back()}>
+                Close
+              </Button>
+            ) : null}
+          </div>
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           {candidate.licenseState ? <Badge tone="navy">{candidate.licenseState}</Badge> : null}
           {candidate.credential ? <Badge tone="success">{candidate.credential}</Badge> : null}

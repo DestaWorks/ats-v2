@@ -108,11 +108,8 @@ export function DetailsTab({
   if (!editing) {
     return (
       <div className="flex flex-col gap-4">
-        <div className="flex justify-end">
-          <Button type="button" size="sm" variant="secondary" onClick={() => setEditing(true)}>
-            Edit
-          </Button>
-        </div>
+        {/* Edit affordance intentionally removed for now (form + save path kept below —
+            restoring is a one-line `setEditing(true)` trigger wherever it lands next). */}
         <div className="grid gap-4 sm:grid-cols-2">
           <Card className="p-4">
             <h3 className="mb-2 text-xs font-bold tracking-wide text-gray uppercase">Contact</h3>

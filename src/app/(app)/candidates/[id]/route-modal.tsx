@@ -53,7 +53,7 @@ export function RouteModal({ children }: { children: ReactNode }) {
         aria-label="Candidate detail"
         tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-4xl rounded-2xl bg-surface/95 shadow-2xl focus:outline-none"
+        className="relative w-full max-w-4xl rounded-2xl bg-surface shadow-2xl focus:outline-none"
       >
         {children}
       </div>

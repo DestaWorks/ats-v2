@@ -40,6 +40,9 @@
 
 html,
 body {
+  /* Light-only app: without this, OS dark mode styles NATIVE controls (select popups,
+     scrollbars, date pickers) dark against our light chrome. */
+  color-scheme: light;
   background: var(--color-surface);
   color: var(--color-charcoal);
   font-family:
