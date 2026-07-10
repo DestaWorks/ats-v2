@@ -2,21 +2,20 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { LEAD_STATUSES, leadStatusTone, type LeadStatus } from "@/lib/constants";
+import { LEAD_STATUSES, type LeadStatus } from "@/lib/constants";
 import type { BulkLeadActionInput, LeadListDTO, LeadListItemDTO } from "@/lib/validation/lead";
 import { messageForFailure } from "@/lib/api/client";
-import { formatDate } from "@/lib/utils/format-date";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Select } from "@/components/ui/select";
-import { Table, Td } from "@/components/ui/table";
+import { Table } from "@/components/ui/table";
+import { pageHrefFor, pageItems } from "../lib/pager";
 import { AddLeadButton, type ClientOption } from "./add-lead-modal";
 import { ImportLeadsButton } from "./import-leads-modal";
-import { LeadRowActions, isSnoozed } from "./lead-row-actions";
-import { fetchLeadsPage, postBulkAction } from "./lib/lead-fetch";
+import { LeadRow } from "./lead-row";
+import { postBulkAction } from "./lib/lead-fetch";
 
 /** A teammate option for the bulk "Assign owner…" select. */
 export interface UserOption {
@@ -28,13 +27,13 @@ export interface UserOption {
 const UNDO_SECONDS = 30;
 
 /**
- * Client wrapper for the `/sourcing` inventory. The RSC SSR-renders page 1 as `initial`; this
- * component owns the accumulated rows: keyset "Load more", in-place mutation results, and the
- * bulk toolbar (`source_lead_bulk_action` parity): select-all covers the LOADED rows; bulk
- * status/assign/client/outreach skip Promoted leads server-side; bulk delete confirms, then
- * offers a 30-second UNDO (bulk restore). Snoozed rows render pale-yellow with a 💤 badge
- * (date-aware). After a bulk action the list re-seeds page 1 (statuses/rows may have changed
- * beyond what's loaded).
+ * Client wrapper for the `/sourcing` inventory. The RSC SSR-renders one OFFSET page as
+ * `initial` (numbered pager in the table footer — identical mechanics to the candidates list);
+ * this component applies mutation results in place and re-seeds whenever the server page
+ * changes. Bulk toolbar (`source_lead_bulk_action` parity): select-all covers the PAGE's rows;
+ * bulk status/assign/client/outreach skip Promoted leads server-side; bulk delete confirms,
+ * then offers a 30-second UNDO (bulk restore). Snoozed rows render pale-yellow with a 💤 badge
+ * (date-aware). After a bulk action / import the RSC re-runs (`router.refresh`).
  */
 export function LeadsInventory({
   initial,
@@ -45,13 +44,11 @@ export function LeadsInventory({
   clients: ClientOption[];
   users: UserOption[];
 }) {
+  const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const [rows, setRows] = useState<LeadListItemDTO[]>(initial.leads);
-  const [nextCursor, setNextCursor] = useState<string | null>(initial.nextCursor);
-  const [hasMore, setHasMore] = useState<boolean>(initial.hasMore);
   const [total, setTotal] = useState<number>(initial.total);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState("");
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [bulkPending, setBulkPending] = useState(false);
@@ -81,38 +78,17 @@ export function LeadsInventory({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [idsKey]);
 
-  async function loadMore() {
-    if (!nextCursor || loading) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const page = await fetchLeadsPage(searchParams, nextCursor);
-      const seen = new Set(rows.map((r) => r.id));
-      const merged = [...rows, ...page.leads.filter((r) => !seen.has(r.id))];
-      const added = merged.length - rows.length;
-      setRows(merged);
-      setNextCursor(page.nextCursor);
-      setHasMore(page.hasMore);
-      setAnnouncement(`Loaded ${added} more. Showing ${merged.length} of ${total}.`);
-    } catch {
-      setError("Couldn't load more leads. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  }
+  // Re-seed from the server page whenever the RSC re-renders (pager navigation, router.refresh
+  // after bulk actions/imports) — local state stays authoritative between server reads.
+  useEffect(() => {
+    setRows(initial.leads);
+    setTotal(initial.total);
+    setSelected(new Set());
+  }, [initial]);
 
-  /** Re-seed page 1 for the current filters (after bulk actions / imports change many rows). */
-  async function reload() {
-    try {
-      const page = await fetchLeadsPage(searchParams, null);
-      setRows(page.leads);
-      setNextCursor(page.nextCursor);
-      setHasMore(page.hasMore);
-      setTotal(page.total);
-      setSelected(new Set());
-    } catch {
-      setError("Couldn't refresh the list. Please reload the page.");
-    }
+  /** Re-run the RSC for the current URL (after bulk actions / imports change many rows). */
+  function reload() {
+    router.refresh();
   }
 
   function prependLead(lead: LeadListItemDTO) {
@@ -161,7 +137,7 @@ export function LeadsInventory({
     if (input.action === "delete") {
       setUndo({ ids: [...input.ids], secondsLeft: UNDO_SECONDS });
     }
-    await reload();
+    reload();
   }
 
   function bulkDelete() {
@@ -179,7 +155,7 @@ export function LeadsInventory({
       toast.success(
         `Restored ${result.data.affected} lead${result.data.affected === 1 ? "" : "s"}`,
       );
-      await reload();
+      reload();
     } else {
       toast.error(messageForFailure(result.failure));
     }
@@ -201,7 +177,7 @@ export function LeadsInventory({
               );
             }
           }}
-          className="w-40"
+          style={{ width: "11rem" }}
         >
           <option value="">Change status…</option>
           {LEAD_STATUSES.filter((s) => s !== "Promoted").map((s) => (
@@ -222,7 +198,7 @@ export function LeadsInventory({
               );
             }
           }}
-          className="w-40"
+          style={{ width: "11rem" }}
         >
           <option value="">Assign owner…</option>
           {users.map((u) => (
@@ -247,7 +223,7 @@ export function LeadsInventory({
               );
             }
           }}
-          className="w-40"
+          style={{ width: "11rem" }}
         >
           <option value="">Change client…</option>
           <option value="__none">(no client)</option>
@@ -272,16 +248,77 @@ export function LeadsInventory({
       </div>
     ) : null;
 
+  // Numbered pager INSIDE the table footer — identical mechanics to the candidates list
+  // (`<Link>`s changing `?page=`; the RSC re-reads and this component re-seeds via the effect).
+  const { page, pageSize, totalPages, hasPrev, hasNext } = initial;
+  const from = (page - 1) * pageSize + 1;
+  const to = (page - 1) * pageSize + rows.length;
+  const pHref = (n: number) => pageHrefFor(pathname, searchParams, n);
+  const pagerFooter = (
+    <>
+      <span className="text-xs text-gray tabular-nums">
+        Showing {rows.length === 0 ? 0 : from}–{to} of {total}
+      </span>
+      <nav aria-label="Pagination" className="ml-auto flex items-center gap-1">
+        {hasPrev ? (
+          <Link
+            href={pHref(page - 1)}
+            rel="prev"
+            className="rounded-md border border-black/15 px-2.5 py-1 text-sm font-semibold text-charcoal transition hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-navy focus-visible:outline-none"
+          >
+            ← Prev
+          </Link>
+        ) : (
+          <span className="rounded-md border border-black/10 px-2.5 py-1 text-sm font-semibold text-gray/50">
+            ← Prev
+          </span>
+        )}
+        {pageItems(page, totalPages).map((item, i) =>
+          item === "gap" ? (
+            <span key={`gap-${i}`} className="px-1.5 text-sm text-gray">
+              …
+            </span>
+          ) : item === page ? (
+            <span
+              key={item}
+              aria-current="page"
+              className="min-w-8 rounded-md bg-navy px-2.5 py-1 text-center text-sm font-semibold text-white tabular-nums"
+            >
+              {item}
+            </span>
+          ) : (
+            <Link
+              key={item}
+              href={pHref(item)}
+              aria-label={`Page ${item}`}
+              className="min-w-8 rounded-md px-2.5 py-1 text-center text-sm font-semibold text-charcoal tabular-nums transition hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-navy focus-visible:outline-none"
+            >
+              {item}
+            </Link>
+          ),
+        )}
+        {hasNext ? (
+          <Link
+            href={pHref(page + 1)}
+            rel="next"
+            className="rounded-md border border-black/15 px-2.5 py-1 text-sm font-semibold text-charcoal transition hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-navy focus-visible:outline-none"
+          >
+            Next →
+          </Link>
+        ) : (
+          <span className="rounded-md border border-black/10 px-2.5 py-1 text-sm font-semibold text-gray/50">
+            Next →
+          </span>
+        )}
+      </nav>
+    </>
+  );
+
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <span className="text-xs text-gray">
-          Showing {rows.length} of {total}
-        </span>
-        <div className="flex items-center gap-2">
-          <ImportLeadsButton onImported={() => void reload()} />
-          <AddLeadButton clients={clients} onAdded={prependLead} size="sm" variant="success" />
-        </div>
+      <div className="flex flex-wrap items-center justify-end gap-3">
+        <ImportLeadsButton onImported={reload} />
+        <AddLeadButton clients={clients} onAdded={prependLead} size="sm" variant="success" />
       </div>
 
       <div aria-live="polite" className="sr-only">
@@ -308,6 +345,7 @@ export function LeadsInventory({
         <Table
           caption="Source leads"
           toolbar={bulkBar}
+          footer={pagerFooter}
           columns={[
             <input
               key="all"
@@ -318,96 +356,27 @@ export function LeadsInventory({
               onChange={toggleAll}
             />,
             "Name",
-            "Contact",
+            "Credential",
+            "Location",
+            "Client",
             "Status",
-            "Outreach",
-            "Last outreach",
-            "Source",
+            "Last touch",
+            "Owner",
             "Actions",
           ]}
         >
-          {rows.map((lead) => {
-            const snoozed = isSnoozed(lead.snoozedUntil);
-            return (
-              <tr
-                key={lead.id}
-                className={
-                  lead.deletedAt
-                    ? "bg-red/5 opacity-70 transition"
-                    : snoozed
-                      ? "bg-orange/5 transition hover:bg-orange/10"
-                      : "transition hover:bg-black/[0.03]"
-                }
-              >
-                <Td>
-                  <input
-                    type="checkbox"
-                    aria-label={`Select ${lead.name}`}
-                    className="accent-navy"
-                    checked={selected.has(lead.id)}
-                    onChange={() => toggle(lead.id)}
-                  />
-                </Td>
-                <Td>
-                  <span className="font-semibold text-navy">{lead.name}</span>
-                  {lead.deletedAt ? (
-                    <Badge tone="danger" size="sm" className="ml-1.5 align-middle">
-                      Deleted
-                    </Badge>
-                  ) : null}
-                  {snoozed ? (
-                    <Badge tone="amber" size="sm" className="ml-1.5 align-middle">
-                      💤 until {lead.snoozedUntil!.slice(0, 10)}
-                    </Badge>
-                  ) : null}
-                  {lead.credential ? (
-                    <span className="block text-xs text-gray">{lead.credential}</span>
-                  ) : null}
-                </Td>
-                <Td>
-                  {lead.email ? <span className="block text-charcoal">{lead.email}</span> : null}
-                  {lead.phone ? <span className="block text-gray">{lead.phone}</span> : null}
-                  {!lead.email && !lead.phone ? <span className="text-gray">—</span> : null}
-                </Td>
-                <Td>
-                  {lead.status === "Promoted" && lead.promotedCandidateId ? (
-                    <Link
-                      href={`/candidates/${lead.promotedCandidateId}`}
-                      className="focus-visible:ring-2 focus-visible:ring-navy focus-visible:outline-none"
-                    >
-                      <Badge tone={leadStatusTone(lead.status)}>{lead.status} →</Badge>
-                    </Link>
-                  ) : (
-                    <Badge tone={leadStatusTone(lead.status)}>{lead.status}</Badge>
-                  )}
-                </Td>
-                <Td>{lead.outreachCount}</Td>
-                <Td>{formatDate(lead.lastOutreachAt)}</Td>
-                <Td>{lead.source ?? <span className="text-gray">—</span>}</Td>
-                <Td>
-                  <LeadRowActions lead={lead} onUpdated={replaceLead} onRemoved={removeLead} />
-                </Td>
-              </tr>
-            );
-          })}
+          {rows.map((lead) => (
+            <LeadRow
+              key={lead.id}
+              lead={lead}
+              selected={selected.has(lead.id)}
+              onToggleSelect={() => toggle(lead.id)}
+              onUpdated={replaceLead}
+              onRemoved={removeLead}
+            />
+          ))}
         </Table>
       )}
-
-      {error ? (
-        <p role="alert" className="text-sm text-red">
-          {error}
-        </p>
-      ) : null}
-
-      {hasMore ? (
-        <div className="flex justify-center pt-1">
-          <Button type="button" variant="secondary" size="sm" onClick={loadMore} loading={loading}>
-            {loading ? "Loading…" : "Load more"}
-          </Button>
-        </div>
-      ) : rows.length > 0 ? (
-        <p className="pt-1 text-center text-xs text-gray">End of results.</p>
-      ) : null}
     </div>
   );
 }

@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
 /**
- * GET /api/leads/list — the guarded `/sourcing` load-more: unauth → 401; a valid request → 200 with
- * the `LeadListDTO`; a malformed `cursor` → 400; a bad `status` enum → 422. `leadService` is mocked;
- * auth + zod + the cursor decode run for real.
+ * GET /api/leads/list — the guarded `/sourcing` offset-page read: unauth → 401; a valid request →
+ * 200 with the `LeadListDTO`; a bad `status` enum / `page` → 422. `leadService` is mocked;
+ * auth + zod run for real.
  */
 
 const h = vi.hoisted(() => ({
@@ -19,7 +19,15 @@ vi.mock("@/server/services/lead.service", () => ({ leadService: { list: h.list }
 
 import { GET } from "./route";
 
-const PAGE = { leads: [], count: 0, hasMore: false, nextCursor: null, total: 0 };
+const PAGE = {
+  leads: [],
+  total: 0,
+  page: 1,
+  pageSize: 25,
+  totalPages: 1,
+  hasPrev: false,
+  hasNext: false,
+};
 
 function req(query = "") {
   return new Request(`http://localhost/api/leads/list${query}`);
@@ -47,25 +55,16 @@ describe("GET /api/leads/list", () => {
     expect(filters).toMatchObject({ status: "Sourced", source: "LinkedIn", search: "jane" });
   });
 
-  it("decodes a valid cursor and passes it through", async () => {
-    const cursor = Buffer.from(JSON.stringify(["2026-06-01T00:00:00.000Z", "l1"]), "utf8")
-      .toString("base64")
-      .replace(/\+/g, "-")
-      .replace(/\//g, "_")
-      .replace(/=+$/, "");
-    const res = await GET(req(`?cursor=${cursor}`), undefined);
+  it("forwards clientId/ownerId/page (coerced) to the service", async () => {
+    const res = await GET(req("?clientId=cl1&ownerId=u2&page=3"), undefined);
     expect(res.status).toBe(200);
     const [filters] = h.list.mock.calls[0]!;
-    expect(filters.cursor).toMatchObject({
-      kind: "createdAt",
-      value: "2026-06-01T00:00:00.000Z",
-      id: "l1",
-    });
+    expect(filters).toMatchObject({ clientId: "cl1", ownerId: "u2", page: 3 });
   });
 
-  it("400 on a malformed cursor, nothing read", async () => {
-    const res = await GET(req("?cursor=not-a-real-cursor"), undefined);
-    expect(res.status).toBe(400);
+  it("422 on a non-numeric page, nothing read", async () => {
+    const res = await GET(req("?page=abc"), undefined);
+    expect(res.status).toBe(422);
     expect(h.list).not.toHaveBeenCalled();
   });
 

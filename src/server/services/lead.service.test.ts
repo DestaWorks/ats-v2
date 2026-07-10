@@ -122,40 +122,49 @@ describe("leadService.create", () => {
 });
 
 describe("leadService.list", () => {
-  it("forwards filters, derives hasMore/nextCursor from PAGE+1, resolves targetClientName", async () => {
-    // 51 rows → hasMore true, page trimmed to 50, cursor from the 50th.
-    const rows = Array.from({ length: 51 }, (_, i) =>
-      lead({ id: `l${i}`, createdAt: new Date(2026, 0, 1, 0, 0, i) }),
-    );
-    h.leadRepo.list.mockResolvedValue(rows);
-    h.leadRepo.count.mockResolvedValue(120);
+  it("serves one OFFSET page — filters forwarded, page CLAMPED, pager meta honest", async () => {
+    h.leadRepo.list.mockResolvedValue([lead()]);
+    h.leadRepo.count.mockResolvedValue(60); // → 3 pages of 25
 
-    const out = await leadService.list({ status: "Sourced", source: "LinkedIn", search: "jane" });
-
-    const [listFilters] = h.leadRepo.list.mock.calls[0]!;
-    expect(listFilters).toMatchObject({
+    // Requested page 9 clamps to the last page (3).
+    const out = await leadService.list({
       status: "Sourced",
       source: "LinkedIn",
+      clientId: "cl1",
+      ownerId: "u2",
       search: "jane",
-      take: 51,
+      page: 9,
     });
-    const [countFilters] = h.leadRepo.count.mock.calls[0]!;
-    expect(countFilters).toMatchObject({ status: "Sourced", source: "LinkedIn", search: "jane" });
 
-    expect(out.leads).toHaveLength(50);
-    expect(out.count).toBe(50);
-    expect(out.hasMore).toBe(true);
-    expect(out.nextCursor).toBeTypeOf("string");
-    expect(out.total).toBe(120);
+    const [countFilters] = h.leadRepo.count.mock.calls[0]!;
+    expect(countFilters).toMatchObject({
+      status: "Sourced",
+      source: "LinkedIn",
+      clientId: "cl1",
+      createdById: "u2", // ownerId maps to the repo's createdById
+      search: "jane",
+    });
+    const [listFilters] = h.leadRepo.list.mock.calls[0]!;
+    expect(listFilters).toMatchObject({ skip: 50, take: 25 }); // (3-1)*25
+
+    expect(out).toMatchObject({
+      total: 60,
+      page: 3,
+      pageSize: 25,
+      totalPages: 3,
+      hasPrev: true,
+      hasNext: false,
+    });
     expect(out.leads[0]!.targetClientName).toBe("Acme Health");
   });
 
-  it("no next page when the result fits in one page", async () => {
+  it("defaults to page 1 (skip 0); a single short page has no prev/next", async () => {
     h.leadRepo.list.mockResolvedValue([lead()]);
     h.leadRepo.count.mockResolvedValue(1);
     const out = await leadService.list({});
-    expect(out.hasMore).toBe(false);
-    expect(out.nextCursor).toBeNull();
+    const [listFilters] = h.leadRepo.list.mock.calls[0]!;
+    expect(listFilters).toMatchObject({ skip: 0, take: 25 });
+    expect(out).toMatchObject({ page: 1, totalPages: 1, hasPrev: false, hasNext: false });
   });
 });
 

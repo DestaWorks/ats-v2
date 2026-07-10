@@ -31,18 +31,30 @@ export default async function SourcingPage({
   const status: LeadStatus | undefined =
     rawStatus && isLeadStatus(rawStatus) ? rawStatus : undefined;
   const source = one(sp.source)?.trim() || undefined;
+  const clientId = one(sp.clientId)?.trim() || undefined;
+  const ownerId = one(sp.ownerId)?.trim() || undefined;
   const search = one(sp.search)?.trim() || undefined;
   const showDeleted = one(sp.deleted) === "1";
+  const rawPage = Number(one(sp.page));
+  const page = Number.isInteger(rawPage) && rawPage > 0 ? rawPage : 1;
 
   const [list, clientRows, users] = await Promise.all([
-    leadService.list({ status, source, search, includeDeleted: showDeleted }),
+    leadService.list({
+      status,
+      source,
+      clientId,
+      ownerId,
+      search,
+      includeDeleted: showDeleted,
+      page,
+    }),
     clientRepository.list(),
-    userRepository.list(), // bulk "Assign owner…" options (id + display name only)
+    userRepository.list(), // filter + bulk "Assign owner…" options (id + display name only)
   ]);
   const clients = clientRows.map((c) => ({ id: c.id, name: c.name }));
 
-  // Remount the client list whenever a SERVER filter changes so it re-seeds from page 1.
-  const listKey = [status, source, search, showDeleted].join("|");
+  // Remount the client list whenever the SERVER query changes so it re-seeds cleanly.
+  const listKey = [status, source, clientId, ownerId, search, showDeleted, page].join("|");
 
   return (
     <div className="flex flex-col gap-5 px-8 py-6">
@@ -56,7 +68,7 @@ export default async function SourcingPage({
         </div>
       </header>
 
-      <LeadFilters />
+      <LeadFilters clients={clients} owners={users} />
 
       <LeadsInventory key={listKey} initial={list} clients={clients} users={users} />
     </div>

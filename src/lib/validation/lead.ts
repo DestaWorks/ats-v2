@@ -31,7 +31,11 @@ export interface LeadListItemDTO {
   status: LeadStatus;
   outreachCount: number;
   lastOutreachAt: string | null; // ISO
+  /** Channel of the newest attempt (denorm) — the legacy "Last touch" cell ("linkedin · 20d"). */
+  lastOutreachChannel: string | null;
   targetClientName: string | null;
+  /** Who sourced the lead (`createdById` resolved to a display name; legacy Owner column). */
+  ownerName: string | null;
   promotedCandidateId: string | null; // present once promoted → the row links to the candidate
   createdAt: string; // ISO
   /** Soft-delete marker (ISO) — non-null only in the "Show deleted" view; drives row styling + Restore. */
@@ -44,13 +48,19 @@ export interface LeadListItemDTO {
   snoozedUntil: string | null;
 }
 
-/** The `/sourcing` list payload — one keyset page + the honest filtered total. */
+/**
+ * The `/sourcing` list payload — a server OFFSET page (mirrors `CandidateListDTO`): filters in
+ * SQL `WHERE`, newest-first `ORDER BY`, `skip`/`take` pagination; `page` clamped to
+ * `[1, totalPages]`; `hasPrev`/`hasNext` drive the numbered pager.
+ */
 export interface LeadListDTO {
   leads: LeadListItemDTO[];
-  count: number; // rows in this page
-  hasMore: boolean;
-  nextCursor: string | null;
-  total: number; // true filtered count ("Showing N of M")
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  hasPrev: boolean;
+  hasNext: boolean;
 }
 
 /** One logged outreach attempt (newest-first on the detail view). */
@@ -211,9 +221,12 @@ export type ImportLeadsInput = z.infer<typeof importLeadsSchema>;
 export const leadListQuerySchema = z.object({
   status: z.enum(LEAD_STATUSES).optional(),
   source: z.string().trim().min(1).max(120).optional(),
+  clientId: z.string().trim().min(1).optional(),
+  ownerId: z.string().trim().min(1).optional(),
   search: z.string().trim().min(1).max(100).optional(),
   /** "Show deleted" — include soft-deleted leads (they render flagged, with a Restore action). */
   deleted: z.preprocess((v) => v === "1" || v === "true", z.boolean()).optional(),
-  cursor: z.string().min(1).optional(),
+  /** 1-based OFFSET page (clamped server-side to `[1, totalPages]`). */
+  page: z.coerce.number().int().min(1).optional(),
 });
 export type LeadListQuery = z.infer<typeof leadListQuerySchema>;
