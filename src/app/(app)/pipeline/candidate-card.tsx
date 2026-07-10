@@ -180,7 +180,7 @@ export function CandidateCard({
           value={card.status}
           disabled={busy}
           onChange={(e) => onMove(card, e.target.value as CandidateStatus)}
-          className="w-full rounded border border-black/10 bg-white px-1.5 py-1 text-[11px] text-charcoal disabled:opacity-50"
+          className="w-full rounded border border-black/10 bg-white px-1.5 py-1 text-[11px] text-charcoal scheme-light disabled:opacity-50"
         >
           {ALL_STATUS_CODES.map((code) => (
             <option key={code} value={code}>
