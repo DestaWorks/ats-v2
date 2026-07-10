@@ -3,6 +3,7 @@ import { isLeadStatus, type LeadStatus } from "@/lib/constants";
 import { getCurrentUser } from "@/server/auth/guards";
 import { leadService } from "@/server/services/lead.service";
 import { clientRepository } from "@/server/repositories/client.repository";
+import { userRepository } from "@/server/repositories/user.repository";
 import { LeadFilters } from "./lead-filters";
 import { LeadsInventory } from "./leads-inventory";
 
@@ -33,9 +34,10 @@ export default async function SourcingPage({
   const search = one(sp.search)?.trim() || undefined;
   const showDeleted = one(sp.deleted) === "1";
 
-  const [list, clientRows] = await Promise.all([
+  const [list, clientRows, users] = await Promise.all([
     leadService.list({ status, source, search, includeDeleted: showDeleted }),
     clientRepository.list(),
+    userRepository.list(), // bulk "Assign owner…" options (id + display name only)
   ]);
   const clients = clientRows.map((c) => ({ id: c.id, name: c.name }));
 
@@ -56,7 +58,7 @@ export default async function SourcingPage({
 
       <LeadFilters />
 
-      <LeadsInventory key={listKey} initial={list} clients={clients} />
+      <LeadsInventory key={listKey} initial={list} clients={clients} users={users} />
     </div>
   );
 }

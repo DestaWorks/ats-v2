@@ -10,10 +10,32 @@ import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Select } from "@/components/ui/select";
 import { Modal } from "@/components/ui/modal";
-import { deleteLead, postOutreach, postPromote, postRespond, postRestore } from "./lib/lead-fetch";
+import {
+  deleteLead,
+  postOutreach,
+  postPromote,
+  postRespond,
+  postRestore,
+  postSnooze,
+} from "./lib/lead-fetch";
+import { OutreachHistoryModal } from "./outreach-history-modal";
 import { leadActionState } from "./lib/leads-query";
 
-type OpenModal = "outreach" | "promote" | "delete" | null;
+type OpenModal = "outreach" | "promote" | "delete" | "snooze" | "history" | null;
+
+/** True while the lead's snooze date is in the FUTURE (date-aware — an expired snooze is awake). */
+export function isSnoozed(snoozedUntil: string | null, now: number = Date.now()): boolean {
+  if (!snoozedUntil) return false;
+  const t = new Date(snoozedUntil).getTime();
+  return !Number.isNaN(t) && t > now;
+}
+
+/** Default snooze horizon (legacy `openSnooze`: +7 days), as an `<input type="date">` value. */
+function defaultSnoozeDate(): string {
+  const d = new Date();
+  d.setDate(d.getDate() + 7);
+  return d.toISOString().slice(0, 10);
+}
 
 /**
  * Per-row action cluster for the `/sourcing` inventory. Renders labeled buttons (not a color-only
@@ -38,6 +60,7 @@ export function LeadRowActions({
   const [pending, startTransition] = useTransition();
   const [channel, setChannel] = useState<(typeof OUTREACH_CHANNELS)[number]>(OUTREACH_CHANNELS[0]);
   const [note, setNote] = useState("");
+  const [snoozeDate, setSnoozeDate] = useState(defaultSnoozeDate);
 
   const { canLogOutreach, canRespond, canPromote } = leadActionState(lead.status);
 
@@ -98,6 +121,20 @@ export function LeadRowActions({
       if (result.ok) {
         toast.success("Lead deleted");
         onRemoved(lead.id);
+        close();
+      } else {
+        toast.error(messageForFailure(result.failure));
+        close();
+      }
+    });
+  }
+
+  function snooze(until: string | null) {
+    startTransition(async () => {
+      const result = await postSnooze(lead.id, until);
+      if (result.ok) {
+        toast.success(until ? `Snoozed until ${until}` : "Lead woken");
+        onUpdated(result.data.lead);
         close();
       } else {
         toast.error(messageForFailure(result.failure));
@@ -172,6 +209,33 @@ export function LeadRowActions({
       >
         Promote
       </Button>
+      <Button type="button" size="xs" variant="secondary" onClick={() => setOpen("history")}>
+        History
+      </Button>
+      {isSnoozed(lead.snoozedUntil) ? (
+        <Button
+          type="button"
+          size="xs"
+          variant="secondary"
+          loading={pending}
+          onClick={() => snooze(null)}
+        >
+          Wake
+        </Button>
+      ) : lead.status !== "Promoted" ? (
+        <Button
+          type="button"
+          size="xs"
+          variant="secondary"
+          onClick={() => {
+            setSnoozeDate(defaultSnoozeDate());
+            setOpen("snooze");
+          }}
+          aria-label={`Snooze ${lead.name}`}
+        >
+          Snooze
+        </Button>
+      ) : null}
       <Button
         type="button"
         size="xs"
@@ -217,6 +281,47 @@ export function LeadRowActions({
           </div>
         </div>
       </Modal>
+
+      {/* Snooze modal — free until-date, default +7 days (legacy parity). */}
+      <Modal open={open === "snooze"} onClose={close} title={`Snooze — ${lead.name}`}>
+        <div className="flex flex-col gap-4">
+          <Field
+            label="Snooze until"
+            htmlFor={`snooze-${lead.id}`}
+            hint="Excludes this lead from stuck-lead alerts until the date below — useful when waiting for a callback or an intentional pause."
+          >
+            <input
+              id={`snooze-${lead.id}`}
+              type="date"
+              value={snoozeDate}
+              onChange={(e) => setSnoozeDate(e.target.value)}
+              className="rounded-md border border-black/15 px-2.5 py-1.5 text-sm focus:ring-2 focus:ring-navy focus:outline-none"
+            />
+          </Field>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              loading={pending}
+              disabled={!snoozeDate}
+              onClick={() => snooze(snoozeDate)}
+            >
+              Snooze
+            </Button>
+            <Button type="button" variant="secondary" disabled={pending} onClick={close}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Outreach history — edit/delete logged attempts. */}
+      <OutreachHistoryModal
+        leadId={lead.id}
+        leadName={lead.name}
+        open={open === "history"}
+        onClose={close}
+        onUpdated={onUpdated}
+      />
 
       {/* Promote confirm. */}
       <Modal open={open === "promote"} onClose={close} title="Promote lead">
