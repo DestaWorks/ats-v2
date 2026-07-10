@@ -1,6 +1,5 @@
 import "server-only";
 import type { OutreachAttempt, Prisma, SourceLead } from "@/generated/prisma/client";
-import type { PageCursor } from "@/lib/validation/cursor";
 import { prisma } from "@/server/db/prisma";
 
 /** A raw source-lead row (Prisma model). Services/DTOs map this to API shapes. */
@@ -14,12 +13,16 @@ export interface LeadListFilters {
   status?: string;
   /** Equality on the sourcing source (free text). */
   source?: string;
+  /** Equality on the target client. */
+  clientId?: string;
+  /** Equality on the owner (`createdById` — who sourced the lead). */
+  createdById?: string;
   /** Free-text match on name or email (case-insensitive). */
   search?: string;
   includeDeleted?: boolean;
-  /** Keyset cursor — the service decodes it; the repo turns it into a `WHERE (createdAt, id) < cursor`. */
-  cursor?: PageCursor;
-  /** Cap the rows returned (callers pass `pageSize + 1` to detect `hasMore`). */
+  /** OFFSET skip for the numbered pager (the service computes `(page-1) * pageSize`). */
+  skip?: number;
+  /** Cap the rows returned (one offset page). */
   take?: number;
 }
 
@@ -45,6 +48,8 @@ export function buildLeadWhere(filters: LeadListFilters): Prisma.SourceLeadWhere
   if (!filters.includeDeleted) where.deletedAt = null;
   if (filters.status) where.status = filters.status;
   if (filters.source) where.source = filters.source;
+  if (filters.clientId) where.clientId = filters.clientId;
+  if (filters.createdById) where.createdById = filters.createdById;
   if (filters.search) {
     and.push({
       OR: [
@@ -55,22 +60,6 @@ export function buildLeadWhere(filters: LeadListFilters): Prisma.SourceLeadWhere
   }
   if (and.length > 0) where.AND = and;
   return where;
-}
-
-/** The keyset predicate `WHERE (createdAt, id) < cursor` — Newest-first (`createdAt desc`, id tiebreak). */
-function keysetWhere(cursor: PageCursor): Prisma.SourceLeadWhereInput {
-  const dt = new Date(cursor.value);
-  return { OR: [{ createdAt: { lt: dt } }, { createdAt: dt, id: { lt: cursor.id } }] };
-}
-
-/** Merge an extra AND clause into a where, normalizing `AND` to an array. */
-function andMerge(
-  where: Prisma.SourceLeadWhereInput,
-  clause: Prisma.SourceLeadWhereInput,
-): Prisma.SourceLeadWhereInput {
-  const existing = where.AND;
-  const arr = Array.isArray(existing) ? existing : existing ? [existing] : [];
-  return { ...where, AND: [...arr, clause] };
 }
 
 /** Resolve the client to use — the transaction client when composing writes, else the singleton. */
@@ -98,21 +87,20 @@ export const leadRepository = {
   },
 
   /**
-   * The core read. Builds the shared `where` (`buildLeadWhere`), applies the keyset predicate from
-   * `cursor`, orders `createdAt desc` (id tiebreak), and fetches `take` rows (callers pass
-   * `pageSize + 1` so the service can detect `hasMore` + derive `nextCursor`). Newest-first.
+   * The core read. Builds the shared `where` (`buildLeadWhere`), orders `createdAt desc` (id
+   * tiebreak), and fetches one OFFSET page (`skip`/`take` — the numbered pager, mirroring the
+   * candidates list). Newest-first.
    */
   list(filters: LeadListFilters = {}, tx?: Prisma.TransactionClient) {
-    let where = buildLeadWhere(filters);
-    if (filters.cursor) where = andMerge(where, keysetWhere(filters.cursor));
     return db(tx).sourceLead.findMany({
-      where,
+      where: buildLeadWhere(filters),
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      ...(filters.skip !== undefined ? { skip: filters.skip } : {}),
       ...(filters.take !== undefined ? { take: filters.take } : {}),
     });
   },
 
-  /** True filtered total for the same `where` as `list` (minus cursor/take) — the "Showing N of M". */
+  /** True filtered total for the same `where` as `list` (minus skip/take) — the "Showing N of M". */
   count(filters: LeadListFilters = {}, tx?: Prisma.TransactionClient) {
     return db(tx).sourceLead.count({ where: buildLeadWhere(filters) });
   },
@@ -173,6 +161,7 @@ export const leadRepository = {
         status: params.status,
         outreachCount: { increment: 1 },
         lastOutreachAt: params.at,
+        lastOutreachChannel: params.channel,
       },
     });
     return { attempt, lead };
@@ -217,14 +206,21 @@ export const leadRepository = {
    * deleting an attempt never regresses the funnel; that stays a manual status change).
    */
   async syncOutreachDenorm(leadId: string, tx?: Prisma.TransactionClient) {
-    const agg = await db(tx).outreachAttempt.aggregate({
-      where: { leadId },
-      _count: { _all: true },
-      _max: { at: true },
-    });
+    const [count, latest] = await Promise.all([
+      db(tx).outreachAttempt.count({ where: { leadId } }),
+      db(tx).outreachAttempt.findFirst({
+        where: { leadId },
+        orderBy: [{ at: "desc" }, { id: "desc" }],
+        select: { at: true, channel: true },
+      }),
+    ]);
     return db(tx).sourceLead.update({
       where: { id: leadId },
-      data: { outreachCount: agg._count._all, lastOutreachAt: agg._max.at },
+      data: {
+        outreachCount: count,
+        lastOutreachAt: latest?.at ?? null,
+        lastOutreachChannel: latest?.channel ?? null,
+      },
     });
   },
 

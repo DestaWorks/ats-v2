@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils/cn";
  * rectangular badges (timing chips). `className` is merged last for overrides.
  */
 
-export type BadgeTone = "neutral" | "navy" | "success" | "amber" | "danger";
+export type BadgeTone = "neutral" | "navy" | "success" | "amber" | "danger" | "purple";
 export type BadgeSize = "sm" | "md";
 
 /** Tinted bg + text per tone (matches the existing inline usages). */
@@ -22,6 +22,7 @@ const TONE: Record<BadgeTone, string> = {
   success: "bg-green/15 text-green",
   amber: "bg-orange/10 text-orange",
   danger: "bg-red/10 text-red",
+  purple: "bg-purple text-white", // legacy Promoted pill — FILLED, not tinted
 };
 
 /** Padding per size (both share the [11px] text used by the current badges). */

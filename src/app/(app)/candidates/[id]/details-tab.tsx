@@ -8,6 +8,7 @@ import {
   POPULATIONS,
   SETTINGS,
   SOURCES,
+  TELEHEALTH_PREFS,
   TAGS,
   TRACKS,
   US_STATES,
@@ -75,6 +76,8 @@ export function DetailsTab({
       credential: (candidate.credential as UpdateCandidateInput["credential"]) ?? undefined,
       population: (candidate.population as UpdateCandidateInput["population"]) ?? undefined,
       setting: (candidate.setting as UpdateCandidateInput["setting"]) ?? undefined,
+      telehealthPref:
+        (candidate.telehealthPref as UpdateCandidateInput["telehealthPref"]) ?? undefined,
       track: candidate.track as UpdateCandidateInput["track"],
       source: (candidate.source as UpdateCandidateInput["source"]) ?? undefined,
       tags: (candidate.tags as UpdateCandidateInput["tags"]) ?? [],
@@ -108,11 +111,8 @@ export function DetailsTab({
   if (!editing) {
     return (
       <div className="flex flex-col gap-4">
-        <div className="flex justify-end">
-          <Button type="button" size="sm" variant="secondary" onClick={() => setEditing(true)}>
-            Edit
-          </Button>
-        </div>
+        {/* Edit affordance intentionally removed for now (form + save path kept below —
+            restoring is a one-line `setEditing(true)` trigger wherever it lands next). */}
         <div className="grid gap-4 sm:grid-cols-2">
           <Card className="p-4">
             <h3 className="mb-2 text-xs font-bold tracking-wide text-gray uppercase">Contact</h3>
@@ -136,6 +136,7 @@ export function DetailsTab({
               <MetaRow label="Credential" value={candidate.credential ?? "—"} />
               <MetaRow label="Population" value={candidate.population ?? "—"} />
               <MetaRow label="Setting" value={candidate.setting ?? "—"} />
+              <MetaRow label="Telehealth" value={candidate.telehealthPref ?? "—"} />
               <MetaRow label="Track" value={candidate.track} />
               <MetaRow label="Source" value={candidate.source ?? "—"} />
               <MetaRow
@@ -172,7 +173,7 @@ export function DetailsTab({
         </Field>
         <Field label="State" htmlFor="cd-state" error={fieldError(form, "state")}>
           <Select id="cd-state" {...form.register("state", { setValueAs: emptyToNull })}>
-            <option value="">—</option>
+            <option value="">Select…</option>
             {US_STATES.map((s) => (
               <option key={s} value={s}>
                 {s}
@@ -194,7 +195,7 @@ export function DetailsTab({
         </Field>
         <Field label="Credential" htmlFor="cd-cred" error={fieldError(form, "credential")}>
           <Select id="cd-cred" {...form.register("credential", { setValueAs: emptyToNull })}>
-            <option value="">—</option>
+            <option value="">Select…</option>
             {CREDENTIALS.map((c) => (
               <option key={c} value={c}>
                 {c}
@@ -204,7 +205,7 @@ export function DetailsTab({
         </Field>
         <Field label="Population" htmlFor="cd-pop" error={fieldError(form, "population")}>
           <Select id="cd-pop" {...form.register("population", { setValueAs: emptyToNull })}>
-            <option value="">—</option>
+            <option value="">Select…</option>
             {POPULATIONS.map((p) => (
               <option key={p} value={p}>
                 {p}
@@ -214,10 +215,20 @@ export function DetailsTab({
         </Field>
         <Field label="Setting" htmlFor="cd-setting" error={fieldError(form, "setting")}>
           <Select id="cd-setting" {...form.register("setting", { setValueAs: emptyToNull })}>
-            <option value="">—</option>
+            <option value="">Select…</option>
             {SETTINGS.map((s) => (
               <option key={s} value={s}>
                 {s}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Telehealth" htmlFor="cd-tele" error={fieldError(form, "telehealthPref")}>
+          <Select id="cd-tele" {...form.register("telehealthPref", { setValueAs: emptyToNull })}>
+            <option value="">Select…</option>
+            {TELEHEALTH_PREFS.map((t) => (
+              <option key={t} value={t}>
+                {t}
               </option>
             ))}
           </Select>
@@ -233,7 +244,7 @@ export function DetailsTab({
         </Field>
         <Field label="Source" htmlFor="cd-source" error={fieldError(form, "source")}>
           <Select id="cd-source" {...form.register("source", { setValueAs: emptyToNull })}>
-            <option value="">—</option>
+            <option value="">Select…</option>
             {SOURCES.map((s) => (
               <option key={s} value={s}>
                 {s}
@@ -243,7 +254,7 @@ export function DetailsTab({
         </Field>
         <Field label="License state" htmlFor="cd-licstate" error={fieldError(form, "licenseState")}>
           <Select id="cd-licstate" {...form.register("licenseState", { setValueAs: emptyToNull })}>
-            <option value="">—</option>
+            <option value="">Select…</option>
             {US_STATES.map((s) => (
               <option key={s} value={s}>
                 {s}

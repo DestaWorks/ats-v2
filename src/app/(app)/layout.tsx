@@ -18,8 +18,17 @@ import { BASE_NAV_ITEMS, type NavItem } from "./lib/nav";
  *    content in `<main id="content">` (the skip target). The **Import** link is appended only for
  *    viewers with `bulkImport` — UI hiding is UX; the route stays server-guarded.
  * 3. **Shared data.** `clients` for the sidebar's add-candidate modal, fetched once here.
+ *
+ * The `modal` parallel slot hosts ROUTE-intercepted overlays (the candidate detail opened
+ * in-app renders there, over the still-mounted board/list); it is `null` otherwise.
  */
-export default async function AppLayout({ children }: { children: React.ReactNode }) {
+export default async function AppLayout({
+  children,
+  modal,
+}: {
+  children: React.ReactNode;
+  modal: React.ReactNode;
+}) {
   const user = await getCurrentUser();
   if (!user) redirect("/sign-in");
 
@@ -55,6 +64,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </main>
         </div>
       </div>
+      {modal}
     </>
   );
 }

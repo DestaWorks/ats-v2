@@ -19,7 +19,6 @@ import type {
   OutreachAttemptDTO,
   UpdateOutreachInput,
 } from "@/lib/validation/lead";
-import { encodeCursor, type PageCursor } from "@/lib/validation/cursor";
 import { toIso, isoOrNull } from "@/lib/utils/iso";
 import type { AuthUser } from "@/server/auth/guards";
 import { writeAudit } from "@/server/db/audit";
@@ -35,21 +34,29 @@ import { AppError } from "@/server/http/app-error";
 import { candidateService } from "./candidate.service";
 import { leadToCandidateInput } from "./lead.promote-map";
 
-/** One keyset page of the `/sourcing` inventory (mirrors the candidate `LIST_PAGE`). */
-const LIST_PAGE = 50;
+/** One OFFSET page of the `/sourcing` inventory (matches the candidate `LIST_PAGE`). */
+const LIST_PAGE = 25;
 
-/** Filters accepted by the `/sourcing` list read — status/source/search + a keyset cursor. */
+/** Filters accepted by the `/sourcing` list read — status/source/client/owner/search + a page. */
 export interface LeadListFilters {
   status?: string;
   source?: string;
+  clientId?: string;
+  /** Owner filter — who sourced the lead (`createdById`). */
+  ownerId?: string;
   search?: string;
   /** "Show deleted" — include soft-deleted rows (they render flagged, with Restore). */
   includeDeleted?: boolean;
-  cursor?: PageCursor;
+  /** 1-based OFFSET page (clamped to `[1, totalPages]`). */
+  page?: number;
 }
 
-/** Project a lead row onto the inventory row DTO. `targetClientName` from the batch client map. */
-function toLeadListItem(row: LeadRow, clientNames: Map<string, string>): LeadListItemDTO {
+/** Project a lead row onto the inventory row DTO. Names come from the batch client/user maps. */
+function toLeadListItem(
+  row: LeadRow,
+  clientNames: Map<string, string>,
+  ownerNames: Map<string, string>,
+): LeadListItemDTO {
   return {
     id: row.id,
     name: row.name,
@@ -61,7 +68,9 @@ function toLeadListItem(row: LeadRow, clientNames: Map<string, string>): LeadLis
     status: row.status as LeadStatus,
     outreachCount: row.outreachCount,
     lastOutreachAt: isoOrNull(row.lastOutreachAt),
+    lastOutreachChannel: row.lastOutreachChannel,
     targetClientName: row.clientId ? (clientNames.get(row.clientId) ?? null) : null,
+    ownerName: row.createdById ? (ownerNames.get(row.createdById) ?? null) : null,
     promotedCandidateId: row.promotedCandidateId,
     createdAt: toIso(row.createdAt),
     deletedAt: isoOrNull(row.deletedAt),
@@ -92,7 +101,8 @@ function toLeadDetail(
   actorNames: Map<string, string>,
 ): LeadDetailDTO {
   return {
-    ...toLeadListItem(row, clientNames),
+    // `actorNames` was batched over the attempts' actors PLUS the lead's owner (loadDetail).
+    ...toLeadListItem(row, clientNames, actorNames),
     linkedinUrl: row.linkedinUrl,
     tags: row.tags,
     notes: row.notes,
@@ -113,7 +123,10 @@ async function loadDetail(lead: LeadRow): Promise<LeadDetailDTO> {
     clientRepository.list(),
   ]);
   const clientNames = new Map(clients.map((c) => [c.id, c.name]));
-  const actorNames = await userRepository.namesByIds(attempts.map((a) => a.actorId));
+  const actorNames = await userRepository.namesByIds([
+    ...attempts.map((a) => a.actorId),
+    ...(lead.createdById ? [lead.createdById] : []),
+  ]);
   return toLeadDetail(lead, attempts, clientNames, actorNames);
 }
 
@@ -171,22 +184,45 @@ export const leadService = {
   },
 
   /**
-   * The `/sourcing` inventory — one keyset page (Newest-first) + the honest filtered `total`. Fetches
-   * `LIST_PAGE + 1` rows so `hasMore` is exact and `nextCursor` walks the whole (filtered) set.
-   * `targetClientName` is resolved from a one-shot `clients` map (as the candidate reads do).
+   * The `/sourcing` inventory — one server OFFSET page (Newest-first), mirroring the candidates
+   * list: true filtered `total`, `page` clamped to `[1, totalPages]`, `hasPrev`/`hasNext` for the
+   * numbered pager. `targetClientName`/`ownerName` resolve from one-shot batch maps (no N+1).
    */
   async list(filters: LeadListFilters = {}): Promise<LeadListDTO> {
-    const [rows, total, clients] = await Promise.all([
-      leadRepository.list({ ...filters, take: LIST_PAGE + 1 }),
-      leadRepository.count(filters),
+    const repoFilters = {
+      status: filters.status,
+      source: filters.source,
+      clientId: filters.clientId,
+      createdById: filters.ownerId,
+      search: filters.search,
+      includeDeleted: filters.includeDeleted,
+    };
+    const [total, clients] = await Promise.all([
+      leadRepository.count(repoFilters),
       clientRepository.list(),
     ]);
-    const hasMore = rows.length > LIST_PAGE;
-    const page = hasMore ? rows.slice(0, LIST_PAGE) : rows;
+    const totalPages = Math.max(1, Math.ceil(total / LIST_PAGE));
+    const page = Math.min(Math.max(1, filters.page ?? 1), totalPages);
+    const rows = await leadRepository.list({
+      ...repoFilters,
+      skip: (page - 1) * LIST_PAGE,
+      take: LIST_PAGE,
+    });
     const clientNames = new Map(clients.map((c) => [c.id, c.name]));
-    const leads = page.map((row) => toLeadListItem(row, clientNames));
-    const nextCursor = hasMore ? encodeCursor(page[page.length - 1]!, "createdAt_desc") : null;
-    return { leads, count: leads.length, hasMore, nextCursor, total };
+    // Owner display names in ONE batched read (legacy Owner column).
+    const ownerNames = await userRepository.namesByIds(
+      rows.map((r) => r.createdById).filter((id): id is string => id !== null),
+    );
+    const leads = rows.map((row) => toLeadListItem(row, clientNames, ownerNames));
+    return {
+      leads,
+      total,
+      page,
+      pageSize: LIST_PAGE,
+      totalPages,
+      hasPrev: page > 1,
+      hasNext: page < totalPages,
+    };
   },
 
   /**

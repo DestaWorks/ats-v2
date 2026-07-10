@@ -207,7 +207,8 @@ share a database.** *(`zyx.com` below is a placeholder for the real domain.)*
 - [ ] **Deferred:** track-editor pill; auto-handoff to Operate on "Started" (idempotency key).
 - **Done-when:** full record editable ✅ *(handoff deferred)*.
 
-### 2.4 Add Candidate (Module 5)  ✅ *(done)*
+### 2.4 Add Candidate (Module 5)  ✅ *(done — legacy field order/labels restored 2026-07-11)*
+- [ ] **Deferred fields (audit 2026-07-11):** `TelehealthPref` (legacy stores + shows on Details; add as nullable column + select when convenient) · **Target Locations** (needs `client_locations` — port with Open Roles 3.5, its consumer). Legacy `contactSource` is write-only dead data — deliberately NOT ported.
 - [x] `POST /api/candidates` route + `createCandidateSchema` (strict; `licenseNumber` gated on `viewCredentials`; can't set status).
 - [x] Track-aware add-candidate form at `/candidates/new` (clinical/prescriber show credential+license; operations contact-only) → redirects to the new candidate detail. Entry: "+ Add candidate" on the board header.
 - **Done-when:** ✅ manual create works + validated (262 tests, build green).

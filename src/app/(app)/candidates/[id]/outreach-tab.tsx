@@ -83,7 +83,9 @@ export function OutreachTab({
               ))}
             </Select>
           </Field>
-          <Field label="Note" htmlFor="outreach-note" hint="Optional" className="min-w-56 flex-1">
+          {/* "(optional)" lives in the label, not a hint line below — a hint would break the
+              row's bottom alignment (channel · note · button all end on the control line). */}
+          <Field label="Note (optional)" htmlFor="outreach-note" className="min-w-56 flex-1">
             <Textarea
               id="outreach-note"
               rows={1}

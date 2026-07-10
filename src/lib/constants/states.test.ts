@@ -19,14 +19,17 @@ describe("states", () => {
 });
 
 describe("stateBoardLink", () => {
-  it("returns the legacy LL portal for the 4 mapped states", () => {
+  it("returns the named portal for the 4 mapped states (URLs refreshed 2026-07-10)", () => {
     expect(Object.keys(STATE_BOARDS)).toEqual(["CT", "NJ", "FL", "MA"]);
     expect(stateBoardLink("CT")).toEqual({
       name: "CT eLicense Portal",
       url: "https://www.elicense.ct.gov/",
       mapped: true,
     });
-    expect(stateBoardLink("NJ")?.mapped).toBe(true);
+    // NJ must point at the VERIFICATION search, not the portal shell root (link rot 2026-07).
+    expect(stateBoardLink("NJ")?.url).toBe("https://newjersey.mylicense.com/verification/");
+    expect(stateBoardLink("MA")?.url).toBe("https://checkahealthlicense.mass.gov/");
+    expect(stateBoardLink("FL")?.url).toBe("https://flhealthsource.gov/");
   });
 
   it("falls back to a license-lookup search for unmapped states", () => {

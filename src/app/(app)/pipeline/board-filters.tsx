@@ -24,15 +24,11 @@ export function BoardFilters({
   owners,
   hotOnly,
   onToggleHot,
-  hideEmpty,
-  onToggleHideEmpty,
 }: {
   clients: ClientOption[];
   owners: { id: string; name: string }[];
   hotOnly: boolean;
   onToggleHot: () => void;
-  hideEmpty: boolean;
-  onToggleHideEmpty: () => void;
 }) {
   const f = useUrlFilters();
 
@@ -73,20 +69,11 @@ export function BoardFilters({
       >
         Needs verification
       </FilterChip>
-      {/* Page-local lens — filters the loaded cards in every column (does not re-query). */}
+      {/* Page-local lens — filters the loaded cards in every column (does not re-query).
+          "Hide empty stages" lives on its own row above the columns (legacy placement). */}
       <FilterChip pressed={hotOnly} onToggle={onToggleHot}>
         Hot (this page)
       </FilterChip>
-      {/* Page-local view toggle — collapses 0-count columns (legacy: a checkbox, not a chip). */}
-      <label className="flex cursor-pointer items-center gap-1.5 text-sm font-medium text-charcoal select-none">
-        <input
-          type="checkbox"
-          checked={hideEmpty}
-          onChange={onToggleHideEmpty}
-          className="h-4 w-4 accent-navy"
-        />
-        Hide empty stages
-      </label>
 
       <FiltersPopover count={popoverCount}>
         <FilterField

@@ -190,12 +190,13 @@ function AddLeadForm({
         </Field>
       </div>
 
-      <div className="flex gap-2">
-        <Button type="submit" loading={pending}>
-          Add lead
-        </Button>
+      {/* Legacy footer: actions right-aligned above a hairline — Cancel, then the GREEN commit. */}
+      <div className="flex items-center justify-end gap-2 border-t border-black/5 pt-4">
         <Button type="button" variant="secondary" disabled={pending} onClick={onDone}>
           Cancel
+        </Button>
+        <Button type="submit" variant="success" loading={pending}>
+          Add Lead
         </Button>
       </div>
     </form>

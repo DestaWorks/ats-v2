@@ -17,6 +17,7 @@ import {
   POPULATIONS,
   SETTINGS,
   SOURCES,
+  TELEHEALTH_PREFS,
   TAGS,
   TRACKS,
   US_STATES,
@@ -80,6 +81,8 @@ export interface CandidateProfileDTO {
   credential: string | null;
   population: string | null;
   setting: string | null;
+  /** Telehealth work-mode PREFERENCE (legacy TelehealthPref) — distinct from `setting`. */
+  telehealthPref: string | null;
   track: string;
   source: string | null;
   tags: string[];
@@ -214,6 +217,7 @@ export const updateCandidateSchema = z
     credential: z.enum(CREDENTIALS).nullish(),
     population: z.enum(POPULATIONS).nullish(),
     setting: z.enum(SETTINGS).nullish(),
+    telehealthPref: z.enum(TELEHEALTH_PREFS).nullish(),
     track: z.enum(TRACKS).optional(),
     source: z.enum(SOURCES).nullish(),
     tags: z.array(z.enum(TAGS)).max(20).optional(),
@@ -245,6 +249,7 @@ export const createCandidateSchema = z
     credential: z.enum(CREDENTIALS).nullish(),
     population: z.enum(POPULATIONS).nullish(),
     setting: z.enum(SETTINGS).nullish(),
+    telehealthPref: z.enum(TELEHEALTH_PREFS).nullish(),
     track: z.enum(TRACKS).default("Clinical"),
     source: z.enum(SOURCES).nullish(),
     tags: z.array(z.enum(TAGS)).max(20).optional(),

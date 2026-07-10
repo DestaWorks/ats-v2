@@ -23,6 +23,7 @@ describe("normalizeImportStatus", () => {
   it("fuzzy-normalizes the legacy vocab", () => {
     expect(normalizeImportStatus("new")).toBe("Sourced");
     expect(normalizeImportStatus("Outreach 2")).toBe("Outreach 2");
+    expect(normalizeImportStatus("outreach 3")).toBe("Outreach 3 (Final)"); // enum has the suffix
     expect(normalizeImportStatus("responded cold")).toBe("Responded — Cold");
     expect(normalizeImportStatus("HOT")).toBe("Responded — Hot");
     expect(normalizeImportStatus("placed")).toBe("Promoted");

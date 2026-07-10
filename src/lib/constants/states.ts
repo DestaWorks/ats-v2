@@ -106,16 +106,21 @@ export function isCompactState(state: string | null | undefined): boolean {
 }
 
 /**
- * State licensing-board verification portals (legacy `LL`, ported verbatim — the License tab's
+ * State licensing-board verification portals (from the legacy `LL` map — the License tab's
  * "verify on state board" link). Only the states the team actually verifies against carry a named
  * portal; `stateBoardLink` falls back to a license-lookup web search for every other state so the
  * verify workflow never dead-ends (legacy showed no link at all for unmapped states).
+ *
+ * URLs refreshed 2026-07-10 — the legacy values had rotted: NJ's root was a portal shell (the
+ * search lives under /verification/) and MA's checkalicense.mass.gov is dead (the live checker
+ * is checkahealthlicense.mass.gov). CT is unchanged; FL now enters via flhealthsource.gov
+ * ("Verify a License"), which fronts the MQA search.
  */
 export const STATE_BOARDS: Record<string, { name: string; url: string }> = {
   CT: { name: "CT eLicense Portal", url: "https://www.elicense.ct.gov/" },
-  NJ: { name: "NJ Consumer Affairs", url: "https://newjersey.mylicense.com/" },
-  FL: { name: "FL MQA", url: "https://mqa-internet.doh.state.fl.us/" },
-  MA: { name: "MA Board", url: "https://checkalicense.mass.gov/" },
+  NJ: { name: "NJ Consumer Affairs", url: "https://newjersey.mylicense.com/verification/" },
+  FL: { name: "FL Health Source (MQA)", url: "https://flhealthsource.gov/" },
+  MA: { name: "MA Check a Health License", url: "https://checkahealthlicense.mass.gov/" },
 };
 
 /** The board link for a license state — a named portal when mapped, else a search fallback. */

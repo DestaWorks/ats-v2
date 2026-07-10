@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactNode, TdHTMLAttributes } from "react";
 import { cn } from "@/lib/utils/cn";
 
 /**
@@ -81,7 +81,15 @@ export function Table({
   );
 }
 
-/** A body cell with padding matching the header. `className` merged last. */
-export function Td({ className, children }: { className?: string; children?: ReactNode }) {
-  return <td className={cn("px-3 py-2 align-top text-charcoal", className)}>{children}</td>;
+/** A body cell with padding matching the header. Spreads native props (`colSpan`, `onClick`, …). */
+export function Td({
+  className,
+  children,
+  ...props
+}: { className?: string; children?: ReactNode } & TdHTMLAttributes<HTMLTableCellElement>) {
+  return (
+    <td className={cn("px-3 py-2 align-top text-charcoal", className)} {...props}>
+      {children}
+    </td>
+  );
 }

@@ -4,16 +4,16 @@ import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { statusLabel, type CandidateStatus, type LicenseStatus, type Track } from "@/lib/constants";
 import type { CandidateProfileDTO } from "@/lib/validation/candidate";
-import { cn } from "@/lib/utils/cn";
+import { Select } from "@/components/ui/select";
 import { buildStageMoverOptions } from "./lib/stage-mover-options";
 import { messageForFailure, postMove, type MovedFields } from "./lib/detail-fetch";
 
 /**
- * The legacy "MOVE TO" pill row: every stage as a pill — current filled navy, valid targets
- * outlined, gate-blocked targets dimmed with the reasons as a tooltip. OQ-4: a client-side
- * `checkStageGate` pre-check disables invalid targets and lists their reasons — the full detail
- * DTO carries the gate inputs (contact/population/setting) the board card lacks. The SERVER
- * stays authoritative: a `422 STAGE_BLOCKED` still surfaces the server's reasons inline.
+ * "Move to" — a compact stage `<select>` (gate-blocked targets disabled with " — blocked").
+ * OQ-4: a client-side `checkStageGate` pre-check disables invalid targets and lists their
+ * reasons — the full detail DTO carries the gate inputs (contact/population/setting) the board
+ * card lacks. The SERVER stays authoritative: a `422 STAGE_BLOCKED` still surfaces the server's
+ * reasons inline.
  */
 export function StageMover({
   candidate,
@@ -72,32 +72,30 @@ export function StageMover({
     });
   }
 
+  const selectId = `stage-mover-${candidate.id}`;
+
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="text-[11px] font-bold tracking-[0.08em] text-gray uppercase">Move to</span>
-      <div role="group" aria-label="Move candidate to a stage" className="flex flex-wrap gap-1.5">
+      <label
+        htmlFor={selectId}
+        className="text-[11px] font-bold tracking-[0.08em] text-gray uppercase"
+      >
+        Move to
+      </label>
+      <Select
+        id={selectId}
+        value={candidate.status}
+        disabled={pending}
+        onChange={(e) => move(e.target.value as CandidateStatus)}
+        className="max-w-xs"
+      >
         {options.map((o) => (
-          <button
-            key={o.code}
-            type="button"
-            disabled={pending || (!o.valid && !o.current)}
-            aria-pressed={o.current}
-            onClick={() => move(o.code as CandidateStatus)}
-            title={!o.valid && !o.current ? o.reasons.join("; ") : undefined}
-            className={cn(
-              "rounded-full border px-3 py-1 text-xs font-semibold transition",
-              "focus-visible:ring-2 focus-visible:ring-navy focus-visible:outline-none",
-              o.current
-                ? "border-navy bg-navy text-white"
-                : o.valid
-                  ? "border-black/15 bg-white text-charcoal hover:bg-black/5"
-                  : "cursor-not-allowed border-black/10 bg-black/[0.03] text-gray/70",
-            )}
-          >
+          <option key={o.code} value={o.code} disabled={!o.valid && !o.current}>
             {o.label}
-          </button>
+            {!o.valid && !o.current ? " — blocked" : ""}
+          </option>
         ))}
-      </div>
+      </Select>
       {blockedReasons.length > 0 ? (
         <ul role="alert" className="mt-0.5 list-disc pl-5 text-xs text-red">
           {blockedReasons.map((r, i) => (

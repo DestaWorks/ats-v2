@@ -190,9 +190,18 @@ export function PipelineBoard({
         owners={owners}
         hotOnly={hotOnly}
         onToggleHot={() => setHotOnly((v) => !v)}
-        hideEmpty={hideEmpty}
-        onToggleHideEmpty={() => setHideEmpty((v) => !v)}
       />
+
+      {/* Legacy placement: its own row between the filters and the columns, left-aligned. */}
+      <label className="-mb-1 flex w-fit cursor-pointer items-center gap-2 text-sm text-gray select-none">
+        <input
+          type="checkbox"
+          checked={hideEmpty}
+          onChange={() => setHideEmpty((v) => !v)}
+          className="h-4 w-4 accent-navy"
+        />
+        Hide empty stages
+      </label>
 
       {error ? (
         <p role="alert" className="rounded-md bg-red/5 px-3 py-2 text-sm text-red">

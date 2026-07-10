@@ -53,7 +53,7 @@ export const LEAD_STATUS_TONE: Record<LeadStatus, BadgeTone> = {
   "No Response": "danger",
   "Bad Fit": "danger",
   "Future Collaboration": "neutral",
-  Promoted: "success",
+  Promoted: "purple", // legacy: filled purple pill
 };
 
 /** `Badge` tone for a raw lead-status string; unknown/legacy statuses fall back to `neutral`. */

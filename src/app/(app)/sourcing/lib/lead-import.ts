@@ -82,7 +82,11 @@ export function normalizeImportStatus(raw: string): LeadStatus {
   const v = raw.trim().toLowerCase();
   if (!v || v === "new" || v.includes("sourc")) return "Sourced";
   const outreach = /outreach\s*([1-3])/.exec(v);
-  if (outreach) return `Outreach ${outreach[1]}` as LeadStatus;
+  // The third step's canonical label carries the "(Final)" suffix — a bare "Outreach 3" would
+  // fail the server's LEAD_STATUSES enum and reject the whole chunk.
+  if (outreach) {
+    return outreach[1] === "3" ? "Outreach 3 (Final)" : (`Outreach ${outreach[1]}` as LeadStatus);
+  }
   if (v.includes("respond")) return v.includes("cold") ? "Responded — Cold" : "Responded — Hot";
   if (v.includes("hot")) return "Responded — Hot";
   if (v.includes("cold")) return "Responded — Cold";

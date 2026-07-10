@@ -1,32 +1,18 @@
 /**
- * Client fetch helpers for the `/sourcing` inventory. The load-more read (`fetchLeadsPage`) mirrors
- * the candidate list-fetch (thin wrapper over the gated `GET /api/leads/list`); the mutations reuse
- * the shared `postJson`/`readFailure` envelope helpers so a 409 CONFLICT (already-Promoted lead) or a
- * 422 surfaces as an `ApiFailure` the UI can render. No server imports — safe to bundle client-side.
+ * Client fetch helpers for the `/sourcing` inventory mutations — thin wrappers over the gated
+ * API routes reusing the shared `postJson`/`readFailure` envelope helpers so a 409 CONFLICT
+ * (already-Promoted lead) or a 422 surfaces as an `ApiFailure` the UI can render. The LIST read
+ * has no helper: the RSC serves offset pages directly (`?page=` navigations + router.refresh).
+ * No server imports — safe to bundle client-side.
  */
 import type {
   BulkLeadActionInput,
   ImportLeadRow,
   LeadDetailDTO,
-  LeadListDTO,
   LogOutreachInput,
   UpdateOutreachInput,
 } from "@/lib/validation/lead";
 import { type ApiResult, getJson, postJson, readFailure } from "@/lib/api/client";
-import { buildLeadsQuery } from "./leads-query";
-
-/** Fetch the next keyset page for the current filters. Throws on a non-OK response. */
-export async function fetchLeadsPage(
-  searchParams: URLSearchParams,
-  cursor: string | null,
-): Promise<LeadListDTO> {
-  const query = buildLeadsQuery(searchParams, cursor);
-  const res = await fetch(`/api/leads/list?${query}`, {
-    headers: { Accept: "application/json" },
-  });
-  if (!res.ok) throw new Error("Failed to load more leads.");
-  return (await res.json()) as LeadListDTO;
-}
 
 /** Log an outreach attempt (advances the lead's status server-side). Returns the fresh detail. */
 export function postOutreach(
