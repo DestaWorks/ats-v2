@@ -28,6 +28,7 @@ const row: CandidateRow = {
   credential: "PMHNP",
   population: "Adult",
   setting: "Telehealth",
+  telehealthPref: null,
   track: "Clinical",
   source: "LinkedIn",
   tags: ["Priority"],

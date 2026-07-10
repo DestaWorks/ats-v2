@@ -49,6 +49,10 @@ export const SETTINGS = [
 ] as const;
 export type Setting = (typeof SETTINGS)[number];
 
+/** Telehealth work-mode PREFERENCE (legacy `TELE_OPT`) — what they want, vs `setting` = where they are. */
+export const TELEHEALTH_PREFS = ["Telehealth", "On-site", "Hybrid"] as const;
+export type TelehealthPref = (typeof TELEHEALTH_PREFS)[number];
+
 /** Candidate sources (legacy `SOURCES`). */
 export const SOURCES = [
   "Indeed",

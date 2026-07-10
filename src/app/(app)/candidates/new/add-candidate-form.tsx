@@ -8,6 +8,7 @@ import {
   POPULATIONS,
   SETTINGS,
   SOURCES,
+  TELEHEALTH_PREFS,
   TAGS,
   TRACKS,
   US_STATES,
@@ -95,8 +96,12 @@ export function AddCandidateForm({
     <form onSubmit={form.handleSubmit(onSubmit)} noValidate className="flex flex-col gap-5">
       {serverError ? <ErrorState message={serverError} /> : null}
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Name" htmlFor="ac-name" error={fieldError(form, "name")} required>
+      {/* Field labels + order follow the LEGACY Add New Candidate modal. Deliberate deltas:
+          residence State is kept (it drives the 30-pt state-match scoring; legacy captured it
+          elsewhere); legacy's Contact Source (write-only duplicate of Source) and Target
+          Locations (needs client_locations — ports with Open Roles 3.5) are omitted. */}
+      <div className="grid gap-x-6 gap-y-5 sm:grid-cols-2">
+        <Field label="Full Name" htmlFor="ac-name" error={fieldError(form, "name")} required>
           <Input id="ac-name" autoFocus {...form.register("name")} />
         </Field>
         <Field label="Track" htmlFor="ac-track" error={fieldError(form, "track")} required>
@@ -108,45 +113,10 @@ export function AddCandidateForm({
             ))}
           </Select>
         </Field>
-        <Field label="Email" htmlFor="ac-email" error={fieldError(form, "email")}>
-          <Input
-            id="ac-email"
-            type="email"
-            {...form.register("email", { setValueAs: emptyToNull })}
-          />
-        </Field>
-        <Field label="Phone" htmlFor="ac-phone" error={fieldError(form, "phone")}>
-          <Input id="ac-phone" {...form.register("phone", { setValueAs: emptyToNull })} />
-        </Field>
-        <Field label="City" htmlFor="ac-city" error={fieldError(form, "city")}>
-          <Input id="ac-city" {...form.register("city", { setValueAs: emptyToNull })} />
-        </Field>
-        <Field label="State" htmlFor="ac-state" error={fieldError(form, "state")}>
-          <Select id="ac-state" {...form.register("state", { setValueAs: emptyToNull })}>
-            <option value="">—</option>
-            {US_STATES.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field label="Employer" htmlFor="ac-employer" error={fieldError(form, "employer")}>
-          <Input id="ac-employer" {...form.register("employer", { setValueAs: emptyToNull })} />
-        </Field>
-        <Field label="Years experience" htmlFor="ac-years" error={fieldError(form, "yearsExp")}>
-          <Input
-            id="ac-years"
-            type="number"
-            min={0}
-            max={80}
-            {...form.register("yearsExp", { setValueAs: emptyToNullNumber })}
-          />
-        </Field>
         {showCredential ? (
           <Field label="Credential" htmlFor="ac-cred" error={fieldError(form, "credential")}>
             <Select id="ac-cred" {...form.register("credential", { setValueAs: emptyToNull })}>
-              <option value="">—</option>
+              <option value="">Select…</option>
               {CREDENTIALS.map((c) => (
                 <option key={c} value={c}>
                   {c}
@@ -155,39 +125,9 @@ export function AddCandidateForm({
             </Select>
           </Field>
         ) : null}
-        <Field label="Population" htmlFor="ac-pop" error={fieldError(form, "population")}>
-          <Select id="ac-pop" {...form.register("population", { setValueAs: emptyToNull })}>
-            <option value="">—</option>
-            {POPULATIONS.map((p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field label="Setting" htmlFor="ac-setting" error={fieldError(form, "setting")}>
-          <Select id="ac-setting" {...form.register("setting", { setValueAs: emptyToNull })}>
-            <option value="">—</option>
-            {SETTINGS.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field label="Source" htmlFor="ac-source" error={fieldError(form, "source")}>
-          <Select id="ac-source" {...form.register("source", { setValueAs: emptyToNull })}>
-            <option value="">—</option>
-            {SOURCES.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </Select>
-        </Field>
         {showLicenseState ? (
           <Field
-            label="License state"
+            label="License State"
             htmlFor="ac-licstate"
             error={fieldError(form, "licenseState")}
           >
@@ -195,7 +135,7 @@ export function AddCandidateForm({
               id="ac-licstate"
               {...form.register("licenseState", { setValueAs: emptyToNull })}
             >
-              <option value="">—</option>
+              <option value="">Select…</option>
               {US_STATES.map((s) => (
                 <option key={s} value={s}>
                   {s}
@@ -206,7 +146,7 @@ export function AddCandidateForm({
         ) : null}
         {showLicenseNumber ? (
           <Field
-            label="License number"
+            label="License #"
             htmlFor="ac-licnum"
             error={fieldError(form, "licenseNumber")}
             hint="Only visible to credential-cleared roles"
@@ -227,17 +167,96 @@ export function AddCandidateForm({
             ))}
           </Select>
         </Field>
+        <Field label="Source" htmlFor="ac-source" error={fieldError(form, "source")}>
+          <Select id="ac-source" {...form.register("source", { setValueAs: emptyToNull })}>
+            <option value="">Select…</option>
+            {SOURCES.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Email" htmlFor="ac-email" error={fieldError(form, "email")}>
+          <Input
+            id="ac-email"
+            type="email"
+            {...form.register("email", { setValueAs: emptyToNull })}
+          />
+        </Field>
+        <Field label="Phone" htmlFor="ac-phone" error={fieldError(form, "phone")}>
+          <Input id="ac-phone" {...form.register("phone", { setValueAs: emptyToNull })} />
+        </Field>
+        <Field label="City" htmlFor="ac-city" error={fieldError(form, "city")}>
+          <Input id="ac-city" {...form.register("city", { setValueAs: emptyToNull })} />
+        </Field>
+        <Field label="State" htmlFor="ac-state" error={fieldError(form, "state")}>
+          <Select id="ac-state" {...form.register("state", { setValueAs: emptyToNull })}>
+            <option value="">Select…</option>
+            {US_STATES.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Employer" htmlFor="ac-employer" error={fieldError(form, "employer")}>
+          <Input id="ac-employer" {...form.register("employer", { setValueAs: emptyToNull })} />
+        </Field>
+        <Field label="Population" htmlFor="ac-pop" error={fieldError(form, "population")}>
+          <Select id="ac-pop" {...form.register("population", { setValueAs: emptyToNull })}>
+            <option value="">Select…</option>
+            {POPULATIONS.map((p) => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Setting" htmlFor="ac-setting" error={fieldError(form, "setting")}>
+          <Select id="ac-setting" {...form.register("setting", { setValueAs: emptyToNull })}>
+            <option value="">Select…</option>
+            {SETTINGS.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Telehealth" htmlFor="ac-tele" error={fieldError(form, "telehealthPref")}>
+          <Select id="ac-tele" {...form.register("telehealthPref", { setValueAs: emptyToNull })}>
+            <option value="">Select…</option>
+            {TELEHEALTH_PREFS.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Years Exp" htmlFor="ac-years" error={fieldError(form, "yearsExp")}>
+          <Input
+            id="ac-years"
+            type="number"
+            min={0}
+            max={80}
+            {...form.register("yearsExp", { setValueAs: emptyToNullNumber })}
+          />
+        </Field>
       </div>
 
       <fieldset className="flex flex-col gap-2">
-        <legend className="text-sm font-medium text-charcoal">Tags</legend>
-        <div className="flex flex-wrap gap-3">
+        {/* Legacy section-label style; the checkbox mechanics stay (deliberate — see 2026-07-11). */}
+        <legend className="text-[11px] font-bold tracking-[0.08em] text-gray uppercase">
+          Tags
+        </legend>
+        <div className="flex flex-wrap gap-x-4 gap-y-2">
           {TAGS.map((tag) => {
             const checked = selectedTags.includes(tag);
             return (
               <label key={tag} className="flex items-center gap-1.5 text-sm text-charcoal">
                 <input
                   type="checkbox"
+                  className="accent-navy"
                   checked={checked}
                   onChange={(e) => {
                     const next = e.target.checked
@@ -253,10 +272,8 @@ export function AddCandidateForm({
         </div>
       </fieldset>
 
-      <div className="flex gap-2">
-        <Button type="submit" loading={pending}>
-          Create candidate
-        </Button>
+      {/* Legacy footer: actions right-aligned above a hairline — Cancel, then the GREEN commit. */}
+      <div className="flex items-center justify-end gap-2 border-t border-black/5 pt-4">
         <Button
           type="button"
           variant="secondary"
@@ -264,6 +281,9 @@ export function AddCandidateForm({
           onClick={() => (onCancel ? onCancel() : router.push("/pipeline"))}
         >
           Cancel
+        </Button>
+        <Button type="submit" variant="success" loading={pending}>
+          Add Candidate
         </Button>
       </div>
     </form>

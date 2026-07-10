@@ -79,6 +79,7 @@ export function toCandidateProfileDTO(dto: CandidateDTO): CandidateProfileDTO {
     credential: dto.credential,
     population: dto.population,
     setting: dto.setting,
+    telehealthPref: dto.telehealthPref,
     track: dto.track,
     source: dto.source,
     tags: dto.tags,
