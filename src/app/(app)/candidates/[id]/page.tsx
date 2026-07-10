@@ -1,17 +1,12 @@
-import { notFound, redirect } from "next/navigation";
-import { getCurrentUser } from "@/server/auth/guards";
-import { candidateService } from "@/server/services/candidate.service";
-import { clientRepository } from "@/server/repositories/client.repository";
-import { userRepository } from "@/server/repositories/user.repository";
-import { AppError } from "@/server/http/app-error";
 import { CandidateDetail } from "./candidate-detail";
+import { loadCandidateDetail } from "./lib/load-detail";
 
 /**
- * Candidate detail (RSC). Mirrors the pipeline board's guard-then-read pattern (the `(app)` segment
- * has no shared layout): `getCurrentUser()` → redirect if unauthed, then load the composite
- * `CandidateDetailDTO` server-side via `candidateService.getCandidateDetail` (a direct call, no
- * self-fetch). A NOT_FOUND (missing / soft-deleted) maps to `notFound()`. The viewer's capabilities
- * become UI hints for the client component — the server routes re-enforce them on every mutation.
+ * Candidate detail — the FULL-PAGE rendering of `/candidates/[id]` (hard load, refresh, new tab,
+ * and every deep link: alerts/mentions `?tab=`, promoted-lead links, shared URLs). In-app
+ * navigation from the board/list is INTERCEPTED by `(app)/@modal/(.)candidates/[id]` and renders
+ * the same content as a dialog over the current view instead (legacy modal UX) — both entries
+ * share `loadCandidateDetail`, so data/guards can never drift.
  */
 export default async function CandidateDetailPage({
   params,
@@ -20,25 +15,9 @@ export default async function CandidateDetailPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ tab?: string }>;
 }) {
-  const user = await getCurrentUser();
-  if (!user) redirect("/sign-in");
-
   const { id } = await params;
   const { tab } = await searchParams;
-
-  let detail;
-  try {
-    detail = await candidateService.getCandidateDetail(id, user);
-  } catch (err) {
-    if (err instanceof AppError && err.code === "NOT_FOUND") notFound();
-    throw err;
-  }
-
-  const [clientRows, taggable] = await Promise.all([
-    clientRepository.list(),
-    userRepository.list(), // @mention targets: id + display name only (no emails client-side)
-  ]);
-  const clients = clientRows.map((c) => ({ id: c.id, name: c.name }));
+  const { detail, clients, taggable } = await loadCandidateDetail(id);
 
   return (
     <CandidateDetail
