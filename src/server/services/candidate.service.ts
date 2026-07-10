@@ -30,11 +30,16 @@ import type {
 } from "@/lib/validation/pipeline";
 import { encodeCursor, type PageCursor } from "@/lib/validation/cursor";
 import { listSortToOrderBy, type ListSort } from "@/lib/validation/pipeline";
+import type { LogOutreachInput, OutreachAttemptDTO } from "@/lib/validation/lead";
 import { requireUser, type AuthUser } from "@/server/auth/guards";
 import { writeAudit } from "@/server/db/audit";
 import { withTransaction } from "@/server/db/with-transaction";
 import { candidateRepository, type CandidateRow } from "@/server/repositories/candidate.repository";
 import { clientRepository, type ClientRow } from "@/server/repositories/client.repository";
+import {
+  outreachRepository,
+  type OutreachAttemptRow,
+} from "@/server/repositories/outreach.repository";
 import { userRepository } from "@/server/repositories/user.repository";
 import {
   clientRulesRepository,
@@ -150,7 +155,9 @@ function pageMeta(total: number, requestedPage: number, pageSize: number) {
  * against", so it always sinks below any real score, including a real `0`). Ties — and the whole
  * null group — keep their incoming (DB `orderBy`) order, so `fit` is deterministic across pages.
  */
-function sortByFit<T>(scored: { row: T; score: number | null }[]): { row: T; score: number | null }[] {
+function sortByFit<T>(
+  scored: { row: T; score: number | null }[],
+): { row: T; score: number | null }[] {
   return scored
     .map((entry, index) => ({ entry, index }))
     .sort((a, b) => {
@@ -301,6 +308,24 @@ function toListItem(
     createdAt: dto.createdAt.toISOString(),
     score,
     dqFlags,
+  };
+}
+
+/**
+ * Project a shared `outreach_attempts` row onto the wire DTO (mirrors the lead service's private
+ * mapper — kept local because lead.service imports candidateService, so importing back would cycle).
+ */
+function toOutreachDTO(
+  row: OutreachAttemptRow,
+  actorNames: Map<string, string>,
+): OutreachAttemptDTO {
+  return {
+    id: row.id,
+    channel: row.channel as OutreachAttemptDTO["channel"],
+    at: row.at.toISOString(),
+    note: row.note,
+    actorId: row.actorId,
+    actorName: actorNames.get(row.actorId) ?? null,
   };
 }
 
@@ -564,13 +589,17 @@ export const candidateService = {
     const candidate = await candidateRepository.findById(id);
     if (!candidate) throw new AppError("NOT_FOUND", "Candidate not found");
 
-    const [documents, notes, history, clients, rulesRows] = await Promise.all([
+    const [documents, notes, history, clients, rulesRows, outreachRows] = await Promise.all([
       documentRepository.listByCandidate(id),
       noteRepository.listByCandidate(id),
       stageHistoryRepository.listByCandidate(id),
       clientRepository.list(),
       clientRulesRepository.list(),
+      outreachRepository.listForCandidate(id),
     ]);
+    // Attempt actors → display names in ONE batched read (mirrors the lead detail; no N+1).
+    const outreachActors = await userRepository.namesByIds(outreachRows.map((a) => a.actorId));
+    const outreach = outreachRows.map((a) => toOutreachDTO(a, outreachActors));
 
     const clientName = candidate.clientId
       ? (new Map(clients.map((c) => [c.id, c.name])).get(candidate.clientId) ?? null)
@@ -602,9 +631,44 @@ export const candidateService = {
       documents: documents.map((d) => toDocumentSummaryDTO(toDocumentDTO(d, viewer))),
       notes: visibleNotes(notes, viewer).map(toNoteDTO),
       stageHistory: history.slice(0, 10).map(toStageEventDTO),
+      outreach,
       canVerifyCredentials: hasCapability(viewer.role, "viewCredentials"),
       scoring,
     };
+  },
+
+  /**
+   * Log one outreach attempt on a CANDIDATE (`candidate_log_outreach` parity — the lead-side twin
+   * lives in `lead.service.logOutreach`). Open to any operator. In one transaction: insert the
+   * attempt (shared `outreach_attempts` table), bump the candidate's denormalized counter, and
+   * audit. Returns the fresh attempt DTO (actor name resolved) for in-place prepend.
+   */
+  async logOutreach(
+    id: string,
+    input: LogOutreachInput,
+    user: AuthUser,
+  ): Promise<OutreachAttemptDTO> {
+    const existing = await candidateRepository.findById(id);
+    if (!existing) throw new AppError("NOT_FOUND", "Candidate not found");
+    const attempt = await withTransaction(async (tx) => {
+      const created = await outreachRepository.createForCandidate(
+        id,
+        { channel: input.channel, note: input.note ?? null, actorId: user.id },
+        tx,
+      );
+      await candidateRepository.incrementOutreach(id, tx);
+      await writeAudit(tx, {
+        entity: "candidate",
+        entityId: id,
+        actor: user.id,
+        action: "log_outreach",
+        before: null,
+        after: { channel: input.channel, attemptId: created.id },
+      });
+      return created;
+    });
+    const actorNames = await userRepository.namesByIds([attempt.actorId]);
+    return toOutreachDTO(attempt, actorNames);
   },
 
   /**
@@ -686,7 +750,14 @@ export const candidateService = {
         now,
       });
       const candidates = rows.map((row) =>
-        toListItem(row, viewer, clientNames, now, scoreFor(row, rulesByClient), dqFor(row, rulesByClient)),
+        toListItem(
+          row,
+          viewer,
+          clientNames,
+          now,
+          scoreFor(row, rulesByClient),
+          dqFor(row, rulesByClient),
+        ),
       );
       return { candidates, ...meta };
     }
@@ -738,7 +809,16 @@ export const candidateService = {
     const rulesByClient = buildRulesMap(clients, rulesRows);
     const now = new Date();
     const attention = staleRows
-      .map((row) => toCard(row, viewer, clientNames, now, scoreFor(row, rulesByClient), dqFor(row, rulesByClient)))
+      .map((row) =>
+        toCard(
+          row,
+          viewer,
+          clientNames,
+          now,
+          scoreFor(row, rulesByClient),
+          dqFor(row, rulesByClient),
+        ),
+      )
       .filter((c) => c.isOverdue || c.isStuck);
 
     return { total, active, terminal: total - active, columns, attention };
@@ -792,7 +872,14 @@ export const candidateService = {
     const clientNames = new Map(clients.map((c) => [c.id, c.name]));
     const rulesByClient = buildRulesMap(clients, rulesRows);
     const cardOf = (row: CandidateRow) =>
-      toCard(row, viewer, clientNames, now, scoreFor(row, rulesByClient), dqFor(row, rulesByClient));
+      toCard(
+        row,
+        viewer,
+        clientNames,
+        now,
+        scoreFor(row, rulesByClient),
+        dqFor(row, rulesByClient),
+      );
 
     const countByStatus = new Map<string, number>();
     for (const g of grouped) countByStatus.set(g.status, g._count._all);
@@ -865,7 +952,14 @@ export const candidateService = {
     const hasMore = rows.length > BOARD_PAGE;
     const pageRows = hasMore ? rows.slice(0, BOARD_PAGE) : rows;
     const items = pageRows.map((row) =>
-      toCard(row, viewer, clientNames, now, scoreFor(row, rulesByClient), dqFor(row, rulesByClient)),
+      toCard(
+        row,
+        viewer,
+        clientNames,
+        now,
+        scoreFor(row, rulesByClient),
+        dqFor(row, rulesByClient),
+      ),
     );
     const nextCursor = hasMore
       ? encodeCursor(pageRows[pageRows.length - 1]!, "createdAt_desc")

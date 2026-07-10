@@ -346,6 +346,15 @@ export const candidateRepository = {
     );
   },
 
+  /** Bump the denormalized outreach counter (candidate_log_outreach writes ride the same tx). */
+  incrementOutreach(id: string, tx?: Prisma.TransactionClient) {
+    return db(tx).candidate.update({
+      where: { id },
+      data: { outreachAttempts: { increment: 1 } },
+      select: { id: true, outreachAttempts: true }, // no PII columns → no crypto round-trip
+    });
+  },
+
   /**
    * PERMANENT hard delete — cascades to documents, notes, and stage history (all `onDelete: Cascade`
    * to `Candidate`). Irreversible; ONLY the capability-gated purge service path reaches this. No

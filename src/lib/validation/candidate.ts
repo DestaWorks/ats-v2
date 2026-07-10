@@ -9,6 +9,7 @@
  * `viewCredentials`) — the optional fields below mirror that boundary.
  */
 import { z } from "zod";
+import type { OutreachAttemptDTO } from "./lead";
 import {
   CREDENTIALS,
   LICENSE_STATUSES,
@@ -172,6 +173,11 @@ export interface CandidateDetailDTO {
   documents: DocumentSummaryDTO[];
   notes: NoteDTO[]; // already role-scoped server-side
   stageHistory: StageEventDTO[]; // recent 10, desc
+  /**
+   * Outreach history, newest first — attempts logged on the candidate PLUS the promoted-from
+   * lead's sourcing trail (shared `outreach_attempts` table). Shape shared with the lead detail.
+   */
+  outreach: OutreachAttemptDTO[];
   canVerifyCredentials: boolean;
   /**
    * Fit breakdown for the assigned client — `pct`/`score`/`max`, the soft `flags` (why it isn't 100),
