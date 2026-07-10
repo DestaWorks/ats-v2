@@ -24,6 +24,7 @@ const h = vi.hoisted(() => ({
     incrementOutreach: vi.fn(),
   },
   outreachRepo: { listForCandidate: vi.fn(), createForCandidate: vi.fn() },
+  leadRepo: { findByPromotedCandidateId: vi.fn() },
   stageRepo: { add: vi.fn(), listByCandidate: vi.fn() },
   docRepo: { listByCandidate: vi.fn() },
   noteRepo: { listByCandidate: vi.fn(), create: vi.fn() },
@@ -50,6 +51,7 @@ vi.mock("@/server/repositories/user.repository", () => ({ userRepository: h.user
 vi.mock("@/server/repositories/outreach.repository", () => ({
   outreachRepository: h.outreachRepo,
 }));
+vi.mock("@/server/repositories/lead.repository", () => ({ leadRepository: h.leadRepo }));
 vi.mock("@/server/repositories/client-rules.repository", async () => {
   const actual = await vi.importActual<
     typeof import("@/server/repositories/client-rules.repository")
@@ -121,6 +123,8 @@ beforeEach(() => {
   h.outreachRepo.listForCandidate.mockReset();
   h.outreachRepo.createForCandidate.mockReset();
   h.outreachRepo.listForCandidate.mockResolvedValue([]);
+  h.leadRepo.findByPromotedCandidateId.mockReset();
+  h.leadRepo.findByPromotedCandidateId.mockResolvedValue(null);
   h.userRepo.namesByIds.mockReset();
   h.userRepo.namesByIds.mockResolvedValue(new Map());
   h.stageRepo.add.mockReset();
@@ -830,5 +834,107 @@ describe("candidateService.verifyLicense", () => {
       candidateService.verifyLicense("missing", { licenseStatus: "Active" }, h.user as AuthUser),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect(h.candidateRepo.update).not.toHaveBeenCalled();
+  });
+});
+
+describe("candidateService.getJourney", () => {
+  it("composes sourced → promoted → stage → note → outreach, oldest first, with spanDays", async () => {
+    h.candidateRepo.findById.mockResolvedValue(
+      fullCandidate({ createdAt: new Date("2026-06-25T10:00:00.000Z") }),
+    );
+    h.leadRepo.findByPromotedCandidateId.mockResolvedValue({
+      id: "l1",
+      source: "linkedIn",
+      clientId: "cl1",
+      createdById: "u2",
+      createdAt: new Date("2026-06-20T00:00:00.000Z"),
+    });
+    h.stageRepo.listByCandidate.mockResolvedValue([
+      {
+        id: "s1",
+        fromStatus: "NEW_CANDIDATE",
+        toStatus: "QUALIFIED",
+        enteredAt: new Date("2026-06-26T00:00:00.000Z"),
+        actorId: "u1",
+      },
+    ]);
+    h.noteRepo.listByCandidate.mockResolvedValue([
+      {
+        id: "n1",
+        body: "@Biruh Test",
+        noteType: "internal",
+        authorId: "u1",
+        authorName: "Test User",
+        createdAt: new Date("2026-06-26T01:00:00.000Z"),
+      },
+    ]);
+    h.outreachRepo.listForCandidate.mockResolvedValue([
+      {
+        id: "a1",
+        channel: "email",
+        at: new Date("2026-06-27T00:00:00.000Z"),
+        note: "Template sent",
+        actorId: "u1",
+      },
+    ]);
+    h.userRepo.namesByIds.mockResolvedValue(
+      new Map([
+        ["u1", "Test User"],
+        ["u2", "Michael Habtom"],
+      ]),
+    );
+
+    const journey = await candidateService.getJourney("c1", h.owner as AuthUser);
+
+    expect(journey.events.map((e) => e.kind)).toEqual([
+      "sourced",
+      "promoted",
+      "stage",
+      "note",
+      "outreach",
+    ]);
+    expect(journey.events[0]).toMatchObject({
+      actorName: "Michael Habtom",
+      detail: "linkedIn · target Acme Health",
+    });
+    // Stage codes render as display labels (unknown codes fall back to the raw string).
+    expect(journey.events[2]!.detail).toBe("New Candidate → QUALIFIED");
+    expect(journey.events[3]).toMatchObject({ noteType: "internal", detail: "@Biruh Test" });
+    expect(journey.events[4]).toMatchObject({ channel: "email", detail: "Template sent" });
+    expect(journey.spanDays).toBe(7); // Jun 20 → Jun 27
+  });
+
+  it("applies note VISIBILITY (an Associate never sees non-internal notes in the journey)", async () => {
+    h.candidateRepo.findById.mockResolvedValue(fullCandidate());
+    h.noteRepo.listByCandidate.mockResolvedValue([
+      {
+        id: "n1",
+        body: "internal ok",
+        noteType: "internal",
+        authorId: "u1",
+        authorName: "Test User",
+        createdAt: new Date("2026-06-26T01:00:00.000Z"),
+      },
+      {
+        id: "n2",
+        body: "client-only secret",
+        noteType: "client",
+        authorId: "u1",
+        authorName: "Test User",
+        createdAt: new Date("2026-06-26T02:00:00.000Z"),
+      },
+    ]);
+
+    const journey = await candidateService.getJourney("c1", h.user as AuthUser);
+    const notes = journey.events.filter((e) => e.kind === "note");
+    expect(notes).toHaveLength(1);
+    expect(notes[0]!.detail).toBe("internal ok");
+  });
+
+  it("a candidate with no lead gets a 'created' origin event instead", async () => {
+    h.candidateRepo.findById.mockResolvedValue(fullCandidate());
+    const journey = await candidateService.getJourney("c1", h.owner as AuthUser);
+    expect(journey.events[0]).toMatchObject({ kind: "created", detail: "Referral" });
+    expect(journey.events.some((e) => e.kind === "sourced" || e.kind === "promoted")).toBe(false);
   });
 });

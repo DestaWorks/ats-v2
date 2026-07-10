@@ -265,4 +265,12 @@ export const leadRepository = {
   findByLegacyId(legacyId: string, tx?: Prisma.TransactionClient) {
     return db(tx).sourceLead.findUnique({ where: { legacyId } });
   },
+
+  /**
+   * The lead a candidate was promoted FROM (unique back-link), delete-agnostic — the journey
+   * still shows the sourcing origin even if the lead row was later trashed.
+   */
+  findByPromotedCandidateId(candidateId: string, tx?: Prisma.TransactionClient) {
+    return db(tx).sourceLead.findUnique({ where: { promotedCandidateId: candidateId } });
+  },
 };

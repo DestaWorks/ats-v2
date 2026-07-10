@@ -29,8 +29,10 @@ import type {
   DashboardStatsDTO,
 } from "@/lib/validation/pipeline";
 import { encodeCursor, type PageCursor } from "@/lib/validation/cursor";
+import { toIso } from "@/lib/utils/iso";
 import { listSortToOrderBy, type ListSort } from "@/lib/validation/pipeline";
 import type { LogOutreachInput, OutreachAttemptDTO } from "@/lib/validation/lead";
+import type { JourneyDTO, JourneyEventDTO } from "@/lib/validation/journey";
 import { requireUser, type AuthUser } from "@/server/auth/guards";
 import { writeAudit } from "@/server/db/audit";
 import { withTransaction } from "@/server/db/with-transaction";
@@ -41,6 +43,7 @@ import {
   type OutreachAttemptRow,
 } from "@/server/repositories/outreach.repository";
 import { userRepository } from "@/server/repositories/user.repository";
+import { leadRepository } from "@/server/repositories/lead.repository";
 import {
   clientRulesRepository,
   toClientRules,
@@ -635,6 +638,105 @@ export const candidateService = {
       canVerifyCredentials: hasCapability(viewer.role, "viewCredentials"),
       scoring,
     };
+  },
+
+  /**
+   * The candidate's full JOURNEY (legacy "Candidate Journey" modal parity): sourcing origin +
+   * promote hand-off (from the promoted-from lead, when one exists) + EVERY stage transition +
+   * the viewer-VISIBLE notes (same `visibleNotes` scope as the detail — the journey can never
+   * leak a note type the tabs hide) + the merged outreach log, oldest first. Actor names resolve
+   * in one batched read. `spanDays` = first→last event, for the "N events · spans N days" line.
+   */
+  async getJourney(id: string, viewer: AuthUser): Promise<JourneyDTO> {
+    const candidate = await candidateRepository.findById(id);
+    if (!candidate) throw new AppError("NOT_FOUND", "Candidate not found");
+
+    const [history, notes, outreachRows, lead, clients] = await Promise.all([
+      stageHistoryRepository.listByCandidate(id),
+      noteRepository.listByCandidate(id),
+      outreachRepository.listForCandidate(id),
+      leadRepository.findByPromotedCandidateId(id),
+      clientRepository.list(),
+    ]);
+    const actorIds = [
+      ...history.map((h) => h.actorId),
+      ...outreachRows.map((a) => a.actorId),
+      ...(lead?.createdById ? [lead.createdById] : []),
+      ...(candidate.createdById ? [candidate.createdById] : []),
+    ];
+    const names = await userRepository.namesByIds(actorIds);
+    const nameOf = (actorId: string | null) => (actorId ? (names.get(actorId) ?? null) : null);
+    const stageName = (code: string | null) =>
+      code === null ? "—" : isCandidateStatus(code) ? statusLabel(code) : code;
+
+    const events: JourneyEventDTO[] = [];
+    if (lead) {
+      const targetClient = lead.clientId
+        ? (clients.find((c) => c.id === lead.clientId)?.name ?? null)
+        : null;
+      events.push({
+        kind: "sourced",
+        at: toIso(lead.createdAt),
+        actorName: nameOf(lead.createdById),
+        detail:
+          [lead.source, targetClient ? `target ${targetClient}` : null]
+            .filter(Boolean)
+            .join(" · ") || null,
+      });
+      events.push({
+        kind: "promoted",
+        at: toIso(candidate.createdAt),
+        actorName: nameOf(candidate.createdById),
+        detail: `Now in the pipeline as ${candidate.name}`,
+      });
+    } else {
+      events.push({
+        kind: "created",
+        at: toIso(candidate.createdAt),
+        actorName: nameOf(candidate.createdById),
+        detail: candidate.source,
+      });
+    }
+    for (const h of history) {
+      events.push({
+        kind: "stage",
+        at: toIso(h.enteredAt),
+        actorName: nameOf(h.actorId),
+        detail: `${stageName(h.fromStatus)} → ${stageName(h.toStatus)}`,
+      });
+    }
+    for (const n of visibleNotes(notes, viewer)) {
+      events.push({
+        kind: "note",
+        at: toIso(n.createdAt),
+        actorName: n.authorName,
+        detail: n.body,
+        noteType: n.noteType as JourneyEventDTO["noteType"],
+      });
+    }
+    for (const a of outreachRows) {
+      events.push({
+        kind: "outreach",
+        at: toIso(a.at),
+        actorName: nameOf(a.actorId),
+        detail: a.note,
+        channel: a.channel as JourneyEventDTO["channel"],
+      });
+    }
+
+    events.sort((a, b) => a.at.localeCompare(b.at));
+    const spanDays =
+      events.length > 1
+        ? Math.max(
+            0,
+            Math.round(
+              (new Date(events[events.length - 1]!.at).getTime() -
+                new Date(events[0]!.at).getTime()) /
+                86_400_000,
+            ),
+          )
+        : 0;
+    return { events, spanDays };
   },
 
   /**
