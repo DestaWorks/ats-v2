@@ -55,11 +55,11 @@ describe("POST /api/candidates/:id/notes", () => {
       authorName: "Test User",
       createdAt: "2026-07-04T00:00:00.000Z",
     });
-    const res = await POST(post({ body: "hi", noteType: "external" }), ctx);
+    const res = await POST(post({ body: "hi", noteType: "call" }), ctx);
     expect(res.status).toBe(201);
     expect(h.add).toHaveBeenCalledWith(
       "c1",
-      { body: "hi", noteType: "external" },
+      { body: "hi", noteType: "call" },
       expect.objectContaining({ id: "u1", name: "Test User" }),
     );
     expect((await res.json()).note.id).toBe("n1");
@@ -89,7 +89,7 @@ describe("POST /api/candidates/:id/notes", () => {
   });
 
   it("422 on a bad noteType", async () => {
-    const res = await POST(post({ body: "hi", noteType: "call" }), ctx);
+    const res = await POST(post({ body: "hi", noteType: "external" }), ctx); // retired value
     expect(res.status).toBe(422);
     expect(h.add).not.toHaveBeenCalled();
   });

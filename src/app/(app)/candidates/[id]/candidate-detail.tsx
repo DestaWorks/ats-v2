@@ -9,6 +9,7 @@ import type {
   VerifyLicenseInput,
 } from "@/lib/validation/candidate";
 import type { OutreachAttemptDTO } from "@/lib/validation/lead";
+import type { MentionTarget } from "@/lib/mentions";
 import { DetailHeader } from "./detail-header";
 import { DetailTabs, type TabDef } from "./detail-tabs";
 import { DetailsTab, type ClientOption } from "./details-tab";
@@ -28,10 +29,12 @@ import type { MovedFields } from "./lib/detail-fetch";
 export function CandidateDetail({
   initial,
   clients,
+  taggable,
   canEditCredential,
 }: {
   initial: CandidateDetailDTO;
   clients: ClientOption[];
+  taggable: MentionTarget[];
   canEditCredential: boolean;
 }) {
   const [candidate, setCandidate] = useState<CandidateProfileDTO>(initial.candidate);
@@ -130,7 +133,13 @@ export function CandidateDetail({
       key: "notes",
       label: `Notes (${notes.length})`,
       panel: (
-        <NotesTab candidateId={candidate.id} notes={notes} onAdded={onAdded} announce={announce} />
+        <NotesTab
+          candidateId={candidate.id}
+          notes={notes}
+          taggable={taggable}
+          onAdded={onAdded}
+          announce={announce}
+        />
       ),
     },
     {

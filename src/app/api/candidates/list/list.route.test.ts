@@ -60,7 +60,13 @@ describe("GET /api/candidates/list", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(LIST);
     const [filters] = h.listCandidates.mock.calls[0]!;
-    expect(filters).toMatchObject({ sort: "oldest", mine: true, overdue: true, hot: true, page: 3 });
+    expect(filters).toMatchObject({
+      sort: "oldest",
+      mine: true,
+      overdue: true,
+      hot: true,
+      page: 3,
+    });
   });
 
   it("accepts sort=fit (the computed fit-score sort)", async () => {

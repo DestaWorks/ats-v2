@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { getCurrentUser } from "@/server/auth/guards";
 import { candidateService } from "@/server/services/candidate.service";
 import { clientRepository } from "@/server/repositories/client.repository";
+import { userRepository } from "@/server/repositories/user.repository";
 import { AppError } from "@/server/http/app-error";
 import { CandidateDetail } from "./candidate-detail";
 
@@ -26,13 +27,17 @@ export default async function CandidateDetailPage({ params }: { params: Promise<
     throw err;
   }
 
-  const clientRows = await clientRepository.list();
+  const [clientRows, taggable] = await Promise.all([
+    clientRepository.list(),
+    userRepository.list(), // @mention targets: id + display name only (no emails client-side)
+  ]);
   const clients = clientRows.map((c) => ({ id: c.id, name: c.name }));
 
   return (
     <CandidateDetail
       initial={detail}
       clients={clients}
+      taggable={taggable}
       canEditCredential={detail.canVerifyCredentials}
     />
   );
