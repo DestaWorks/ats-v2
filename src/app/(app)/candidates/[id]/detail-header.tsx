@@ -58,7 +58,18 @@ export function DetailHeader({
         <div className="flex items-start justify-between gap-3">
           <h1 className="font-serif text-2xl font-bold text-charcoal">{candidate.name}</h1>
           <div className="flex shrink-0 items-center gap-2">
-            <JourneyButton candidateId={candidate.id} candidateName={candidate.name} />
+            <JourneyButton
+              candidateId={candidate.id}
+              candidateName={candidate.name}
+              subtitle={[
+                candidate.credential,
+                candidate.licenseState,
+                clientName,
+                statusLabel(candidate.status as CandidateStatus),
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            />
             {inModal ? (
               <Button type="button" size="sm" variant="secondary" onClick={() => router.back()}>
                 Close

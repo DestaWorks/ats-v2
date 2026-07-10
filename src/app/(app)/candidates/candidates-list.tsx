@@ -83,7 +83,7 @@ function SortArrow({ asc }: { asc?: boolean }) {
 /** A faint up/down glyph marking an inactive-but-sortable header. */
 function SortIdle() {
   return (
-    <svg viewBox="0 0 12 12" fill="none" aria-hidden className="h-3 w-3 text-gray/50">
+    <svg viewBox="0 0 12 12" fill="none" aria-hidden className="h-3 w-3 text-white/50">
       <path d="M6 1.5 3.5 4h5L6 1.5ZM6 10.5 3.5 8h5L6 10.5Z" fill="currentColor" />
     </svg>
   );
@@ -170,8 +170,9 @@ export function CandidatesList({
       else p.set("page", String(n));
     });
 
+  // Header sort links sit on the NAVY header band — stay white like the plain column labels.
   const headerLinkClass =
-    "-mx-1 inline-flex items-center gap-1 rounded px-1 py-0.5 hover:text-charcoal focus-visible:ring-2 focus-visible:ring-navy focus-visible:outline-none";
+    "-mx-1 inline-flex items-center gap-1 rounded px-1 py-0.5 text-white hover:text-white/80 focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none";
 
   // Created header: active when sorting by date; toggles newest↔oldest (from fit → newest).
   const createdActive = sort === "newest" || sort === "oldest";
@@ -183,7 +184,7 @@ export function CandidatesList({
           ? `Sorted by created date, ${sort === "newest" ? "newest first" : "oldest first"}. Activate to reverse.`
           : "Sort by created date, newest first."
       }
-      className={cn(headerLinkClass, createdActive && "text-charcoal")}
+      className={headerLinkClass}
     >
       Created
       {createdActive ? <SortArrow asc={sort === "oldest"} /> : <SortIdle />}
@@ -200,7 +201,7 @@ export function CandidatesList({
           ? "Sorted by fit score, highest first. Activate to clear the fit sort."
           : "Sort by fit score, highest first."
       }
-      className={cn(headerLinkClass, scoreActive && "text-charcoal")}
+      className={headerLinkClass}
     >
       Score
       {scoreActive ? <SortArrow /> : <SortIdle />}

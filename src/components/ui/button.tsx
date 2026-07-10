@@ -1,6 +1,5 @@
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { cn } from "@/lib/utils/cn";
-import { Spinner } from "./spinner";
 
 /**
  * Shared button primitive. Extracted from the buttons hand-rolled across auth /
@@ -10,8 +9,8 @@ import { Spinner } from "./spinner";
  * `mt-2`, …). Spreads native `<button>` props (`type`, `onClick`, `disabled`,
  * `aria-*`) and forwards a ref to the underlying element.
  *
- * `loading` renders the shared `<Spinner>` inline (folding in the resume SaveBar's
- * spinner + label pattern) and disables the button.
+ * `loading` just DISABLES the button (dimmed via `disabled:opacity-50`) — no inline spinner,
+ * so the button never changes size mid-action.
  */
 
 export type ButtonVariant =
@@ -61,14 +60,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       )}
       {...props}
     >
-      {loading ? (
-        <span className="inline-flex items-center gap-2">
-          <Spinner className="h-4 w-4 text-current" label="Loading" />
-          {children}
-        </span>
-      ) : (
-        children
-      )}
+      {children}
     </button>
   );
 });

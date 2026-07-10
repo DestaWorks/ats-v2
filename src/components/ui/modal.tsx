@@ -55,7 +55,7 @@ export function Modal({
         if (e.target === ref.current) onClose();
       }}
       className={cn(
-        "m-auto w-[min(40rem,calc(100vw-2rem))] rounded-xl border border-black/5 bg-white p-0 text-charcoal shadow-xl backdrop:bg-black/40",
+        "m-auto w-[min(50rem,calc(100vw-2rem))] rounded-xl border border-black/5 bg-white p-0 text-charcoal shadow-xl backdrop:bg-black/40",
         className,
       )}
     >
