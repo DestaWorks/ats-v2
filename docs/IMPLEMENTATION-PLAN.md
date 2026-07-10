@@ -187,13 +187,15 @@ share a database.** *(`zyx.com` below is a placeholder for the real domain.)*
 - [ ] **Deferred to follow-up:** table view + sortable columns; `saved_views` model + saved views + filter chips (mine/overdue/stuck/hot/verify); bulk-select UI (endpoint ships now); AI health strip (`server/ai/pipeline-health`); card scoring (needs `client_rules`); client-side gate pre-check (dim invalid targets); TanStack Query.
 - **Done-when:** recruiters work candidates; gates block invalid moves; every move audited. *(Core loop ✅; legacy retirement waits on the deferred views.)*
 
-### 2.2 Candidate Detail — notes (brings ONLY note tables)  🟡 *(notes done — mentions/outreach/ETL deferred; design `docs/design/wave-2.3-candidate-detail.md`)*
-- [x] Add `candidate_notes` model → migrated (`add_candidate_notes`). *(mentions model deferred.)*
+### 2.2 Candidate Detail — notes (brings ONLY note tables)  ✅ *(done 2026-07-10 — notes + @mentions + 5-way types + outreach tab; notes ETL deferred to 1.3; design `docs/design/wave-2.3-candidate-detail.md`)*
+- [x] Add `candidate_notes` model → migrated (`add_candidate_notes`); `mentions` model → migrated (`add_mentions_expand_note_types`).
 - [x] Notes service: add note (**XSS fixed** — bodies stored raw, rendered as escaped React text; `dangerouslySetInnerHTML` banned via `react/no-danger`), role-scoped visibility **server-side** (`visibleNotes`); author from the session, not the client. Audited.
 - [x] `POST /api/candidates/:id/notes`, `GET .../notes` routes.
 - [x] Port Notes tab (list + composer).
-- [ ] **Deferred:** `mentions` model + mentions service + @mention autocomplete + notify; outreach-history panel; notes ETL backfill.
-- **Done-when:** notes safe + role-scoped ✅ *(mentions/historical notes deferred)*.
+- [x] @mentions: server-side resolution from the stored body + mention rows w/ read state; cursor-aware autocomplete; `GET /api/mentions` + `POST /api/mentions/read`. Legacy 5-way note types restored (`internal/client/call/email/text`) with SERVER-side visibility (`viewAllNoteTypes` capability).
+- [x] Candidate outreach tab (`candidate_log_outreach` parity) — merged direct + promoted-lead history, log form, tx'd counter+audit.
+- [ ] **Deferred:** notes ETL backfill (goes with 1.3).
+- **Done-when:** notes safe + role-scoped ✅ · mentions ✅ *(historical-notes ETL deferred)*.
 
 ### 2.3 Candidate Detail — the rest (Module 4)  🟡 *(core done — handoff deferred)*
 - [x] `PATCH /api/candidates/:id` (edit, audited, `licenseNumber` gated on `viewCredentials`) + `POST .../verify-license` routes.
@@ -208,23 +210,23 @@ share a database.** *(`zyx.com` below is a placeholder for the real domain.)*
 - [x] Track-aware add-candidate form at `/candidates/new` (clinical/prescriber show credential+license; operations contact-only) → redirects to the new candidate detail. Entry: "+ Add candidate" on the board header.
 - **Done-when:** ✅ manual create works + validated (262 tests, build green).
 
-### 2.5 Cross-cutting (Module 24)  🟡 *(trash + activity done, PRs #16/#17 — alerts pending)*
+### 2.5 Cross-cutting (Module 24)  🟡 *(trash + activity + alerts done — trash retention policy pending owner)*
 - [x] Trash: soft-delete list + restore + purge routes (purge capability-gated + type-to-confirm; page at `/trash`, not a modal). *Retention gap vs legacy: no 30-day days-left countdown / auto-purge — policy decision + cron pending (audit 2026-07-07).*
-- [ ] Alerts panel (mentions + derived overdue/new/unverified) — port 1:1. *(mentions section depends on 2.2's deferred mentions model)*
+- [x] Alerts panel (2026-07-10): header "Alerts" pill (badge = unread mentions only) + panel — @mentions (8 unread/3 read, mark-all-read, deep links) + derived OVERDUE / NEW TO REVIEW / VERIFICATION PENDING buckets, viewer-scoped SERVER-side via `GET /api/alerts`.
 - [x] Audit-log write helper used by every mutation *(shipped Wave 0.5; used by every service mutation since)*.
 - [x] **Activity Log view** (`vw="activity"`) — filter by action/entity/actor/date-range, keyset pagination, lazy before/after diff; admin-gated (`viewAudit`). *(exceeds legacy parity)*
-- **Done-when:** trash + alerts + activity log work; audit records actor+before/after. **Open: alerts panel only.**
+- **Done-when:** trash + alerts + activity log work; audit records actor+before/after. **Open: trash 30-day countdown/auto-purge (owner policy).**
 
-### 2.6 Sourcing (Module 6) — brings ONLY lead tables *(moved up with the funnel — D2)*  🟡 *(core funnel done, PR #18 — bulk/snooze/restore/import pending)*
+### 2.6 Sourcing (Module 6) — brings ONLY lead tables *(moved up with the funnel — D2)*  🟡 *(full lifecycle done 2026-07-10 — ONLY leads ETL backfill open)*
 - [x] Add `source_leads` + **one `outreach_attempts`** model (nullable `lead_id` + `candidate_id`, serves both lead and candidate outreach) → migrate. *(split out of the JSON blob)*
 - [x] Lead repository + service (outreach state machine + `normalizeLeadStatus` → codes; pure `lead-lifecycle` rules).
-- [ ] Routes (one per action): ✅ add · ✅ log-outreach · ✅ respond · ✅ delete — **pending: edit/delete-outreach, bulk-action, snooze, undelete/restore** *(deleted leads currently unrecoverable via UI — audit 2026-07-07)*.
+- [x] Routes (one per action): add · log-outreach · respond · delete · restore · snooze (`snoozedUntil`, date-aware — legacy forever-snooze bug fixed) · edit/delete-outreach (lead-scoped, denorm re-sync, status never regressed) · bulk (delete/restore/status/assign/client/outreach, skips-Promoted, per-lead audit).
 - [x] `POST /api/leads/:id/promote` — **the `source_lead_promote` hand-off writes the candidate to Postgres** (not the Sheet), so promote and pipeline share one store. *(409-safe against concurrent promote)*
-- [ ] `POST /api/leads/bulk-import` (chunked) route.
+- [x] `POST /api/leads/import` (200-row chunks; server dedupe email→name; quoted-cell CSV parser client-side).
 - [ ] **ETL: backfill leads** from the Sheet — `legacy_id` idempotent upsert, **email-primary dedupe** (name secondary/manual), keep-newest+flag merge; freeze the leads source at final backfill.
-- [x] Port inventory + filters (modernized: shared filter toolbar, canonical Source dropdown) + add/log/promote/delete modals — **pending: snooze modal, expanded outreach-history row**.
-- [ ] Port bulk actions + 30s-undo 1:1.
-- **Done-when:** full lead lifecycle + promote → candidate **in Postgres**; historical leads migrated; legacy lead writes frozen/redirected. **Open: bulk actions, snooze, lead restore, lead bulk-import, leads ETL.**
+- [x] Port inventory + filters (modernized: shared filter toolbar, canonical Source dropdown) + add/log/promote/delete/snooze modals + outreach-history modal (edit/delete inline).
+- [x] Port bulk actions + 30s-undo 1:1 (select-all, status/assign/client/delete/log toolbar, undo = bulk restore).
+- **Done-when:** full lead lifecycle + promote → candidate **in Postgres**; historical leads migrated; legacy lead writes frozen/redirected. **Open: leads ETL only.**
 
 ### 2.7 Discover / NPPES (Module 7) — moved up with the funnel (find step)
 - [ ] NPPES search proxy route.
@@ -267,6 +269,11 @@ pipeline polish (✅ owner filter · ✅ needs-verification chip · ✅ hide-emp
 client-side note hiding (now server-side), `dangerouslySetInnerHTML` notes (XSS), `UpdatedAt`-derived
 stage timing (now `stageEnteredAt`), localStorage saved views (will be `saved_views` table), naive CSV
 split parser.
+
+**Resolution 2026-07-10:** all six P0s ✅ and all P1s ✅ shipped, except **trash 30-day countdown/auto-purge**
+(owner policy pending) and **pipeline park/snooze** (product decision). A follow-up design-parity pass
+restyled the shell + shipped pages to the legacy DESTAWORKS look (header/wordmark, navy tables, MOVE-TO
+pills, Overview greeting + stacked distribution).
 
 **Owner escalations open:** 0.9 legacy hardening (CRITICAL, live PII), prod env (0.2/D6), OQ-0 export
 format (blocks 1.3/1.4), trash auto-purge sign-off.
