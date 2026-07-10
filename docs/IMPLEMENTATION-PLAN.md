@@ -176,7 +176,7 @@ share a database.** *(`zyx.com` below is a placeholder for the real domain.)*
 > to the new app — there is never a window where a legacy promote writes a candidate the new
 > pipeline can't see.
 
-### 2.1 Pipeline (Module 3) — brings `saved_views`  🟡 *(core board done — design `docs/design/wave-2.1-pipeline.md`; polish deferred)*
+### 2.1 Pipeline (Module 3) — brings `saved_views`  🟡 *(board + list + polish done 2026-07-10 — open: saved_views, park/snooze, AI health strip)*
 - [x] Candidate service: `move(id, toStatus)` — `STAGE_REQUIRED` gate, `stage_history` + audit, in a transaction *(shipped Wave 1.1)*.
 - [x] `GET /api/candidates` — **funnel-grouped** board data + filters (track/client/search/includeTerminal).
 - [x] `POST /api/candidates/:id/move` route (gated; returns only pipeline fields — no PII).
@@ -184,8 +184,9 @@ share a database.** *(`zyx.com` below is a placeholder for the real domain.)*
 - [x] Kanban board + cards + drag-drop → move (dnd-kit, React 19 `useOptimistic`, snap-back + toast on `STAGE_BLOCKED`); terminal-state side rail; per-card status-`<select>` fallback (keyboard/terminal moves). Real **dashboard** (funnel bars + Total/Active/Overdue/Stuck + needs-attention + CTA) replaces the 0.3 placeholder.
 - [x] Filters in URL `searchParams` (shareable). Demo-seed tooling (`pnpm db:seed:demo`, `db:status`) for local testing.
 - [x] Tests: move gating (single + bulk STAGE_BLOCKED), funnel grouping, exact optimistic-revert, no-PII-on-move. Reviewed (architect→backend→frontend→review; M1 PII-over-return fixed, M2 client gate pre-check deferred w/ sign-off). **161 tests, build green.**
-- [ ] **Deferred to follow-up:** table view + sortable columns; `saved_views` model + saved views + filter chips (mine/overdue/stuck/hot/verify); bulk-select UI (endpoint ships now); AI health strip (`server/ai/pipeline-health`); card scoring (needs `client_rules`); client-side gate pre-check (dim invalid targets); TanStack Query.
-- **Done-when:** recruiters work candidates; gates block invalid moves; every move audited. *(Core loop ✅; legacy retirement waits on the deferred views.)*
+- [x] Follow-ups shipped (2026-07-07..10, PR #19): `/candidates` table view w/ server-side sort/filter/OFFSET pages; filter chips (mine/overdue/stuck/hot/needs-verification) + owner filter + hide-empty + per-column avg-days; bulk-select UI; card scoring vs `client_rules` (+ advisory auto-DQ flags); client-side gate pre-check (board select + detail MOVE-TO pills dim invalid targets).
+- [ ] **Still deferred:** `saved_views` model + saved views; pipeline park/snooze (product decision); AI health strip (`server/ai/pipeline-health`). *(TanStack Query dropped — plain fetch + RSC re-seed proved sufficient.)*
+- **Done-when:** recruiters work candidates; gates block invalid moves; every move audited. *(Core loop + views ✅; open: saved views, park/snooze, AI strip.)*
 
 ### 2.2 Candidate Detail — notes (brings ONLY note tables)  ✅ *(done 2026-07-10 — notes + @mentions + 5-way types + outreach tab; notes ETL deferred to 1.3; design `docs/design/wave-2.3-candidate-detail.md`)*
 - [x] Add `candidate_notes` model → migrated (`add_candidate_notes`); `mentions` model → migrated (`add_mentions_expand_note_types`).
@@ -202,6 +203,7 @@ share a database.** *(`zyx.com` below is a placeholder for the real domain.)*
 - [x] Header + stage-mover (client gate pre-check + server-authoritative move). Board card → **View profile** link.
 - [x] Details tab (edit form) + License tab (track-aware verify) + RÃ©sumÃ© tab (documents list; byte preview → W6).
 - [x] Read layer: `getCandidateDetail` (PII-gated composite: candidate + documents + notes + stage history). Reviewed (architect→backend→frontend→review; M1 rules→`lib/rules` isomorphic move + M2 `react/no-danger` + N3 URL allowlist fixed). **253 tests, build green.**
+- [x] **Journey timeline** (2026-07-10, PR #20): `GET /api/candidates/:id/journey` composes sourced (promoted-from lead) → promoted/created → every stage move → viewer-VISIBLE notes → merged outreach, oldest-first; "🏛 Journey" modal on the detail header (legacy CANDIDATE JOURNEY parity).
 - [ ] **Deferred:** track-editor pill; auto-handoff to Operate on "Started" (idempotency key).
 - **Done-when:** full record editable ✅ *(handoff deferred)*.
 
@@ -270,7 +272,7 @@ client-side note hiding (now server-side), `dangerouslySetInnerHTML` notes (XSS)
 stage timing (now `stageEnteredAt`), localStorage saved views (will be `saved_views` table), naive CSV
 split parser.
 
-**Resolution 2026-07-10:** all six P0s ✅ and all P1s ✅ shipped, except **trash 30-day countdown/auto-purge**
+**Resolution 2026-07-10 (PRs #19 + #20):** all six P0s ✅ and all P1s ✅ shipped, except **trash 30-day countdown/auto-purge**
 (owner policy pending) and **pipeline park/snooze** (product decision). A follow-up design-parity pass
 restyled the shell + shipped pages to the legacy DESTAWORKS look (header/wordmark, navy tables, MOVE-TO
 pills, Overview greeting + stacked distribution).

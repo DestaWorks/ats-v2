@@ -116,7 +116,7 @@ capability map only.
 | Field | Notes |
 |-------|-------|
 | `CandidateID` | Foreign key |
-| Note type | internal vs external (`.note-int` / `.note-ext` styling) |
+| Note type | 5-way: `internal` / `client` / `call` / `email` / `text` (legacy picker; non-`internal` types admin-only — target: `viewAllNoteTypes` capability, enforced SERVER-side) |
 | Body, author, timestamp | |
 | Mentions | `@user` mentions create Mention records with `MentionID`, `recipientEmail`, read state |
 
