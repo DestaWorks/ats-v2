@@ -1,6 +1,8 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { ALL_STATUS_CODES, statusLabel, type CandidateStatus } from "@/lib/constants";
@@ -95,10 +97,27 @@ export function CandidateCard({
   onMove: (card: CandidateCardDTO, toStatus: CandidateStatus) => void;
   busy?: boolean;
 }) {
+  const router = useRouter();
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: card.id,
     attributes: { roleDescription: "draggable candidate card" },
   });
+
+  // Click-vs-drag disambiguation (legacy: clicking a card opens the detail): the PointerSensor
+  // only activates after 5px of travel, so a clean click never starts a drag — but the browser
+  // still fires a `click` AFTER a real drag ends. Remember that a drag happened for this pointer
+  // interaction and swallow exactly that one click.
+  const wasDragged = useRef(false);
+  useEffect(() => {
+    if (isDragging) wasDragged.current = true;
+  }, [isDragging]);
+  function openProfile() {
+    if (wasDragged.current) {
+      wasDragged.current = false;
+      return;
+    }
+    router.push(`/candidates/${card.id}`);
+  }
   // Left-border accent — advisory DQ (red) outranks timing (orange), matching the legacy board.
   const accent =
     card.dqFlags.length > 0
@@ -126,14 +145,17 @@ export function CandidateCard({
         isDragging && "opacity-40",
       )}
     >
-      {/* Drag handle = the card body. The <select> below stays outside the listeners so it
-          remains independently operable by keyboard / pointer. */}
+      {/* Drag handle = the card body; a plain CLICK on it opens the profile (legacy modal UX —
+          the 5px sensor constraint disambiguates). The <select> below stays outside the
+          listeners so it remains independently operable by keyboard / pointer; the View-profile
+          link stays as the keyboard/a11y route into the detail. */}
       <div
         ref={setNodeRef}
         style={{ transform: CSS.Translate.toString(transform) }}
-        className="cursor-grab touch-none p-3 active:cursor-grabbing"
+        className="cursor-pointer touch-none p-3 active:cursor-grabbing"
         {...attributes}
         {...listeners}
+        onClick={openProfile}
         aria-label={ariaLabel}
       >
         <CandidateCardContent card={card} />
