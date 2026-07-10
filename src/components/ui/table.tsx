@@ -55,13 +55,14 @@ export function Table({
           >
             {caption}
           </caption>
+          {/* Legacy-parity header: filled navy band with white labels. */}
           <thead>
-            <tr className="border-b border-black/10 bg-black/[0.03]">
+            <tr className="bg-navy">
               {columns.map((col, i) => (
                 <th
                   key={i}
                   scope="col"
-                  className="px-3 py-2 text-xs font-semibold tracking-wide text-gray uppercase"
+                  className="px-3 py-2.5 text-[13px] font-semibold text-white"
                 >
                   {col}
                 </th>

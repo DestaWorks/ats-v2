@@ -57,15 +57,15 @@ export function AlertsBell({ viewerFirstName }: { viewerFirstName: string }) {
 
   return (
     <Popover
-      align="start"
+      align="end"
       panelClassName="w-96 max-w-[calc(100vw-2rem)] p-0 overflow-hidden"
       trigger={(open) => (
         <span
           className={cn(
-            "flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition",
+            "flex items-center gap-1.5 rounded-lg border px-3.5 py-1.5 text-sm font-semibold transition",
             open
               ? "border-navy bg-navy/10 text-navy"
-              : "border-black/15 text-charcoal hover:bg-black/5",
+              : "border-black/10 bg-black/[0.04] text-charcoal hover:bg-black/[0.07]",
           )}
         >
           Alerts

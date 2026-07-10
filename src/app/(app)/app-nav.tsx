@@ -5,28 +5,26 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils/cn";
 import { activeNavHref, type NavItem } from "./lib/nav";
-import { AlertsBell } from "./alerts-bell";
-import { SignOutButton } from "./sign-out-button";
+import { AddCandidateButton } from "./add-candidate-modal";
+import type { ClientOption } from "./candidates/new/add-candidate-form";
 
 /**
- * The persistent app-shell **left sidebar** (client — needs `usePathname` to highlight the active
- * item). The server layout owns auth, the capability-gated `items` list, and the `clients` list for
- * the add-candidate modal; this component is presentation only. `.no-print` hides it in printable
- * views (reports/credentials).
+ * The app-shell **left sidebar** (legacy parity). The brand/user chrome lives in `AppHeader`;
+ * this column is nav links (active = FILLED navy pill, legacy style) plus the action cluster at
+ * the bottom: green "+ Add Candidate" (opens the shared modal) and the purple "Parse Resume"
+ * link. `.no-print` hides it in printable views.
  *
- * Layout: a fixed-width column on `md+` (`w-60`, sticky full-height); on small screens it collapses
- * to a top bar with an accessible hamburger that expands the nav panel *inline* (pushing content
- * down, never overlaying/hiding it). Top→bottom: brand · nav links (active = `aria-current`) ·
- * spacer · user name·role + Sign out. (Add-candidate lives on the pages, not the sidebar.)
+ * On small screens it collapses to a slim "Menu" bar whose hamburger expands the panel inline
+ * (pushing content down, never overlaying it).
  */
 export function AppNav({
   items,
-  userName,
-  userRole,
+  clients,
+  canEditCredential,
 }: {
   items: NavItem[];
-  userName: string;
-  userRole: string;
+  clients: ClientOption[];
+  canEditCredential: boolean;
 }) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -36,24 +34,17 @@ export function AppNav({
   );
 
   return (
-    <nav className="no-print flex flex-col border-b border-black/10 bg-white md:sticky md:top-0 md:h-screen md:w-60 md:shrink-0 md:border-r md:border-b-0">
-      {/* Brand + mobile hamburger */}
-      <div className="flex items-center justify-between px-4 py-3 md:py-4">
-        <Link
-          href="/dashboard"
-          onClick={() => setMobileOpen(false)}
-          className="text-sm font-bold tracking-tight text-navy focus-visible:ring-2 focus-visible:ring-navy focus-visible:outline-none"
-        >
-          DestaHealth ATS
-        </Link>
-        <AlertsBell viewerFirstName={userName.split(" ")[0] ?? userName} />
+    <nav className="no-print flex flex-col border-b border-black/10 bg-white md:sticky md:top-[53px] md:h-[calc(100vh-53px)] md:w-60 md:shrink-0 md:border-r md:border-b-0">
+      {/* Mobile-only menu bar (the brand lives in the header). */}
+      <div className="flex items-center justify-between px-4 py-2 md:hidden">
+        <span className="text-sm font-semibold text-gray">Menu</span>
         <button
           type="button"
           onClick={() => setMobileOpen((o) => !o)}
           aria-expanded={mobileOpen}
           aria-controls="app-nav-panel"
           aria-label="Toggle navigation"
-          className="rounded-md p-1.5 text-charcoal transition hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-navy focus-visible:outline-none md:hidden"
+          className="rounded-md p-1.5 text-charcoal transition hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-navy focus-visible:outline-none"
         >
           <svg
             aria-hidden="true"
@@ -72,7 +63,10 @@ export function AppNav({
       {/* Nav panel: always shown as a column on md+, toggled inline on mobile. */}
       <div
         id="app-nav-panel"
-        className={cn("flex-col gap-3 px-3 pb-4 md:flex md:flex-1", mobileOpen ? "flex" : "hidden")}
+        className={cn(
+          "flex-col gap-3 px-3 pt-3 pb-4 md:flex md:flex-1",
+          mobileOpen ? "flex" : "hidden",
+        )}
       >
         <ul className="flex flex-col gap-1">
           {items.map((item) => {
@@ -84,10 +78,10 @@ export function AppNav({
                   aria-current={isActive ? "page" : undefined}
                   onClick={() => setMobileOpen(false)}
                   className={cn(
-                    "block rounded-md px-3 py-2 text-sm font-medium transition",
+                    "block rounded-lg px-4 py-2.5 text-sm font-medium transition",
                     "focus-visible:ring-2 focus-visible:ring-navy focus-visible:outline-none",
                     isActive
-                      ? "bg-navy/10 font-semibold text-navy"
+                      ? "bg-navy font-semibold text-white shadow-sm"
                       : "text-charcoal hover:bg-black/5",
                   )}
                 >
@@ -98,12 +92,31 @@ export function AppNav({
           })}
         </ul>
 
-        {/* Spacer pushes the user block to the bottom of the full-height column. */}
-        <div className="mt-auto flex flex-col gap-2 border-t border-black/5 pt-4">
-          <span className="px-1 text-sm text-gray">
-            {userName} · <span className="font-semibold text-charcoal">{userRole}</span>
-          </span>
-          <SignOutButton />
+        {/* Bottom action cluster (legacy: green + Add Candidate · purple Parse Resume). */}
+        <div className="mt-auto grid grid-cols-2 gap-2 border-t border-black/5 pt-4">
+          <AddCandidateButton
+            clients={clients}
+            canEditCredential={canEditCredential}
+            variant="success"
+            size="sm"
+            className="px-2 leading-snug"
+            label={
+              <>
+                + Add
+                <br />
+                Candidate
+              </>
+            }
+          />
+          <Link
+            href="/resume"
+            onClick={() => setMobileOpen(false)}
+            className="flex items-center justify-center rounded-md bg-purple px-2 text-sm leading-snug font-semibold text-white transition hover:opacity-90 focus-visible:ring-2 focus-visible:ring-navy focus-visible:outline-none"
+          >
+            Parse
+            <br />
+            Resume
+          </Link>
         </div>
       </div>
     </nav>

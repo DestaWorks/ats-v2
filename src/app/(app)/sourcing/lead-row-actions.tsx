@@ -176,11 +176,11 @@ export function LeadRowActions({
       <Button
         type="button"
         size="xs"
-        variant="secondary"
+        variant="primary"
         disabled={!canLogOutreach}
         onClick={() => setOpen("outreach")}
       >
-        Log outreach
+        Log
       </Button>
       <Button
         type="button"
@@ -203,7 +203,7 @@ export function LeadRowActions({
       <Button
         type="button"
         size="xs"
-        variant="primary"
+        variant="purple"
         disabled={!canPromote}
         onClick={() => setOpen("promote")}
       >

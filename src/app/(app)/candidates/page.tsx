@@ -104,7 +104,12 @@ export default async function CandidatesPage({
           </p>
           <p className="text-xs text-gray">Score shown per row.</p>
         </div>
-        <AddCandidateButton clients={clients} canEditCredential={canEditCredential} size="sm" />
+        <AddCandidateButton
+          clients={clients}
+          canEditCredential={canEditCredential}
+          size="sm"
+          variant="success"
+        />
       </header>
 
       <ListFilters clients={clients} owners={owners} />

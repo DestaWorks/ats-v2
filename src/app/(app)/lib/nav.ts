@@ -16,11 +16,10 @@ export interface NavItem {
  * separately capability-gated Purge action lives inside the page), so all operators see it.
  */
 export const BASE_NAV_ITEMS: readonly NavItem[] = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/pipeline", label: "Pipeline" },
+  { href: "/dashboard", label: "Overview" },
   { href: "/sourcing", label: "Sourcing" },
+  { href: "/pipeline", label: "Pipeline" },
   { href: "/candidates", label: "Candidates" },
-  { href: "/resume", label: "Parse Résumé" },
   { href: "/trash", label: "Trash" },
 ];
 

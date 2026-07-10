@@ -286,7 +286,7 @@ export function CandidatesList({
       checked={allSelected}
       onChange={toggleAll}
       aria-label={allSelected ? "Deselect all on this page" : "Select all on this page"}
-      className="h-4 w-4 accent-navy"
+      className="h-4 w-4 accent-white"
     />
   );
 

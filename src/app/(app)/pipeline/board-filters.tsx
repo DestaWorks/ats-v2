@@ -77,10 +77,16 @@ export function BoardFilters({
       <FilterChip pressed={hotOnly} onToggle={onToggleHot}>
         Hot (this page)
       </FilterChip>
-      {/* Page-local view toggle — collapses 0-count columns so live stages get the width. */}
-      <FilterChip pressed={hideEmpty} onToggle={onToggleHideEmpty}>
-        Hide empty
-      </FilterChip>
+      {/* Page-local view toggle — collapses 0-count columns (legacy: a checkbox, not a chip). */}
+      <label className="flex cursor-pointer items-center gap-1.5 text-sm font-medium text-charcoal select-none">
+        <input
+          type="checkbox"
+          checked={hideEmpty}
+          onChange={onToggleHideEmpty}
+          className="h-4 w-4 accent-navy"
+        />
+        Hide empty stages
+      </label>
 
       <FiltersPopover count={popoverCount}>
         <FilterField

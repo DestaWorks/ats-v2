@@ -280,7 +280,7 @@ export function LeadsInventory({
         </span>
         <div className="flex items-center gap-2">
           <ImportLeadsButton onImported={() => void reload()} />
-          <AddLeadButton clients={clients} onAdded={prependLead} size="sm" />
+          <AddLeadButton clients={clients} onAdded={prependLead} size="sm" variant="success" />
         </div>
       </div>
 
@@ -313,7 +313,7 @@ export function LeadsInventory({
               key="all"
               type="checkbox"
               aria-label="Select all loaded leads"
-              className="accent-navy"
+              className="accent-white"
               checked={selected.size === rows.length && rows.length > 0}
               onChange={toggleAll}
             />,

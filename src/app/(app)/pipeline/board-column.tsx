@@ -4,7 +4,6 @@ import { useDroppable } from "@dnd-kit/core";
 import { statusSlaDays, type CandidateStatus } from "@/lib/constants";
 import type { BoardColumn as BoardColumnData, CandidateCardDTO } from "@/lib/validation/pipeline";
 import { cn } from "@/lib/utils/cn";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { filterHotLocal } from "../lib/list-local";
 import { CandidateCard } from "./candidate-card";
@@ -51,14 +50,17 @@ export function BoardColumn({
         isDragActive && !isOver && "border-dashed",
       )}
     >
-      <header className="flex items-center justify-between gap-2 border-b border-black/5 px-3 py-2">
+      {/* Legacy-parity header: colored stage dot + tracked uppercase label + big SERIF count. */}
+      <header className="flex items-center justify-between gap-2 border-b border-black/5 px-3 py-1.5">
         <div className="flex items-center gap-2">
           <span aria-hidden className={cn("h-2.5 w-2.5 rounded-full", STATUS_BG[column.status])} />
-          <h2 className="text-xs font-bold tracking-wide text-charcoal uppercase">
+          <h2 className="text-[11px] font-bold tracking-[0.08em] text-charcoal uppercase">
             {column.label}
           </h2>
         </div>
-        <Badge>{column.count}</Badge>
+        <span className="font-serif text-xl leading-none font-semibold text-charcoal">
+          {column.count}
+        </span>
       </header>
 
       {sla != null || avgDays != null ? (
