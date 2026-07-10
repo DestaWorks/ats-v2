@@ -6,6 +6,7 @@ import type { CandidateDetailDTO, CandidateProfileDTO } from "@/lib/validation/c
 import { cn } from "@/lib/utils/cn";
 import { Badge } from "@/components/ui/badge";
 import { StageMover } from "./stage-mover";
+import { JourneyButton } from "./journey-modal";
 import { DeleteCandidateButton } from "./delete-candidate-button";
 import type { MovedFields } from "./lib/detail-fetch";
 
@@ -41,11 +42,14 @@ export function DetailHeader({
         <Link href="/pipeline" className="text-sm font-semibold text-navy hover:underline">
           ← Back to board
         </Link>
-        <DeleteCandidateButton
-          candidateId={candidate.id}
-          candidateName={candidate.name}
-          announce={announce}
-        />
+        <div className="flex items-center gap-2">
+          <JourneyButton candidateId={candidate.id} candidateName={candidate.name} />
+          <DeleteCandidateButton
+            candidateId={candidate.id}
+            candidateName={candidate.name}
+            announce={announce}
+          />
+        </div>
       </div>
 
       <div className="flex flex-col gap-2.5">
