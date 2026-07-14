@@ -10,8 +10,8 @@ import type {
 } from "@/lib/validation/candidate";
 import type { OutreachAttemptDTO } from "@/lib/validation/lead";
 import type { MentionTarget } from "@/lib/mentions";
+import { DetailTabs, type TabDef } from "@/components/ui/tabs";
 import { DetailHeader } from "./detail-header";
-import { DetailTabs, type TabDef } from "./detail-tabs";
 import { DetailsTab, type ClientOption } from "./details-tab";
 import { ScoringCard } from "./scoring-card";
 import { LicenseTab } from "./license-tab";
@@ -177,7 +177,7 @@ export function CandidateDetail({
         inModal={inModal}
       />
 
-      <DetailTabs tabs={tabs} initialKey={initialTab} />
+      <DetailTabs tabs={tabs} initialKey={initialTab} ariaLabel="Candidate detail" />
     </div>
   );
 }

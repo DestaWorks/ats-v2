@@ -16,10 +16,19 @@ export interface TabDef {
  * its panel via `aria-controls`/`aria-labelledby`. Only the active panel is rendered (forms remount
  * on switch — acceptable for this slice; the seeded values come from props).
  *
- * `initialKey` selects the starting tab (alerts-panel deep links: `?tab=notes` / `?tab=license`);
- * an unknown key falls back to the first tab.
+ * `initialKey` selects the starting tab (e.g. alerts-panel deep links: `?tab=notes` / `?tab=license`);
+ * an unknown key falls back to the first tab. `ariaLabel` names the tablist for screen readers
+ * (e.g. "Candidate detail", "Role detail") — pass one per feature that mounts this.
  */
-export function DetailTabs({ tabs, initialKey }: { tabs: TabDef[]; initialKey?: string }) {
+export function DetailTabs({
+  tabs,
+  initialKey,
+  ariaLabel,
+}: {
+  tabs: TabDef[];
+  initialKey?: string;
+  ariaLabel: string;
+}) {
   const [selected, setSelected] = useState(() =>
     Math.max(
       0,
@@ -64,7 +73,7 @@ export function DetailTabs({ tabs, initialKey }: { tabs: TabDef[]; initialKey?: 
       {/* Legacy-parity pill tabs: a light track, the active tab a FILLED dark pill. */}
       <div
         role="tablist"
-        aria-label="Candidate detail"
+        aria-label={ariaLabel}
         className="inline-flex flex-wrap gap-1 self-start rounded-full bg-black/[0.04] p-1"
       >
         {tabs.map((tab, i) => {

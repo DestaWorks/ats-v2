@@ -300,13 +300,22 @@ export const leadService = {
    * fields COERCED by `leadToCandidateInput`), flip the lead to Promoted + set `promotedCandidateId`,
    * and audit `promote` — atomic, so a lead can never read Promoted while pointing at a candidate that
    * failed to write. Returns the new candidate id (the client navigates to `/candidates/{id}`).
+   * `opts.filledFromRoleId` (Wave 3.5, `openRoleService.promote`) stamps which Open Role this
+   * candidate fills — a real FK, unlike legacy's `"FilledFromRole:R123"` tags-string hack.
    */
-  async promote(id: string, user: AuthUser): Promise<{ candidateId: string }> {
+  async promote(
+    id: string,
+    user: AuthUser,
+    opts?: { filledFromRoleId?: string },
+  ): Promise<{ candidateId: string }> {
     const existing = await requireLead(id);
     if (!canPromote(existing.status as LeadStatus)) {
       throw new AppError("CONFLICT", "Lead already promoted");
     }
-    const input = leadToCandidateInput(existing);
+    const input = {
+      ...leadToCandidateInput(existing),
+      filledFromRoleId: opts?.filledFromRoleId ?? null,
+    };
     return withTransaction(async (tx) => {
       const candidate = await candidateService.create(input, { user, tx });
       // Guarded flip INSIDE the tx: if a concurrent promote already flipped this lead, we update 0

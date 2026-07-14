@@ -385,6 +385,8 @@ export interface CandidateCreateInput {
   licenseExpiry?: Date | null;
   clientId?: string | null;
   legacyId?: string | null;
+  /** Wave 3.5 — which Open Role this candidate was promoted to fill, if any (server-composed only). */
+  filledFromRoleId?: string | null;
 }
 
 /** Editable fields. `status`/pipeline timing are owned by `move` (denormalization contract). */

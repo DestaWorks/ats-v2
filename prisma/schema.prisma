@@ -17,22 +17,22 @@ datasource db {
 // --- Better Auth core models (+ admin plugin fields) ---
 
 model User {
-  id            String    @id @default(cuid())
-  name          String
-  email         String    @unique
-  emailVerified Boolean   @default(false)
-  image         String?
+  id             String         @id @default(cuid())
+  name           String
+  email          String         @unique
+  emailVerified  Boolean        @default(false)
+  image          String?
   // RBAC (DECISIONS D3): one fixed role per account; `admin` is a role value.
-  role          String    @default("Associate")
+  role           String         @default("Associate")
   // admin plugin
-  banned        Boolean   @default(false)
-  banReason     String?
-  banExpires    DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  sessions      Session[]
-  accounts      Account[]
-  mentions      Mention[]
+  banned         Boolean        @default(false)
+  banReason      String?
+  banExpires     DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  sessions       Session[]
+  accounts       Account[]
+  mentions       Mention[]
   targets        DailyTarget[]  @relation("targets")
   actuals        DailyActual[]  @relation("actuals")
   dailyLogs      DailyLog[]     @relation("dailyLogs")
@@ -141,16 +141,18 @@ model ActivityLog {
 // encrypted at rest at the repository boundary when `FIELD_ENCRYPTION_KEY` is set.
 
 model Client {
-  id         String       @id @default(cuid())
-  legacyId   String?      @unique
-  name       String
-  capacity   Int?
-  createdAt  DateTime     @default(now())
-  updatedAt  DateTime     @updatedAt
-  deletedAt   DateTime?
-  candidates  Candidate[]
-  rules       ClientRules? // 1:1 back-relation — per-client scoring/matching rules
-  sourceLeads SourceLead[] @relation("LeadTargetClient") // pre-pipeline leads targeting this client
+  id           String              @id @default(cuid())
+  legacyId     String?             @unique
+  name         String
+  capacity     Int?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  deletedAt    DateTime?
+  candidates   Candidate[]
+  rules        ClientRules? // 1:1 back-relation — per-client scoring/matching rules
+  sourceLeads  SourceLead[]        @relation("LeadTargetClient") // pre-pipeline leads targeting this client
+  openRoles    OpenRole[] // Wave 3.5 — this client's job requisitions
+  matchProfile ClientMatchProfile? // 1:1 back-relation — this client's active-matcher weight overrides
 
   @@index([deletedAt])
   @@map("clients")
@@ -179,8 +181,8 @@ model ClientRules {
 }
 
 model Candidate {
-  id                  String          @id @default(cuid())
-  legacyId            String?         @unique
+  id                  String            @id @default(cuid())
+  legacyId            String?           @unique
   // identity / contact (PII)
   name                String
   email               String?
@@ -193,30 +195,36 @@ model Candidate {
   credential          String?
   population          String?
   setting             String?
-  telehealthPref String? // legacy TelehealthPref — preference, distinct from setting
-  track               String          @default("Clinical")
+  telehealthPref      String? // legacy TelehealthPref — preference, distinct from setting
+  track               String            @default("Clinical")
   source              String?
-  tags                String[]        @default([])
-  outreachAttempts    Int             @default(0)
+  tags                String[]          @default([])
+  outreachAttempts    Int               @default(0)
   // license / verification
   licenseState        String?
   licenseNumber       String? // SENSITIVE — DTO-gated + encrypted at rest when FIELD_ENCRYPTION_KEY is set
-  licenseStatus       String          @default("Not Verified")
+  licenseStatus       String            @default("Not Verified")
   licenseExpiry       DateTime?
   licenseVerifiedAt   DateTime?
   licenseVerifiedById String?
   // pipeline (code + ordinal + denormalized timing)
-  status              String          @default("NEW_CANDIDATE")
-  stageOrder          Int             @default(0)
-  stageEnteredAt      DateTime        @default(now())
+  status              String            @default("NEW_CANDIDATE")
+  stageOrder          Int               @default(0)
+  stageEnteredAt      DateTime          @default(now())
   placedAt            DateTime?
   // client
   clientId            String?
-  client              Client?         @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  client              Client?           @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  // Wave 3.5: which Open Role this candidate was promoted to fill, if any. A DELIBERATE deviation
+  // from legacy (`Code.gs:860`), which stuffed `"FilledFromRole:R123"` into the free-text `tags`
+  // string with no real FK — this is a real, nullable relation instead. `onDelete: SetNull` so
+  // deleting a role never takes a placed candidate's history with it.
+  filledFromRoleId    String?
+  filledFromRole      OpenRole?         @relation(fields: [filledFromRoleId], references: [id], onDelete: SetNull)
   // lifecycle
   createdById         String?
-  createdAt           DateTime        @default(now())
-  updatedAt           DateTime        @updatedAt
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
   deletedAt           DateTime?
   deletedById         String?
   stageHistory        StageHistory[]
@@ -230,6 +238,7 @@ model Candidate {
 
   @@index([status])
   @@index([clientId])
+  @@index([filledFromRoleId])
   @@index([deletedAt])
   @@index([licenseExpiry])
   @@index([status, deletedAt])
@@ -380,10 +389,10 @@ model SourceLead {
   // Channel of the newest attempt (denorm, kept by logOutreach + syncOutreachDenorm) — the
   // inventory's legacy "Last touch" cell ("LinkedIn · 20d") without an N+1 latest-attempt read.
   lastOutreachChannel String?
-  respondedAt    DateTime?
+  respondedAt         DateTime?
   // Snooze: excluded from stuck-lead alerts until this date (legacy `SnoozedUntil`). Date-aware
   // EVERYWHERE (the legacy brief checked raw truthiness — an expired snooze suppressed forever).
-  snoozedUntil   DateTime?
+  snoozedUntil        DateTime?
 
   // promote back-link (set once, on promote)
   promotedCandidateId String?    @unique
@@ -508,10 +517,10 @@ model DailyLog {
   notes        String?
   shiftHandoff String?
   // Auto-captured snapshot at submit time (added/moved/notes counts from the ATS).
-  autoAdded Int @default(0)
-  autoMoved Int @default(0)
-  autoNotes Int @default(0)
-  perClient Json? // { [clientId]: sourcedCount }
+  autoAdded    Int     @default(0)
+  autoMoved    Int     @default(0)
+  autoNotes    Int     @default(0)
+  perClient    Json? // { [clientId]: sourcedCount }
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -547,4 +556,94 @@ model JournalGoal {
 
   @@index([userId, weekStart])
   @@map("journal_goals")
+}
+
+// --- Open Roles (Wave 3.5, legacy `ATS_OpenRoles` / `ATS_RoleNotes` / `ATS_ClientMatchProfiles`) ---
+// A client job requisition, with a client-tunable lead matcher, a fixed-weight dormant-lead
+// re-engagement scorer, and a triage-strip ranker (all pure logic in `lib/rules/role-matching.ts`
+// — this table is DATA only). Vocab (status/priority) is String, validated in zod against
+// `lib/constants/open-role.ts` (matches every other status/vocab column in this schema). Hard
+// delete (no soft-delete) — matches legacy `open_role_delete`, which has no undo.
+
+model OpenRole {
+  id       String  @id @default(cuid())
+  legacyId String? @unique // deferred ETL backfill
+
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  title       String
+  credential  String?
+  state       String?
+  city        String?
+  setting     String?
+  population  String?
+  rate        String? // free text, e.g. "$75-90/hr" (legacy stores no structured min/max)
+  description String?
+
+  status   String @default("Open") // Open | On Hold | Filled | Closed
+  priority String @default("P2") // P1 | P2 | P3
+
+  assignedToId String? // recruiter working this role (free `User.id`, mirrors other actor columns)
+
+  openedAt DateTime  @default(now())
+  closedAt DateTime? // set when status flips to Filled/Closed; cleared if reopened
+
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  notes            RoleNote[]
+  filledCandidates Candidate[]
+
+  @@index([clientId])
+  @@index([status])
+  @@index([status, priority])
+  @@map("open_roles")
+}
+
+/// Role-scoped note (legacy `ATS_RoleNotes`) — same soft-delete append-only shape as candidate/lead
+/// notes, but `category` is free text (legacy default "General") instead of the internal/external vocab.
+model RoleNote {
+  id     String   @id @default(cuid())
+  roleId String
+  role   OpenRole @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  authorId   String
+  authorName String?
+  category   String  @default("General")
+  body       String
+
+  createdAt   DateTime  @default(now())
+  deletedAt   DateTime?
+  deletedById String?
+
+  @@index([roleId])
+  @@index([roleId, createdAt])
+  @@map("role_notes")
+}
+
+/// Per-client weight overrides for the ACTIVE lead→role matcher (legacy `ATS_ClientMatchProfiles`,
+/// `cpHeaders`). Exactly one row per Client (1:1, upsert-on-save); a client with no row falls back to
+/// `DEFAULT_MATCH_WEIGHTS` in `lib/rules/role-matching.ts`. The dormant re-engagement scorer does NOT
+/// read this table — it is fixed-weight by design (legacy `scoreMatchDormant`).
+model ClientMatchProfile {
+  id       String @id @default(cuid())
+  clientId String @unique
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  weightSameClient   Int @default(30)
+  weightSameState    Int @default(25)
+  weightCredExact    Int @default(25)
+  weightCredPartial  Int @default(15)
+  weightRespondedHot Int @default(20)
+  weightOutreach     Int @default(10)
+  weightSourced      Int @default(5)
+  penaltyCold        Int @default(10)
+  minScore           Int @default(25)
+
+  updatedById String?
+  updatedAt   DateTime @updatedAt
+
+  @@map("client_match_profiles")
 }

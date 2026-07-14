@@ -10,3 +10,18 @@ export { getAutoDisqualify } from "./disqualify";
 export { checkStageGate, canTransition } from "./stage-gates";
 export { getDaysInStage, isOverdue, isStuck } from "./stage-timing";
 export { normalizeLeadStatus } from "./normalize-lead-status";
+export {
+  DEFAULT_MATCH_WEIGHTS,
+  scoreRoleMatch,
+  matchesForRole,
+  scoreDormantMatch,
+  dormantMatchesForRole,
+  triageScore,
+  isStrongMatch,
+  type RuleRole,
+  type RuleLead,
+  type ClientMatchWeights,
+  type RoleMatch,
+  type RuleRoleForTriage,
+  type TriageResult,
+} from "./role-matching";
