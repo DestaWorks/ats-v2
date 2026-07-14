@@ -33,6 +33,11 @@ model User {
   sessions      Session[]
   accounts      Account[]
   mentions      Mention[]
+  targets        DailyTarget[]  @relation("targets")
+  actuals        DailyActual[]  @relation("actuals")
+  dailyLogs      DailyLog[]     @relation("dailyLogs")
+  journalEntries JournalEntry[] @relation("journalEntries")
+  journalGoals   JournalGoal[]  @relation("journalGoals")
 
   @@map("user")
 }
@@ -425,4 +430,121 @@ model OutreachAttempt {
   @@index([candidateId])
   @@index([actorId, at]) // DECISIONS: outreach_attempts(actor, day) — the CRM/daily-log perf index
   @@map("outreach_attempts")
+}
+
+// --- Daily accountability loop (Wave 3.1) ---
+// Legacy split this across ATS_DailyTargets/ATS_DailyActuals (keyed by fragile synthesized
+// emails) and `ats_log` activity rows with JSON in overloaded columns. Here: real tables keyed
+// by (userId, date) where `date`/`weekStart` are CALENDAR-DATE STRINGS ("YYYY-MM-DD", the
+// user's local day / Monday of the ISO week) — one week definition app-wide (legacy had three).
+
+/// Manager-set per-associate targets for one day (legacy ATS_DailyTargets).
+model DailyTarget {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation("targets", fields: [userId], references: [id], onDelete: Cascade)
+  date   String // "YYYY-MM-DD"
+
+  sourcing   Int @default(0)
+  outreach   Int @default(0)
+  atsCleanup Int @default(0)
+  inbound    Int @default(0)
+  screens    Int @default(0)
+
+  priorityClientId   String?
+  priorityRole       String?
+  priorityState      String?
+  notesFromYesterday String?
+  watchFor           String?
+
+  setById   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, date])
+  @@index([date])
+  @@map("daily_targets")
+}
+
+/// End-of-shift self-confirmed actuals (legacy ATS_DailyActuals; pre-filled from live counts).
+model DailyActual {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation("actuals", fields: [userId], references: [id], onDelete: Cascade)
+  date   String // "YYYY-MM-DD"
+
+  sourcing   Int @default(0)
+  outreach   Int @default(0)
+  atsCleanup Int @default(0)
+  inbound    Int @default(0)
+  screens    Int @default(0)
+
+  note              String?
+  perClientSourcing Json? // { [clientId]: count } — optional breakdown
+  shiftHandoff      String? // visible to the next shift
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, date])
+  @@index([date])
+  @@map("daily_actuals")
+}
+
+/// Daily Log self-report (legacy `ats_log` action "daily_log" — JSON in Details). One per user/day.
+model DailyLog {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation("dailyLogs", fields: [userId], references: [id], onDelete: Cascade)
+  date   String // "YYYY-MM-DD"
+
+  sourced    Int @default(0)
+  outreach   Int @default(0)
+  responses  Int @default(0)
+  screenings Int @default(0)
+  submitted  Int @default(0)
+
+  blocker      String?
+  notes        String?
+  shiftHandoff String?
+  // Auto-captured snapshot at submit time (added/moved/notes counts from the ATS).
+  autoAdded Int @default(0)
+  autoMoved Int @default(0)
+  autoNotes Int @default(0)
+  perClient Json? // { [clientId]: sourcedCount }
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, date])
+  @@index([date])
+  @@map("daily_logs")
+}
+
+/// Journal free-text note (legacy `journal_entry` activity rows).
+model JournalEntry {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation("journalEntries", fields: [userId], references: [id], onDelete: Cascade)
+  date      String // "YYYY-MM-DD"
+  text      String
+  createdAt DateTime @default(now())
+
+  @@index([userId, date])
+  @@map("journal_entries")
+}
+
+/// Weekly goal (legacy `journal_goal` rows — which APPENDED a duplicate on toggle; here `done`
+/// is a real update). `weekStart` = Monday of the ISO week ("YYYY-MM-DD").
+model JournalGoal {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation("journalGoals", fields: [userId], references: [id], onDelete: Cascade)
+  weekStart String // "YYYY-MM-DD" (Monday)
+  text      String
+  done      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, weekStart])
+  @@map("journal_goals")
 }
