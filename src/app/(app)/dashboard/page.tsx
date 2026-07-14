@@ -8,6 +8,8 @@ import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils/cn";
 import { STATUS_BG } from "../pipeline/lib/status-style";
 import { StatCard } from "./stat-card";
+import { DailyStrip } from "./daily-strip";
+import { SinceYouClosed } from "./since-you-closed";
 
 /**
  * Overview (RSC, legacy-parity). Reads a lightweight summary (`candidateService.dashboardStats`)
@@ -46,6 +48,10 @@ export default async function DashboardPage() {
           {stats.active} candidate{stats.active === 1 ? "" : "s"} in pipeline · {today}
         </p>
       </header>
+
+      {/* Daily accountability loop (Wave 3.1): targets/pace + End of Shift, then the recap. */}
+      <DailyStrip />
+      <SinceYouClosed userId={user.id} />
 
       <section className="grid grid-cols-3 gap-3">
         <StatCard label="Total" value={stats.total} />

@@ -288,11 +288,12 @@ format (blocks 1.3/1.4). *Trash auto-purge sign-off resolved 2026-07-14 — see 
 
 # WAVE 3 — Funnel Intelligence & Daily Loop (Month 2)
 
-### 3.1 Daily accountability loop — Overview + Daily Log *(pulled EARLIER from the tail — D5; daily-use)*
-- [ ] Add minimal `targets` + `actuals` + `daily_logs`/`journal_entries`/`journal_goals` models → migrate. *(the Daily Log slice brings its own journal models.)*
-- [ ] Shared `live-actuals` + `stats-for-range` services (**one source of truth** — fixes the 3 week-defs). *(Weekly/Daily briefs in 5.1 reuse these.)*
-- [ ] Port the **Overview** ("since you closed" recap + **Today's Targets**) 1:1.
-- [ ] Port the **Daily Log & Journal** (self-report + auto-capture + ramps/streaks) 1:1.
+### 3.1 Daily accountability loop — Overview + Daily Log *(pulled EARLIER from the tail — D5; daily-use)*  🟡 *(core built 2026-07-13 — see open items)*
+- [x] `daily_targets` + `daily_actuals` + `daily_logs` + `journal_entries` + `journal_goals` models → migrated (`add_daily_loop_tables`). Keyed (userId, "YYYY-MM-DD") — real user ids, not legacy's synthesized emails.
+- [x] Shared `lib/daily` + `dailyService.liveActuals` (**one source of truth**: Monday-anchored weeks everywhere — legacy's 3 week-defs consolidated; user-local day windows via a tz offset; sourcing = leads by `createdById`, outreach = attempts by `actorId`, cleanup = move/update/verify_license audit rows). *(`stats-for-range` minimal: `actualsForRange` — 5.1 briefs extend it.)*
+- [x] Overview port: "No targets" banner (leadership gets Set-targets modal — legacy sent them to the Brief page), TODAY'S TARGETS strip (serif x/y + 9–5 pace status), End-of-Shift modal pre-filled from live actuals, "Since you closed" recap (localStorage last-seen + 30s dwell, buckets from DOMAIN tables so no audit capability needed; mentions live in the Alerts bell).
+- [x] Daily Log & Journal page (`/daily-log`, nav item): tenure-ramp phase (weekNum from the USER's start date, not a hardcoded epoch) + 🔥 streak, auto-capture tiles, once-a-day self-report (409 on resubmit; autos snapshotted server-side), log history, weekly goals (REAL toggles — legacy appended duplicates), journal notes.
+- [ ] **Open:** `ats_targets_suggest` AI suggest (deferred — needs the AI provider plumbing, D. AI-agnostic); 7-day trend / predictive pacing / Indeed-credit-burn / admin team-breakdown widgets; per-client sourcing breakdown grids (schema fields exist, UI deferred); manager feedback notes.
 - **Done-when:** the daily loop (Overview + Daily Log) runs on live data early — **it is not deferrable.**
 
 ### 3.2 Smarter Sourcing (Biruh priority #4) *(net-new — distinct from Open-Roles matching)*

@@ -272,7 +272,10 @@ describe("candidateService.listCandidates — score path (fit / hot)", () => {
   it("hot + fit compose, and the page clamps to the filtered length", async () => {
     h.clientRulesRepo.list.mockResolvedValue([sterlingRules()]);
     h.candidateRepo.list.mockResolvedValue(threeScored());
-    const list = await candidateService.listCandidates({ hot: true, sort: "fit", page: 9 }, associate);
+    const list = await candidateService.listCandidates(
+      { hot: true, sort: "fit", page: 9 },
+      associate,
+    );
     expect(list.candidates.map((c) => c.id)).toEqual(["hi"]);
     expect(list.page).toBe(1);
     expect(list.totalPages).toBe(1);
