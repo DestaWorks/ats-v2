@@ -41,3 +41,4 @@ yarn-error.log*
 # Legacy app (Apps Script backend + monolith client) — LOCAL-ONLY parity reference.
 # Never committed: keep it on the dev machine, not in the shared repo.
 /legacy/
+.vercel
