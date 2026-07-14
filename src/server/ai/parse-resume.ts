@@ -4,7 +4,7 @@ import type { ZodType } from "zod";
 import type { ResumeVariant } from "@/lib/constants/documents";
 import { resumeSchemaFor, type ParseResumeInput, type ResumeData } from "@/lib/validation/resume";
 import { AppError } from "@/server/http/app-error";
-import { resumeExtractionEnabled } from "./config";
+import { aiEnabled } from "./config";
 import { generateStructured } from "./provider";
 
 /**
@@ -64,13 +64,13 @@ const SYSTEM_PROMPTS: Record<ResumeVariant, string> = {
 };
 
 /**
- * Extract a résumé with the configured LLM provider. Gated on `resumeExtractionEnabled` (the
- * provider's key being present). Returns the zod-validated structured data for the variant, or
- * throws a typed `AppError`. The zod schema is enforced by `generateObject`, so an invalid/absent
- * object surfaces as EXTRACTION_FAILED — no manual JSON parsing.
+ * Extract a résumé with the configured LLM provider. Gated on `aiEnabled` (the provider's key
+ * being present). Returns the zod-validated structured data for the variant, or throws a typed
+ * `AppError`. The zod schema is enforced by `generateObject`, so an invalid/absent object
+ * surfaces as EXTRACTION_FAILED — no manual JSON parsing.
  */
 export async function parseResume(input: ParseResumeInput): Promise<ResumeData> {
-  if (!resumeExtractionEnabled) {
+  if (!aiEnabled) {
     throw new AppError("FEATURE_DISABLED", "Résumé extraction is not configured");
   }
 

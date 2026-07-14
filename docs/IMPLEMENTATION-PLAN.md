@@ -213,12 +213,12 @@ share a database.** *(`zyx.com` below is a placeholder for the real domain.)*
 - [x] Track-aware add-candidate form at `/candidates/new` (clinical/prescriber show credential+license; operations contact-only) → redirects to the new candidate detail. Entry: "+ Add candidate" on the board header.
 - **Done-when:** ✅ manual create works + validated (262 tests, build green).
 
-### 2.5 Cross-cutting (Module 24)  🟡 *(trash + activity + alerts done — trash retention policy pending owner)*
-- [x] Trash: soft-delete list + restore + purge routes (purge capability-gated + type-to-confirm; page at `/trash`, not a modal). *Retention gap vs legacy: no 30-day days-left countdown / auto-purge — policy decision + cron pending (audit 2026-07-07).*
+### 2.5 Cross-cutting (Module 24)  ✅ *(trash + activity + alerts done — retention policy decided 2026-07-14)*
+- [x] Trash: soft-delete list + restore + purge routes (purge capability-gated + type-to-confirm; page at `/trash`, not a modal). *Retention decision (owner, 2026-07-14): **no auto-purge for v1** — soft-delete + the existing manual, capability-gated purge is the policy. No 30-day countdown/cron; revisit if the owner wants time-based retention later.*
 - [x] Alerts panel (2026-07-10): header "Alerts" pill (badge = unread mentions only) + panel — @mentions (8 unread/3 read, mark-all-read, deep links) + derived OVERDUE / NEW TO REVIEW / VERIFICATION PENDING buckets, viewer-scoped SERVER-side via `GET /api/alerts`.
 - [x] Audit-log write helper used by every mutation *(shipped Wave 0.5; used by every service mutation since)*.
 - [x] **Activity Log view** (`vw="activity"`) — filter by action/entity/actor/date-range, keyset pagination, lazy before/after diff; admin-gated (`viewAudit`). *(exceeds legacy parity)*
-- **Done-when:** trash + alerts + activity log work; audit records actor+before/after. **Open: trash 30-day countdown/auto-purge (owner policy).**
+- **Done-when:** ✅ trash + alerts + activity log work; audit records actor+before/after; trash retention policy decided (no auto-purge for v1).
 
 ### 2.6 Sourcing (Module 6) — brings ONLY lead tables *(moved up with the funnel — D2)*  🟡 *(full lifecycle done 2026-07-10 — ONLY leads ETL backfill open)*
 - [x] Add `source_leads` + **one `outreach_attempts`** model (nullable `lead_id` + `candidate_id`, serves both lead and candidate outreach) → migrate. *(split out of the JSON blob)*
@@ -278,8 +278,11 @@ split parser.
 restyled the shell + shipped pages to the legacy DESTAWORKS look (header/wordmark, navy tables, MOVE-TO
 pills, Overview greeting + stacked distribution).
 
+**Resolution 2026-07-14 (owner decision):** trash retention decided — **no auto-purge for v1**; soft-delete
++ the existing manual/capability-gated purge is the policy (no 30-day countdown, no cron). See 2.5.
+
 **Owner escalations open:** 0.9 legacy hardening (CRITICAL, live PII), prod env (0.2/D6), OQ-0 export
-format (blocks 1.3/1.4), trash auto-purge sign-off.
+format (blocks 1.3/1.4). *Trash auto-purge sign-off resolved 2026-07-14 — see above.*
 
 ---
 

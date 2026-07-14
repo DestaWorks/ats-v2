@@ -21,7 +21,7 @@ vi.mock("@/server/repositories/candidate.repository", () => ({
   candidateRepository: { list: h.list },
 }));
 vi.mock("@/server/ai/config", () => ({
-  get resumeExtractionEnabled() {
+  get aiEnabled() {
     return h.enabled;
   },
 }));
