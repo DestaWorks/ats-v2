@@ -44,6 +44,7 @@ const row: CandidateRow = {
   stageEnteredAt: new Date("2026-01-01T00:00:00Z"),
   placedAt: null,
   clientId: "cl1",
+  filledFromRoleId: null,
   createdById: "u1",
   createdAt: new Date("2026-01-01T00:00:00Z"),
   updatedAt: new Date("2026-01-01T00:00:00Z"),

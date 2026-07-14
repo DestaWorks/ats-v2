@@ -39,7 +39,7 @@ export default async function DashboardPage() {
   const distributionTotal = filled.reduce((sum, c) => sum + c.count, 0);
 
   return (
-    <div className="mx-auto flex max-w-4xl flex-col gap-6 p-8">
+    <div className="flex flex-col gap-6 px-8 py-6">
       <header>
         <h1 className="text-3xl font-bold text-charcoal">
           Good {timeOfDay}, {firstName}.
@@ -53,91 +53,108 @@ export default async function DashboardPage() {
       <DailyStrip />
       <SinceYouClosed userId={user.id} />
 
-      <section className="grid grid-cols-3 gap-3">
-        <StatCard label="Total" value={stats.total} />
-        <StatCard label="Active" value={stats.active} />
-        <StatCard label="Terminal" value={stats.terminal} />
-      </section>
+      {/* Main (stats + distribution) + a sidebar (needs attention) — fills the width on wide
+          screens instead of one narrow centered column with dead space on both sides. */}
+      <div className="grid items-start gap-6 lg:grid-cols-3">
+        <div className="flex flex-col gap-6 lg:col-span-2">
+          <section className="grid grid-cols-3 gap-3">
+            <StatCard label="Total" value={stats.total} />
+            <StatCard label="Active" value={stats.active} />
+            <StatCard label="Terminal" value={stats.terminal} />
+          </section>
 
-      <Card as="section" className="p-5">
-        <div className="mb-1 flex items-center justify-between">
-          <h2 className="text-base font-bold text-charcoal">Pipeline Distribution</h2>
-          {/* An anchor (next/link), not a <button> — kept inline; it mirrors the primary/sm Button look. */}
-          <Link
-            href="/pipeline"
-            className="rounded-md bg-navy px-3 py-1.5 text-sm font-semibold text-white transition hover:opacity-90"
-          >
-            Open pipeline board →
-          </Link>
-        </div>
-        <p className="mb-4 text-xs text-gray">
-          Team pipeline · {distributionTotal} candidate{distributionTotal === 1 ? "" : "s"}
-        </p>
-        {distributionTotal === 0 ? (
-          <EmptyState
-            title="No candidates yet"
-            description="Add candidates via the résumé flow to populate the pipeline."
-          />
-        ) : (
-          <div className="flex flex-col gap-3">
-            {/* The stacked bar — one proportional segment per non-empty stage (legacy Overview). */}
-            <div
-              role="img"
-              aria-label={`Pipeline distribution: ${filled
-                .map((c) => `${c.label} ${c.count}`)
-                .join(", ")}`}
-              className="flex h-8 w-full gap-0.5 overflow-hidden rounded-md"
-            >
-              {filled.map((col) => (
+          <Card as="section" className="p-5">
+            <div className="mb-1 flex items-center justify-between">
+              <h2 className="text-base font-bold text-charcoal">Pipeline Distribution</h2>
+              {/* An anchor (next/link), not a <button> — kept inline; it mirrors the primary/sm Button look. */}
+              <Link
+                href="/pipeline"
+                className="rounded-md bg-navy px-3 py-1.5 text-sm font-semibold text-white transition hover:opacity-90"
+              >
+                Open pipeline board →
+              </Link>
+            </div>
+            <p className="mb-4 text-xs text-gray">
+              Team pipeline · {distributionTotal} candidate{distributionTotal === 1 ? "" : "s"}
+            </p>
+            {distributionTotal === 0 ? (
+              <EmptyState
+                title="No candidates yet"
+                description="Add candidates via the résumé flow to populate the pipeline."
+              />
+            ) : (
+              <div className="flex flex-col gap-3">
+                {/* The stacked bar — one proportional segment per non-empty stage (legacy Overview). */}
                 <div
-                  key={col.status}
-                  className={cn(
-                    "flex min-w-6 items-center justify-center text-xs font-semibold text-white",
-                    STATUS_BG[col.status],
-                  )}
-                  style={{ flexGrow: col.count }}
+                  role="img"
+                  aria-label={`Pipeline distribution: ${filled
+                    .map((c) => `${c.label} ${c.count}`)
+                    .join(", ")}`}
+                  className="flex h-8 w-full gap-0.5 overflow-hidden rounded-md"
                 >
-                  {col.count / distributionTotal >= 0.08 ? col.count : null}
+                  {filled.map((col) => (
+                    <div
+                      key={col.status}
+                      className={cn(
+                        "flex min-w-6 items-center justify-center text-xs font-semibold text-white",
+                        STATUS_BG[col.status],
+                      )}
+                      style={{ flexGrow: col.count }}
+                    >
+                      {col.count / distributionTotal >= 0.08 ? col.count : null}
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-            <div className="flex flex-wrap gap-x-4 gap-y-1.5">
-              {filled.map((col) => (
-                <span key={col.status} className="flex items-center gap-1.5 text-xs text-charcoal">
-                  <span aria-hidden className={cn("h-2 w-2 rounded-sm", STATUS_BG[col.status])} />
-                  {col.label} <span className="font-bold">{col.count}</span>
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-      </Card>
+                <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+                  {filled.map((col) => (
+                    <span
+                      key={col.status}
+                      className="flex items-center gap-1.5 text-xs text-charcoal"
+                    >
+                      <span
+                        aria-hidden
+                        className={cn("h-2 w-2 rounded-sm", STATUS_BG[col.status])}
+                      />
+                      {col.label} <span className="font-bold">{col.count}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </Card>
+        </div>
 
-      <Card as="section" className="p-5">
-        <h2 className="mb-3 text-sm font-bold tracking-wide text-navy uppercase">
-          Needs attention
-        </h2>
-        {attention.length === 0 ? (
-          <p className="text-sm text-gray">Nothing overdue or stuck — the pipeline is healthy.</p>
-        ) : (
-          <ul className="flex flex-col divide-y divide-black/5">
-            {attention.map((c) => (
-              <li key={c.id} className="flex items-center justify-between gap-3 py-2">
-                <span className="flex items-center gap-2">
-                  <span aria-hidden className={cn("h-2 w-2 rounded-full", STATUS_BG[c.status])} />
-                  <span className="text-sm font-medium text-charcoal">{c.name}</span>
-                  <span className="text-xs text-gray">{c.clientName ?? "Unassigned"}</span>
-                </span>
-                <span
-                  className={cn("text-xs font-semibold", c.isOverdue ? "text-red" : "text-orange")}
-                >
-                  {c.isOverdue ? "overdue" : "stuck"} · {c.daysInStage}d
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Card>
+        <Card as="section" className="p-5 lg:col-span-1">
+          <h2 className="mb-3 text-sm font-bold tracking-wide text-navy uppercase">
+            Needs attention
+          </h2>
+          {attention.length === 0 ? (
+            <p className="text-sm text-gray">Nothing overdue or stuck — the pipeline is healthy.</p>
+          ) : (
+            <ul className="flex flex-col divide-y divide-black/5">
+              {attention.map((c) => (
+                <li key={c.id} className="flex flex-col gap-1 py-2.5">
+                  <span className="flex items-center gap-2">
+                    <span aria-hidden className={cn("h-2 w-2 rounded-full", STATUS_BG[c.status])} />
+                    <span className="text-sm font-medium text-charcoal">{c.name}</span>
+                  </span>
+                  <span className="flex items-center justify-between gap-3 pl-4">
+                    <span className="text-xs text-gray">{c.clientName ?? "Unassigned"}</span>
+                    <span
+                      className={cn(
+                        "text-xs font-semibold",
+                        c.isOverdue ? "text-red" : "text-orange",
+                      )}
+                    >
+                      {c.isOverdue ? "overdue" : "stuck"} · {c.daysInStage}d
+                    </span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      </div>
     </div>
   );
 }

@@ -13,3 +13,4 @@ export * from "./states";
 export * from "./lead-status";
 export * from "./notes";
 export * from "./audit";
+export * from "./open-role";

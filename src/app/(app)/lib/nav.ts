@@ -21,6 +21,7 @@ export const BASE_NAV_ITEMS: readonly NavItem[] = [
   { href: "/sourcing", label: "Sourcing" },
   { href: "/pipeline", label: "Pipeline" },
   { href: "/candidates", label: "Candidates" },
+  { href: "/roles", label: "Open Roles" },
   { href: "/trash", label: "Trash" },
 ];
 

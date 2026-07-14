@@ -208,7 +208,8 @@ share a database.** *(`zyx.com` below is a placeholder for the real domain.)*
 - **Done-when:** full record editable ✅ *(handoff deferred)*.
 
 ### 2.4 Add Candidate (Module 5)  ✅ *(done — legacy field order/labels restored 2026-07-11)*
-- [ ] **Deferred fields (audit 2026-07-11):** `TelehealthPref` (legacy stores + shows on Details; add as nullable column + select when convenient) · **Target Locations** (needs `client_locations` — port with Open Roles 3.5, its consumer). Legacy `contactSource` is write-only dead data — deliberately NOT ported.
+- [x] `TelehealthPref` added (nullable column + select, 2026-07-11).
+- [ ] **Target Locations** deferred — legacy `targetLocation` is a **Candidate** field (comma-joined `"State / City"` free text, cascading state→city picker), used ONLY to interpolate `{targetLocations}` into outreach email templates. It does **not** feed `scoreMatch`/`scoreMatchDormant`/Inbound Triage's client matcher, and legacy has **no `client_locations` table** (corrected 2026-07-14 — an earlier note here wrongly assumed a Client-side table gated on Open Roles 3.5; it isn't). Port as a nullable `Candidate.targetLocation` string column whenever outreach-template interpolation is built — not a 3.5 dependency. Legacy `contactSource` is write-only dead data — deliberately NOT ported.
 - [x] `POST /api/candidates` route + `createCandidateSchema` (strict; `licenseNumber` gated on `viewCredentials`; can't set status).
 - [x] Track-aware add-candidate form at `/candidates/new` (clinical/prescriber show credential+license; operations contact-only) → redirects to the new candidate detail. Entry: "+ Add candidate" on the board header.
 - **Done-when:** ✅ manual create works + validated (262 tests, build green).
