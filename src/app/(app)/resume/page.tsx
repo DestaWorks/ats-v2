@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/server/auth/guards";
-import { resumeExtractionEnabled } from "@/server/ai/config";
+import { aiEnabled } from "@/server/ai/config";
 import { ResumeFlow } from "./resume-flow";
 
 /**
@@ -22,7 +22,7 @@ export default async function ResumePage() {
           Pick the role, upload the résumé, get the finished DestaHealth profile.
         </p>
       </header>
-      <ResumeFlow recruiterName={user.name} resumeExtractionEnabled={resumeExtractionEnabled} />
+      <ResumeFlow recruiterName={user.name} resumeExtractionEnabled={aiEnabled} />
     </div>
   );
 }

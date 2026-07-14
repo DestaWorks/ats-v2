@@ -36,6 +36,20 @@ const SIZE: Record<ButtonSize, string> = {
   lg: "px-5 py-2 text-sm",
 };
 
+/** The button look, as plain classes — for non-`<button>` elements (e.g. a `<Link>` styled as a button). */
+export function buttonClasses(
+  variant: ButtonVariant = "primary",
+  size: ButtonSize = "md",
+  className?: string,
+) {
+  return cn(
+    "inline-flex items-center justify-center rounded-md transition focus-visible:ring-2 focus-visible:ring-navy focus-visible:outline-none disabled:opacity-50",
+    VARIANT[variant],
+    SIZE[size],
+    className,
+  );
+}
+
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
   size?: ButtonSize;
@@ -52,12 +66,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     <button
       ref={ref}
       disabled={disabled || loading}
-      className={cn(
-        "rounded-md transition focus-visible:ring-2 focus-visible:ring-navy focus-visible:outline-none disabled:opacity-50",
-        VARIANT[variant],
-        SIZE[size],
-        className,
-      )}
+      className={buttonClasses(variant, size, className)}
       {...props}
     >
       {children}

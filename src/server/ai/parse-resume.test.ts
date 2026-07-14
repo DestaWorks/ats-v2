@@ -29,7 +29,7 @@ const h = vi.hoisted(() => {
 vi.mock("server-only", () => ({}));
 
 vi.mock("@/server/ai/config", () => ({
-  get resumeExtractionEnabled() {
+  get aiEnabled() {
     return h.enabled;
   },
 }));

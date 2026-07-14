@@ -33,8 +33,8 @@ export function parseModel(model: string = AI_MODEL): { provider: AiProvider; mo
   return { provider: provider as AiProvider, modelId };
 }
 
-/** The résumé feature is enabled iff the configured provider's API key is present. */
-export const resumeExtractionEnabled: boolean = (() => {
+/** AI features are enabled iff the configured provider's API key is present. */
+export const aiEnabled: boolean = (() => {
   try {
     return Boolean(process.env[PROVIDER_KEY_ENV[parseModel().provider]]);
   } catch {

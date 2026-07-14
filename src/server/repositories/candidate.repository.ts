@@ -226,6 +226,21 @@ export const candidateRepository = {
   },
 
   /**
+   * Existing LIVE candidates matching any of these emails (case-insensitive) — the inbound-triage
+   * dedupe check (Wave 2.8). `email` is not an encrypted column — no `decryptRow` needed.
+   */
+  async findManyByEmails(
+    emails: string[],
+    tx?: Prisma.TransactionClient,
+  ): Promise<Array<{ id: string; name: string; email: string | null }>> {
+    if (emails.length === 0) return [];
+    return db(tx).candidate.findMany({
+      where: { email: { in: emails, mode: "insensitive" }, deletedAt: null },
+      select: { id: true, name: true, email: true },
+    });
+  },
+
+  /**
    * ETL-ONLY, intentionally delete-agnostic: returns a soft-deleted row too, so the one-shot
    * migration re-upserts an existing (even trashed) record instead of creating a duplicate.
    * UI/read paths must NOT use this — they go through `findById`/`list` (which exclude deleted).

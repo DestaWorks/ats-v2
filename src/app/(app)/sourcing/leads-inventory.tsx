@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { LEAD_STATUSES, type LeadStatus } from "@/lib/constants";
 import type { BulkLeadActionInput, LeadListDTO, LeadListItemDTO } from "@/lib/validation/lead";
 import { messageForFailure } from "@/lib/api/client";
-import { Button } from "@/components/ui/button";
+import { Button, buttonClasses } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Select } from "@/components/ui/select";
 import { Table } from "@/components/ui/table";
@@ -317,6 +317,9 @@ export function LeadsInventory({
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-end gap-3">
+        <Link href="/sourcing/inbound" className={buttonClasses("secondary", "sm")}>
+          ✨ Inbound Triage
+        </Link>
         <ImportLeadsButton onImported={reload} />
         <AddLeadButton clients={clients} onAdded={prependLead} size="sm" variant="success" />
       </div>
