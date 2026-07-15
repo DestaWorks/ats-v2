@@ -176,7 +176,7 @@ share a database.** *(`zyx.com` below is a placeholder for the real domain.)*
 > to the new app — there is never a window where a legacy promote writes a candidate the new
 > pipeline can't see.
 
-### 2.1 Pipeline (Module 3) — brings `saved_views`  🟡 *(board + list + polish done 2026-07-10 — open: saved_views, park/snooze, AI health strip)*
+### 2.1 Pipeline (Module 3) — brings `saved_views`  🟡 *(board + list + polish done 2026-07-10, saved_views done 2026-07-15 — open: park/snooze, AI health strip)*
 - [x] Candidate service: `move(id, toStatus)` — `STAGE_REQUIRED` gate, `stage_history` + audit, in a transaction *(shipped Wave 1.1)*.
 - [x] `GET /api/candidates` — **funnel-grouped** board data + filters (track/client/search/includeTerminal).
 - [x] `POST /api/candidates/:id/move` route (gated; returns only pipeline fields — no PII).
@@ -185,8 +185,9 @@ share a database.** *(`zyx.com` below is a placeholder for the real domain.)*
 - [x] Filters in URL `searchParams` (shareable). Demo-seed tooling (`pnpm db:seed:demo`, `db:status`) for local testing.
 - [x] Tests: move gating (single + bulk STAGE_BLOCKED), funnel grouping, exact optimistic-revert, no-PII-on-move. Reviewed (architect→backend→frontend→review; M1 PII-over-return fixed, M2 client gate pre-check deferred w/ sign-off). **161 tests, build green.**
 - [x] Follow-ups shipped (2026-07-07..10, PR #19): `/candidates` table view w/ server-side sort/filter/OFFSET pages; filter chips (mine/overdue/stuck/hot/needs-verification) + owner filter + hide-empty + per-column avg-days; bulk-select UI; card scoring vs `client_rules` (+ advisory auto-DQ flags); client-side gate pre-check (board select + detail MOVE-TO pills dim invalid targets).
-- [ ] **Still deferred:** `saved_views` model + saved views; pipeline park/snooze (product decision); AI health strip (`server/ai/pipeline-health`). *(TanStack Query dropped — plain fetch + RSC re-seed proved sufficient.)*
-- **Done-when:** recruiters work candidates; gates block invalid moves; every move audited. *(Core loop + views ✅; open: saved views, park/snooze, AI strip.)*
+- [x] **`saved_views` (2026-07-15):** personal, per-user saved filter combos — `SavedView` model (`scope` discriminates pipeline vs. candidates so the two incompatible URL param sets never collide; `query` is the raw `searchParams` string, not a structured/parsed shape; hard delete, no soft-delete — matches `DailyTarget`/`JournalGoal`, not `CandidateNote`/`RoleNote`). `savedViewService` (`list`/`create`/`remove`, ownership-scoped authZ — a compound `(id, userId)` delete match, `NOT_FOUND` on any mismatch so the error can't enumerate other users' ids) + `GET`/`POST /api/saved-views`, `DELETE /api/saved-views/:id`. Wired into the Pipeline board only (`SavedViewsBar`, a "+ Save view" trigger + a "VIEWS:" chip row, legacy `pSavedViews` parity but DB-backed instead of `localStorage`); the candidates-list wiring is a cheap follow-up, not built yet. 5 new tests (ownership isolation + create round-trip); full stack verified against the real dev server + Postgres (create/list/duplicate-409/delete/persist-after-reload).
+- [ ] **Still deferred:** pipeline park/snooze (product decision); AI health strip (`server/ai/pipeline-health`). *(TanStack Query dropped — plain fetch + RSC re-seed proved sufficient; formalized as DECISIONS D7.)*
+- **Done-when:** recruiters work candidates; gates block invalid moves; every move audited. *(Core loop + views + saved_views ✅; open: park/snooze, AI strip.)*
 
 ### 2.2 Candidate Detail — notes (brings ONLY note tables)  ✅ *(done 2026-07-10 — notes + @mentions + 5-way types + outreach tab; notes ETL deferred to 1.3; design `docs/design/wave-2.3-candidate-detail.md`)*
 - [x] Add `candidate_notes` model → migrated (`add_candidate_notes`); `mentions` model → migrated (`add_mentions_expand_note_types`).

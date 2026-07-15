@@ -14,3 +14,4 @@ export * from "./lead-status";
 export * from "./notes";
 export * from "./audit";
 export * from "./open-role";
+export * from "./saved-view";
