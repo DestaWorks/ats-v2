@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { TRACKS, type Track } from "@/lib/constants";
 import { getCurrentUser } from "@/server/auth/guards";
 import { candidateService } from "@/server/services/candidate.service";
+import { savedViewService } from "@/server/services/saved-view.service";
 import { clientRepository } from "@/server/repositories/client.repository";
 import { userRepository } from "@/server/repositories/user.repository";
 import { Spinner } from "@/components/ui/spinner";
@@ -27,7 +28,7 @@ export default async function PipelinePage({
   const rawTrack = one(sp.track);
   const track = TRACKS.includes(rawTrack as Track) ? (rawTrack as Track) : undefined;
 
-  const [board, clientRows, userRows] = await Promise.all([
+  const [board, clientRows, userRows, savedViews] = await Promise.all([
     candidateService.listBoard(
       {
         track,
@@ -39,6 +40,7 @@ export default async function PipelinePage({
     ),
     clientRepository.list(),
     userRepository.list(),
+    savedViewService.list("pipeline", user),
   ]);
   const clients = clientRows.map((c) => ({ id: c.id, name: c.name }));
   const owners = userRows.map((u) => ({ id: u.id, name: u.name }));
@@ -59,7 +61,7 @@ export default async function PipelinePage({
           </div>
         }
       >
-        <PipelineBoard initial={board} clients={clients} owners={owners} />
+        <PipelineBoard initial={board} clients={clients} owners={owners} savedViews={savedViews} />
       </Suspense>
     </div>
   );

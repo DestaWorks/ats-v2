@@ -38,6 +38,7 @@ model User {
   dailyLogs      DailyLog[]     @relation("dailyLogs")
   journalEntries JournalEntry[] @relation("journalEntries")
   journalGoals   JournalGoal[]  @relation("journalGoals")
+  savedViews     SavedView[]    @relation("savedViews")
 
   @@map("user")
 }
@@ -556,6 +557,31 @@ model JournalGoal {
 
   @@index([userId, weekStart])
   @@map("journal_goals")
+}
+
+// Per-user saved filter/view (Wave 2.1 closeout; DECISIONS: shareable filters/saved-views → URL
+// searchParams + this table, never localStorage — legacy stored these in
+// `localStorage["desta_ats_pipeline_views_"+userId]`). Personal-only, no sharing — mirrors
+// DailyTarget/JournalGoal (hard delete, no `deletedAt`), not CandidateNote/RoleNote (no other
+// user ever reads this row). `scope` discriminates pages with incompatible URL param sets
+// (pipeline vs. candidates) so they never collide. `query` is the RAW
+// `URLSearchParams.toString()` (no leading "?") — never a structured/parsed shape, so new filter
+// params on either page's toolbar need no migration here.
+model SavedView {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation("savedViews", fields: [userId], references: [id], onDelete: Cascade)
+
+  scope String // "pipeline" | "candidates" (SAVED_VIEW_SCOPES, validated in zod)
+  name  String // display name, e.g. "My hot CT leads"
+  query String // raw searchParams string, e.g. "track=RN&mine=1&overdue=1"
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, scope, name])
+  @@index([userId, scope])
+  @@map("saved_views")
 }
 
 // --- Open Roles (Wave 3.5, legacy `ATS_OpenRoles` / `ATS_RoleNotes` / `ATS_ClientMatchProfiles`) ---

@@ -16,8 +16,10 @@ import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { toast } from "sonner";
 import { statusLabel, type CandidateStatus } from "@/lib/constants";
 import type { BoardResponse, CandidateCardDTO } from "@/lib/validation/pipeline";
+import type { SavedViewDTO } from "@/lib/validation/saved-view";
 import { Spinner } from "@/components/ui/spinner";
 import { mergePage } from "../lib/list-local";
+import { SavedViewsBar } from "../lib/saved-views-bar";
 import { BoardColumn } from "./board-column";
 import { BoardFilters, type ClientOption } from "./board-filters";
 import { CandidateCardContent } from "./candidate-card";
@@ -37,10 +39,12 @@ export function PipelineBoard({
   initial,
   clients,
   owners,
+  savedViews,
 }: {
   initial: BoardResponse;
   clients: ClientOption[];
   owners: { id: string; name: string }[];
+  savedViews: SavedViewDTO[];
 }) {
   const searchParams = useSearchParams();
   const [board, setBoard] = useState(initial);
@@ -191,6 +195,7 @@ export function PipelineBoard({
         hotOnly={hotOnly}
         onToggleHot={() => setHotOnly((v) => !v)}
       />
+      <SavedViewsBar scope="pipeline" initial={savedViews} />
 
       {/* Legacy placement: its own row between the filters and the columns, left-aligned. */}
       <label className="-mb-1 flex w-fit cursor-pointer items-center gap-2 text-sm text-gray select-none">
