@@ -31,7 +31,13 @@ const h = vi.hoisted(() => ({
     findManyByNames: vi.fn(),
     createMany: vi.fn(),
   },
-  clientRepo: { list: vi.fn() },
+  clientRepo: {
+    list: vi.fn(),
+    nameMap: async () => {
+      const clients = await h.clientRepo.list();
+      return new Map(clients.map((c: { id: string; name: string }) => [c.id, c.name]));
+    },
+  },
   userRepo: { namesByIds: vi.fn() },
   candidateService: { create: vi.fn() },
   writeAudit: vi.fn(),

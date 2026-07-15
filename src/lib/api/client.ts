@@ -47,22 +47,40 @@ export function messageForFailure(failure: ApiFailure): string {
   return failure.message || "Something went wrong. Please try again.";
 }
 
-/** GET `url` as JSON, returning the parsed response `T` on success or an `ApiFailure`. */
-export async function getJson<T>(url: string): Promise<ApiResult<T>> {
-  const res = await fetch(url);
+/** Issue `fetch(url, init)` and turn a non-OK response into an `ApiFailure` (shared by every verb below). */
+async function request<T>(url: string, init: RequestInit): Promise<ApiResult<T>> {
+  const res = await fetch(url, init);
   if (!res.ok) return { ok: false, failure: await readFailure(res) };
   const data = (await res.json()) as T;
   return { ok: true, data };
 }
 
+/** A JSON body request — `Content-Type` header + serialized body (shared by POST/PATCH/PUT). */
+function jsonRequestInit(method: string, body: unknown): RequestInit {
+  return { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
+}
+
+/** GET `url` as JSON, returning the parsed response `T` on success or an `ApiFailure`. */
+export function getJson<T>(url: string): Promise<ApiResult<T>> {
+  return request<T>(url, {});
+}
+
 /** POST `body` as JSON to `url`, returning the parsed response `T` on success or an `ApiFailure`. */
-export async function postJson<T>(url: string, body: unknown): Promise<ApiResult<T>> {
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) return { ok: false, failure: await readFailure(res) };
-  const data = (await res.json()) as T;
-  return { ok: true, data };
+export function postJson<T>(url: string, body: unknown): Promise<ApiResult<T>> {
+  return request<T>(url, jsonRequestInit("POST", body));
+}
+
+/** PATCH `body` as JSON to `url`, returning the parsed response `T` on success or an `ApiFailure`. */
+export function patchJson<T>(url: string, body: unknown): Promise<ApiResult<T>> {
+  return request<T>(url, jsonRequestInit("PATCH", body));
+}
+
+/** PUT `body` as JSON to `url`, returning the parsed response `T` on success or an `ApiFailure`. */
+export function putJson<T>(url: string, body: unknown): Promise<ApiResult<T>> {
+  return request<T>(url, jsonRequestInit("PUT", body));
+}
+
+/** DELETE `url`, returning the parsed response `T` on success or an `ApiFailure`. */
+export function deleteJson<T>(url: string): Promise<ApiResult<T>> {
+  return request<T>(url, { method: "DELETE" });
 }

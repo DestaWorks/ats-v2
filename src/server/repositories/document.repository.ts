@@ -1,7 +1,7 @@
 import "server-only";
 import { Prisma } from "@/generated/prisma/client";
 import type { Document } from "@/generated/prisma/client";
-import { prisma } from "@/server/db/prisma";
+import { db } from "@/server/db/prisma";
 import { decryptField, encryptField, isEncryptionEnabled } from "@/server/db/field-crypto";
 
 /** A raw document row (Prisma model). Services/DTOs map this to API shapes. */
@@ -24,11 +24,6 @@ export interface DocumentCreateData {
   extractedText?: string | null;
   extractedData?: unknown;
   uploadedById?: string | null;
-}
-
-/** Resolve the client to use — the transaction client when composing writes, else the singleton. */
-function db(tx?: Prisma.TransactionClient) {
-  return tx ?? prisma;
 }
 
 const ENC_PREFIX = "enc:v1:";

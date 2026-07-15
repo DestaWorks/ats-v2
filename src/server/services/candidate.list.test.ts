@@ -15,7 +15,13 @@ import type { AuthUser } from "@/server/auth/guards";
 
 const h = vi.hoisted(() => ({
   candidateRepo: { list: vi.fn(), count: vi.fn() },
-  clientRepo: { list: vi.fn() },
+  clientRepo: {
+    list: vi.fn(),
+    nameMap: async () => {
+      const clients = await h.clientRepo.list();
+      return new Map(clients.map((c: { id: string; name: string }) => [c.id, c.name]));
+    },
+  },
   clientRulesRepo: { list: vi.fn() },
 }));
 

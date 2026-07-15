@@ -15,6 +15,7 @@ import type {
   ClientMatchProfileDTO,
   CreateOpenRoleInput,
   OpenRoleDetailDTO,
+  OpenRoleListDTO,
   OpenRoleListItemDTO,
   ParseJdInput,
   ParsedJdDTO,
@@ -26,6 +27,7 @@ import type {
   UpdateOpenRoleInput,
 } from "@/lib/validation/open-role";
 import { toIso, isoOrNull } from "@/lib/utils/iso";
+import { pageMeta } from "@/lib/pagination";
 import type { AuthUser } from "@/server/auth/guards";
 import { writeAudit } from "@/server/db/audit";
 import { withTransaction } from "@/server/db/with-transaction";
@@ -33,7 +35,7 @@ import { extractJd } from "@/server/ai/extract-jd";
 import { openRoleRepository, type OpenRoleRow } from "@/server/repositories/open-role.repository";
 import { clientMatchProfileRepository } from "@/server/repositories/client-match-profile.repository";
 import { clientRepository } from "@/server/repositories/client.repository";
-import { leadRepository, type LeadRow } from "@/server/repositories/lead.repository";
+import { leadRepository, type LeadMatchRow } from "@/server/repositories/lead.repository";
 import { userRepository } from "@/server/repositories/user.repository";
 import { AppError } from "@/server/http/app-error";
 import { leadService } from "./lead.service";
@@ -103,7 +105,7 @@ async function requireRole(id: string): Promise<OpenRoleRow> {
 }
 
 /** Project a lead row onto the pure matcher's input shape. */
-function toRuleLead(lead: LeadRow): RuleLead {
+function toRuleLead(lead: LeadMatchRow): RuleLead {
   return {
     targetClientId: lead.clientId,
     state: lead.state,
@@ -112,7 +114,7 @@ function toRuleLead(lead: LeadRow): RuleLead {
   };
 }
 
-function toMatchDTO(m: { lead: LeadRow & RuleLead; score: number }): RoleMatchDTO {
+function toMatchDTO(m: { lead: LeadMatchRow & RuleLead; score: number }): RoleMatchDTO {
   return {
     leadId: m.lead.id,
     leadName: m.lead.name,
@@ -121,6 +123,12 @@ function toMatchDTO(m: { lead: LeadRow & RuleLead; score: number }): RoleMatchDT
     leadCredential: m.lead.credential,
     score: m.score,
   };
+}
+
+/** Every non-deleted lead, projected onto the matchers' input shape (one lean query). */
+async function loadMatchCandidates(): Promise<Array<LeadMatchRow & RuleLead>> {
+  const leads = await leadRepository.listForMatching();
+  return leads.map((lead) => ({ ...lead, ...toRuleLead(lead) }));
 }
 
 function toProfileDTO(
@@ -168,55 +176,36 @@ export const openRoleService = {
     return this.detail(role.id);
   },
 
-  async list(filters: OpenRoleListFilters = {}): Promise<{
-    roles: OpenRoleListItemDTO[];
-    total: number;
-    page: number;
-    pageSize: number;
-    totalPages: number;
-    hasPrev: boolean;
-    hasNext: boolean;
-  }> {
+  async list(filters: OpenRoleListFilters = {}): Promise<OpenRoleListDTO> {
     const repoFilters = {
       clientId: filters.clientId,
       status: filters.status,
       priority: filters.priority,
       search: filters.search,
     };
-    const [total, clients] = await Promise.all([
+    const [total, clientNames] = await Promise.all([
       openRoleRepository.count(repoFilters),
-      clientRepository.list(),
+      clientRepository.nameMap(),
     ]);
-    const totalPages = Math.max(1, Math.ceil(total / LIST_PAGE));
-    const page = Math.min(Math.max(1, filters.page ?? 1), totalPages);
+    const meta = pageMeta(total, filters.page ?? 1, LIST_PAGE);
     const rows = await openRoleRepository.list({
       ...repoFilters,
-      skip: (page - 1) * LIST_PAGE,
+      skip: (meta.page - 1) * LIST_PAGE,
       take: LIST_PAGE,
     });
-    const clientNames = new Map(clients.map((c) => [c.id, c.name]));
     const userNames = await userRepository.namesByIds(
       rows.map((r) => r.assignedToId).filter((id): id is string => id !== null),
     );
-    return {
-      roles: rows.map((row) => toRoleListItem(row, clientNames, userNames)),
-      total,
-      page,
-      pageSize: LIST_PAGE,
-      totalPages,
-      hasPrev: page > 1,
-      hasNext: page < totalPages,
-    };
+    return { roles: rows.map((row) => toRoleListItem(row, clientNames, userNames)), ...meta };
   },
 
   /** Full detail — role + notes (matches/dormant matches are separate reads, `matches`/`dormantMatches`). */
   async detail(id: string): Promise<OpenRoleDetailDTO> {
     const role = await requireRole(id);
-    const [notes, clients] = await Promise.all([
+    const [notes, clientNames] = await Promise.all([
       openRoleRepository.listNotes(id),
-      clientRepository.list(),
+      clientRepository.nameMap(),
     ]);
-    const clientNames = new Map(clients.map((c) => [c.id, c.name]));
     const authorIds = notes.map((n) => n.authorId);
     const assigneeIds = role.assignedToId ? [role.assignedToId] : [];
     const userNames = await userRepository.namesByIds([...authorIds, ...assigneeIds]);
@@ -233,21 +222,38 @@ export const openRoleService = {
   /** The active matcher's ranked leads for this role (client-tunable weights, top 15). */
   async matches(id: string): Promise<RoleMatchDTO[]> {
     const role = await requireRole(id);
-    const [leads, profileRow] = await Promise.all([
-      leadRepository.list({}),
+    const [candidates, profileRow] = await Promise.all([
+      loadMatchCandidates(),
       clientMatchProfileRepository.findByClientId(role.clientId),
     ]);
     const weights = profileRow ?? DEFAULT_MATCH_WEIGHTS;
-    const candidates = leads.map((lead) => ({ ...lead, ...toRuleLead(lead) }));
     return matchesForRole(role, candidates, weights).map(toMatchDTO);
   },
 
   /** The fixed-weight dormant re-engagement scorer's ranked leads for this role (top 10). */
   async dormantMatches(id: string): Promise<RoleMatchDTO[]> {
     const role = await requireRole(id);
-    const leads = await leadRepository.list({});
-    const candidates = leads.map((lead) => ({ ...lead, ...toRuleLead(lead) }));
+    const candidates = await loadMatchCandidates();
     return dormantMatchesForRole(role, candidates).map(toMatchDTO);
+  },
+
+  /**
+   * `matches` + `dormantMatches` computed from ONE lead fetch — for `/roles/[id]`, which needs
+   * both on the same page load (avoids two redundant full-table scans of `source_lead`).
+   */
+  async matchesAndDormant(
+    id: string,
+  ): Promise<{ matches: RoleMatchDTO[]; dormantMatches: RoleMatchDTO[] }> {
+    const role = await requireRole(id);
+    const [candidates, profileRow] = await Promise.all([
+      loadMatchCandidates(),
+      clientMatchProfileRepository.findByClientId(role.clientId),
+    ]);
+    const weights = profileRow ?? DEFAULT_MATCH_WEIGHTS;
+    return {
+      matches: matchesForRole(role, candidates, weights).map(toMatchDTO),
+      dormantMatches: dormantMatchesForRole(role, candidates).map(toMatchDTO),
+    };
   },
 
   async update(id: string, input: UpdateOpenRoleInput, user: AuthUser): Promise<OpenRoleDetailDTO> {
@@ -358,15 +364,13 @@ export const openRoleService = {
 
   /** Top 3 "roles to work now" across every active (non-Filled/Closed) role. */
   async triage(): Promise<TriageRoleDTO[]> {
-    const [roles, clients, leads, profiles] = await Promise.all([
+    const [roles, clientNames, candidates, profiles] = await Promise.all([
       openRoleRepository.listActive(),
-      clientRepository.list(),
-      leadRepository.list({}),
+      clientRepository.nameMap(),
+      loadMatchCandidates(),
       clientMatchProfileRepository.list(),
     ]);
-    const clientNames = new Map(clients.map((c) => [c.id, c.name]));
     const profileByClient = new Map(profiles.map((p) => [p.clientId, p]));
-    const candidates = leads.map((lead) => ({ ...lead, ...toRuleLead(lead) }));
     const now = new Date();
 
     const scored = roles.map((role) => {

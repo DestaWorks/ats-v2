@@ -14,7 +14,7 @@ import type {
   VerifyLicenseInput,
 } from "@/lib/validation/candidate";
 import type { LogOutreachInput, OutreachAttemptDTO } from "@/lib/validation/lead";
-import { postJson, readFailure, type ApiResult } from "@/lib/api/client";
+import { patchJson, postJson, type ApiResult } from "@/lib/api/client";
 
 export { messageForFailure } from "@/lib/api/client";
 export type { ApiFailure, FieldIssue } from "@/lib/api/client";
@@ -43,14 +43,11 @@ export async function patchCandidate(
   id: string,
   input: UpdateCandidateInput,
 ): Promise<ApiResult<Record<string, unknown>>> {
-  const res = await fetch(`/api/candidates/${id}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(input),
-  });
-  if (!res.ok) return { ok: false, failure: await readFailure(res) };
-  const body = (await res.json()) as { candidate: Record<string, unknown> };
-  return { ok: true, data: body.candidate };
+  const res = await patchJson<{ candidate: Record<string, unknown> }>(
+    `/api/candidates/${id}`,
+    input,
+  );
+  return res.ok ? { ok: true, data: res.data.candidate } : res;
 }
 
 /** POST a license verification. */

@@ -153,13 +153,26 @@ Ritu Suri & Associates, NJ-Psych Candidates, Future Potential Clients.
 
 ---
 
-### OpenRole (requisition)
+### OpenRole (requisition) — implemented Wave 3.5 (`open_roles`, hard-delete, no `deletedAt`)
 | Field | Notes |
 |-------|-------|
-| Title, Credential, State, City | |
-| Setting, Population, Rate, Priority | Priority e.g. P1/P2 |
+| `clientId` | FK → Client (cascade delete) |
+| Title, Credential, State, City | Credential/State/Setting/Population use the SAME strict enums as Candidate (tighter than legacy's free text) |
+| Setting, Population, Rate | Rate is free text (legacy has no structured min/max either) |
 | Description | |
-| Source | internal or client-posted via portal (`portal_post_role`) |
+| `status` | `Open \| On Hold \| Filled \| Closed` |
+| `priority` | `P1 \| P2 \| P3` |
+| `assignedToId` | Recruiter working this role (free `User.id`, mirrors other actor columns) |
+| `openedAt` / `closedAt` | `closedAt` stamped when status flips to Filled/Closed, cleared on reopen |
+| `createdById`, `createdAt`, `updatedAt` | |
+
+Matching is 3 separate pure scoring engines (`lib/rules/role-matching.ts`, no `Source`/portal field —
+that legacy concept was never built): a client-tunable **active matcher** (weights from
+`ClientMatchProfile`, falls back to `DEFAULT_MATCH_WEIGHTS`), a fixed-weight **dormant
+re-engagement scorer**, and a **triage-strip ranker** (priority + staleness + match quality → "top 3
+roles to work now"). `Candidate.filledFromRoleId` (nullable FK, `onDelete: SetNull`) records which
+role a promoted candidate filled — a real relation, unlike legacy's `"FilledFromRole:R123"`
+tags-string hack.
 
 ---
 
@@ -206,9 +219,9 @@ Per-associate goals (`ats_targets_*`) vs. actuals (`ats_actuals_*`); pipeline he
 |-------|-----------------------|
 | `stage_history` | `candidate_id`, `from_stage`, `to_stage`, `entered_at`, `actor_id` — the per-candidate stage-transition ledger; `stage_entered_at`/`placed_at` on `candidates` are denormalized from here |
 | `client_rules` | Matching rules **as data** (per client): allowed states/creds/populations/settings, priority, autoDisqualify. Consumed by `scoreCandidate(candidate, clientRules)` |
-| `role_notes` | Notes attached to an open role / requisition |
+| `role_notes` | ✅ implemented — `roleId` FK, `authorId`/`authorName`, `category` (free text, default "General"), `body`, soft-delete (`deletedAt`/`deletedById`). Same append-only shape as `candidate_notes`. |
 | `deal_blockers` | Blockers on a CRM deal |
-| `client_match_profiles` | Saved client matching profiles (target ideal-candidate shape) |
+| `client_match_profiles` | ✅ implemented — one row per client (1:1, upsert-on-save): 9 tunable weight columns (`weightSameClient`, `weightSameState`, `weightCredExact`, `weightCredPartial`, `weightRespondedHot`, `weightOutreach`, `weightSourced`, `penaltyCold`, `minScore`) for the ACTIVE role matcher only — the dormant scorer is fixed-weight by design and never reads this table. No row → the matcher falls back to `DEFAULT_MATCH_WEIGHTS`. |
 | `daily_logs` | Per-associate daily accountability log (Overview / Daily Log loop) |
 | `journal_entries` | Free-form journal entries |
 | `journal_goals` | Journal goals / targets |

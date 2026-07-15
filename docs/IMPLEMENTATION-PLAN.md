@@ -320,12 +320,30 @@ format (blocks 1.3/1.4). *Trash auto-purge sign-off resolved 2026-07-14 — see 
 > per-state adapters, **partial coverage** to start). v1 is *assisted*, not *automated* — automation
 > lands as a fast-follow after the queue is in use.
 
-### 3.5 Open Roles (Module 12) — brings ONLY role tables
-- [ ] Add `open_roles` + `role_notes` + `client_match_profiles` models → migrate.
-- [ ] Weighted matcher + triage rank + SLA/health + dormant scorer services.
-- [ ] Routes: role add/update/delete, note add/delete, match-profile save/delete, JD parse (Claude).
-- [ ] Port role cards + triage strip + matches + dormant panel + modals 1:1.
-- **Done-when:** roles managed; matches rank; JD auto-fill; one-click promote.
+### 3.5 Open Roles (Module 12) — brings ONLY role tables  ✅ *(done — PR #25, 2026-07-14)*
+- [x] Add `open_roles` + `role_notes` + `client_match_profiles` models → migrate (`20260714170402_add_open_roles`).
+- [x] Weighted matcher (client-tunable) + triage-strip ranker + fixed-weight dormant re-engagement scorer — 3 distinct scoring engines ported from the legacy source, pure + unit-tested in `lib/rules/role-matching.ts`. *(No separate "SLA/health" module — staleness is one term inside the triage-strip formula, matching legacy; there's no independent health-state enum.)*
+- [x] Routes: role CRUD + notes CRUD + matches/dormant-matches reads + promote + triage + match-profile CRUD + JD parse (provider-agnostic, not Claude-only — reuses the Wave 1.2/2.8 AI layer).
+- [x] `/roles` (table, matching `candidates-list.tsx`'s pattern — not cards) + triage strip + `/roles/:id` (matches/dormant/notes tabs + inline edit).
+- [x] **Deviation from legacy (deliberate):** promoted candidates get a real `filledFromRoleId` FK instead of legacy's `"FilledFromRole:R123"` tags-string hack.
+- **Done-when:** ✅ roles managed; matches rank; JD auto-fill; one-click promote.
+
+> **Maintenance — DRY/code-standard audit (PR #26, 2026-07-15).** A full-codebase audit after
+> 3.5 (repositories, services, validation, client fetch code, docs) found and fixed: a `db(tx)`
+> transaction helper reimplemented in 13 repositories → one shared helper; an id→name `Map`
+> rebuilt at 14 call sites → `clientRepository.nameMap()`; 3 duplicated offset-pagination
+> implementations → shared `PageMeta`/`pageMeta()` + a shared `<Pager>` component; 6 duplicated
+> `emptyToNull`/`emptyToNullNumber` form helpers → one shared pair; an **N+1 fix** on Open
+> Roles (`matches`/`dormantMatches`/`triage` each independently full-table-scanned every lead
+> with every column — now a lean `select`-only read, and `/roles/[id]` fetches leads once
+> instead of twice per page load via a new `matchesAndDormant()`); `lib/api/client.ts` gained
+> `patchJson`/`putJson`/`deleteJson` and 5 hand-rolled `fetch()` call sites were migrated onto
+> them; Sourcing's bespoke filter card was migrated onto the shared `FilterToolbar` primitives
+> already used by Candidates/Pipeline/Roles. Also resolved a real doc/reality gap found during
+> the audit: `docs/DECISIONS.md`/`STACK-ARCHITECTURE.md` had locked in TanStack Query as the
+> server-state layer, but every wave since 0.6 actually shipped RSC reads + `lib/api/client.ts`'s
+> typed `ApiResult<T>` helpers instead (TanStack Query was never installed) — **formalized as
+> DECISIONS D7**, docs updated to match reality rather than the unbuilt original plan.
 
 ### 3.6 Credentials Intelligence (Module 25 Â· `vw="matrix"`) — leadership dashboard
 - [ ] Service: derive verification queue (reuses 3.4), expiry buckets, credentialÃstate coverage matrix, gap

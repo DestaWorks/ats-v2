@@ -24,7 +24,15 @@ import {
   type UpdateOpenRoleInput,
 } from "@/lib/validation/open-role";
 import { useZodForm } from "@/lib/forms/use-zod-form";
-import { getJson, messageForFailure, postJson } from "@/lib/api/client";
+import { emptyToNull } from "@/lib/forms/empty-to-null";
+import {
+  deleteJson,
+  getJson,
+  messageForFailure,
+  patchJson,
+  postJson,
+  putJson,
+} from "@/lib/api/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DetailTabs, type TabDef } from "@/components/ui/tabs";
@@ -35,8 +43,6 @@ import { Select } from "@/components/ui/select";
 import { Table, Td } from "@/components/ui/table";
 import { fieldError } from "../../candidates/[id]/lib/form-error";
 import { PRIORITY_TONE, STATUS_TONE } from "../lib/role-style";
-
-const emptyToNull = (v: unknown) => (v === "" || v == null ? null : v);
 
 export function RoleDetail({
   initial,
@@ -59,7 +65,7 @@ export function RoleDetail({
   function handleDelete() {
     if (!window.confirm(`Permanently delete "${role.title}"? This cannot be undone.`)) return;
     startDelete(async () => {
-      const res = await fetch(`/api/roles/${role.id}`, { method: "DELETE" });
+      const res = await deleteJson(`/api/roles/${role.id}`);
       if (res.ok) {
         toast.success("Role deleted");
         router.push("/roles");
@@ -206,28 +212,18 @@ function EditRoleForm({
   function onSubmit(values: UpdateOpenRoleInput) {
     setServerError(null);
     startTransition(async () => {
-      const res = await fetch(`/api/roles/${role.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(values),
-      });
+      const res = await patchJson<{ role: OpenRoleDetailDTO }>(`/api/roles/${role.id}`, values);
       if (res.ok) {
-        const data = (await res.json()) as { role: OpenRoleDetailDTO };
         toast.success("Role updated");
-        onSaved(data.role);
-      } else {
-        const body = (await res.json().catch(() => ({}))) as {
-          error?: { message?: string; issues?: { path: string; message: string }[] };
-        };
-        if (body.error?.issues?.length) {
-          for (const issue of body.error.issues) {
-            form.setError(issue.path as keyof UpdateOpenRoleInput, { message: issue.message });
-          }
-          toast.error("Please fix the highlighted fields");
-        } else {
-          setServerError(body.error?.message ?? "Something went wrong");
-          toast.error(body.error?.message ?? "Something went wrong");
+        onSaved(res.data.role);
+      } else if (res.failure.issues.length) {
+        for (const issue of res.failure.issues) {
+          form.setError(issue.path as keyof UpdateOpenRoleInput, { message: issue.message });
         }
+        toast.error("Please fix the highlighted fields");
+      } else {
+        setServerError(messageForFailure(res.failure));
+        toast.error(messageForFailure(res.failure));
       }
     });
   }
@@ -461,18 +457,13 @@ function MatchProfileEditor({ clientId, onClose }: { clientId: string; onClose: 
       penaltyCold: profile.penaltyCold,
       minScore: profile.minScore,
     };
-    const res = await fetch(`/api/client-match-profiles/${clientId}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(weights),
-    });
+    const res = await putJson(`/api/client-match-profiles/${clientId}`, weights);
     setSaving(false);
     if (res.ok) {
       toast.success("Matching weights saved");
       onClose();
     } else {
-      const body = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
-      toast.error(body.error?.message ?? "Could not save weights");
+      toast.error(res.failure.message || "Could not save weights");
     }
   }
 
@@ -535,10 +526,11 @@ function NotesPanel({
   }
 
   async function handleDelete(noteId: string) {
-    const res = await fetch(`/api/roles/${role.id}/notes/${noteId}`, { method: "DELETE" });
+    const res = await deleteJson<{ role: OpenRoleDetailDTO }>(
+      `/api/roles/${role.id}/notes/${noteId}`,
+    );
     if (res.ok) {
-      const data = (await res.json()) as { role: OpenRoleDetailDTO };
-      onChanged(data.role);
+      onChanged(res.data.role);
     } else {
       toast.error("Could not delete this note");
     }

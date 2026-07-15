@@ -1,11 +1,6 @@
 import "server-only";
 import type { Prisma } from "@/generated/prisma/client";
-import { prisma } from "@/server/db/prisma";
-
-/** Resolve the client to use — the transaction client when composing writes, else the singleton. */
-function db(tx?: Prisma.TransactionClient) {
-  return tx ?? prisma;
-}
+import { db } from "@/server/db/prisma";
 
 /** A raw outreach-attempt row (Prisma model). Services map this to `OutreachAttemptDTO`. */
 export type OutreachAttemptRow = Prisma.OutreachAttemptGetPayload<Record<string, never>>;

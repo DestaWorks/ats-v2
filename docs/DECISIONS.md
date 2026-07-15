@@ -47,6 +47,24 @@ PII. Secrets, `BETTER_AUTH_URL`, and Google OAuth redirect URIs are **per-enviro
 `staging.zyx.com` first, then applied to production.** Set up in Wave 0 (`IMPLEMENTATION-PLAN.md`
 0.1b / 0.2). Needs from Biruh: domain/DNS access, Vercel, the two Supabase projects.
 
+**D7 — Server-state fetching = RSC reads + typed `ApiResult<T>` mutation helpers, not TanStack
+Query (supersedes the "Client-state classification" line under Resolved review findings →
+Front-end).** The pre-implementation review planned TanStack Query as the server-state layer, but
+it was never adopted (`package.json` has no dependency on it) — every wave shipped since Wave 0
+(0.6 through 3.5) instead uses, with zero deviation: **reads** are Server Components
+(`app/(app)/<feature>/page.tsx`, or a `lib/load-*.ts` composite loader for multi-read pages) that
+call `server/services/**` directly and pass DTOs down as props — no client-side data-fetching
+library, no request waterfall; **mutations** go through `lib/api/client.ts`'s typed
+`getJson`/`postJson`/`patchJson`/`putJson`/`deleteJson` helpers, returning a discriminated
+`ApiResult<T>` the UI branches on directly (`form.setError` for field issues,
+`messageForFailure` + a Sonner toast otherwise); success calls `router.refresh()` (re-runs the
+RSC read) or patches local `useState` for snappier UX. The one case needing optimistic UI (the
+pipeline board's card move) uses React's built-in `useOptimistic` + `useTransition`, not a
+query-cache library's `onMutate`/rollback. This is a **formal decision, not an unaddressed
+gap** — this proven pattern is the standard going forward; do not reach for TanStack Query (or
+any other client cache library) in new work. Full detail: `STACK-ARCHITECTURE.md` §6, code
+standard rules: `CONVENTIONS.md` §5.
+
 ---
 
 ## Resolved review findings (apply across docs)
@@ -95,12 +113,17 @@ PII. Secrets, `BETTER_AUTH_URL`, and Google OAuth redirect URIs are **per-enviro
   `ch`→`charcoal`, `bl`→`navy`, etc.). "1:1" = same look, not same inline-style soup.
 - **shadcn/Radix** adopted **only** for a11y-hard primitives: Dialog, DropdownMenu, Combobox
   (@mention), Toast (Sonner). Bespoke layout hand-rolled. Closes the "optional" question.
-- **Client-state classification:** legacy `useState` (~180) split into **server-state → TanStack
-  Query**, **ephemeral UI → useState**, **shareable filters/saved-views → URL `searchParams` +
-  a `saved_views` table** (not localStorage; localStorage only for non-sensitive prefs).
-- **RSC vs client:** `modules/**` default to `"use client"` (they're interactive); RSC reserved
-  for `app/` layouts + read-only pages (Client Portal, Credentials matrix, printable reports).
-- **Optimistic updates:** kanban moves use `onMutate` + rollback (no visible snap-back).
+- **Client-state classification** *(superseded by D7 above — server-state line only)*: legacy
+  `useState` (~180) split into **server-state → RSC reads + `lib/api/client.ts` mutation
+  helpers** (not TanStack Query), **ephemeral UI → useState**, **shareable filters/saved-views →
+  URL `searchParams` + a `saved_views` table** (not localStorage; localStorage only for
+  non-sensitive prefs) — the latter two are unchanged from the original review.
+- **RSC vs client:** feature client code lives at `app/(app)/<feature>/` (co-located, not a
+  separate `modules/**` tree — see D7/STACK-ARCHITECTURE §3.6); interactive components are
+  `"use client"`, RSC is used for the page-level read (and read-only pages: Client Portal,
+  Credentials matrix, printable reports).
+- **Optimistic updates:** kanban moves use React's `useOptimistic` + `useTransition` (not a
+  query-cache library's `onMutate`/rollback — see D7).
 - **Accessible DnD:** use **dnd-kit** (keyboard + screen-reader), not a 1:1 port of the legacy
   hand-rolled HTML5 DnD.
 - **Wave-0 FE baseline (budgeted):** form lib (**react-hook-form + zodResolver**), shared

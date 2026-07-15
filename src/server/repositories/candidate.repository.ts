@@ -8,7 +8,7 @@ import {
   type Track,
 } from "@/lib/constants";
 import type { ListOrderBy, PageCursor } from "@/lib/validation/cursor";
-import { prisma } from "@/server/db/prisma";
+import { db } from "@/server/db/prisma";
 import { decryptField, encryptField } from "@/server/db/field-crypto";
 
 /** A raw candidate row (Prisma model). Services/DTOs map this to API shapes. */
@@ -153,11 +153,6 @@ function andMerge(
   const existing = where.AND;
   const arr = Array.isArray(existing) ? existing : existing ? [existing] : [];
   return { ...where, AND: [...arr, clause] };
-}
-
-/** Resolve the client to use — the transaction client when composing writes, else the singleton. */
-function db(tx?: Prisma.TransactionClient) {
-  return tx ?? prisma;
 }
 
 /**

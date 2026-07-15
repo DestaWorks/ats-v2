@@ -1,11 +1,6 @@
 import "server-only";
 import type { Prisma } from "@/generated/prisma/client";
-import { prisma } from "@/server/db/prisma";
-
-/** Resolve the client to use — the transaction client when composing reads, else the singleton. */
-function db(tx?: Prisma.TransactionClient) {
-  return tx ?? prisma;
-}
+import { db } from "@/server/db/prisma";
 
 /**
  * Minimal read access to the Better Auth `User` table for resolving actor ids → display names.

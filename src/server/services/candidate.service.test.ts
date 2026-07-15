@@ -28,7 +28,13 @@ const h = vi.hoisted(() => ({
   stageRepo: { add: vi.fn(), listByCandidate: vi.fn() },
   docRepo: { listByCandidate: vi.fn() },
   noteRepo: { listByCandidate: vi.fn(), create: vi.fn() },
-  clientRepo: { list: vi.fn() },
+  clientRepo: {
+    list: vi.fn(),
+    nameMap: async () => {
+      const clients = await h.clientRepo.list();
+      return new Map(clients.map((c: { id: string; name: string }) => [c.id, c.name]));
+    },
+  },
   clientRulesRepo: { list: vi.fn() },
   userRepo: { namesByIds: vi.fn() },
   writeAudit: vi.fn(),

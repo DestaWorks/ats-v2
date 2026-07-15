@@ -15,11 +15,12 @@ const h = vi.hoisted(() => ({
 }));
 
 vi.mock("server-only", () => ({}));
-vi.mock("@/server/db/prisma", () => ({
-  prisma: {
+vi.mock("@/server/db/prisma", () => {
+  const prisma = {
     candidate: { findMany: h.findMany, count: h.count, groupBy: h.groupBy, delete: h.delete },
-  },
-}));
+  };
+  return { prisma, db: (tx?: unknown) => tx ?? prisma };
+});
 // Crypto is a passthrough here — these tests never assert on encrypted columns.
 vi.mock("@/server/db/field-crypto", () => ({
   encryptField: (v: string) => v,

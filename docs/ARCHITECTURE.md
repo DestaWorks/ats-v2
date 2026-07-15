@@ -78,7 +78,7 @@ server-enforced authorization — reached **incrementally**, running beside the 
 ```
 ┌──────────────── Client (Next.js App Router + React + TS) ────────────────┐
 │  • Next.js, component-per-file, code-split by route                       │
-│  • Typed API client + TanStack Query; zod-validated at the boundary       │
+│  • RSC reads + typed ApiResult<T> fetch helpers; zod-validated at the boundary │
 │  • Auth via Better Auth session; NO role logic trusted client-side        │
 └───────────────┬──────────────────────────────────────────────────────────┘
                 │  HTTPS, JSON, authenticated (Better Auth session)
@@ -100,7 +100,8 @@ server-enforced authorization — reached **incrementally**, running beside the 
 
 **Stack in one line:** Next.js (App Router) + TS · Tailwind v4 + Sonner · Route Handlers →
 services → repositories → Prisma · PostgreSQL (Supabase) · Better Auth (6 fixed roles →
-capability groups) · Zod · TanStack Query · Claude API (server-side) · Vercel.
+capability groups) · Zod · RSC + typed fetch helpers (no client cache library) · Claude API
+(server-side) · Vercel.
 → **Full detail: `docs/STACK-ARCHITECTURE.md`. Locked decisions: `docs/DECISIONS.md`.**
 
 **Migration** is a **one-time ETL** (no live Sheet adapter, no dual-read) — see DECISIONS D1 and

@@ -1,14 +1,9 @@
 import "server-only";
 import type { Client, Prisma } from "@/generated/prisma/client";
-import { prisma } from "@/server/db/prisma";
+import { db } from "@/server/db/prisma";
 
 /** A raw client row (Prisma model). */
 export type ClientRow = Client;
-
-/** Resolve the client to use — the transaction client when composing writes, else the singleton. */
-function db(tx?: Prisma.TransactionClient) {
-  return tx ?? prisma;
-}
 
 /**
  * Client data access — the ONLY layer that touches Prisma for clients. The `clients` table is
@@ -22,5 +17,18 @@ export const clientRepository = {
       where: opts?.includeDeleted ? {} : { deletedAt: null },
       orderBy: { name: "asc" },
     });
+  },
+
+  /**
+   * The `id → name` map every list/board/detail read builds from `list()` — pulled out since it
+   * was hand-rolled (`new Map(clients.map((c) => [c.id, c.name]))`) at 14 call sites across 5
+   * services. Same `includeDeleted`/`tx` passthrough as `list()`.
+   */
+  async nameMap(
+    opts?: { includeDeleted?: boolean },
+    tx?: Prisma.TransactionClient,
+  ): Promise<Map<string, string>> {
+    const clients = await clientRepository.list(opts, tx);
+    return new Map(clients.map((c) => [c.id, c.name]));
   },
 };

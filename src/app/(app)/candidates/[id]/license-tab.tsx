@@ -10,6 +10,7 @@ import {
   type VerifyLicenseInput,
 } from "@/lib/validation/candidate";
 import { useZodForm } from "@/lib/forms/use-zod-form";
+import { emptyToNull } from "@/lib/forms/empty-to-null";
 import { cn } from "@/lib/utils/cn";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
@@ -81,8 +82,6 @@ export function LicenseTab({
       }
     });
   }
-
-  const emptyToNull = (v: unknown) => (v === "" || v == null ? null : v);
 
   return (
     <div className="flex flex-col gap-4">

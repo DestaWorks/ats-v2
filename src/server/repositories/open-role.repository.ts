@@ -1,6 +1,6 @@
 import "server-only";
 import type { OpenRole, Prisma } from "@/generated/prisma/client";
-import { prisma } from "@/server/db/prisma";
+import { db } from "@/server/db/prisma";
 
 /** A raw open-role row (Prisma model). Services/DTOs map this to API shapes. */
 export type OpenRoleRow = OpenRole;
@@ -12,10 +12,6 @@ export interface OpenRoleFilters {
   priority?: string;
   /** Free-text match on title (case-insensitive). */
   search?: string;
-}
-
-function db(tx?: Prisma.TransactionClient) {
-  return tx ?? prisma;
 }
 
 function buildWhere(filters: OpenRoleFilters): Prisma.OpenRoleWhereInput {

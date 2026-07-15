@@ -1,15 +1,10 @@
 import "server-only";
 import type { ClientRules as ClientRulesModel, Prisma } from "@/generated/prisma/client";
 import type { ClientRules } from "@/lib/rules/types";
-import { prisma } from "@/server/db/prisma";
+import { db } from "@/server/db/prisma";
 
 /** A raw client-rules row (Prisma model). Services map this to the pure `ClientRules` (via `toClientRules`). */
 export type ClientRulesRow = ClientRulesModel;
-
-/** Resolve the client to use — the transaction client when composing writes, else the singleton. */
-function db(tx?: Prisma.TransactionClient) {
-  return tx ?? prisma;
-}
 
 /**
  * Client-rules data access — the ONLY layer that touches Prisma for scoring rules. The `client_rules`

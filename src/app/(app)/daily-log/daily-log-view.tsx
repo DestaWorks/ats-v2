@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { dateKey, mondayOf } from "@/lib/daily";
 import { BLOCKERS, type DailyLogViewDTO } from "@/lib/validation/daily";
-import { getJson, postJson, messageForFailure, readFailure } from "@/lib/api/client";
+import { getJson, postJson, patchJson, messageForFailure } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Field } from "@/components/ui/field";
@@ -200,13 +200,9 @@ export function DailyLogView() {
   }
 
   async function toggleGoal(id: string, done: boolean) {
-    const res = await fetch(`/api/daily/journal/goals/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ done }),
-    });
+    const res = await patchJson(`/api/daily/journal/goals/${id}`, { done });
     if (res.ok) void refresh();
-    else toast.error(messageForFailure(await readFailure(res)));
+    else toast.error(messageForFailure(res.failure));
   }
 
   async function addEntry() {
