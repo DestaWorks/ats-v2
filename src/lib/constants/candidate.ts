@@ -65,6 +65,7 @@ export const SOURCES = [
   "Cold Outreach",
   "Scraped",
   "Direct Application",
+  "NPPES",
 ] as const;
 export type Source = (typeof SOURCES)[number];
 

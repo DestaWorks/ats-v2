@@ -8,6 +8,7 @@ export type AppErrorCode =
   | "FEATURE_DISABLED"
   | "RATE_LIMITED"
   | "EXTRACTION_FAILED"
+  | "UPSTREAM_ERROR"
   | "INTERNAL";
 
 const DEFAULT_STATUS: Record<AppErrorCode, number> = {
@@ -22,6 +23,9 @@ const DEFAULT_STATUS: Record<AppErrorCode, number> = {
   FEATURE_DISABLED: 503,
   RATE_LIMITED: 429,
   EXTRACTION_FAILED: 502,
+  // Wave 2.7 Discover: a third-party HTTP call (NPPES, or any future external integration)
+  // failed, timed out, or returned an unparseable body — generic, not scoped to one provider.
+  UPSTREAM_ERROR: 502,
   INTERNAL: 500,
 };
 

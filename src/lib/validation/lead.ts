@@ -100,6 +100,12 @@ export const addLeadSchema = z
     tags: z.array(z.string().trim().min(1).max(60)).max(20).optional(),
     notes: z.string().trim().max(5000).nullish(),
     clientId: z.string().min(1).nullish(),
+    /** National Provider Identifier — set when a lead originates from Discover (NPPES); the
+     *  manual "Add lead" form never populates it. */
+    npi: z
+      .string()
+      .regex(/^\d{10}$/)
+      .nullish(),
   })
   .strict();
 export type CreateLeadInput = z.infer<typeof addLeadSchema>;

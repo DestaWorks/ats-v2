@@ -146,17 +146,17 @@ share a database.** *(`zyx.com` below is a placeholder for the real domain.)*
 - [x] Tests: mapper, match threshold (incl. no-silent-merge + IDOR refusal), routes (auth/key-absent/mocked provider), client confirm-gate. Reviewed (architect→backend+provider-refactor→frontend→review; M1 auto/decline contract fixed). **134 tests, build green.**
 - **Done-when:** ✅ upload a rÃ©sumÃ© → structured candidate data → saved; email match auto-attaches (dedupe), fuzzy match requires explicit confirm, no match creates new. *(Activates when an `AI_MODEL` provider key is set — same key-agnostic pattern as Google OAuth.)*
 
-### 1.3 Bulk Import / Candidate ETL (Module 20)
-- [ ] Importer service: parse Sheet export (CSV/JSON).
-- [ ] Transform: `normalizeStatus` (→ codes), map roles, resolve `candidates.client` FK.
-- [ ] **Dedupe: email-primary** (name secondary / manual-review), with a **`legacy_id` column** carried on every row for **idempotent upsert**.
-- [ ] **Merge policy: keep-newest + flag** conflicting records for manual review (no silent overwrite).
-- [ ] Load candidates (idempotent upsert on `legacy_id`) + added/skipped/errored/flagged report.
-- [ ] `POST /api/migration/prepare` (preview) route.
-- [ ] `POST /api/migration/commit` route (with **rÃ©sumÃ©→profile match confidence threshold + manual-confirm**).
-- [ ] Port the 3-step wizard UI 1:1 (upload → preview → commit).
-- [ ] Test: re-running import doesn't duplicate (upsert by `legacy_id`); email-dupes collapse; conflicts are flagged not silently merged.
-- **Done-when:** all historical candidates in Postgres; report matches; re-run is safe.
+### 1.3 Bulk Import / Candidate ETL (Module 20)  ✅ *(done — commit `8e74eb6`, 2026-07-04; design `docs/design/wave-1.3-etl.md`)*
+- [x] Importer service: parse Sheet export (CSV/JSON) — `sheet-parse.ts` (32 canonical legacy columns, required-header fail-fast).
+- [x] Transform: `normalizeStatus` (→ codes), map roles, resolve `candidates.client` FK — `candidate-import.transform.ts` (`fromLegacyStatusLabel`, `normalizeClientKey`; unknown client → flagged, not auto-created).
+- [x] **Dedupe: email-primary** (name secondary / manual-review), with a **`legacy_id` column** carried on every row for **idempotent upsert** — `dedupeByEmail`; `Candidate.legacyId String? @unique` (also on `Client`, `Document`).
+- [x] **Merge policy: keep-newest + flag** conflicting records for manual review (no silent overwrite) — colliding rows sorted by `updatedAt`→`createdAt`→legacyId, tagged `Needs Review` + `email-duplicate`; nothing dropped.
+- [x] Load candidates (idempotent upsert on `legacy_id`) + added/skipped/errored/flagged report — `candidateRepository.upsertByLegacyId` + `buildReport` (6 count buckets); re-run asserted to create zero duplicates.
+- [x] `POST /api/migration/prepare` (preview) route — zero DB writes, test-verified.
+- [x] `POST /api/migration/commit` route. *(The "résumé→profile match confidence threshold" phrase in the original plan line doesn't apply to this flow — bulk import attaches résumés deterministically by `legacyId`/`ResumeFileID`, since it already has an authoritative identity key; the confidence-gated fuzzy matcher is Wave 1.2's separate interactive upload flow. Formally closed as design-doc E-5, not a gap.)*
+- [x] Port the 3-step wizard UI 1:1 (upload → preview → commit) — `migration-wizard.tsx` (`Stepper`, in-browser file read + sha256 checksum).
+- [x] Test: re-running import doesn't duplicate (upsert by `legacy_id`); email-dupes collapse; conflicts are flagged not silently merged — `migration.service.test.ts` (46 tests total across the module, all passing).
+- **Done-when:** ✅ importer built, tested, reviewed — **not yet run against the real historical export** (needs the actual Sheet file from Biruh; that one-time production run is Wave 1.4, still open below).
 
 ### 1.4 Parity check + Sheet freeze
 - [ ] **Dry-run the full import on `staging` first** (staging Supabase project) — verify counts,
@@ -199,14 +199,15 @@ share a database.** *(`zyx.com` below is a placeholder for the real domain.)*
 - [ ] **Deferred:** notes ETL backfill (goes with 1.3).
 - **Done-when:** notes safe + role-scoped ✅ · mentions ✅ *(historical-notes ETL deferred)*.
 
-### 2.3 Candidate Detail — the rest (Module 4)  🟡 *(core done — handoff deferred)*
+### 2.3 Candidate Detail — the rest (Module 4)  🟡 *(core done — handoff blocked, see below)*
 - [x] `PATCH /api/candidates/:id` (edit, audited, `licenseNumber` gated on `viewCredentials`) + `POST .../verify-license` routes.
 - [x] Header + stage-mover (client gate pre-check + server-authoritative move). Board card → **View profile** link.
 - [x] Details tab (edit form) + License tab (track-aware verify) + RÃ©sumÃ© tab (documents list; byte preview → W6).
 - [x] Read layer: `getCandidateDetail` (PII-gated composite: candidate + documents + notes + stage history). Reviewed (architect→backend→frontend→review; M1 rules→`lib/rules` isomorphic move + M2 `react/no-danger` + N3 URL allowlist fixed). **253 tests, build green.**
 - [x] **Journey timeline** (2026-07-10, PR #20): `GET /api/candidates/:id/journey` composes sourced (promoted-from lead) → promoted/created → every stage move → viewer-VISIBLE notes → merged outreach, oldest-first; "🏛 Journey" modal on the detail header (legacy CANDIDATE JOURNEY parity).
-- [ ] **Deferred:** track-editor pill; auto-handoff to Operate on "Started" (idempotency key).
-- **Done-when:** full record editable ✅ *(handoff deferred)*.
+- [x] **Track-editor pill (resolved 2026-07-15):** already covered — `track` is editable in the Details-tab edit form (`updateCandidateSchema` accepts it, no capability gate beyond the general edit permission). A standalone pill (legacy had one next to the name badges) was deliberately descoped at Wave 2.3 design time (`docs/design/wave-2.3-candidate-detail.md`) and stays descoped — the form field is sufficient.
+- [ ] **BLOCKED — auto-handoff to Operate on "Started":** legacy's "handoff" was a live cross-system call to a **separate, external app** (`desta-operate`, its own Google-Sheets-backed Apps Script backend) — not a module of this ATS. This codebase has no API/webhook/credential to reach Operate, and none of the product docs describe one. Cannot be built until Operate exposes an integration point Biruh can grant access to. When unblocked: `candidateService.move()` already has the natural idempotency key (`placedAt`, stamped once on first arrival at `STARTED_DAY1` — see `prisma/schema.prisma`) to guard the handoff call inside the same transaction, mirroring `leadRepository.markPromoted`'s TOCTOU-safe pattern.
+- **Done-when:** full record editable ✅. Operate handoff excluded from done-when — external dependency, see BLOCKED note.
 
 ### 2.4 Add Candidate (Module 5)  ✅ *(done — legacy field order/labels restored 2026-07-11)*
 - [x] `TelehealthPref` added (nullable column + select, 2026-07-11).
@@ -233,13 +234,14 @@ share a database.** *(`zyx.com` below is a placeholder for the real domain.)*
 - [x] Port bulk actions + 30s-undo 1:1 (select-all, status/assign/client/delete/log toolbar, undo = bulk restore).
 - **Done-when:** full lead lifecycle + promote → candidate **in Postgres**; historical leads migrated; legacy lead writes frozen/redirected. **Open: leads ETL only.**
 
-### 2.7 Discover / NPPES (Module 7) — moved up with the funnel (find step)
-- [ ] NPPES search proxy route.
-- [ ] `enrich_provider_contact` (Claude) route.
-- [ ] Coverage-gap query + cross-system dedupe helper (**email-primary**).
-- [ ] Add-to-sourcing route.
-- [ ] Port search + results table + verify links + coverage gaps 1:1.
-- **Done-when:** search → dedupe → add to sourcing — all on the new app alongside promote + pipeline.
+### 2.7 Discover / NPPES (Module 7) — moved up with the funnel (find step)  ✅ *(core flow done — 2026-07-15; Coverage Gaps/Boolean Search/contact enrichment out of scope, see below)*
+- [x] NPPES search proxy route — no route needed; `/discover` is an RSC read (`discoverService.search()` calls `server/integrations/nppes.ts` directly, matching `docs/CONVENTIONS.md` §5's "RSC reads call services directly" — same pattern as `/sourcing`). Rate-limited per-user (real external-API cost/abuse surface a normal DB read doesn't have).
+- [ ] **`enrich_provider_contact` — deliberately NOT built.** Turned out not to be an AI/Claude feature at all: legacy's version (`legacy/Code.gs:1613-1712`) is a Clay-webhook → Apollo.io → NPPES-phone-fallback waterfall, needing `CLAY_WEBHOOK_URL`/`APOLLO_API_KEY` that don't exist in this repo/env. **Blocked** pending those credentials from Biruh — no route, UI, or feature flag exists for it yet.
+- [ ] **Coverage-gap query — out of scope for this pass** (a separate widget on the same legacy Discover page; not required by the done-when below). A natural, cheap follow-up once core flow is validated.
+- [x] Cross-system dedupe helper — **NPI-primary, name-fallback** (not email-primary — NPPES results carry an NPI, not an email). Pure function `classifyDiscoverRow` (`src/lib/rules/discover-dedupe.ts`, unit-tested), checks a lead-NPI match, then a lead-name match, then a candidate-name match (candidate wins — further down the funnel). `SourceLead.npi String? @unique` added; deliberately no `Candidate.npi` (see the migration's/service's doc comments for why).
+- [x] Add-to-sourcing route — `POST /api/discover/add` (`discoverService.addToSourcing`), bulk-creates via `leadRepository.createMany` with `source` forced server-side to `"NPPES"` (added to the `SOURCES` enum so it survives promote), audited, re-derives the dedupe check server-side (never trusts the client's search-time `dupStatus`).
+- [x] Port search + results table + verify links 1:1 — `/discover` (nav item after Sourcing): search form (provider type/state/city/name — NPPES itself requires at least one of type/city/name, not state alone) + results table (bulk-select "new" rows, target-client picker, "Add N to Sourcing") + verify links (reused existing `stateBoardLink()`, not extended beyond its current 4 states — a separate follow-up). **Coverage gaps not ported** (see above).
+- **Done-when:** ✅ search → dedupe → add to sourcing — all on the new app alongside promote + pipeline. Verified against the live NPPES API end-to-end (real provider results, NPI values, taxonomy labels rendering; insufficient-criteria and empty-query cases handled gracefully) — the add-to-sourcing *write* itself not yet exercised against the shared dev/demo DB (same caution as recent features).
 
 ### 2.8 Inbound Triage (Sourcing/CRM) *(net-new build task — was missing)*
 - [ ] Service: classify inbound applicants/replies → new-lead vs existing-candidate/lead (email-primary match + confidence + manual-confirm), suggest next action.
@@ -295,7 +297,8 @@ format (blocks 1.3/1.4). *Trash auto-purge sign-off resolved 2026-07-14 — see 
 - [x] Shared `lib/daily` + `dailyService.liveActuals` (**one source of truth**: Monday-anchored weeks everywhere — legacy's 3 week-defs consolidated; user-local day windows via a tz offset; sourcing = leads by `createdById`, outreach = attempts by `actorId`, cleanup = move/update/verify_license audit rows). *(`stats-for-range` minimal: `actualsForRange` — 5.1 briefs extend it.)*
 - [x] Overview port: "No targets" banner (leadership gets Set-targets modal — legacy sent them to the Brief page), TODAY'S TARGETS strip (serif x/y + 9–5 pace status), End-of-Shift modal pre-filled from live actuals, "Since you closed" recap (localStorage last-seen + 30s dwell, buckets from DOMAIN tables so no audit capability needed; mentions live in the Alerts bell).
 - [x] Daily Log & Journal page (`/daily-log`, nav item): tenure-ramp phase (weekNum from the USER's start date, not a hardcoded epoch) + 🔥 streak, auto-capture tiles, once-a-day self-report (409 on resubmit; autos snapshotted server-side), log history, weekly goals (REAL toggles — legacy appended duplicates), journal notes.
-- [ ] **Open:** `ats_targets_suggest` AI suggest (deferred — needs the AI provider plumbing, D. AI-agnostic); 7-day trend / predictive pacing / Indeed-credit-burn / admin team-breakdown widgets; per-client sourcing breakdown grids (schema fields exist, UI deferred); manager feedback notes.
+- [x] **Per-client sourcing breakdown (2026-07-15):** legacy never had a *display* grid for this — it was an optional input (a row of small per-client count fields) on the Daily Log self-report and the End-of-Shift modal, tracking "where sourcing effort went." Ported input-only, matching legacy exactly: `DailyActual.perClientSourcing`/`DailyLog.perClient` (JSON `{clientId:count}`, no FK, already in the schema but previously unwired) now flow through `saveActualsSchema`/`submitLogSchema` → `dailyService`. Daily Log excludes the 2 non-recruiting placeholder clients ("NJ-Psych Candidates"/"Future Potential Clients"); the EOS modal doesn't (legacy's own asymmetry, replicated intentionally). No new display/report view — that's a separate, unscoped ask if wanted later.
+- [ ] **Open:** `ats_targets_suggest` AI suggest (deferred — needs the AI provider plumbing, D. AI-agnostic); 7-day trend / predictive pacing / Indeed-credit-burn / admin team-breakdown widgets; manager feedback notes.
 - **Done-when:** the daily loop (Overview + Daily Log) runs on live data early — **it is not deferrable.**
 
 ### 3.2 Smarter Sourcing (Biruh priority #4) *(net-new — distinct from Open-Roles matching)*

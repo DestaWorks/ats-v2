@@ -235,6 +235,19 @@ export const candidateRepository = {
     });
   },
 
+  /** Existing LIVE candidates matching any of these names (case-insensitive) — the Discover
+   *  (NPPES) cross-system dedupe check (Wave 2.7). */
+  async findManyByNames(
+    names: string[],
+    tx?: Prisma.TransactionClient,
+  ): Promise<Array<{ id: string; name: string; status: string }>> {
+    if (names.length === 0) return [];
+    return db(tx).candidate.findMany({
+      where: { name: { in: names, mode: "insensitive" }, deletedAt: null },
+      select: { id: true, name: true, status: true },
+    });
+  },
+
   /**
    * ETL-ONLY, intentionally delete-agnostic: returns a soft-deleted row too, so the one-shot
    * migration re-upserts an existing (even trashed) record instead of creating a duplicate.

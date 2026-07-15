@@ -150,6 +150,7 @@ export function DailyLogView() {
   });
   const [goalText, setGoalText] = useState("");
   const [entryText, setEntryText] = useState("");
+  const [perClient, setPerClient] = useState<Record<string, string>>({});
   const [pending, setPending] = useState(false);
   const today = dateKey();
   const tz = new Date().getTimezoneOffset();
@@ -164,7 +165,7 @@ export function DailyLogView() {
   }, [refresh]);
 
   if (!view) return <p className="text-sm text-gray">Loading…</p>;
-  const { log, auto, ramp, streak, history, goals, entries } = view;
+  const { log, auto, ramp, streak, history, goals, entries, clients } = view;
 
   async function submitLog() {
     setPending(true);
@@ -179,6 +180,11 @@ export function DailyLogView() {
       blocker: form.blocker || null,
       notes: (form.notes ?? "").trim() || null,
       shiftHandoff: (form.shiftHandoff ?? "").trim() || null,
+      perClient: Object.fromEntries(
+        Object.entries(perClient)
+          .map(([id, v]) => [id, Number(v) || 0] as const)
+          .filter(([, v]) => v > 0),
+      ),
     });
     setPending(false);
     if (res.ok) {
@@ -357,6 +363,33 @@ export function DailyLogView() {
                 </Select>
               </Field>
             </div>
+            {clients.length > 0 ? (
+              <div>
+                <p className="mb-2 text-[11px] font-semibold tracking-wide text-gray uppercase">
+                  Sourced by client{" "}
+                  <span className="text-[10px] font-normal normal-case text-gray/70">
+                    (optional — tracks where effort is going)
+                  </span>
+                </p>
+                <div className="flex flex-wrap gap-3">
+                  {clients.map((c) => (
+                    <label key={c.id} className="flex items-center gap-1.5 text-xs text-gray">
+                      {c.name.split(" ")[0]}
+                      <Input
+                        id={`dl-pc-${c.id}`}
+                        aria-label={`Sourced for ${c.name}`}
+                        type="number"
+                        min={0}
+                        max={999}
+                        value={perClient[c.id] ?? ""}
+                        onChange={(e) => setPerClient({ ...perClient, [c.id]: e.target.value })}
+                        className="w-16 py-1 text-center text-xs"
+                      />
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ) : null}
             <Field label="Notes (optional)" htmlFor="dl-notes">
               <textarea
                 id="dl-notes"
