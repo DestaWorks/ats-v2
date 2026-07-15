@@ -188,7 +188,9 @@ function EndOfShiftModal({
     note: "",
     shiftHandoff: "",
   });
+  const [perClientSourcing, setPerClientSourcing] = useState<Record<string, string>>({});
   const [pending, setPending] = useState(false);
+  const eosClients = (data.clients ?? []).slice(0, 6);
 
   async function submit() {
     setPending(true);
@@ -201,6 +203,11 @@ function EndOfShiftModal({
       screens: Number(form.screens) || 0,
       note: (form.note ?? "").trim() || null,
       shiftHandoff: (form.shiftHandoff ?? "").trim() || null,
+      perClientSourcing: Object.fromEntries(
+        Object.entries(perClientSourcing)
+          .map(([id, v]) => [id, Number(v) || 0] as const)
+          .filter(([, v]) => v > 0),
+      ),
     });
     setPending(false);
     if (res.ok) {
@@ -248,6 +255,36 @@ function EndOfShiftModal({
             );
           })}
         </div>
+        {eosClients.length > 0 ? (
+          <div>
+            <p className="mb-1.5 text-[11px] font-semibold tracking-wide text-gray uppercase">
+              Sourced by client{" "}
+              <span className="font-normal normal-case text-gray/70">(optional)</span>
+            </p>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {eosClients.map((c) => (
+                <div
+                  key={c.id}
+                  className="flex items-center gap-2 rounded-md bg-black/[0.03] px-2.5 py-1.5"
+                >
+                  <span className="flex-1 text-xs text-charcoal">{c.name.split(" ")[0]}</span>
+                  <Input
+                    id={`eos-pc-${c.id}`}
+                    aria-label={`Sourced for ${c.name}`}
+                    type="number"
+                    min={0}
+                    max={999}
+                    value={perClientSourcing[c.id] ?? ""}
+                    onChange={(e) =>
+                      setPerClientSourcing({ ...perClientSourcing, [c.id]: e.target.value })
+                    }
+                    className="w-14 py-1 text-right text-xs"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
         <Field label="Note (optional)" htmlFor="eos-note">
           <Input
             id="eos-note"

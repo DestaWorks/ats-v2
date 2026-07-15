@@ -1,4 +1,5 @@
 import "server-only";
+import type { Prisma } from "@/generated/prisma/client";
 import { hasCapability } from "@/lib/constants";
 import { dayWindow, mondayOf, rampFor, sourcingStreak, tenureWeek } from "@/lib/daily";
 import type {
@@ -32,6 +33,11 @@ import { AppError } from "@/server/http/app-error";
 
 /** The capability that gates target-setting (leadership; legacy: the Daily Brief manager modal). */
 const SET_TARGETS_CAP = "viewReports" as const;
+
+/** Legacy Daily Log excluded these 2 non-recruiting placeholder clients from the per-client
+ *  sourcing breakdown (not real targets); the EOS modal did NOT apply this exclusion — both
+ *  intentional, legacy parity (legacy/index.html:2319 vs :1240). */
+const PER_CLIENT_BREAKDOWN_EXCLUDED = new Set(["NJ-Psych Candidates", "Future Potential Clients"]);
 
 function toTargetDTO(
   row: DailyTargetRow,
@@ -120,7 +126,7 @@ export const dailyService = {
       actualSubmitted: actual !== null,
       canSetTargets,
       teammates,
-      clients: canSetTargets ? clients.map((c) => ({ id: c.id, name: c.name })) : undefined,
+      clients: clients.map((c) => ({ id: c.id, name: c.name })),
     };
   },
 
@@ -174,6 +180,7 @@ export const dailyService = {
           screens: input.screens,
           note: input.note ?? null,
           shiftHandoff: input.shiftHandoff ?? null,
+          perClientSourcing: (input.perClientSourcing ?? {}) as Prisma.InputJsonValue,
         },
         tx,
       );
@@ -206,16 +213,18 @@ export const dailyService = {
   /** The Daily Log page composite for the SESSION user. */
   async logView(user: AuthUser, date: string, tz: number): Promise<DailyLogViewDTO> {
     const w = dayWindow(date, tz);
-    const [log, added, moved, notes, verified, history, entries, userRow] = await Promise.all([
-      dailyRepository.logFor(user.id, date),
-      dailyRepository.countCandidatesAdded(user.id, w),
-      dailyRepository.countAuditAction(user.id, "move", w),
-      dailyRepository.countAuditAction(user.id, "add_note", w),
-      dailyRepository.countAuditAction(user.id, "verify_license", w),
-      dailyRepository.logsForUser(user.id, 15),
-      dailyRepository.entriesForUser(user.id, 20),
-      prisma.user.findUnique({ where: { id: user.id }, select: { createdAt: true } }),
-    ]);
+    const [log, added, moved, notes, verified, history, entries, userRow, clients] =
+      await Promise.all([
+        dailyRepository.logFor(user.id, date),
+        dailyRepository.countCandidatesAdded(user.id, w),
+        dailyRepository.countAuditAction(user.id, "move", w),
+        dailyRepository.countAuditAction(user.id, "add_note", w),
+        dailyRepository.countAuditAction(user.id, "verify_license", w),
+        dailyRepository.logsForUser(user.id, 15),
+        dailyRepository.entriesForUser(user.id, 20),
+        prisma.user.findUnique({ where: { id: user.id }, select: { createdAt: true } }),
+        clientRepository.list(),
+      ]);
     const goals = await dailyRepository.goalsForWeek(user.id, mondayOf(date));
     const weekNum = tenureWeek(userRow?.createdAt ?? new Date(), date);
     const ramp = rampFor(weekNum);
@@ -228,6 +237,9 @@ export const dailyService = {
       history: history.slice(0, 10).map(toLogDTO),
       goals: goals.map(toGoalDTO),
       entries: entries.map(toEntryDTO),
+      clients: clients
+        .filter((c) => !PER_CLIENT_BREAKDOWN_EXCLUDED.has(c.name))
+        .map((c) => ({ id: c.id, name: c.name })),
     };
   },
 
@@ -254,6 +266,7 @@ export const dailyService = {
           blocker: input.blocker ?? null,
           notes: input.notes ?? null,
           shiftHandoff: input.shiftHandoff ?? null,
+          perClient: (input.perClient ?? {}) as Prisma.InputJsonValue,
           autoAdded: added,
           autoMoved: moved,
           autoNotes: notes,

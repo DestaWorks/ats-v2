@@ -371,6 +371,7 @@ model SourceLead {
   email       String?
   phone       String?
   linkedinUrl String?
+  npi         String? @unique // National Provider Identifier (NPPES) — Discover sourcing dedupe key
 
   // sourcing context (free text — NOT the candidate strict-vocab enums)
   credential String? // raw job title / credential text

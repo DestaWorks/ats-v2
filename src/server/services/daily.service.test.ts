@@ -143,6 +143,7 @@ describe("dailyService.submitLog", () => {
     responses: 2,
     screenings: 1,
     submitted: 0,
+    perClient: { cl1: 3 },
   };
 
   it("snapshots the auto counts server-side and audits in one tx", async () => {
@@ -158,7 +159,13 @@ describe("dailyService.submitLog", () => {
 
     const [data, tx] = h.repo.createLog.mock.calls[0]!;
     expect(tx).toBe(h.fakeTx);
-    expect(data).toMatchObject({ userId: "u1", autoAdded: 4, autoMoved: 6, autoNotes: 2 });
+    expect(data).toMatchObject({
+      userId: "u1",
+      autoAdded: 4,
+      autoMoved: 6,
+      autoNotes: 2,
+      perClient: { cl1: 3 },
+    });
     expect(dto.sourced).toBe(18);
     expect(h.writeAudit.mock.calls[0]![1]).toMatchObject({ action: "submit_log" });
   });

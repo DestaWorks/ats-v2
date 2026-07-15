@@ -11,6 +11,13 @@ const dateKey = z.string().regex(DATE_KEY_RE, "Expected YYYY-MM-DD");
 const metric = z.coerce.number().int().min(0).max(999);
 export const tzOffsetSchema = z.coerce.number().int().min(-840).max(840).default(0);
 
+/** clientId → sourced count. No FK — an ad-hoc `{ [clientId]: count }` shape (legacy parity).
+ *  Size-capped defensively (legacy put no bound on this blob at all). */
+const perClientCounts = z
+  .record(z.string().min(1).max(40), metric)
+  .refine((v) => Object.keys(v).length <= 20, "Too many clients")
+  .optional();
+
 // --- DTOs ---------------------------------------------------------------
 
 /** A manager-set per-associate day target (legacy ATS_DailyTargets row). */
@@ -96,6 +103,9 @@ export interface DailyLogViewDTO {
   history: DailyLogDTO[]; // last 10, newest first
   goals: JournalGoalDTO[]; // current (Monday-anchored) week
   entries: JournalEntryDTO[]; // recent journal notes, newest first
+  /** Options for the optional "Sourced by client" breakdown (excludes non-recruiting placeholder
+   *  clients — see `PER_CLIENT_BREAKDOWN_EXCLUDED` in `daily.service.ts`). */
+  clients: { id: string; name: string }[];
 }
 
 // --- request schemas ------------------------------------------------------
@@ -130,6 +140,7 @@ export const saveActualsSchema = z
     screens: metric,
     note: z.string().trim().max(2000).nullish(),
     shiftHandoff: z.string().trim().max(2000).nullish(),
+    perClientSourcing: perClientCounts,
   })
   .strict();
 export type SaveActualsInput = z.infer<typeof saveActualsSchema>;
@@ -147,6 +158,7 @@ export const submitLogSchema = z
     blocker: z.string().trim().max(200).nullish(),
     notes: z.string().trim().max(5000).nullish(),
     shiftHandoff: z.string().trim().max(2000).nullish(),
+    perClient: perClientCounts,
   })
   .strict();
 export type SubmitLogInput = z.infer<typeof submitLogSchema>;

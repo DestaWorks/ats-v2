@@ -252,18 +252,33 @@ export const leadRepository = {
     });
   },
 
-  /** Existing leads matching any of these names (import dedup fallback for email-less rows). */
+  /** Existing leads matching any of these names (import/Discover dedup fallback for email-less rows). */
   findManyByNames(names: string[], tx?: Prisma.TransactionClient) {
     if (names.length === 0) return Promise.resolve([]);
     return db(tx).sourceLead.findMany({
       where: { name: { in: names, mode: "insensitive" } },
-      select: { id: true, email: true, name: true, phone: true },
+      select: { id: true, email: true, name: true, phone: true, status: true },
     });
   },
 
-  /** Bulk insert (import) — rows are pre-deduped by the service. */
-  createMany(rows: Prisma.SourceLeadCreateManyInput[], tx?: Prisma.TransactionClient) {
-    return db(tx).sourceLead.createMany({ data: rows });
+  /** Existing leads matching any of these NPIs — Discover (NPPES) dedup, delete-agnostic like the
+   *  other dedup lookups (a soft-deleted lead still blocks a duplicate add). */
+  findManyByNpis(npis: string[], tx?: Prisma.TransactionClient) {
+    if (npis.length === 0) return Promise.resolve([]);
+    return db(tx).sourceLead.findMany({
+      where: { npi: { in: npis } },
+      select: { id: true, npi: true, name: true, status: true },
+    });
+  },
+
+  /** Bulk insert (import / Discover add) — rows are pre-deduped by the service. `skipDuplicates`
+   *  defends the `npi` unique constraint against a concurrent add racing the service's own check. */
+  createMany(
+    rows: Prisma.SourceLeadCreateManyInput[],
+    tx?: Prisma.TransactionClient,
+    opts?: { skipDuplicates?: boolean },
+  ) {
+    return db(tx).sourceLead.createMany({ data: rows, skipDuplicates: opts?.skipDuplicates });
   },
 
   /**
