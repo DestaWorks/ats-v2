@@ -141,7 +141,7 @@ concrete. In plain terms:
 | **Tailwind CSS** | Styling — lets us reuse the current look and layout as-is |
 | **Claude API (Anthropic)** | The AI features — daily/weekly briefs, résumé parsing, and matching |
 | **Vercel** | Hosting and reliable, repeatable deploys |
-| *Prisma · Zod · TanStack Query* | Supporting tools that keep the data safe, correct, and fast |
+| *Prisma · Zod* | Supporting tools that keep the data safe and correct |
 
 Everything here is a proven, mainstream choice — nothing exotic — so the app stays easy to
 maintain and easy for any future engineer to pick up.

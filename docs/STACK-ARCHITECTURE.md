@@ -14,7 +14,7 @@ generic stack notes in `ARCHITECTURE.md`/`EDD.md` and locks the decisions.
 | Auth | **Better Auth** (Prisma adapter, email/password + Google) — on Supabase Postgres¹ |
 | AI | **Claude API (Anthropic)** via serverless endpoints — server-held key |
 | Validation | **Zod** (shared client ↔ server) |
-| Server state | **TanStack Query** (confirmed; see §6) |
+| Server state | **RSC reads + typed fetch helpers** (see §6) — no client cache library |
 | Forms | **react-hook-form + zodResolver** |
 | Drag & drop | **dnd-kit** (accessible) |
 | UI primitives | **shadcn/Radix** for a11y-hard primitives only (Dialog, DropdownMenu, Combobox, Sonner) |
@@ -38,18 +38,19 @@ generic stack notes in `ARCHITECTURE.md`/`EDD.md` and locks the decisions.
 
 ## 1. Architectural model — layered, one-way dependencies
 
-Two halves: a **modular client** (feature modules) and a **layered server**
-(API → service → repository → db). The hard rule is **dependencies only point downward**;
-a lower layer must never import an upper one.
+Two halves: an **RSC-first client** (feature code co-located under `app/(app)/<feature>/`) and a
+**layered server** (API → service → repository → db). The hard rule is **dependencies only point
+downward**; a lower layer must never import an upper one.
 
 ```
               ┌─────────────────────────────────────────────┐
-   CLIENT     │  app/ (routing & layout only, thin)          │
-   (browser   │        │ renders                              │
-    + RSC)    │  modules/<feature>/  components · hooks       │
-              │        │ calls (HTTP, typed)                  │
+   CLIENT     │  app/(app)/<feature>/page.tsx  (RSC — reads,  │
+   (browser   │  calls services directly, no client fetch)   │
+    + RSC)    │        │ renders, passes DTOs as props        │
+              │  app/(app)/<feature>/*.tsx  ("use client" —   │
+              │  interactive: forms, tables, filters, DnD)    │
               └────────┼─────────────────────────────────────┘
-                       │  fetch /api  (TanStack Query)
+                       │  fetch /api  (lib/api/client.ts typed helpers)
               ┌────────▼─────────────────────────────────────┐
    SERVER     │  app/api/.../route.ts   = API layer           │  ← controllers: validate(zod)
               │        │                                       │     + authz + shape response
@@ -80,38 +81,38 @@ a lower layer must never import an upper one.
 
 ## 2. Folder structure
 
+> **Superseded from the original design:** a separate `modules/<feature>/` client tree
+> (components/hooks/api/query-keys.ts, TanStack Query-backed) was planned but never built. Every
+> wave shipped instead co-locates a feature's client code directly under
+> `app/(app)/<feature>/` — see §3.6/§6. `src/modules/` exists on disk only as an empty,
+> unused placeholder; do not add to it.
+
 ```
 desta-ats/
 ├─ prisma/
 │  ├─ schema.prisma            # models incl. Better Auth (User/Session/Account/Verification)
 │  └─ migrations/
 ├─ src/
-│  ├─ app/                     # ROUTING & LAYOUT ONLY — no business logic, no Prisma
+│  ├─ app/
 │  │  ├─ (auth)/sign-in/page.tsx
 │  │  ├─ (app)/                # authenticated shell (sidebar lives here)
 │  │  │  ├─ layout.tsx
-│  │  │  ├─ pipeline/page.tsx
-│  │  │  ├─ sourcing/page.tsx
-│  │  │  ├─ briefs/…  crm/…  admin/…  profile/…
-│  │  ├─ portal/               # read-only client portal (separate audience)
+│  │  │  ├─ pipeline/
+│  │  │  │  ├─ page.tsx             # RSC — guard, load DTOs via services, render the client view
+│  │  │  │  ├─ pipeline-board.tsx   # "use client" — the interactive board (state, mutations)
+│  │  │  │  └─ lib/                 # board-fetch.ts (typed fetchers), small pure helpers
+│  │  │  ├─ sourcing/  candidates/  roles/  daily-log/  trash/  activity/  …  (same shape)
+│  │  │  └─ lib/                    # cross-feature client helpers scoped to the (app) group:
+│  │  │                             # FilterToolbar/FiltersPopover/FilterField, use-url-filters,
+│  │  │                             # FilterChip — shared by candidates/pipeline/roles/sourcing
 │  │  ├─ api/                  # === API LAYER (HTTP controllers) ===
 │  │  │  ├─ auth/[...all]/route.ts        # Better Auth handler
 │  │  │  ├─ candidates/route.ts           # GET list / POST create
 │  │  │  ├─ candidates/[id]/route.ts      # GET / PATCH / DELETE
 │  │  │  ├─ candidates/[id]/move/route.ts # POST stage transition
-│  │  │  ├─ leads/…  briefs/…  clients/…
+│  │  │  ├─ leads/…  roles/…  daily/…
 │  │  ├─ layout.tsx
 │  │  └─ globals.css           # @import "tailwindcss"; @theme { … }
-│  │
-│  ├─ modules/                 # === CLIENT FEATURE MODULES (module-by-module) ===
-│  │  ├─ pipeline/
-│  │  │  ├─ components/         # KanbanBoard, CandidateCard, CandidateModal…
-│  │  │  ├─ hooks/             # useCandidates, useMoveCandidate (TanStack Query)
-│  │  │  ├─ api/               # typed fetchers → /api/candidates (client side)
-│  │  │  ├─ query-keys.ts      # candidateKeys.list(filters) …
-│  │  │  ├─ types.ts           # view-model types (from zod-inferred DTOs)
-│  │  │  └─ index.ts           # barrel export — the module's public surface
-│  │  ├─ sourcing/  briefs/  crm/  verification/  admin/  portal/  …
 │  │
 │  ├─ server/                  # === SERVER-ONLY LAYERS ('server-only' guarded) ===
 │  │  ├─ services/             # business logic / orchestration / transactions
@@ -137,13 +138,17 @@ desta-ats/
 │  │
 │  ├─ lib/                     # === SHARED / ISOMORPHIC ===
 │  │  ├─ validation/           # zod schemas (shared client+server) → DTOs & inputs
-│  │  │  ├─ candidate.schema.ts
-│  │  │  └─ lead.schema.ts
+│  │  │  ├─ candidate.ts
+│  │  │  └─ lead.ts
+│  │  ├─ api/client.ts         # getJson/postJson/patchJson/putJson/deleteJson — see §6
+│  │  ├─ pagination.ts         # PageMeta / pageMeta() — shared offset-page envelope + math
+│  │  ├─ forms/                # useZodForm, emptyToNull/emptyToNullNumber
 │  │  ├─ constants/            # STATUSES, CLIENTS, SOURCES, ROLES, TAGS, COMPACT_STATES
 │  │  ├─ utils/                # dates, formatting, pure helpers
 │  │  └─ auth-client.ts        # Better Auth React client (signIn/useSession…)
 │  │
-│  ├─ components/ui/           # shared UI primitives (buttons, inputs, Sonner <Toaster/>)
+│  ├─ components/ui/           # shared UI primitives (Button, Input, Select, Table, Pager,
+│  │                           # Sonner <Toaster/>) — generic, no feature/route awareness
 │  └─ styles/
 ├─ eslint.config.mjs           # layer boundaries via eslint-plugin-boundaries + no-restricted-paths
 └─ docs/
@@ -240,12 +245,22 @@ service — is the only place that touches `prisma.$transaction`; repositories r
   same rules fetched via the API) for instant UX feedback, but the server decision is
   authoritative.
 
-### 3.6 Client modules — `modules/<feature>/*`
-- Self-contained per feature; only its `index.ts` barrel is imported by `app/` pages.
-- `components/` (UI), `hooks/` (TanStack Query wrappers), `api/` (typed fetchers to `/api`),
-  `query-keys.ts`, `types.ts`. **No server imports.**
-- Container → Hook → Presenter: container holds filters/state, hook runs queries/mutations,
-  presenter is pure rendering.
+### 3.6 Client feature code — `app/(app)/<feature>/*`
+- Self-contained per feature, co-located with its route (no separate `modules/` tree — see the
+  §2 note). **No server imports** in anything that isn't a `page.tsx`/`layout.tsx` RSC.
+- **`page.tsx`** (RSC, no `"use client"`): guards (`getCurrentUser`/`requireUser`), loads DTOs by
+  calling `server/services/**` directly (no fetch — same process), renders the client view with
+  those DTOs as props. Multi-read pages centralize the composite load in a `lib/load-*.ts`
+  helper (e.g. `roles/[id]/lib/load-detail.ts`) so the guard → read → `NOT_FOUND` mapping lives
+  in one place.
+- **`<feature>-view.tsx` / `<feature>-inventory.tsx` / `<feature>-board.tsx`** (`"use client"`):
+  the interactive surface — state, filters, mutations. Holds its own `useState`/`useTransition`;
+  no client-side data-fetching library.
+- **`lib/`**: typed fetchers (thin wrappers over `lib/api/client.ts`, e.g. `board-fetch.ts`,
+  `lead-fetch.ts`) plus small pure helpers local to the feature.
+- **`add-*-modal.tsx`**: the create-flow pattern — a `Button` + shared `Modal`, mounted only
+  while open, `useZodForm` + the same zod schema the route enforces, `router.push`/`onAdded`
+  on success (see §6).
 
 ---
 
@@ -366,59 +381,76 @@ export type CreateCandidateInput = z.infer<typeof createCandidateInput>;
 
 ## 6. Data fetching & mutations (client)
 
-**RSC vs client (explicit rule).** Feature modules under **`modules/**` default to
-`"use client"`** — they are interactive (kanban, modals, filters, DnD). **React Server
-Components are reserved for `app/` layouts and read-only pages**: the **Client Portal**, the
-**Credentials matrix**, and **printable reports**. Do not reach for RSC inside interactive
-modules just to save a fetch.
+**Decided (supersedes the original TanStack Query plan — no client cache library was adopted;
+`package.json` has no dependency on one).** Every wave since Wave 0 has shipped this pattern with
+zero deviation:
+
+**RSC vs client.** `app/(app)/<feature>/page.tsx` is an RSC — it guards, calls
+`server/services/**` directly (no fetch, no client cache — same process), and passes the DTO down
+as props. Everything interactive (forms, tables, filters, DnD, modals) is a **client component**
+sibling in the same feature folder (see §3.6). RSC is also used for the read-only pages
+(Client Portal, Credentials matrix, printable reports) — same mechanism, no special case.
 
 **Client-state classification** (decide per piece of state):
 
 | Kind of state | Where it lives |
 |---------------|----------------|
-| Server state (candidates, leads, briefs…) | **TanStack Query** (module hooks) |
-| Ephemeral UI (open/closed, hover, draft toggles) | **`useState`** |
+| Server state (candidates, leads, roles…) | **RSC read on load** + **`router.refresh()`** after a mutation (re-runs the RSC, no client cache to invalidate) |
+| Ephemeral UI (open/closed, hover, draft toggles, in-flight lists) | **`useState`** |
 | Shareable filters / saved views | **URL `searchParams` + a `saved_views` table** — never localStorage |
 | Non-sensitive personal prefs | localStorage (only these) |
 
-- **Reads:** TanStack Query in module hooks; query keys centralized per module
-  (`candidateKeys.list(filters)`, `candidateKeys.detail(id)`).
-- **Server Components** (the read-only pages above) may fetch directly via services for the
-  initial render (server-only), then hydrate the query cache; client hooks reuse the same keys.
-- **Writes:** the client calls the API (or a thin Server Action) via a mutation hook; on
-  success **invalidate** the affected keys and fire a **Sonner** toast.
-- **Forms** use **react-hook-form + `zodResolver`** with the shared `lib/validation` schemas.
+- **Reads:** the owning `page.tsx` (or a `lib/load-*.ts` composite loader for multi-read pages)
+  calls services directly and seeds the client component's props. There is no client-side
+  re-fetch of the same data — the client component holds it in `useState`, seeded from props,
+  and patches it locally after a mutation (or just calls `router.refresh()` and lets the new
+  props flow back down).
+- **Writes:** every mutation goes through **`lib/api/client.ts`**'s typed helpers —
+  `getJson`/`postJson`/`patchJson`/`putJson`/`deleteJson` — which return a discriminated
+  **`ApiResult<T>`**: `{ ok: true, data: T }` or `{ ok: false, failure: ApiFailure }`
+  (`{ code, message, issues }`, from the route's `{ error: {...} }` envelope). The caller
+  branches directly: field-level `issues` → `form.setError(...)`; anything else →
+  `messageForFailure(failure)` + a **Sonner** toast. On success: either `router.refresh()`
+  (re-runs the RSC read) or an in-place `setState` patch for snappier UX, then a success toast.
+  Feature `lib/` files (e.g. `board-fetch.ts`, `lead-fetch.ts`) wrap these into one-liners typed
+  to the feature's DTOs — never call `fetch()` directly in a component.
+- **Forms** use **react-hook-form + `zodResolver`** (the shared `useZodForm` hook) with the same
+  `lib/validation` schema the API route parses — client and server validate identically.
 - **Saved views** are persisted in the `saved_views` table and encoded in the URL
   `searchParams`, so a view is shareable/bookmarkable and survives reload.
 
-**Optimistic updates for kanban moves** — `onMutate` + rollback (no visible snap-back):
+**Optimistic updates** use React's built-in **`useOptimistic` + `useTransition`** — no
+manual snapshot/rollback bookkeeping (the pipeline board's card move is the reference case):
 
 ```ts
-const move = useMutation({
-  mutationFn: (vars) => moveCandidate(vars),               // module/api fetcher
-  onMutate: async (vars) => {                              // optimistic apply
-    await qc.cancelQueries({ queryKey: candidateKeys.all });
-    const prev = qc.getQueryData(candidateKeys.list(filters));
-    qc.setQueryData(candidateKeys.list(filters), (old) => applyMove(old, vars));
-    return { prev };                                        // context for rollback
-  },
-  onError: (e, _v, ctx) => {                                // rollback on failure
-    if (ctx?.prev) qc.setQueryData(candidateKeys.list(filters), ctx.prev);
-    toast.error(e.message);
-  },
-  onSettled: () => qc.invalidateQueries({ queryKey: candidateKeys.all }),
-  onSuccess: () => toast.success("Candidate moved"),
-});
+const [optimisticBoard, addOptimistic] = useOptimistic(board, applyBoardMove);
+const [, startTransition] = useTransition();
+
+function onMove(card: CandidateCardDTO, toStatus: CandidateStatus) {
+  startTransition(async () => {
+    addOptimistic({ id: card.id, toStatus });      // shows immediately
+    const result = await postMove(card.id, toStatus); // typed fetcher → ApiResult<T>
+    if (result.ok) {
+      setBoard((prev) => applyBoardMove(prev, card.id, toStatus)); // commit to base
+      toast.success(`${card.name} moved`);
+    } else {
+      toast.error(messageForFailure(result.failure)); // base unchanged → useOptimistic reverts
+    }
+  });
+}
 ```
 
 Drag-and-drop itself uses **dnd-kit** (keyboard- and screen-reader-accessible), not the legacy
 hand-rolled HTML5 DnD.
 
 > **API style decision:** primary write path is **Route Handlers** under `app/api` (explicit,
-> typed, reusable by the client portal and any future consumer). Server Actions are allowed
-> for simple internal form mutations but must stay thin and delegate to a service — never put
-> business logic or Prisma in an action. This keeps one set of business logic (services) with
-> two possible entry points.
+> typed, reusable by the client portal and any future consumer), fronted by an `apiHandler()`
+> wrapper that authenticates/authorizes/validates/shapes-errors uniformly (§7) and returns the
+> `ApiResult<T>` envelope. **Server Actions are the exception, not the default** — used only where
+> there's no session to hit a guarded route against (`(auth)/request-access/actions.ts`, pre-auth).
+> They stay thin (validate with the shared zod schema, delegate to a service) and return their own
+> small `{ ok, error }` shape rather than the full envelope. Default to a Route Handler; reach for
+> a Server Action only for a genuinely pre-auth/public form.
 
 ---
 
@@ -568,7 +600,8 @@ These come from the signed Developer NDA and from how the Owner runs security. T
    custom roles v2; signup disabled). (§4)
 9. **`client_rules` is data**; `scoreCandidate(candidate, clientRules)` is pure. Status is
    codes/ordinal. (§3.5)
-10. **TanStack Query is the confirmed server-state layer**; ephemeral→`useState`, shareable→URL
-    `searchParams` + `saved_views` table. (§6)
+10. **RSC reads + `lib/api/client.ts`'s typed `ApiResult<T>` helpers are the server-state
+    layer** (no client cache library); ephemeral→`useState`, shareable→URL `searchParams` +
+    `saved_views` table. (§6)
 
 Open: confirm the Better Auth CLI command for the installed version.

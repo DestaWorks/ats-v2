@@ -31,14 +31,31 @@ ship continuously.
 
 ## 3. Project structure (target)
 
-**The authoritative folder structure is `docs/STACK-ARCHITECTURE.md` §2** — the locked
-`modules/` (UI feature slices) + `server/{services, repositories, rules, auth, db, ai, http}`
-(layered backend) layout. Do not invent a parallel `features/` + `domain/` + `api/` tree; use
-STACK-ARCHITECTURE §2 verbatim. This section only adds file-size/complexity conventions on top.
+**The authoritative folder structure is `docs/STACK-ARCHITECTURE.md` §2** — client feature code
+co-located under `app/(app)/<feature>/` (§3.6) + `server/{services, repositories, rules, auth,
+db, ai, http}` (layered backend). Do not invent a parallel `features/` + `domain/` + `api/` tree,
+and do not add to `src/modules/` (an unused, empty placeholder from an earlier plan — see
+STACK-ARCHITECTURE §2). This section only adds file-size/complexity conventions on top.
 
 - **One component per file.** No 9,000-line files; flag any file > ~400 lines in review.
 - **No giant components.** If a component has more than a handful of `useState`, extract
   hooks/subcomponents. (The legacy `App()` with ~180 hooks is the anti-pattern we're fixing.)
+
+## 3a. Repository-layer reuse rules
+
+- **Never redefine `db(tx)`.** Import the shared `db(tx?: Prisma.TransactionClient)` helper from
+  `server/db/prisma` (`db(tx) ?? prisma` under the hood) — do not reimplement it per repository.
+- **Never rebuild an id→name lookup by hand.** Use `clientRepository.nameMap()` (or the
+  equivalent for the entity in question) instead of `new Map(rows.map(r => [r.id, r.name]))` at
+  each call site — one query pattern, one place to optimize.
+- **Project narrow reads with `select`.** A read that only needs a few columns for scoring/
+  matching/lookup (not the full entity) should get its own repository method with an explicit
+  Prisma `select` (see `leadRepository.listForMatching()`) — don't fetch full rows (PII included)
+  just to read 3–4 fields.
+- **Share one fetch across sibling reads on the same page load.** If two service methods would
+  each independently fetch the same unbounded/expensive dataset for one page (e.g. two scorers
+  both reading "every lead"), add a composite method that fetches once and returns both results,
+  and have the RSC loader call that instead of `Promise.all`-ing the two originals.
 
 ## 4. Naming
 
@@ -51,17 +68,33 @@ STACK-ARCHITECTURE §2 verbatim. This section only adds file-size/complexity con
 
 ## 5. State & data
 
-- **Server state** via a data-fetching layer (e.g. TanStack Query) — not hand-rolled
-  `fetch` + `useState` + manual refetch.
+- **Server state = RSC reads + `lib/api/client.ts`'s typed fetch helpers — not TanStack Query
+  or any other client cache library (DECISIONS D7).** The page's `page.tsx` (RSC) calls
+  `server/services/**` directly and passes DTOs down as props; mutations go through
+  `getJson`/`postJson`/`patchJson`/`putJson`/`deleteJson`, which return a discriminated
+  `ApiResult<T>` (`{ok:true,data}` / `{ok:false,failure}`). **Never call `fetch()` directly in a
+  component** — add a one-line wrapper in the feature's `lib/*-fetch.ts` instead, so every
+  mutation gets the same failure shape for free. On success, either `router.refresh()` (re-runs
+  the RSC read) or an in-place `setState` patch; on failure, `issues.length` → `form.setError`,
+  else `messageForFailure(failure)` + a Sonner toast. Optimistic UI uses React's `useOptimistic`
+  + `useTransition`, not manual snapshot/rollback bookkeeping.
 - **No business logic in components.** Scoring, disqualification, and stage-gate rules live
   in `server/rules` and are **server-authoritative**; the client may mirror them for UX only.
 - **No `localStorage` for auth/role.** Session is provider-managed; role comes from the API.
 - **Saved views / filters:** shareable filter and saved-view state lives in a `saved_views`
   table + URL `searchParams` (so a view can be linked and reloaded) — **not** `localStorage`.
-  `localStorage` is only for non-sensitive UI prefs (e.g. collapsed-panel, theme).
-- **Forms:** use **react-hook-form + `zodResolver`** (share the zod schema with the API
-  boundary); no hand-rolled `useState`-per-field forms.
+  `localStorage` is only for non-sensitive UI prefs (e.g. collapsed-panel, theme). Filter
+  toolbars are built on the shared `app/(app)/lib/filter-toolbar.tsx` primitives
+  (`FilterToolbar`/`FiltersPopover`/`FilterField`) + `use-url-filters.ts` — not a bespoke card
+  per feature.
+- **Forms:** use **react-hook-form + `zodResolver`** via the shared `useZodForm` hook (share
+  the zod schema with the API boundary); no hand-rolled `useState`-per-field forms. Coerce
+  empty-string `<input>`/`<select>` values to `null` with the shared `emptyToNull`/
+  `emptyToNullNumber` (`lib/forms/empty-to-null.ts`), not a per-form reimplementation.
 - **Dates**: store ISO 8601 UTC; format at the edge. Don't compute SLAs from local time.
+- **Offset-paginated lists** use the shared `PageMeta`/`pageMeta()` (`lib/pagination.ts`) for the
+  envelope/math and the shared `<Pager>` (`components/ui/pager.tsx`) for the footer UI — not a
+  per-list reimplementation of either.
 
 ## 6. API & validation
 
@@ -70,6 +103,15 @@ STACK-ARCHITECTURE §2 verbatim. This section only adds file-size/complexity con
 - **Authorize every endpoint** server-side by role. UI hiding is UX, never security.
 - **Writes return results.** No fire-and-forget `mode:"no-cors"`.
 - **Audit every state change** (actor, action, entity, before/after, timestamp).
+- **Reuse the shared query-param preprocessors** — a `"1"`/`"true"` presence flag is
+  `boolFlagSchema` (`lib/validation/pipeline.ts`), not a per-schema reimplementation of the same
+  `z.preprocess`. A `page` param's parse strategy (`.optional()` + service-side `?? 1`, vs.
+  `.catch(1)` to silently recover a bad value) is a **deliberate per-endpoint choice, not
+  drift** — don't "fix" one to match the other without checking whether that endpoint's tests
+  document the recovery behavior on purpose.
+- **DTO envelopes extend the shared shape, not repeat its fields.** An offset-paginated list DTO
+  is `{ items } & PageMeta` (`extends PageMeta` from `lib/pagination.ts`), not six duplicated
+  `total`/`page`/`pageSize`/… fields.
 
 ## 7. Security rules (non-negotiable — NDA-binding)
 

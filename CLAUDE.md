@@ -12,20 +12,32 @@ production changes.
 
 ## Current state of the codebase (read this before touching anything)
 
-- The **entire application today is a single file**: `index.html` (~9,500 lines, ~860 KB).
-- It is **React 18 written as JSX, transpiled in the browser by `babel-standalone`** at
-  page load. There is **no build step, no `package.json`, no `src/`, no tests**.
-- The **backend is a Google Apps Script web app** (a Google Sheet acting as the database),
-  reached at one hardcoded URL in `index.html`. We do **not** have the Apps Script source
-  in this repo — its behavior is inferred from client calls (see `docs/API-CONTRACT.md`).
-- Git history is currently a series of "Add files via upload / Delete index.html" commits.
-  There is **no meaningful diff history and no baseline**. We are establishing one now.
+The rebuild described below is **well underway, not a future plan** — Waves 0 through 3.5 are
+shipped and live on Vercel with real users. Check `docs/IMPLEMENTATION-PLAN.md` for the
+current wave-by-wave status (✅ done / 🟡 partial / not started) before assuming a feature
+doesn't exist yet.
 
-This architecture is a prototype that outgrew itself. We are migrating to a professional
-stack (Next.js · Prisma · Postgres · Better Auth) over a 3-month plan, with a **one-shot
-Sheet→Postgres ETL** at cutover (not a live Sheet adapter — see `docs/DECISIONS.md` D1). The
-live build plan is `docs/IMPLEMENTATION-PLAN.md` + `docs/ESTIMATE.md`; `docs/DECISIONS.md` is
-authoritative.
+- **The new app lives in `src/`**: Next.js (App Router) + TypeScript + Prisma + PostgreSQL
+  (Supabase) + Better Auth, per `docs/STACK-ARCHITECTURE.md`. Real build (`pnpm build`),
+  real tests (`vitest` — several hundred, growing with every wave), typecheck + lint + format
+  all enforced in CI on every PR. Client feature code is co-located under
+  `app/(app)/<feature>/`; the server is layered `route → service → repository → prisma`
+  (`server/{services,repositories,rules,auth,db,ai,http}`).
+- **The legacy app moved to `legacy/`**: `index.html` (the original ~9,500-line single-file
+  React/babel-standalone app) and `Code.gs` (the Google Apps Script backend, added once it was
+  obtained) now live there for reference/parity-checking only — it is **not maintained** and
+  is being strangled wave by wave, not built on. `docs/API-CONTRACT.md` documents its ~90
+  `event:` operations; `docs/MODULE-BREAKDOWN.md` maps its modules to the new build's waves.
+- **Git history is now normal**: every change is a reviewable PR-sized diff on a branch,
+  merged after CI passes (the old "Add files via upload" pattern is over).
+- Some legacy domains (anything not yet ported per `IMPLEMENTATION-PLAN.md`) are still served
+  by the Apps Script backend during the migration — see `docs/MIGRATION-CHEATSHEET.md` for
+  which app to use for which task, month by month.
+
+We are migrating to this stack over a 3-month plan, with a **one-shot Sheet→Postgres ETL** at
+final cutover (not a live Sheet adapter — see `docs/DECISIONS.md` D1). The live build plan is
+`docs/IMPLEMENTATION-PLAN.md` + `docs/ESTIMATE.md`; `docs/DECISIONS.md` is authoritative;
+coding standards for the new codebase are `docs/CONVENTIONS.md`.
 
 ## Documentation map — start here
 
@@ -55,14 +67,15 @@ The **live build docs** are `docs/DECISIONS.md` (authoritative decisions), `docs
    license numbers, NPI). Never log it, never expose it client-side, never trust the client
    for authorization. Role checks must be enforced server-side. Compliance is **binding**:
    HIPAA (where applicable) + Ethiopian Data Protection Proclamation 1321/2024.
-2. **No secrets in client code (NDA-binding).** The current app hardcodes a backend URL and
-   Google OAuth client ID in `index.html`. Do not add more. Secrets live in env vars only; the
-   **Owner holds the keys** — we build against them. Permissive licenses only (no GPL/LGPL/AGPL
-   without written consent). See `docs/PROJECT-CONTEXT.md`.
+2. **No secrets in client code (NDA-binding).** The legacy app hardcodes a backend URL and
+   Google OAuth client ID in `legacy/index.html` — a known defect, not a pattern to repeat.
+   Secrets live in env vars only; the **Owner holds the keys** — we build against them.
+   Permissive licenses only (no GPL/LGPL/AGPL without written consent). See
+   `docs/PROJECT-CONTEXT.md`.
 3. **Every change is a reviewable diff.** No more whole-file uploads. Work on a branch,
    open a PR, keep commits small and described.
-4. **Do not expand the monolith.** New functionality goes into the new project structure
-   (once it exists), not into `index.html`. We are shrinking that file, not growing it.
+4. **Do not expand the monolith.** New functionality goes into `src/` (the new project
+   structure), never into `legacy/index.html`. We are strangling that file, not growing it.
 5. **Preserve behavior during migration.** The legacy app and the new app run side by side.
    When porting a view, match existing behavior unless a change is explicitly requested.
 6. **Ask before destructive actions** (data migration, deleting sheet columns, purging
@@ -88,8 +101,11 @@ The **live build docs** are `docs/DECISIONS.md` (authoritative decisions), `docs
 
 ## How to verify backend assumptions
 
-When a task depends on legacy backend behavior, the source of truth is the Google Apps Script,
-**not** this repo. Flag the assumption and ask for the `Code.gs` source rather than guessing.
-Whether the Apps Script authenticates/authorizes server-side is handled as a **Wave 0 legacy
-security-hardening task** (`IMPLEMENTATION-PLAN.md` 0.9) — audit it and patch the live app if it
-trusts the client.
+When a task depends on legacy backend behavior, the source of truth is **`legacy/Code.gs`** (the
+Google Apps Script backend, now in-repo) — read it rather than guessing from client calls alone.
+`docs/API-CONTRACT.md` documents the inferred `event:` operations as a starting map, but
+`Code.gs` itself is authoritative when the two disagree. If a behavior genuinely can't be
+determined from `Code.gs` (e.g. it depends on live Sheet data/state), flag the assumption and
+ask rather than guessing. Whether the Apps Script authenticates/authorizes server-side is
+handled as a **Wave 0 legacy security-hardening task** (`IMPLEMENTATION-PLAN.md` 0.9) — audit it
+and patch the live app if it trusts the client.

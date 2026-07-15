@@ -7,7 +7,8 @@ Sheet→Postgres ETL** (no live Sheet adapter, no dual-read — see DECISIONS D1
 in `docs/IMPLEMENTATION-PLAN.md` + `docs/ESTIMATE.md`.
 
 > **Stack is now locked** (Next.js · Prisma · PostgreSQL · Better Auth · Zod · Tailwind v4 ·
-> Sonner · TanStack Query) and the layered architecture is fully specified in
+> Sonner · RSC reads + typed fetch helpers, no client cache library) and the layered architecture
+> is fully specified in
 > **`docs/STACK-ARCHITECTURE.md`** — read that for folder structure, layer rules, auth setup,
 > and conventions. The stack notes in §2 below are kept for rationale/history.
 
