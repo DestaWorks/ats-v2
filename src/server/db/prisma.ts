@@ -1,5 +1,5 @@
 import "server-only";
-import { PrismaClient } from "@/generated/prisma/client";
+import { PrismaClient, type Prisma } from "@/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 
 /**
@@ -21,4 +21,13 @@ export const prisma: PrismaClient = globalForPrisma.prisma ?? createPrisma();
 
 if (process.env.NODE_ENV !== "production") {
   globalForPrisma.prisma = prisma;
+}
+
+/**
+ * Resolve the client to use — the transaction client when a repository method composes an
+ * atomic write, else the singleton. Every repository imports this instead of redefining the
+ * same one-liner locally.
+ */
+export function db(tx?: Prisma.TransactionClient) {
+  return tx ?? prisma;
 }

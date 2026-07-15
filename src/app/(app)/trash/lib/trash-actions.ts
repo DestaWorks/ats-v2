@@ -5,7 +5,7 @@
  * `readFailure`/`postJson`/`messageForFailure`) lives in `@/lib/api/client`; only the route-specific
  * calls + the pure type-to-confirm gate live here (no server imports — safe to bundle client-side).
  */
-import { postJson, readFailure, type ApiResult } from "@/lib/api/client";
+import { deleteJson, postJson, type ApiResult } from "@/lib/api/client";
 
 export { messageForFailure } from "@/lib/api/client";
 
@@ -23,11 +23,8 @@ export function canConfirmPurge(typedName: string, candidateName: string): boole
 }
 
 /** POST a soft-delete (→ Trash). `DELETE /api/candidates/[id]` → `{ ok, id }` on success. */
-export async function deleteCandidate(id: string): Promise<ApiResult<{ ok: true; id: string }>> {
-  const res = await fetch(`/api/candidates/${id}`, { method: "DELETE" });
-  if (!res.ok) return { ok: false, failure: await readFailure(res) };
-  const data = (await res.json()) as { ok: true; id: string };
-  return { ok: true, data };
+export function deleteCandidate(id: string): Promise<ApiResult<{ ok: true; id: string }>> {
+  return deleteJson(`/api/candidates/${id}`);
 }
 
 /** POST a restore (Trash → back to its original stage). `POST /api/candidates/[id]/restore`. */

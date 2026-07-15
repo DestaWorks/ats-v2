@@ -1,13 +1,9 @@
 import "server-only";
 import type { ClientMatchProfile, Prisma } from "@/generated/prisma/client";
-import { prisma } from "@/server/db/prisma";
+import { db } from "@/server/db/prisma";
 
 /** A raw client-match-profile row (Prisma model). */
 export type ClientMatchProfileRow = ClientMatchProfile;
-
-function db(tx?: Prisma.TransactionClient) {
-  return tx ?? prisma;
-}
 
 /**
  * Client-match-profile data access (Wave 3.5) — the active-matcher weight overrides, one row per

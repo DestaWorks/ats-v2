@@ -320,12 +320,13 @@ format (blocks 1.3/1.4). *Trash auto-purge sign-off resolved 2026-07-14 — see 
 > per-state adapters, **partial coverage** to start). v1 is *assisted*, not *automated* — automation
 > lands as a fast-follow after the queue is in use.
 
-### 3.5 Open Roles (Module 12) — brings ONLY role tables
-- [ ] Add `open_roles` + `role_notes` + `client_match_profiles` models → migrate.
-- [ ] Weighted matcher + triage rank + SLA/health + dormant scorer services.
-- [ ] Routes: role add/update/delete, note add/delete, match-profile save/delete, JD parse (Claude).
-- [ ] Port role cards + triage strip + matches + dormant panel + modals 1:1.
-- **Done-when:** roles managed; matches rank; JD auto-fill; one-click promote.
+### 3.5 Open Roles (Module 12) — brings ONLY role tables  ✅ *(done — PR #25, 2026-07-14)*
+- [x] Add `open_roles` + `role_notes` + `client_match_profiles` models → migrate (`20260714170402_add_open_roles`).
+- [x] Weighted matcher (client-tunable) + triage-strip ranker + fixed-weight dormant re-engagement scorer — 3 distinct scoring engines ported from the legacy source, pure + unit-tested in `lib/rules/role-matching.ts`. *(No separate "SLA/health" module — staleness is one term inside the triage-strip formula, matching legacy; there's no independent health-state enum.)*
+- [x] Routes: role CRUD + notes CRUD + matches/dormant-matches reads + promote + triage + match-profile CRUD + JD parse (provider-agnostic, not Claude-only — reuses the Wave 1.2/2.8 AI layer).
+- [x] `/roles` (table, matching `candidates-list.tsx`'s pattern — not cards) + triage strip + `/roles/:id` (matches/dormant/notes tabs + inline edit).
+- [x] **Deviation from legacy (deliberate):** promoted candidates get a real `filledFromRoleId` FK instead of legacy's `"FilledFromRole:R123"` tags-string hack.
+- **Done-when:** ✅ roles managed; matches rank; JD auto-fill; one-click promote.
 
 ### 3.6 Credentials Intelligence (Module 25 Â· `vw="matrix"`) — leadership dashboard
 - [ ] Service: derive verification queue (reuses 3.4), expiry buckets, credentialÃstate coverage matrix, gap

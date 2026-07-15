@@ -17,6 +17,7 @@ import {
   type RoleStatus,
   type TriageBadge,
 } from "@/lib/constants";
+import type { PageMeta } from "@/lib/pagination";
 
 export const createOpenRoleSchema = z
   .object({
@@ -152,6 +153,11 @@ export interface OpenRoleListItemDTO {
 export interface OpenRoleDetailDTO extends OpenRoleListItemDTO {
   description: string | null;
   notes: RoleNoteDTO[];
+}
+
+/** One OFFSET page of the `/roles` browse list. */
+export interface OpenRoleListDTO extends PageMeta {
+  roles: OpenRoleListItemDTO[];
 }
 
 /** One scored lead against a role, ready to render (matcher OR dormant scorer). */

@@ -1,6 +1,6 @@
 import "server-only";
 import type { Prisma } from "@/generated/prisma/client";
-import { prisma } from "@/server/db/prisma";
+import { db } from "@/server/db/prisma";
 
 /** A mention row joined with the context the alerts panel renders (author, type, candidate). */
 export type MentionRow = Prisma.MentionGetPayload<{ include: typeof MENTION_INCLUDE }>;
@@ -16,11 +16,6 @@ const MENTION_INCLUDE = {
     },
   },
 } as const;
-
-/** Resolve the client to use — the transaction client when composing writes, else the singleton. */
-function db(tx?: Prisma.TransactionClient) {
-  return tx ?? prisma;
-}
 
 /**
  * Mention data access — the ONLY layer that touches Prisma for mentions. Rows are created

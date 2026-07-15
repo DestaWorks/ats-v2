@@ -13,7 +13,13 @@ const h = vi.hoisted(() => ({
   extractInbound: vi.fn(),
   candidateRepo: { findManyByEmails: vi.fn() },
   leadRepo: { findManyByEmails: vi.fn(), findManyByNames: vi.fn() },
-  clientRepo: { list: vi.fn() },
+  clientRepo: {
+    list: vi.fn(),
+    nameMap: async () => {
+      const clients = await h.clientRepo.list();
+      return new Map(clients.map((c: { id: string; name: string }) => [c.id, c.name]));
+    },
+  },
   clientRulesRepo: { list: vi.fn() },
   leadService: { create: vi.fn(), logOutreach: vi.fn(), respond: vi.fn() },
 }));

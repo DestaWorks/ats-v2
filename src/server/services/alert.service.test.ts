@@ -10,7 +10,13 @@ import type { AuthUser } from "@/server/auth/guards";
 const h = vi.hoisted(() => ({
   user: { id: "u1", email: "u@desta.works", name: "Test User", role: "Associate" as const },
   candidateRepo: { alertBuckets: vi.fn() },
-  clientRepo: { list: vi.fn() },
+  clientRepo: {
+    list: vi.fn(),
+    nameMap: async () => {
+      const clients = await h.clientRepo.list();
+      return new Map(clients.map((c: { id: string; name: string }) => [c.id, c.name]));
+    },
+  },
   mentionService: { listMine: vi.fn() },
 }));
 

@@ -30,6 +30,7 @@ import type {
 } from "@/lib/validation/pipeline";
 import { encodeCursor, type PageCursor } from "@/lib/validation/cursor";
 import { toIso } from "@/lib/utils/iso";
+import { pageMeta } from "@/lib/pagination";
 import { listSortToOrderBy, type ListSort } from "@/lib/validation/pipeline";
 import type { LogOutreachInput, OutreachAttemptDTO } from "@/lib/validation/lead";
 import type { JourneyDTO, JourneyEventDTO } from "@/lib/validation/journey";
@@ -37,7 +38,7 @@ import { requireUser, type AuthUser } from "@/server/auth/guards";
 import { writeAudit } from "@/server/db/audit";
 import { withTransaction } from "@/server/db/with-transaction";
 import { candidateRepository, type CandidateRow } from "@/server/repositories/candidate.repository";
-import { clientRepository, type ClientRow } from "@/server/repositories/client.repository";
+import { clientRepository } from "@/server/repositories/client.repository";
 import {
   outreachRepository,
   type OutreachAttemptRow,
@@ -146,13 +147,6 @@ function toRepoFilters(filters: SharedListFilters, viewer: AuthUser) {
 /** Page size for the `/candidates` browse read — one OFFSET page of the numbered-pager flat table. */
 const LIST_PAGE = 25;
 
-/** Clamp a requested 1-based page to `[1, totalPages]` and derive the pager flags for the DTO. */
-function pageMeta(total: number, requestedPage: number, pageSize: number) {
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  const page = Math.min(Math.max(1, requestedPage), totalPages);
-  return { total, page, pageSize, totalPages, hasPrev: page > 1, hasNext: page < totalPages };
-}
-
 /**
  * Stable sort of scored rows by fit DESC, nulls last (a `null` score means "nothing to score
  * against", so it always sinks below any real score, including a real `0`). Ties — and the whole
@@ -199,13 +193,12 @@ const TRASH_PAGE = 200;
  * `toClientRules`); `getCandidateDetail` reads them separately from the row when it needs the DQ list.
  */
 function buildRulesMap(
-  clients: ClientRow[],
+  clientNames: Map<string, string>,
   rulesRows: ClientRulesRow[],
 ): Map<string, ClientRules> {
-  const nameById = new Map(clients.map((c) => [c.id, c.name] as const));
   const out = new Map<string, ClientRules>();
   for (const r of rulesRows) {
-    const name = nameById.get(r.clientId);
+    const name = clientNames.get(r.clientId);
     if (!name) continue;
     out.set(r.clientId, toClientRules(r, name));
   }
@@ -572,8 +565,7 @@ export const candidateService = {
    */
   async listTrash(viewer: AuthUser): Promise<CandidateTrashDTO> {
     const rows = await candidateRepository.listDeleted(TRASH_PAGE);
-    const clients = await clientRepository.list();
-    const clientNames = new Map(clients.map((c) => [c.id, c.name]));
+    const clientNames = await clientRepository.nameMap();
     const actorIds = rows.map((r) => r.deletedById).filter((id): id is string => id !== null);
     const actorNames = await userRepository.namesByIds(actorIds);
     const items = rows.map((row) =>
@@ -594,11 +586,11 @@ export const candidateService = {
     const candidate = await candidateRepository.findById(id);
     if (!candidate) throw new AppError("NOT_FOUND", "Candidate not found");
 
-    const [documents, notes, history, clients, rulesRows, outreachRows] = await Promise.all([
+    const [documents, notes, history, clientNames, rulesRows, outreachRows] = await Promise.all([
       documentRepository.listByCandidate(id),
       noteRepository.listByCandidate(id),
       stageHistoryRepository.listByCandidate(id),
-      clientRepository.list(),
+      clientRepository.nameMap(),
       clientRulesRepository.list(),
       outreachRepository.listForCandidate(id),
     ]);
@@ -606,14 +598,12 @@ export const candidateService = {
     const outreachActors = await userRepository.namesByIds(outreachRows.map((a) => a.actorId));
     const outreach = outreachRows.map((a) => toOutreachDTO(a, outreachActors));
 
-    const clientName = candidate.clientId
-      ? (new Map(clients.map((c) => [c.id, c.name])).get(candidate.clientId) ?? null)
-      : null;
+    const clientName = candidate.clientId ? (clientNames.get(candidate.clientId) ?? null) : null;
 
     // Scoring block (S-4/S-7): compute the fit + flags for the assigned client and the ADVISORY
     // auto-DQ reasons. `null` when there's nothing to score against (no client / no rules / max 0).
     // Auto-DQ is display-only — it NEVER mutates the candidate's status (that stays a human `move`).
-    const rulesByClient = buildRulesMap(clients, rulesRows);
+    const rulesByClient = buildRulesMap(clientNames, rulesRows);
     const rules = candidate.clientId ? (rulesByClient.get(candidate.clientId) ?? null) : null;
     const ruleCandidate = toRuleCandidate(candidate);
     const raw = scoreCandidate(ruleCandidate, rules);
@@ -835,12 +825,11 @@ export const candidateService = {
     const baseOrder = listSortToOrderBy(sort);
     const repoFilters = { ...toRepoFilters(filters, viewer), status: filters.status };
 
-    const [clients, rulesRows] = await Promise.all([
-      clientRepository.list(),
+    const [clientNames, rulesRows] = await Promise.all([
+      clientRepository.nameMap(),
       clientRulesRepository.list(),
     ]);
-    const clientNames = new Map(clients.map((c) => [c.id, c.name]));
-    const rulesByClient = buildRulesMap(clients, rulesRows);
+    const rulesByClient = buildRulesMap(clientNames, rulesRows);
 
     // DB path — sort is DB-native and Hot is off, so paginate in SQL.
     if (sort !== "fit" && !hot) {
@@ -886,10 +875,10 @@ export const candidateService = {
    * filtered to those actually overdue/stuck. AuthZ is the caller's; `viewer` drives the card PII gate.
    */
   async dashboardStats(viewer: AuthUser): Promise<DashboardStatsDTO> {
-    const [grouped, staleRows, clients, rulesRows] = await Promise.all([
+    const [grouped, staleRows, clientNames, rulesRows] = await Promise.all([
       candidateRepository.groupByStatus(),
       candidateRepository.listStaleActive(ATTENTION_LIMIT),
-      clientRepository.list(),
+      clientRepository.nameMap(),
       clientRulesRepository.list(),
     ]);
 
@@ -909,8 +898,7 @@ export const candidateService = {
       count: countByStatus.get(status) ?? 0,
     }));
 
-    const clientNames = new Map(clients.map((c) => [c.id, c.name]));
-    const rulesByClient = buildRulesMap(clients, rulesRows);
+    const rulesByClient = buildRulesMap(clientNames, rulesRows);
     const now = new Date();
     const attention = staleRows
       .map((row) =>
@@ -950,12 +938,12 @@ export const candidateService = {
     // One filtered groupBy (TRUE per-column totals) + two targeted counts (meta.overdue/stuck,
     // NOT a full scan) + N indexed per-column keyset reads, all parallelized. When `focus` is set
     // only its column query actually runs (the rest resolve to empty), per the design.
-    const [grouped, overdueCount, stuckCount, clients, rulesRows, columnRows, terminalRows] =
+    const [grouped, overdueCount, stuckCount, clientNames, rulesRows, columnRows, terminalRows] =
       await Promise.all([
         candidateRepository.groupByStatusFiltered(shared),
         candidateRepository.count({ ...shared, overdue: true }),
         candidateRepository.count({ ...shared, stuck: true }),
-        clientRepository.list(),
+        clientRepository.nameMap(),
         clientRulesRepository.list(),
         Promise.all(
           ACTIVE_STATUS_CODES.map((status) =>
@@ -973,8 +961,7 @@ export const candidateService = {
         ),
       ]);
 
-    const clientNames = new Map(clients.map((c) => [c.id, c.name]));
-    const rulesByClient = buildRulesMap(clients, rulesRows);
+    const rulesByClient = buildRulesMap(clientNames, rulesRows);
     const cardOf = (row: CandidateRow) =>
       toCard(
         row,
@@ -1040,7 +1027,7 @@ export const candidateService = {
   ): Promise<ColumnPageDTO> {
     const now = new Date();
     const shared = { ...toRepoFilters(filters, viewer), now };
-    const [rows, clients, rulesRows] = await Promise.all([
+    const [rows, clientNames, rulesRows] = await Promise.all([
       candidateRepository.list({
         ...shared,
         status,
@@ -1048,11 +1035,10 @@ export const candidateService = {
         cursor,
         take: BOARD_PAGE + 1,
       }),
-      clientRepository.list(),
+      clientRepository.nameMap(),
       clientRulesRepository.list(),
     ]);
-    const clientNames = new Map(clients.map((c) => [c.id, c.name]));
-    const rulesByClient = buildRulesMap(clients, rulesRows);
+    const rulesByClient = buildRulesMap(clientNames, rulesRows);
     const hasMore = rows.length > BOARD_PAGE;
     const pageRows = hasMore ? rows.slice(0, BOARD_PAGE) : rows;
     const items = pageRows.map((row) =>

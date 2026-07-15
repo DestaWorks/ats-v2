@@ -19,6 +19,7 @@ import {
   type UpdateCandidateInput,
 } from "@/lib/validation/candidate";
 import { useZodForm } from "@/lib/forms/use-zod-form";
+import { emptyToNull, emptyToNullNumber } from "@/lib/forms/empty-to-null";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Card } from "@/components/ui/card";
@@ -31,11 +32,6 @@ export interface ClientOption {
   id: string;
   name: string;
 }
-
-/** Empty-string sentinel → null for optional enum/text fields (RHF setValueAs runs before zod). */
-const emptyToNull = (v: unknown) => (v === "" || v == null ? null : v);
-const emptyToNullNumber = (v: unknown) =>
-  v === "" || v == null || Number.isNaN(Number(v)) ? null : Number(v);
 
 /** Read-only field row for the meta card. */
 function MetaRow({ label, value }: { label: string; value: string }) {

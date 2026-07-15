@@ -7,7 +7,7 @@ import type {
   JournalGoal,
   Prisma,
 } from "@/generated/prisma/client";
-import { prisma } from "@/server/db/prisma";
+import { db } from "@/server/db/prisma";
 
 export type DailyTargetRow = DailyTarget;
 export type DailyActualRow = DailyActual;
@@ -23,10 +23,6 @@ export interface InstantWindow {
 
 /** Audit actions that count as "ATS cleanup" (legacy: verify license / update / move). */
 const CLEANUP_ACTIONS = ["move", "update", "verify_license"];
-
-function db(tx?: Prisma.TransactionClient) {
-  return tx ?? prisma;
-}
 
 /**
  * Daily-loop data access — targets/actuals/logs/journal CRUD plus the COUNTING predicates the

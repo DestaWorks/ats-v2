@@ -1,6 +1,6 @@
 import "server-only";
 import type { CandidateNote, Prisma } from "@/generated/prisma/client";
-import { prisma } from "@/server/db/prisma";
+import { db } from "@/server/db/prisma";
 
 /** A raw candidate-note row (Prisma model). Services/DTOs map this to API shapes. */
 export type NoteRow = CandidateNote;
@@ -13,11 +13,6 @@ export interface NoteCreateData {
   body: string;
   noteType: string;
   legacyId?: string | null;
-}
-
-/** Resolve the client to use — the transaction client when composing writes, else the singleton. */
-function db(tx?: Prisma.TransactionClient) {
-  return tx ?? prisma;
 }
 
 /**

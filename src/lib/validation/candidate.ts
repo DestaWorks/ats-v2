@@ -10,6 +10,7 @@
  */
 import { z } from "zod";
 import type { OutreachAttemptDTO } from "./lead";
+import type { PageMeta } from "@/lib/pagination";
 import {
   CREDENTIALS,
   LICENSE_STATUSES,
@@ -136,14 +137,8 @@ export interface CandidateListItemDTO {
  * on the last page); `total` is the true filtered count; `page` is clamped to `[1, totalPages]`.
  * `hasPrev`/`hasNext` drive the pager. The client renders what it's given and only changes URL params.
  */
-export interface CandidateListDTO {
+export interface CandidateListDTO extends PageMeta {
   candidates: CandidateListItemDTO[];
-  total: number;
-  page: number;
-  pageSize: number;
-  totalPages: number;
-  hasPrev: boolean;
-  hasNext: boolean;
 }
 
 /**

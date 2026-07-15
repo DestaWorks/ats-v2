@@ -12,7 +12,7 @@ import type {
   LogOutreachInput,
   UpdateOutreachInput,
 } from "@/lib/validation/lead";
-import { type ApiResult, getJson, postJson, readFailure } from "@/lib/api/client";
+import { type ApiResult, deleteJson, getJson, patchJson, postJson } from "@/lib/api/client";
 
 /** Log an outreach attempt (advances the lead's status server-side). Returns the fresh detail. */
 export function postOutreach(
@@ -41,13 +41,8 @@ export function postRestore(id: string): Promise<ApiResult<{ lead: LeadDetailDTO
 }
 
 /** Soft-delete the lead (→ reversible trash). Returns `{ ok, id }` or an `ApiFailure`. */
-export async function deleteLead(id: string): Promise<ApiResult<{ ok: true; id: string }>> {
-  const res = await fetch(`/api/leads/${id}`, {
-    method: "DELETE",
-    headers: { Accept: "application/json" },
-  });
-  if (!res.ok) return { ok: false, failure: await readFailure(res) };
-  return { ok: true, data: (await res.json()) as { ok: true; id: string } };
+export function deleteLead(id: string): Promise<ApiResult<{ ok: true; id: string }>> {
+  return deleteJson(`/api/leads/${id}`);
 }
 
 /** Load one lead's full detail (the outreach-history modal seeds from this). */
@@ -64,31 +59,20 @@ export function postSnooze(
 }
 
 /** Edit one logged attempt (never touches the lead's status). Returns the fresh detail. */
-export async function patchOutreachAttempt(
+export function patchOutreachAttempt(
   id: string,
   attemptId: string,
   body: UpdateOutreachInput,
 ): Promise<ApiResult<{ lead: LeadDetailDTO }>> {
-  const res = await fetch(`/api/leads/${id}/outreach/${attemptId}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) return { ok: false, failure: await readFailure(res) };
-  return { ok: true, data: (await res.json()) as { lead: LeadDetailDTO } };
+  return patchJson(`/api/leads/${id}/outreach/${attemptId}`, body);
 }
 
 /** Delete one logged attempt (denorm re-syncs; status untouched). Returns the fresh detail. */
-export async function deleteOutreachAttempt(
+export function deleteOutreachAttempt(
   id: string,
   attemptId: string,
 ): Promise<ApiResult<{ lead: LeadDetailDTO }>> {
-  const res = await fetch(`/api/leads/${id}/outreach/${attemptId}`, {
-    method: "DELETE",
-    headers: { Accept: "application/json" },
-  });
-  if (!res.ok) return { ok: false, failure: await readFailure(res) };
-  return { ok: true, data: (await res.json()) as { lead: LeadDetailDTO } };
+  return deleteJson(`/api/leads/${id}/outreach/${attemptId}`);
 }
 
 /** Run one bulk action over the selected ids. Returns `{ affected, skipped }`. */

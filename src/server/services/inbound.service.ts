@@ -93,11 +93,10 @@ function matchReasons(
  * at least one positive match reason are kept; sorted by fit desc, capped at `MAX_CLIENT_MATCHES`.
  */
 async function matchClients(extracted: InboundExtractedDTO): Promise<InboundClientMatchDTO[]> {
-  const [clients, rulesRows] = await Promise.all([
-    clientRepository.list(),
+  const [clientNames, rulesRows] = await Promise.all([
+    clientRepository.nameMap(),
     clientRulesRepository.list(),
   ]);
-  const clientNames = new Map(clients.map((c) => [c.id, c.name]));
   const ruleCandidate: RuleCandidate = {
     status: "NEW_CANDIDATE",
     track: "Clinical",

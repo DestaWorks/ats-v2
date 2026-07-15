@@ -11,6 +11,7 @@ import {
 } from "@/lib/validation/open-role";
 import type { OpenRoleDetailDTO } from "@/lib/validation/open-role";
 import { useZodForm } from "@/lib/forms/use-zod-form";
+import { emptyToNull } from "@/lib/forms/empty-to-null";
 import { messageForFailure, postJson } from "@/lib/api/client";
 import { Button, type ButtonProps } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
@@ -24,8 +25,6 @@ export interface ClientOption {
   id: string;
   name: string;
 }
-
-const emptyToNull = (v: unknown) => (v === "" || v == null ? null : v);
 
 /**
  * Add-role trigger + modal (Wave 3.5) — mirrors `AddCandidateButton` exactly: a standalone

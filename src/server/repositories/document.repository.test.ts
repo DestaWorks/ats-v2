@@ -11,7 +11,10 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 const { create } = vi.hoisted(() => ({ create: vi.fn() }));
 
 vi.mock("server-only", () => ({}));
-vi.mock("@/server/db/prisma", () => ({ prisma: { document: { create } } }));
+vi.mock("@/server/db/prisma", () => {
+  const prisma = { document: { create } };
+  return { prisma, db: (tx?: unknown) => tx ?? prisma };
+});
 
 import { documentRepository } from "./document.repository";
 

@@ -27,8 +27,14 @@ const h = vi.hoisted(() => ({
     softDeleteNote: vi.fn(),
   },
   profileRepo: { findByClientId: vi.fn(), list: vi.fn(), upsert: vi.fn(), delete: vi.fn() },
-  clientRepo: { list: vi.fn() },
-  leadRepo: { list: vi.fn() },
+  clientRepo: {
+    list: vi.fn(),
+    nameMap: async () => {
+      const clients = await h.clientRepo.list();
+      return new Map(clients.map((c: { id: string; name: string }) => [c.id, c.name]));
+    },
+  },
+  leadRepo: { list: vi.fn(), listForMatching: vi.fn() },
   userRepo: { namesByIds: vi.fn() },
   leadService: { promote: vi.fn() },
   extractJd: vi.fn(),
@@ -164,7 +170,7 @@ describe("openRoleService.matches", () => {
       penaltyCold: 0,
       minScore: 1,
     });
-    h.leadRepo.list.mockResolvedValue([lead({ status: "Sourced" })]);
+    h.leadRepo.listForMatching.mockResolvedValue([lead({ status: "Sourced" })]);
     const matches = await openRoleService.matches("r1");
     expect(matches).toHaveLength(1);
     expect(matches[0]?.score).toBe(100); // only the exaggerated same-client weight
@@ -173,7 +179,7 @@ describe("openRoleService.matches", () => {
   it("falls back to DEFAULT_MATCH_WEIGHTS when the client has no saved profile", async () => {
     h.roleRepo.findById.mockResolvedValue(role());
     h.profileRepo.findByClientId.mockResolvedValue(null);
-    h.leadRepo.list.mockResolvedValue([lead()]); // clientId/state/credential match + Hot
+    h.leadRepo.listForMatching.mockResolvedValue([lead()]); // clientId/state/credential match + Hot
     const matches = await openRoleService.matches("r1");
     expect(matches[0]?.score).toBe(30 + 25 + 25 + 20); // DEFAULT_MATCH_WEIGHTS perfect + hot
   });
@@ -182,7 +188,7 @@ describe("openRoleService.matches", () => {
 describe("openRoleService.dormantMatches", () => {
   it("only surfaces cold/no-response/future-collab leads regardless of client profile", async () => {
     h.roleRepo.findById.mockResolvedValue(role());
-    h.leadRepo.list.mockResolvedValue([
+    h.leadRepo.listForMatching.mockResolvedValue([
       lead({ status: "Responded — Hot" }),
       lead({ id: "l2", status: "No Response" }),
     ]);
@@ -231,7 +237,7 @@ describe("openRoleService.triage", () => {
     );
     h.roleRepo.listActive.mockResolvedValue(roles);
     h.profileRepo.list.mockResolvedValue([]);
-    h.leadRepo.list.mockResolvedValue([lead()]);
+    h.leadRepo.listForMatching.mockResolvedValue([lead()]);
     const top = await openRoleService.triage();
     expect(top).toHaveLength(3);
     expect(top[0]?.roleId).toBe("r1"); // P1 + hot match dominates the ranking

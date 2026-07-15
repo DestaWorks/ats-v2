@@ -1,11 +1,16 @@
 import "server-only";
 import type { OutreachAttempt, Prisma, SourceLead } from "@/generated/prisma/client";
-import { prisma } from "@/server/db/prisma";
+import { db } from "@/server/db/prisma";
 
 /** A raw source-lead row (Prisma model). Services/DTOs map this to API shapes. */
 export type LeadRow = SourceLead;
 /** A raw outreach-attempt row (Prisma model). */
 export type OutreachRow = OutreachAttempt;
+/** The lean projection `listForMatching` selects — see its doc comment. */
+export type LeadMatchRow = Pick<
+  SourceLead,
+  "id" | "name" | "clientId" | "state" | "credential" | "status"
+>;
 
 /** Filters for `list`/`count`. Soft-deleted rows are excluded unless `includeDeleted`. */
 export interface LeadListFilters {
@@ -62,11 +67,6 @@ export function buildLeadWhere(filters: LeadListFilters): Prisma.SourceLeadWhere
   return where;
 }
 
-/** Resolve the client to use — the transaction client when composing writes, else the singleton. */
-function db(tx?: Prisma.TransactionClient) {
-  return tx ?? prisma;
-}
-
 /**
  * Source-lead + outreach-attempt data access — the ONLY layer that touches Prisma for leads.
  *
@@ -103,6 +103,18 @@ export const leadRepository = {
   /** True filtered total for the same `where` as `list` (minus skip/take) — the "Showing N of M". */
   count(filters: LeadListFilters = {}, tx?: Prisma.TransactionClient) {
     return db(tx).sourceLead.count({ where: buildLeadWhere(filters) });
+  },
+
+  /**
+   * Lean projection for the Open Roles matchers (`RuleLead` scoring only reads these 6 columns) —
+   * every non-deleted lead, unbounded (the matchers score the whole active pool, not one page).
+   * Skips PII/large columns (email, phone, notes, tags, …) the scorers never touch.
+   */
+  listForMatching(tx?: Prisma.TransactionClient): Promise<LeadMatchRow[]> {
+    return db(tx).sourceLead.findMany({
+      where: { deletedAt: null },
+      select: { id: true, name: true, clientId: true, state: true, credential: true, status: true },
+    });
   },
 
   /** Patch a lead — status / respondedAt / promote back-link / denorm columns. */

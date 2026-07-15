@@ -9,9 +9,10 @@ import type { BulkLeadActionInput, LeadListDTO, LeadListItemDTO } from "@/lib/va
 import { messageForFailure } from "@/lib/api/client";
 import { Button, buttonClasses } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Pager } from "@/components/ui/pager";
 import { Select } from "@/components/ui/select";
 import { Table } from "@/components/ui/table";
-import { pageHrefFor, pageItems } from "../lib/pager";
+import { pageHrefFor } from "@/lib/pagination";
 import { AddLeadButton, type ClientOption } from "./add-lead-modal";
 import { ImportLeadsButton } from "./import-leads-modal";
 import { LeadRow } from "./lead-row";
@@ -248,70 +249,23 @@ export function LeadsInventory({
       </div>
     ) : null;
 
-  // Numbered pager INSIDE the table footer — identical mechanics to the candidates list
-  // (`<Link>`s changing `?page=`; the RSC re-reads and this component re-seeds via the effect).
+  // Numbered pager INSIDE the table footer (shared `<Pager>`) — changing `?page=` re-runs the
+  // RSC, and this component re-seeds from `initial` via the effect above.
   const { page, pageSize, totalPages, hasPrev, hasNext } = initial;
   const from = (page - 1) * pageSize + 1;
   const to = (page - 1) * pageSize + rows.length;
   const pHref = (n: number) => pageHrefFor(pathname, searchParams, n);
   const pagerFooter = (
-    <>
-      <span className="text-xs text-gray tabular-nums">
-        Showing {rows.length === 0 ? 0 : from}–{to} of {total}
-      </span>
-      <nav aria-label="Pagination" className="ml-auto flex items-center gap-1">
-        {hasPrev ? (
-          <Link
-            href={pHref(page - 1)}
-            rel="prev"
-            className="rounded-md border border-black/15 px-2.5 py-1 text-sm font-semibold text-charcoal transition hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-navy focus-visible:outline-none"
-          >
-            ← Prev
-          </Link>
-        ) : (
-          <span className="rounded-md border border-black/10 px-2.5 py-1 text-sm font-semibold text-gray/50">
-            ← Prev
-          </span>
-        )}
-        {pageItems(page, totalPages).map((item, i) =>
-          item === "gap" ? (
-            <span key={`gap-${i}`} className="px-1.5 text-sm text-gray">
-              …
-            </span>
-          ) : item === page ? (
-            <span
-              key={item}
-              aria-current="page"
-              className="min-w-8 rounded-md bg-navy px-2.5 py-1 text-center text-sm font-semibold text-white tabular-nums"
-            >
-              {item}
-            </span>
-          ) : (
-            <Link
-              key={item}
-              href={pHref(item)}
-              aria-label={`Page ${item}`}
-              className="min-w-8 rounded-md px-2.5 py-1 text-center text-sm font-semibold text-charcoal tabular-nums transition hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-navy focus-visible:outline-none"
-            >
-              {item}
-            </Link>
-          ),
-        )}
-        {hasNext ? (
-          <Link
-            href={pHref(page + 1)}
-            rel="next"
-            className="rounded-md border border-black/15 px-2.5 py-1 text-sm font-semibold text-charcoal transition hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-navy focus-visible:outline-none"
-          >
-            Next →
-          </Link>
-        ) : (
-          <span className="rounded-md border border-black/10 px-2.5 py-1 text-sm font-semibold text-gray/50">
-            Next →
-          </span>
-        )}
-      </nav>
-    </>
+    <Pager
+      page={page}
+      totalPages={totalPages}
+      hasPrev={hasPrev}
+      hasNext={hasNext}
+      from={rows.length === 0 ? 0 : from}
+      to={to}
+      total={total}
+      hrefFor={pHref}
+    />
   );
 
   return (

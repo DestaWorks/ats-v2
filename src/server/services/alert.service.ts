@@ -45,12 +45,11 @@ function toBucketDTO(
  */
 export const alertService = {
   async forViewer(user: AuthUser): Promise<AlertsDTO> {
-    const [mentionList, buckets, clients] = await Promise.all([
+    const [mentionList, buckets, clientNames] = await Promise.all([
       mentionService.listMine(user),
       candidateRepository.alertBuckets(user.id, BUCKET_ROWS, new Date()),
-      clientRepository.list(),
+      clientRepository.nameMap(),
     ]);
-    const clientNames = new Map(clients.map((c) => [c.id, c.name]));
     return {
       mentions: mentionList.mentions,
       unread: mentionList.unread,

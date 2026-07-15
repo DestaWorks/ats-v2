@@ -1,6 +1,6 @@
 import "server-only";
 import type { Prisma, StageHistory } from "@/generated/prisma/client";
-import { prisma } from "@/server/db/prisma";
+import { db } from "@/server/db/prisma";
 
 /** A raw stage-history row (Prisma model). */
 export type StageHistoryRow = StageHistory;
@@ -13,11 +13,6 @@ export interface StageHistoryAddInput {
   fromStageOrder?: number | null;
   toStageOrder: number;
   actorId: string;
-}
-
-/** Resolve the client to use — the transaction client when composing writes, else the singleton. */
-function db(tx?: Prisma.TransactionClient) {
-  return tx ?? prisma;
 }
 
 /**

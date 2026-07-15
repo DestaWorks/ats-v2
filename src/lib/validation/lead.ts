@@ -16,6 +16,8 @@ import {
   type LeadStatus,
   type OutreachChannel,
 } from "@/lib/constants";
+import type { PageMeta } from "@/lib/pagination";
+import { boolFlagSchema } from "./pipeline";
 
 // --- response DTOs (serialized wire shapes) ---------------------------------
 
@@ -53,14 +55,8 @@ export interface LeadListItemDTO {
  * SQL `WHERE`, newest-first `ORDER BY`, `skip`/`take` pagination; `page` clamped to
  * `[1, totalPages]`; `hasPrev`/`hasNext` drive the numbered pager.
  */
-export interface LeadListDTO {
+export interface LeadListDTO extends PageMeta {
   leads: LeadListItemDTO[];
-  total: number;
-  page: number;
-  pageSize: number;
-  totalPages: number;
-  hasPrev: boolean;
-  hasNext: boolean;
 }
 
 /** One logged outreach attempt (newest-first on the detail view). */
@@ -225,7 +221,7 @@ export const leadListQuerySchema = z.object({
   ownerId: z.string().trim().min(1).optional(),
   search: z.string().trim().min(1).max(100).optional(),
   /** "Show deleted" — include soft-deleted leads (they render flagged, with a Restore action). */
-  deleted: z.preprocess((v) => v === "1" || v === "true", z.boolean()).optional(),
+  deleted: boolFlagSchema.optional(),
   /** 1-based OFFSET page (clamped server-side to `[1, totalPages]`). */
   page: z.coerce.number().int().min(1).optional(),
 });

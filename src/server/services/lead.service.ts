@@ -20,6 +20,7 @@ import type {
   UpdateOutreachInput,
 } from "@/lib/validation/lead";
 import { toIso, isoOrNull } from "@/lib/utils/iso";
+import { pageMeta } from "@/lib/pagination";
 import type { AuthUser } from "@/server/auth/guards";
 import { writeAudit } from "@/server/db/audit";
 import { withTransaction } from "@/server/db/with-transaction";
@@ -118,11 +119,10 @@ function toLeadDetail(
  * `userRepository.namesByIds` (no N+1). Used to return the fresh detail after every mutation.
  */
 async function loadDetail(lead: LeadRow): Promise<LeadDetailDTO> {
-  const [attempts, clients] = await Promise.all([
+  const [attempts, clientNames] = await Promise.all([
     leadRepository.listOutreach(lead.id),
-    clientRepository.list(),
+    clientRepository.nameMap(),
   ]);
-  const clientNames = new Map(clients.map((c) => [c.id, c.name]));
   const actorNames = await userRepository.namesByIds([
     ...attempts.map((a) => a.actorId),
     ...(lead.createdById ? [lead.createdById] : []),
@@ -197,32 +197,22 @@ export const leadService = {
       search: filters.search,
       includeDeleted: filters.includeDeleted,
     };
-    const [total, clients] = await Promise.all([
+    const [total, clientNames] = await Promise.all([
       leadRepository.count(repoFilters),
-      clientRepository.list(),
+      clientRepository.nameMap(),
     ]);
-    const totalPages = Math.max(1, Math.ceil(total / LIST_PAGE));
-    const page = Math.min(Math.max(1, filters.page ?? 1), totalPages);
+    const meta = pageMeta(total, filters.page ?? 1, LIST_PAGE);
     const rows = await leadRepository.list({
       ...repoFilters,
-      skip: (page - 1) * LIST_PAGE,
+      skip: (meta.page - 1) * LIST_PAGE,
       take: LIST_PAGE,
     });
-    const clientNames = new Map(clients.map((c) => [c.id, c.name]));
     // Owner display names in ONE batched read (legacy Owner column).
     const ownerNames = await userRepository.namesByIds(
       rows.map((r) => r.createdById).filter((id): id is string => id !== null),
     );
     const leads = rows.map((row) => toLeadListItem(row, clientNames, ownerNames));
-    return {
-      leads,
-      total,
-      page,
-      pageSize: LIST_PAGE,
-      totalPages,
-      hasPrev: page > 1,
-      hasNext: page < totalPages,
-    };
+    return { leads, ...meta };
   },
 
   /**

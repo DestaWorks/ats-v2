@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { SOURCES } from "@/lib/constants";
 import { addLeadSchema, type CreateLeadInput } from "@/lib/validation/lead";
 import { useZodForm } from "@/lib/forms/use-zod-form";
+import { emptyToNull } from "@/lib/forms/empty-to-null";
 import { messageForFailure, postJson } from "@/lib/api/client";
 import type { LeadDetailDTO } from "@/lib/validation/lead";
 import { Button, type ButtonProps } from "@/components/ui/button";
@@ -20,8 +21,6 @@ export interface ClientOption {
   name: string;
 }
 
-/** Empty-string sentinel → null for optional text fields (RHF setValueAs runs before zod). */
-const emptyToNull = (v: unknown) => (v === "" || v == null ? null : v);
 /** Comma-separated text → a de-duped, trimmed tag array (matches the free-text `tags` schema). */
 const commaToTags = (v: unknown) =>
   typeof v === "string"

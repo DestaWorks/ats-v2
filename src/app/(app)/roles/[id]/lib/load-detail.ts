@@ -18,9 +18,8 @@ export async function loadRoleDetail(id: string) {
     throw err;
   }
 
-  const [matches, dormantMatches, clientRows] = await Promise.all([
-    openRoleService.matches(id),
-    openRoleService.dormantMatches(id),
+  const [{ matches, dormantMatches }, clientRows] = await Promise.all([
+    openRoleService.matchesAndDormant(id),
     clientRepository.list(),
   ]);
   const clients = clientRows.map((c) => ({ id: c.id, name: c.name }));
