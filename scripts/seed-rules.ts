@@ -22,6 +22,7 @@ async function main() {
       creds: [...r.creds],
       pops: [...r.pops],
       settings: [...r.settings],
+      schedule: r.schedule,
       priority: r.priority,
       autoDisqualify: [...r.autoDisqualify],
     };

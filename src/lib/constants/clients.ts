@@ -37,6 +37,14 @@ export interface BaseClientRules {
   creds: readonly string[];
   pops: readonly string[];
   settings: readonly string[];
+  /** Screening (Wave 3.3) schedule-match input. Sourced from legacy's `STATIC_DATA`
+   *  (`legacy/index.html:6972-6977`) — a DIFFERENT, CRM-tab-only structure than the `CLIENT_RULES`
+   *  legacy actually scored against, which had no `schedule` key at all (a legacy bug — the
+   *  "matches client schedule" branch of the Screening scorer was dead code). Wiring real values
+   *  here is a deliberate fix, not a port of legacy's broken behavior — see `docs/DECISIONS.md`'s
+   *  "known client defects are corrected, not ported." `null` where legacy had no static entry.
+   */
+  schedule: string | null;
   priority: "HIGH" | "MED" | "STANDARD";
   autoDisqualify: readonly string[];
 }
@@ -48,6 +56,7 @@ export const BASE_CLIENT_RULES: readonly BaseClientRules[] = [
     creds: ["PMHNP", "PMHNP-BC", "MD", "DO", "PsyD", "PhD"],
     pops: ["Child/Adolescent"],
     settings: ["Hybrid", "Outpatient"],
+    schedule: "Hybrid",
     priority: "HIGH",
     autoDisqualify: ["No CT license", "No child/adolescent experience"],
   },
@@ -57,6 +66,7 @@ export const BASE_CLIENT_RULES: readonly BaseClientRules[] = [
     creds: ["PMHNP", "PMHNP-BC", "MD", "DO", "LCSW", "LPC", "LMHC", "LMFT"],
     pops: [],
     settings: ["Hybrid", "Outpatient", "Telehealth"],
+    schedule: "Hybrid",
     priority: "MED",
     autoDisqualify: ["License must match position state"],
   },
@@ -66,6 +76,7 @@ export const BASE_CLIENT_RULES: readonly BaseClientRules[] = [
     creds: ["PMHNP", "PMHNP-BC", "MD", "DO"],
     pops: [],
     settings: ["Outpatient"],
+    schedule: "3x12hr shifts",
     priority: "STANDARD",
     autoDisqualify: ["No CT license", "On-site only — no telehealth"],
   },
@@ -75,6 +86,7 @@ export const BASE_CLIENT_RULES: readonly BaseClientRules[] = [
     creds: ["PMHNP", "PMHNP-BC", "MD", "DO", "PsyD"],
     pops: [],
     settings: ["Outpatient", "Hybrid", "Telehealth"],
+    schedule: "Flexible",
     priority: "MED",
     autoDisqualify: [],
   },
@@ -84,6 +96,7 @@ export const BASE_CLIENT_RULES: readonly BaseClientRules[] = [
     creds: ["PMHNP", "PMHNP-BC", "MD", "DO", "PsyD", "PhD", "LCSW", "LPC"],
     pops: [],
     settings: [],
+    schedule: null,
     priority: "MED",
     autoDisqualify: ["NJ license required"],
   },
@@ -93,6 +106,7 @@ export const BASE_CLIENT_RULES: readonly BaseClientRules[] = [
     creds: [],
     pops: [],
     settings: [],
+    schedule: null,
     priority: "STANDARD",
     autoDisqualify: [],
   },
