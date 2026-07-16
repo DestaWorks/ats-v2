@@ -15,8 +15,9 @@ import type {
   DiscoverSearchResultDTO,
 } from "@/lib/validation/discover";
 
-/** Mapped-but-not-yet-classified search row (internal — carries `fullName` for dedupe lookup). */
-interface MappedRow {
+/** Mapped-but-not-yet-classified search row. Exported for reuse by `similarity.service.ts`
+ *  (Wave 3.2) — carries `fullName` for dedupe lookup. */
+export interface MappedRow {
   npi: string;
   firstName: string;
   lastName: string;
@@ -30,7 +31,8 @@ interface MappedRow {
   licenseState: string | null;
 }
 
-function mapResult(
+/** Exported for reuse by `similarity.service.ts` (Wave 3.2) — same NPPES-row-to-internal-shape mapping. */
+export function mapResult(
   raw: Awaited<ReturnType<typeof searchNppes>>["results"][number],
   fallbackCredential: string | null,
 ): MappedRow {
@@ -53,7 +55,8 @@ function mapResult(
   };
 }
 
-async function buildDupSets(npis: string[], names: string[]): Promise<DupCandidateSets> {
+/** Exported for reuse by `similarity.service.ts` (Wave 3.2) — same cross-system dedupe read. */
+export async function buildDupSets(npis: string[], names: string[]): Promise<DupCandidateSets> {
   const [byNpi, byName, candByName] = await Promise.all([
     leadRepository.findManyByNpis(npis),
     leadRepository.findManyByNames(names),
@@ -92,7 +95,13 @@ export const discoverService = {
       lastName: query.lastName,
     });
 
-    const rows = results.map((r) => mapResult(r, taxonomyOpt?.credential ?? null));
+    const mapped = results.map((r) => mapResult(r, taxonomyOpt?.credential ?? null));
+    // NPPES's own taxonomy_description match is loose (e.g. "Clinical" also surfaces
+    // neurologists/geneticists) — require the EXACT target description when a taxonomy was
+    // selected, never trust the query alone for precision.
+    const rows = taxonomyOpt
+      ? mapped.filter((r) => r.taxonomyDesc === taxonomyOpt.matchDesc)
+      : mapped;
     const sets = await buildDupSets(
       rows.map((r) => r.npi),
       rows.map((r) => r.fullName.toLowerCase()),

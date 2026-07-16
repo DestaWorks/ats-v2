@@ -301,11 +301,12 @@ format (blocks 1.3/1.4). *Trash auto-purge sign-off resolved 2026-07-14 — see 
 - [ ] **Open:** `ats_targets_suggest` AI suggest (deferred — needs the AI provider plumbing, D. AI-agnostic); 7-day trend / predictive pacing / Indeed-credit-burn / admin team-breakdown widgets; manager feedback notes.
 - **Done-when:** the daily loop (Overview + Daily Log) runs on live data early — **it is not deferrable.**
 
-### 3.2 Smarter Sourcing (Biruh priority #4) *(net-new — distinct from Open-Roles matching)*
-- [ ] Similarity service: **"find providers like this"** — net-new similarity over an anchor candidate/lead (credential/state/population/setting), **separate** from the Open-Roles "match existing candidates to a role" flow.
-- [ ] `POST /api/sourcing/similar` route.
-- [ ] Port/build the "find similar" entry points (from a candidate, lead, or Discover result) → results → add-to-sourcing.
-- **Done-when:** from any provider, "find providers like this" returns ranked net-new candidates to source.
+### 3.2 Smarter Sourcing (Biruh priority #4) *(net-new — distinct from Open-Roles matching)*  ✅ *(done — 2026-07-16)*
+- [x] Confirmed genuinely net-new (no legacy precedent — the only "similarity"-adjacent legacy code scores prospective *agency clients* for the CRM module, unrelated). Since results must be "net-new candidates to source," they come from NPPES (not our own DB); NPPES doesn't return `population`/`setting` at all, so `scoreStateSimilarity` (`lib/rules/similarity.ts`) scores the one real available dimension — state closeness (exact/NLC-compact/other, 100/60/30) — against a taxonomy-hard-filtered NPPES search.
+- [x] `POST /api/sourcing/similar` → `similarityService.findSimilar()`: taxonomy lookup from the anchor's credential, nationwide NPPES search, dedupe-filtered to net-new only, scored + ranked, capped at 20.
+- [x] Three "find similar" entry points, one shared `SimilarProvidersModal`: candidate detail, Discover results (per-row), Sourcing lead rows. Add-to-sourcing reuses the **existing** `POST /api/discover/add` unchanged — no new add endpoint needed.
+- [x] **Found + fixed a live production bug while building this**: 5 of the 8 `TAXONOMY_OPTIONS` NPPES query strings (Discover, Wave 2.7) had *always* errored against the real NPPES API ("No taxonomy codes found") — compound "Classification, Specialization" display strings aren't valid NPPES search values. Researched and verified real working values for all 8 (`constants/nppes.ts`), plus added a required exact-match `matchDesc` post-filter (NPPES's search is loose even when it doesn't error) — applied to both Discover's search and this feature.
+- **Done-when:** from any provider, "find providers like this" returns ranked net-new candidates to source. ✅
 
 ### 3.3 Screening (Module 9)  ✅ *(done — 2026-07-16)*
 - [x] `scoreScreening` (6-section weighted: cred 25/state 20/exp 20/schedule 15/salary 10/comm 10) ported verbatim from `legacy/index.html:6689-6928`, pure + isomorphic (`lib/rules/screening.ts`), 27 hand-computed boundary tests.
