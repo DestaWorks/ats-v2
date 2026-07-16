@@ -22,7 +22,7 @@ import { mergePage } from "../lib/list-local";
 import { SavedViewsBar } from "../lib/saved-views-bar";
 import { BoardColumn } from "./board-column";
 import { BoardFilters, type ClientOption } from "./board-filters";
-import { CandidateCardContent } from "./candidate-card";
+import { CandidateCardContent, CandidateCardFooterPreview } from "./candidate-card";
 import { TerminalRail } from "./terminal-rail";
 import { applyBoardMove } from "./lib/optimistic-move";
 import { fetchBoard, fetchColumnPage, postMove } from "./lib/board-fetch";
@@ -259,9 +259,13 @@ export function PipelineBoard({
 
         <DragOverlay>
           {activeCard ? (
-            // Full card body so the drag preview matches the real card (shared CandidateCardContent).
-            <div className="w-72 cursor-grabbing rounded-lg border border-navy/30 border-l-4 border-l-navy/50 bg-white p-3 shadow-lg">
-              <CandidateCardContent card={activeCard} />
+            // Full card — content AND footer (shared CandidateCardContent/CandidateCardFooterPreview)
+            // — so the drag preview matches the real card exactly, not just its content body.
+            <div className="w-72 cursor-grabbing rounded-lg border border-navy/30 border-l-4 border-l-navy/50 bg-white shadow-lg">
+              <div className="p-3">
+                <CandidateCardContent card={activeCard} />
+              </div>
+              <CandidateCardFooterPreview card={activeCard} />
             </div>
           ) : null}
         </DragOverlay>
