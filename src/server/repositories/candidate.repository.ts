@@ -17,7 +17,7 @@ export type CandidateRow = Candidate;
 /** In-stage threshold (days) that marks a candidate "stuck" — mirrors the `isStuck` default. */
 export const STUCK_DAYS = 7;
 /** Terminal stages start at order 9; "stuck" only applies to active stages (order < 9). */
-const FIRST_TERMINAL_ORDER = 9;
+export const FIRST_TERMINAL_ORDER = 9;
 const MS_PER_DAY = 86_400_000;
 
 /** Filters for `list`/`count`/`groupByStatusFiltered`. Soft-deleted rows are excluded unless `includeDeleted`. */

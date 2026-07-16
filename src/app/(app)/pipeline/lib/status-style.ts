@@ -35,3 +35,15 @@ export function licenseDotClass(status: LicenseStatus): string {
   if (status === "Expired") return "bg-red";
   return "bg-orange";
 }
+
+/**
+ * Days-until-expiry severity color (License Verify's expiry timeline, Wave 3.4) — a distinct
+ * bucketing dimension from `licenseDotClass` (that one keys off the status label; this one keys
+ * off a countdown). Legacy used 4 tiers (red/orange/amber/green, `legacy/index.html:3024-3025`);
+ * this app's palette has no separate "amber" token, so the 90d/180d tiers collapse into one.
+ */
+export function expiryDaysColor(daysLeft: number): string {
+  if (daysLeft <= 30) return "bg-red";
+  if (daysLeft <= 180) return "bg-orange";
+  return "bg-green";
+}
