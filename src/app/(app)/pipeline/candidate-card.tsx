@@ -4,7 +4,6 @@ import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useDraggable } from "@dnd-kit/core";
-import { CSS } from "@dnd-kit/utilities";
 import { ALL_STATUS_CODES, statusLabel, type CandidateStatus } from "@/lib/constants";
 import type { CandidateCardDTO } from "@/lib/validation/pipeline";
 import { cn } from "@/lib/utils/cn";
@@ -88,6 +87,28 @@ export function CandidateCardContent({ card }: { card: CandidateCardDTO }) {
   );
 }
 
+/**
+ * Non-interactive visual copy of the card's footer (View profile link + status control) — used
+ * only by the board's `DragOverlay` so the drag preview matches the full card exactly, not just
+ * its content body. Static text/box instead of a real `Link`/`select`: the overlay is a portaled
+ * clone with no drag listeners or navigation of its own, so there's nothing for real controls to
+ * do here — only their look needs to match.
+ */
+export function CandidateCardFooterPreview({ card }: { card: CandidateCardDTO }) {
+  return (
+    <>
+      <div className="flex items-center justify-between gap-2 border-t border-black/5 px-3 py-1.5">
+        <span className="text-[11px] font-semibold text-navy">View profile</span>
+      </div>
+      <div className="border-t border-black/5 px-3 py-1.5">
+        <div className="w-full rounded border border-black/10 bg-white px-1.5 py-1 text-[11px] text-charcoal">
+          {statusLabel(card.status)}
+        </div>
+      </div>
+    </>
+  );
+}
+
 export function CandidateCard({
   card,
   onMove,
@@ -98,7 +119,7 @@ export function CandidateCard({
   busy?: boolean;
 }) {
   const router = useRouter();
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: card.id,
     attributes: { roleDescription: "draggable candidate card" },
   });
@@ -148,10 +169,14 @@ export function CandidateCard({
       {/* Drag handle = the card body; a plain CLICK on it opens the profile (legacy modal UX —
           the 5px sensor constraint disambiguates). The <select> below stays outside the
           listeners so it remains independently operable by keyboard / pointer; the View-profile
-          link stays as the keyboard/a11y route into the detail. */}
+          link stays as the keyboard/a11y route into the detail.
+          Deliberately NOT translating this node by dnd-kit's `transform` — the board's
+          `DragOverlay` (pipeline-board.tsx) already renders the full, correctly-styled moving
+          clone. Also translating this source div duplicated the visual: a second, chrome-less
+          (no border/bg/shadow — those live on the <li>) copy of the content slid inside its
+          still-mounted source column, overlapping the column boundary/placeholder underneath. */}
       <div
         ref={setNodeRef}
-        style={{ transform: CSS.Translate.toString(transform) }}
         className="cursor-pointer touch-none p-3 active:cursor-grabbing"
         {...attributes}
         {...listeners}
