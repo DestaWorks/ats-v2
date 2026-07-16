@@ -316,12 +316,12 @@ format (blocks 1.3/1.4). *Trash auto-purge sign-off resolved 2026-07-14 — see 
 - [x] **Deviation from spec, by explicit choice:** *auto-move* → **legacy-faithful conditional button** instead (Save always visible; Advance shown only at ≥75%; Move to Future Pipeline shown only at <60%) — matches legacy's own click-to-move UX and this app's existing "advisory only, nothing happens automatically" precedent (`ScoringCard`).
 - **Done-when:** score + decision compute live in the UI; Save/Advance/Move-to-Future-Pipeline fire the right server-authoritative outcome. ✅
 
-### 3.4 License Verify — **v1 assisted verification queue** (Module 10, D4)
-- [ ] Add `verification_presets` model + `LicenseExpiry` (date) on the candidate schema → migrate.
-- [ ] Service: derive the **queue of candidates needing verification** + expiry timeline (uses `LicenseExpiry`).
-- [ ] `POST /api/candidates/:id/verify-license` (editable status) + preset CRUD routes.
-- [ ] Port the assisted queue UI 1:1: candidates-needing-verification list, **one-click state-board links**, editable status, expiry timeline.
-- **Done-when:** a recruiter can work a verification queue: open the right state board in one click, set status, see expiry — status drives gates.
+### 3.4 License Verify — **v1 assisted verification queue** (Module 10, D4)  ✅ *(done — 2026-07-16)*
+- [x] Schema/gates/status-edit were **already shipped** from earlier waves: `Candidate.licenseState/licenseNumber/licenseStatus/licenseExpiry/licenseVerifiedAt/licenseVerifiedById`, `LICENSE_STATUSES`, `POST /api/candidates/:id/verify-license` + `candidateService.verifyLicense()`, the `LicenseTab` UI, and `checkStageGate`/`STAGE_REQUIRED` already gating INITIAL_SCREENING/SUBMITTED_TO_CLIENT on `licenseStatus`. No migration was needed for this wave.
+- [x] `licenseVerifyService.dashboard()` derives the **Verification Queue** (`licenseStatus: "Not Verified"`) + **License Expiry Timeline** (`Active` + `licenseExpiry` set, soonest-first, `daysLeft`/color bucket) — ported from `legacy/index.html:3001-3037`, verbatim filter/sort logic. New `/license-verify` page (read-only RSC — legacy's own queue has no inline verify form either; it launches into the same detail-page verify flow this app already has).
+- [x] **One-click state-board links**: widened `STATE_BOARDS` from 4 to 13 states (added NY/PA/CA/TX/OH/VA/MD/GA/NC, ported from legacy's `BOARD_LINKS` map) — shared with the existing `LicenseTab`.
+- [x] **Deviation from spec, by explicit choice:** dropped the `verification_presets` bullet — legacy's actual `Client_Verification_Presets` feature is per-client canned text for the branded résumé's "Verification Line" (Module 7, unrelated to license-status verification at all). Deferred to whenever branded résumé output is scoped.
+- **Done-when:** a recruiter can work a verification queue: open the right state board in one click, set status, see expiry — status drives gates. ✅
 
 > **Fast-follow (clearly out of v1 scope):** real **per-state automated verification** (spike +
 > per-state adapters, **partial coverage** to start). v1 is *assisted*, not *automated* — automation

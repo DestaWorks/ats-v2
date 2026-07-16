@@ -19,8 +19,7 @@ describe("states", () => {
 });
 
 describe("stateBoardLink", () => {
-  it("returns the named portal for the 4 mapped states (URLs refreshed 2026-07-10)", () => {
-    expect(Object.keys(STATE_BOARDS)).toEqual(["CT", "NJ", "FL", "MA"]);
+  it("returns the named portal for the 4 originally-mapped states (URLs refreshed 2026-07-10)", () => {
     expect(stateBoardLink("CT")).toEqual({
       name: "CT eLicense Portal",
       url: "https://www.elicense.ct.gov/",
@@ -32,11 +31,34 @@ describe("stateBoardLink", () => {
     expect(stateBoardLink("FL")?.url).toBe("https://flhealthsource.gov/");
   });
 
+  it("returns the named portal for the 9 states added in Wave 3.4 (License Verify)", () => {
+    expect(Object.keys(STATE_BOARDS)).toEqual([
+      "CT",
+      "NJ",
+      "FL",
+      "MA",
+      "NY",
+      "PA",
+      "CA",
+      "TX",
+      "OH",
+      "VA",
+      "MD",
+      "GA",
+      "NC",
+    ]);
+    expect(stateBoardLink("NY")).toEqual({
+      name: "NY Office of the Professions",
+      url: "https://www.op.nysed.gov/verification-search",
+      mapped: true,
+    });
+  });
+
   it("falls back to a license-lookup search for unmapped states", () => {
-    const link = stateBoardLink("NY");
+    const link = stateBoardLink("IL");
     expect(link?.mapped).toBe(false);
     expect(link?.url).toContain("google.com/search");
-    expect(link?.url).toContain("NY");
+    expect(link?.url).toContain("IL");
   });
 
   it("returns null when there is no license state", () => {
