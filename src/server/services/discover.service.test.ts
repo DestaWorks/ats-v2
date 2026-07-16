@@ -109,6 +109,44 @@ describe("discoverService.search", () => {
     expect(out.results[0]?.dupStatus).toBe("in_pipeline");
     expect(out.results[0]?.dupMatchId).toBe("c1");
   });
+
+  it("searches NPPES using the selected taxonomy's verified query seed", async () => {
+    h.searchNppes.mockResolvedValue({ resultCount: 1, results: [rawResult()] });
+    await discoverService.search({ taxonomy: "psychiatry" }, user);
+    expect(h.searchNppes).toHaveBeenCalledWith(
+      expect.objectContaining({ taxonomyDescription: "Psychiatry" }),
+    );
+  });
+
+  it("filters out a result whose taxonomy desc doesn't EXACTLY match the selected option — NPPES's own search is loose", async () => {
+    h.searchNppes.mockResolvedValue({
+      resultCount: 2,
+      results: [
+        rawResult(), // real desc: "Psychiatry & Neurology, Psychiatry" — matches "psychiatry"
+        rawResult({
+          number: "9999999999",
+          basic: { first_name: "Noise", last_name: "Row" },
+          taxonomies: [{ code: "X", desc: "Psychiatric Hospital", state: "CT", primary: true }],
+        }),
+      ],
+    });
+    const out = await discoverService.search({ taxonomy: "psychiatry" }, user);
+    expect(out.results).toHaveLength(1);
+    expect(out.results[0]?.npi).toBe("1234567890");
+  });
+
+  it("applies no taxonomy filter when no taxonomy was selected (name/city-only search)", async () => {
+    h.searchNppes.mockResolvedValue({
+      resultCount: 1,
+      results: [
+        rawResult({
+          taxonomies: [{ code: "X", desc: "Unrelated Taxonomy", state: "CT", primary: true }],
+        }),
+      ],
+    });
+    const out = await discoverService.search({ lastName: "Doe" }, user);
+    expect(out.results).toHaveLength(1);
+  });
 });
 
 describe("discoverService.addToSourcing", () => {

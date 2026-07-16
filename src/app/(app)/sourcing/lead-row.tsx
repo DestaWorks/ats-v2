@@ -27,6 +27,7 @@ import {
   postSnooze,
 } from "./lib/lead-fetch";
 import { leadActionState } from "./lib/leads-query";
+import { FindSimilarButton, type ClientOption } from "./similar-providers-modal";
 
 /** True while the lead's snooze date is in the FUTURE (date-aware — an expired snooze is awake). */
 export function isSnoozed(snoozedUntil: string | null, now: number = Date.now()): boolean {
@@ -63,12 +64,14 @@ export function LeadRow({
   onToggleSelect,
   onUpdated,
   onRemoved,
+  clients,
 }: {
   lead: LeadListItemDTO;
   selected: boolean;
   onToggleSelect: () => void;
   onUpdated: (lead: LeadListItemDTO) => void;
   onRemoved: (id: string) => void;
+  clients: ClientOption[];
 }) {
   const router = useRouter();
   const [expanded, setExpanded] = useState(false);
@@ -343,6 +346,15 @@ export function LeadRow({
                   Promote
                 </Button>
               )}
+              {!lead.deletedAt && lead.status !== "Promoted" ? (
+                <FindSimilarButton
+                  credential={lead.credential}
+                  state={lead.state}
+                  anchorLabel={lead.name}
+                  clients={clients}
+                  size="xs"
+                />
+              ) : null}
             </div>
           )}
         </Td>

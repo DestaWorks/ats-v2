@@ -330,6 +330,7 @@ export function LeadsInventory({
               onToggleSelect={() => toggle(lead.id)}
               onUpdated={replaceLead}
               onRemoved={removeLead}
+              clients={clients}
             />
           ))}
         </Table>

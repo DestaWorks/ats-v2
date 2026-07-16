@@ -14,6 +14,7 @@ import { DetailTabs, type TabDef } from "@/components/ui/tabs";
 import { DetailHeader } from "./detail-header";
 import { DetailsTab, type ClientOption } from "./details-tab";
 import { ScoringCard } from "./scoring-card";
+import { FindSimilarButton } from "../../sourcing/similar-providers-modal";
 import { LicenseTab } from "./license-tab";
 import { ResumeTab } from "./resume-tab";
 import { NotesTab } from "./notes-tab";
@@ -115,6 +116,14 @@ export function CandidateDetail({
             announce={announce}
           />
           <ScoringCard scoring={initial.scoring} clientName={clientName} />
+          <div>
+            <FindSimilarButton
+              credential={candidate.credential}
+              state={candidate.licenseState}
+              anchorLabel={candidate.name}
+              clients={clients}
+            />
+          </div>
         </div>
       ),
     },

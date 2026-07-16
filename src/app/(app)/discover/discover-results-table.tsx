@@ -13,6 +13,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Select } from "@/components/ui/select";
 import { Table, Td } from "@/components/ui/table";
 import { postDiscoverAdd } from "./lib/discover-fetch";
+import { FindSimilarButton } from "../sourcing/similar-providers-modal";
 
 export interface ClientOption {
   id: string;
@@ -211,6 +212,13 @@ export function DiscoverResultsTable({
                 <Link href="/sourcing" className="text-xs text-navy hover:underline">
                   View
                 </Link>
+              ) : row.dupStatus === "new" && !isAdded ? (
+                <FindSimilarButton
+                  credential={row.credential}
+                  state={row.state}
+                  anchorLabel={`${row.firstName} ${row.lastName}`.trim()}
+                  clients={clients}
+                />
               ) : null}
             </Td>
           </tr>
