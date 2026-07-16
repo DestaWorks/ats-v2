@@ -172,6 +172,7 @@ model ClientRules {
   creds          String[] @default([]) // e.g. ["PMHNP","MD"] — matched against candidate.credential
   pops           String[] @default([]) // populations, e.g. ["Child/Adolescent"]
   settings       String[] @default([]) // e.g. ["Hybrid","Outpatient"]
+  schedule       String? // e.g. "Hybrid", "3x12hr shifts", "Flexible" — Screening schedule-match input
   priority       String? // "HIGH" | "MED" | "STANDARD" (display / future weighting)
   autoDisqualify String[] @default([]) // human-readable hard-DQ reasons (feeds getAutoDisqualify context)
   createdAt      DateTime @default(now())
@@ -231,6 +232,7 @@ model Candidate {
   stageHistory        StageHistory[]
   documents           Document[]
   notes               CandidateNote[]
+  scorecards          ScreeningScorecard[]
   // Sourcing (Wave 2.6) back-relations. `promotedFromLead` is the lead this candidate was promoted
   // FROM (0/1, `@unique` on the lead side); `outreachLog` is the shared outreach table (candidate
   // side is written later — the `outreachAttempts` Int column above is the DENORM count, not this).
@@ -354,6 +356,43 @@ model StageHistory {
   @@index([candidateId])
   @@index([candidateId, enteredAt])
   @@map("stage_history")
+}
+
+/// Screening scorecard (Wave 3.3, legacy/index.html:6689-6928). One row PER SCORING EVENT
+/// (append-only, like StageHistory — a candidate can be re-screened), not an upsert. All raw
+/// inputs are SCREENING-TIME data — legacy never read/wrote these to the candidate profile (its
+/// own inputs reset to blank on every candidate select, even years-of-experience despite
+/// Candidate.yearsExp existing) — nothing here syncs back to Candidate.
+model ScreeningScorecard {
+  id          String    @id @default(cuid())
+  candidateId String
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  clientId    String? // denormalized: which client's rules were used at scoring time
+
+  credentialsHeld String[] @default([])
+  statesHeld      String[] @default([])
+  yearsExp        Int?
+  schedule        String?
+  salaryAsk       Int?
+  commChecklist   String[] @default([])
+
+  // computed + persisted (history/reporting doesn't need to re-run against a since-changed ClientRules row)
+  credScore     Int
+  stateScore    Int
+  expScore      Int
+  scheduleScore Int
+  salaryScore   Int
+  commScore     Int
+  totalPct      Int
+  decision      String // "Advance" | "Conditional" | "Hold"
+
+  notes String?
+
+  scoredById String
+  scoredAt   DateTime @default(now())
+
+  @@index([candidateId, scoredAt])
+  @@map("screening_scorecards")
 }
 
 // --- Sourcing (Wave 2.6) ---

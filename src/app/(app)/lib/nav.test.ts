@@ -9,6 +9,7 @@ describe("activeNavHref", () => {
     expect(activeNavHref("/pipeline", HREFS)).toBe("/pipeline");
     expect(activeNavHref("/sourcing", HREFS)).toBe("/sourcing");
     expect(activeNavHref("/discover", HREFS)).toBe("/discover");
+    expect(activeNavHref("/screening", HREFS)).toBe("/screening");
     expect(activeNavHref("/candidates", HREFS)).toBe("/candidates");
     expect(activeNavHref("/trash", HREFS)).toBe("/trash");
   });
@@ -23,6 +24,12 @@ describe("activeNavHref", () => {
 
   it("includes Discover as a base nav item (visible to all operators)", () => {
     expect(BASE_NAV_ITEMS.some((i) => i.href === "/discover" && i.label === "Discover")).toBe(true);
+  });
+
+  it("includes Screening as a base nav item (visible to all operators)", () => {
+    expect(BASE_NAV_ITEMS.some((i) => i.href === "/screening" && i.label === "Screening")).toBe(
+      true,
+    );
   });
 
   it("prefers the LONGEST match when prefixes overlap", () => {

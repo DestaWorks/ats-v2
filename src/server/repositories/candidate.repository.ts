@@ -23,6 +23,9 @@ const MS_PER_DAY = 86_400_000;
 /** Filters for `list`/`count`/`groupByStatusFiltered`. Soft-deleted rows are excluded unless `includeDeleted`. */
 export interface CandidateListFilters {
   status?: CandidateStatus;
+  /** OR'd status set (e.g. the Screening picker's 3 eligible stages) — used instead of `status`,
+   *  never together. */
+  statuses?: CandidateStatus[];
   track?: Track;
   clientId?: string;
   /** Free-text match on name or email (case-insensitive). */
@@ -92,6 +95,7 @@ export function buildCandidateWhere(
   const and: Prisma.CandidateWhereInput[] = [];
   if (!filters.includeDeleted) where.deletedAt = null;
   if (filters.status) where.status = filters.status;
+  else if (filters.statuses?.length) where.status = { in: filters.statuses };
   if (filters.track) where.track = filters.track;
   if (filters.clientId) where.clientId = filters.clientId;
   if (filters.licenseStatus) where.licenseStatus = filters.licenseStatus;

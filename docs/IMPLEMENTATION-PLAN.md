@@ -243,11 +243,11 @@ share a database.** *(`zyx.com` below is a placeholder for the real domain.)*
 - [x] Port search + results table + verify links 1:1 — `/discover` (nav item after Sourcing): search form (provider type/state/city/name — NPPES itself requires at least one of type/city/name, not state alone) + results table (bulk-select "new" rows, target-client picker, "Add N to Sourcing") + verify links (reused existing `stateBoardLink()`, not extended beyond its current 4 states — a separate follow-up). **Coverage gaps not ported** (see above).
 - **Done-when:** ✅ search → dedupe → add to sourcing — all on the new app alongside promote + pipeline. Verified against the live NPPES API end-to-end (real provider results, NPI values, taxonomy labels rendering; insufficient-criteria and empty-query cases handled gracefully) — the add-to-sourcing *write* itself not yet exercised against the shared dev/demo DB (same caution as recent features).
 
-### 2.8 Inbound Triage (Sourcing/CRM) *(net-new build task — was missing)*
-- [ ] Service: classify inbound applicants/replies → new-lead vs existing-candidate/lead (email-primary match + confidence + manual-confirm), suggest next action.
-- [ ] Route: list inbound queue + accept/route/dismiss actions (audited).
-- [ ] Port the inbound triage inbox UI 1:1 (or build minimal if no legacy view) — triage into Sourcing or the pipeline.
-- **Done-when:** inbound items land in one queue and route to a lead/candidate without silent wrong-person matches.
+### 2.8 Inbound Triage (Sourcing/CRM) *(net-new build task — was missing)*  ✅ *(done — PR #24, 2026-07-11)*
+- [x] Service: classify inbound applicants/replies → new-lead vs existing-candidate/lead (email-primary match + confidence + manual-confirm), suggest next action — `inbound.service.ts` + `extract-inbound.ts` (provider-agnostic AI extraction, reuses the Wave 1.2 AI layer).
+- [x] Route: list inbound queue + accept/route/dismiss actions (audited) — `src/app/api/inbound/`.
+- [x] Port the inbound triage inbox UI 1:1 — `sourcing/inbound/inbound-triage.tsx` (paste reply → AI extract → dedupe → client match → Hot lead).
+- **Done-when:** ✅ inbound items land in one queue and route to a lead/candidate without silent wrong-person matches.
 
 > **Month 1–2 milestone (funnel cutover):** secure app, candidates migrated, and **find → promote →
 > pipeline all live on the new app together**. **Legacy pipeline, sourcing, and discover retired.**
@@ -307,11 +307,14 @@ format (blocks 1.3/1.4). *Trash auto-purge sign-off resolved 2026-07-14 — see 
 - [ ] Port/build the "find similar" entry points (from a candidate, lead, or Discover result) → results → add-to-sourcing.
 - **Done-when:** from any provider, "find providers like this" returns ranked net-new candidates to source.
 
-### 3.3 Screening (Module 9)
-- [ ] Screening scorer service (6-section weighted) + decision + auto-move.
-- [ ] `POST /api/candidates/:id/screening` route.
-- [ ] Port scorecard UI 1:1.
-- **Done-when:** score + decision + auto-move fire.
+### 3.3 Screening (Module 9)  ✅ *(done — 2026-07-16)*
+- [x] `scoreScreening` (6-section weighted: cred 25/state 20/exp 20/schedule 15/salary 10/comm 10) ported verbatim from `legacy/index.html:6689-6928`, pure + isomorphic (`lib/rules/screening.ts`), 27 hand-computed boundary tests.
+- [x] `screening.service.ts`: `listEligibleCandidates` (scoped to the 3 eligible statuses) + `saveAndMaybeMove` — persists the scorecard (append-only `ScreeningScorecard`, new model) BEFORE attempting any move, then calls `candidateService.move()` in-process (same precedent as `bulkMove`). Server independently recomputes the score and re-validates the requested action against it — never trusts a client-submitted score.
+- [x] Routes at `POST /api/screening/[candidateId]` + `GET /api/screening/candidates` (own top-level surface, not nested under `/api/candidates/:id` — matches the dedicated `/screening` page, same reasoning as Sourcing/Discover).
+- [x] Scorecard UI ported 1:1 to a new `/screening` page (candidate picker + 6 pill/select sections + live client-side score preview importing `scoreScreening` directly, matching this codebase's "client mirrors for UX, server is authoritative" posture).
+- [x] `ClientRules.schedule` added (was dead code in legacy — `CLIENT_RULES` had no `schedule` key, so the Schedule section's client-match branch never fired) and seeded from real legacy `STATIC_DATA` values (Sterling Institute/Contemporary Care → "Hybrid", DOCs Medical Group → "3x12hr shifts", Ritu Suri & Associates → "Flexible"). Per `docs/DECISIONS.md` ("known client defects are corrected, not ported").
+- [x] **Deviation from spec, by explicit choice:** *auto-move* → **legacy-faithful conditional button** instead (Save always visible; Advance shown only at ≥75%; Move to Future Pipeline shown only at <60%) — matches legacy's own click-to-move UX and this app's existing "advisory only, nothing happens automatically" precedent (`ScoringCard`).
+- **Done-when:** score + decision compute live in the UI; Save/Advance/Move-to-Future-Pipeline fire the right server-authoritative outcome. ✅
 
 ### 3.4 License Verify — **v1 assisted verification queue** (Module 10, D4)
 - [ ] Add `verification_presets` model + `LicenseExpiry` (date) on the candidate schema → migrate.
