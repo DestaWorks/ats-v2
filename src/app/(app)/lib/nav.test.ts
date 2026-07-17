@@ -63,6 +63,12 @@ describe("activeNavHref", () => {
     expect(activeNavHref("/activity", withActivity)).toBe("/activity");
   });
 
+  it("matches the capability-gated Credentials item when present (layout-appended, not base)", () => {
+    expect(BASE_NAV_ITEMS.some((i) => i.href === "/credentials")).toBe(false);
+    const withCredentials = [...HREFS, "/credentials"];
+    expect(activeNavHref("/credentials", withCredentials)).toBe("/credentials");
+  });
+
   it("returns null when no item matches", () => {
     expect(activeNavHref("/settings", HREFS)).toBeNull();
   });

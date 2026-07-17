@@ -353,14 +353,25 @@ format (blocks 1.3/1.4). *Trash auto-purge sign-off resolved 2026-07-14 — see 
 > typed `ApiResult<T>` helpers instead (TanStack Query was never installed) — **formalized as
 > DECISIONS D7**, docs updated to match reality rather than the unbuilt original plan.
 
-### 3.6 Credentials Intelligence (Module 25 Â· `vw="matrix"`) — leadership dashboard
-- [ ] Service: derive verification queue (reuses 3.4), expiry buckets, credentialÃstate coverage matrix, gap
-      analysis, NLC compact-license holders, and the 6 stat cards (total/active/unverified/
-      expired/expiring-<90d/NLC).
-- [ ] `GET /api/credentials/overview` route.
-- [ ] Port 1:1: stat cards, Verification Queue (with state-board links), License Expiry Timeline,
-      credentialÃstate coverage matrix, gap/coverage mapping, Print/PDF.
-- **Done-when:** leadership sees verification queue, expiry countdowns, and coverage gaps on real data.
+### 3.6 Credentials Intelligence (Module 25 · `vw="matrix"`) — leadership dashboard  ✅ *(done — 2026-07-17)*
+- [x] `credentialsIntelligenceService.overview()`: 6 stat cards (fresh uncapped aggregate counts —
+      NOT derived from 3.4's capped queue/timeline), a credential×state coverage matrix (DATA-DRIVEN
+      rows/columns, not legacy's hardcoded 6-state/12-credential subset — real data already spans
+      more states/credentials), client×credential gap analysis (`stageOrder < FIRST_TERMINAL_ORDER`,
+      matching 3.4's "active work" convention, not legacy's looser filter), and an NLC compact-license
+      tracker (reconciled to the app-wide 37-state `COMPACT_STATES`, not legacy's inconsistent
+      34-state module-local list).
+- [x] `GET /api/credentials/overview` route, gated `requireCapability("viewCredentials")`.
+- [x] New `/credentials` page (leadership-only, `viewCredentials`-gated like the License tab):
+      stat cards, coverage matrix (4-tier color legend + red GAP cells), gap-analysis card grid,
+      NLC tracker, Print/PDF (`window.print()`, reusing the already-built `.no-print` baseline).
+- [x] **Deviation from spec, by explicit choice:** does NOT re-render the Verification Queue /
+      Expiry Timeline tables a second time (already fully built at `/license-verify`, Wave 3.4) —
+      this dashboard summarizes via the stat cards + "N need attention → View full queue" links
+      instead, avoiding two pages showing identical data. Legacy's Bulk Actions (Mark All
+      Active/Move Expired) and Client Match Summary sections dropped — WRITE actions and score
+      recompute, not part of this wave's own task list.
+- **Done-when:** leadership sees verification queue, expiry countdowns, and coverage gaps on real data. ✅
 
 ---
 

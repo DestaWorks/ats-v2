@@ -39,6 +39,9 @@ export default async function AppLayout({
   if (hasCapability(user.role, "viewAudit")) {
     items.push({ href: "/activity", label: "Activity" });
   }
+  if (hasCapability(user.role, "viewCredentials")) {
+    items.push({ href: "/credentials", label: "Credentials" });
+  }
 
   const clientRows = await clientRepository.list();
   const clients = clientRows.map((c) => ({ id: c.id, name: c.name }));
