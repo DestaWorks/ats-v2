@@ -49,4 +49,44 @@ describe("writeAudit", () => {
       },
     });
   });
+
+  it("redacts sensitive PII/PHI fields (H1) instead of writing plaintext", () => {
+    const create = vi.fn();
+    const tx = { activityLog: { create } } as unknown as Parameters<typeof writeAudit>[0];
+
+    writeAudit(tx, {
+      entity: "candidate",
+      entityId: "c1",
+      actor: "u1",
+      action: "update",
+      before: { licenseNumber: "PMH-12345", email: "old@x.com", name: "Jane Doe" },
+      after: { licenseNumber: "PMH-67890", email: "new@x.com", name: "Jane Doe" },
+    });
+
+    expect(create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        before: { licenseNumber: "[REDACTED]", email: "[REDACTED]", name: "Jane Doe" },
+        after: { licenseNumber: "[REDACTED]", email: "[REDACTED]", name: "Jane Doe" },
+      }),
+    });
+  });
+
+  it("leaves null/undefined sensitive fields as-is (nothing to redact)", () => {
+    const create = vi.fn();
+    const tx = { activityLog: { create } } as unknown as Parameters<typeof writeAudit>[0];
+
+    writeAudit(tx, {
+      entity: "candidate",
+      entityId: "c1",
+      actor: "u1",
+      action: "update",
+      after: { licenseNumber: null, phone: undefined, status: "1 - Screening" },
+    });
+
+    expect(create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        after: { licenseNumber: null, phone: undefined, status: "1 - Screening" },
+      }),
+    });
+  });
 });

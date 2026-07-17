@@ -15,6 +15,7 @@ describe("roles & capabilities", () => {
   it("treats Owner and Admin as superusers", () => {
     expect(hasCapability("Owner", "manageUsers")).toBe(true);
     expect(hasCapability("Owner", "purgeCandidate")).toBe(true);
+    expect(hasCapability("Owner", "deleteOpenRole")).toBe(true);
     expect(hasCapability("Admin", "configureClientPortal")).toBe(true);
   });
 
@@ -23,6 +24,7 @@ describe("roles & capabilities", () => {
     expect(hasCapability("Manager", "viewCrm")).toBe(true);
     expect(hasCapability("Director", "manageUsers")).toBe(false);
     expect(hasCapability("Manager", "purgeCandidate")).toBe(false);
+    expect(hasCapability("Manager", "deleteOpenRole")).toBe(false);
   });
 
   it("grants no privileged capabilities to Screener/Associate", () => {

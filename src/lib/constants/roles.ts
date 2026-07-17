@@ -32,6 +32,7 @@ export const CAPABILITIES = [
   "configureClientPortal",
   "viewAudit",
   "purgeCandidate",
+  "deleteOpenRole", // hard-delete an Open Role (job requisition) — distinct from manageRoles (accounts)
 ] as const;
 export type Capability = (typeof CAPABILITIES)[number];
 
@@ -52,6 +53,7 @@ const ADMIN_CAPABILITIES: readonly Capability[] = [
   "configureClientPortal",
   "viewAudit",
   "purgeCandidate",
+  "deleteOpenRole",
 ];
 
 /** Role → the capabilities it grants. Owner and Admin are superusers. */
