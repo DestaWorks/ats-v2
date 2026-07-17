@@ -2,18 +2,20 @@
 
 import { LEAD_STATUSES, SOURCES } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
-import { FilterChip } from "../lib/filter-chip";
 import { FilterField, FilterToolbar, FiltersPopover } from "../lib/filter-toolbar";
 import { useUrlFilters } from "../lib/use-url-filters";
 
 /**
  * Compact toolbar for the `/sourcing` browse list — matches `candidates/list-filters.tsx` and
- * `roles/role-filters.tsx` (search box · quick chip · a "Filters" popover with an active-count
- * badge), built on the same shared `FilterToolbar`/`useUrlFilters` primitives rather than a
- * bespoke filter card. State lives in the URL `searchParams` (shareable); each change
- * `router.replace`s the URL and the RSC re-reads page 1 (offset-paginated — `resetPage: true`).
- * "Show deleted" stays an always-visible chip (legacy prominence: soft-deleted leads render
- * flagged, each with a Restore action) while Status/Source/Client/Owner live in the popover.
+ * `roles/role-filters.tsx` (search box · a "Filters" popover with an active-count badge), built
+ * on the same shared `FilterToolbar`/`useUrlFilters` primitives rather than a bespoke filter
+ * card. State lives in the URL `searchParams` (shareable); each change `router.replace`s the URL
+ * and the RSC re-reads page 1 (offset-paginated — `resetPage: true`).
+ *
+ * No "Show deleted" chip — removed from the UI by request (soft-deleted leads aren't a workflow
+ * this list surfaces). `showDeleted`/`?deleted=` is kept as a `hasFilters`/`Clear` input only so
+ * a stale/bookmarked `?deleted=true` URL still shows a way to reset it; nothing in the UI can
+ * turn it on anymore.
  */
 export function LeadFilters({
   clients,
@@ -40,10 +42,6 @@ export function LeadFilters({
       placeholder="Search name or email…"
       searchLabel="Search leads"
     >
-      <FilterChip pressed={showDeleted} onToggle={() => f.toggleFlag("deleted", !showDeleted)}>
-        Show deleted
-      </FilterChip>
-
       <FiltersPopover count={popoverCount}>
         <FilterField
           label="Status"
