@@ -32,6 +32,9 @@ export const auth = betterAuth({
           google: {
             clientId: googleClientId as string,
             clientSecret: googleClientSecret as string,
+            // Same invite-only policy as emailAndPassword above: block self-registration via
+            // Google, not just sign-in for existing accounts (SECURITY-AUDIT-APP.md C1).
+            disableSignUp: true,
           },
         },
       }

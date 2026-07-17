@@ -1,5 +1,5 @@
 import { updateOpenRoleSchema } from "@/lib/validation/open-role";
-import { requireUser } from "@/server/auth/guards";
+import { requireUser, requireCapability } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { openRoleService } from "@/server/services/open-role.service";
 
@@ -22,9 +22,13 @@ export const PATCH = apiHandler<{ params: Promise<{ id: string }> }>(async (req,
   return json({ role: await openRoleService.update(id, input, user) });
 });
 
-/** DELETE /api/roles/:id — HARD delete (legacy `open_role_delete` parity — no undo). */
+/**
+ * DELETE /api/roles/:id — HARD delete (legacy `open_role_delete` parity — no undo). Gated behind
+ * `deleteOpenRole` (Owner/Admin only), matching the equally-irreversible candidate purge's
+ * capability gate (SECURITY-AUDIT-APP.md H7) rather than the open-to-any-operator default.
+ */
 export const DELETE = apiHandler<{ params: Promise<{ id: string }> }>(async (_req, ctx) => {
-  const user = await requireUser();
+  const user = await requireCapability("deleteOpenRole");
   const { id } = await ctx.params;
   return json(await openRoleService.remove(id, user));
 });

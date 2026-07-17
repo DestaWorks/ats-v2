@@ -20,6 +20,32 @@ export interface WriteAuditParams {
 }
 
 /**
+ * Field-crypto-designated PII/PHI columns (SECURITY-AUDIT-APP.md H1/H2) that must never land in
+ * `activity_log` as plaintext — regardless of whether `FIELD_ENCRYPTION_KEY` is set, since the
+ * trail is a permanent, append-only record read by `viewAudit` (a broader audience than "who can
+ * edit this candidate"). Redacted at this single choke point so every caller is covered, present
+ * and future, without each service needing to remember to narrow its own before/after payload.
+ */
+const SENSITIVE_AUDIT_KEYS = new Set([
+  "licenseNumber",
+  "email",
+  "phone",
+  "npi",
+  "extractedText",
+  "extractedData",
+]);
+
+function redactSensitive(value: unknown): unknown {
+  if (value === null || typeof value !== "object") return value;
+  if (Array.isArray(value)) return value.map(redactSensitive);
+  const out: Record<string, unknown> = {};
+  for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
+    out[key] = SENSITIVE_AUDIT_KEYS.has(key) && val != null ? "[REDACTED]" : redactSensitive(val);
+  }
+  return out;
+}
+
+/**
  * Append one row to `activity_log`.
  *
  * Takes a Prisma transaction client (`tx`) as its first argument so the audit write runs
@@ -34,8 +60,8 @@ export function writeAudit(tx: Prisma.TransactionClient, params: WriteAuditParam
       entityId: params.entityId,
       actor: params.actor,
       action: params.action,
-      before: params.before as Prisma.InputJsonValue | undefined,
-      after: params.after as Prisma.InputJsonValue | undefined,
+      before: redactSensitive(params.before) as Prisma.InputJsonValue | undefined,
+      after: redactSensitive(params.after) as Prisma.InputJsonValue | undefined,
     },
   });
 }
