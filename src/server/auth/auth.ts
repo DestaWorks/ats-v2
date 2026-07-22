@@ -58,17 +58,15 @@ export const auth = betterAuth({
       "/sign-in/social": { window: 60, max: 10 },
     },
   },
-  // Dev only: trust localhost on whatever port `next dev` picks. In production the real
-  // origin (BETTER_AUTH_URL = zyx.com / staging.zyx.com) is trusted automatically.
+  // Dev only: trust localhost on whatever port `next dev` picks. A wildcard port, not a fixed
+  // list — this machine runs several other local dev servers (other projects), so `next dev`
+  // frequently lands outside any small hardcoded range (e.g. 3000/3001 already taken elsewhere),
+  // and a signed-in-looking sign-in silently 403s with INVALID_ORIGIN. Confirmed via Better
+  // Auth's own `trustedOrigins` wildcard support (`"http://localhost:*"` matches the origin
+  // string, port included — verified directly against the installed package's
+  // `wildcardMatch`/`matchesOriginPattern` source, not just the docs).
   ...(process.env.NODE_ENV !== "production"
-    ? {
-        trustedOrigins: [
-          "http://localhost:3000",
-          "http://localhost:3001",
-          "http://localhost:3002",
-          "http://localhost:3003",
-        ],
-      }
+    ? { trustedOrigins: ["http://localhost:*"] }
     : {}),
   plugins: [nextCookies()],
 });
