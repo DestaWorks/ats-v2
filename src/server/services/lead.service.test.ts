@@ -25,6 +25,7 @@ const h = vi.hoisted(() => ({
     listOutreach: vi.fn(),
     updateOutreachAttempt: vi.fn(),
     deleteOutreachAttempt: vi.fn(),
+    findMostRecentUnresponded: vi.fn(),
     syncOutreachDenorm: vi.fn(),
     findManyByIds: vi.fn(),
     findManyByEmails: vi.fn(),
@@ -91,6 +92,7 @@ beforeEach(() => {
   h.writeAudit.mockReset();
   // loadDetail defaults (individual tests override as needed).
   h.leadRepo.listOutreach.mockResolvedValue([]);
+  h.leadRepo.findMostRecentUnresponded.mockResolvedValue(null);
   h.clientRepo.list.mockResolvedValue([{ id: "cl1", name: "Acme Health" }]);
   h.userRepo.namesByIds.mockResolvedValue(new Map());
 });
@@ -272,6 +274,32 @@ describe("leadService.respond", () => {
       code: "CONFLICT",
     });
     expect(h.leadRepo.update).not.toHaveBeenCalled();
+  });
+
+  it("auto-backfills response/respondedAt on the most recent unresponded attempt (Wave 4.1)", async () => {
+    h.leadRepo.findById.mockResolvedValue(lead({ status: "Outreach 2", respondedAt: null }));
+    h.leadRepo.update.mockResolvedValue(lead({ status: "Responded — Hot" }));
+    h.leadRepo.findMostRecentUnresponded.mockResolvedValue({ id: "a1", response: null });
+
+    await leadService.respond("l1", "hot", h.user as AuthUser);
+
+    expect(h.leadRepo.findMostRecentUnresponded).toHaveBeenCalledWith("l1", h.fakeTx);
+    const [uid, aid, data, utx] = h.leadRepo.updateOutreachAttempt.mock.calls[0]!;
+    expect(uid).toBe("l1");
+    expect(aid).toBe("a1");
+    expect(data.response).toBe("hot");
+    expect(data.respondedAt).toBeInstanceOf(Date);
+    expect(utx).toBe(h.fakeTx);
+  });
+
+  it("does not touch outreach attempts when none are unresponded", async () => {
+    h.leadRepo.findById.mockResolvedValue(lead({ status: "Outreach 2", respondedAt: null }));
+    h.leadRepo.update.mockResolvedValue(lead({ status: "Responded — Hot" }));
+    h.leadRepo.findMostRecentUnresponded.mockResolvedValue(null);
+
+    await leadService.respond("l1", "hot", h.user as AuthUser);
+
+    expect(h.leadRepo.updateOutreachAttempt).not.toHaveBeenCalled();
   });
 });
 

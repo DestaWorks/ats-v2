@@ -40,6 +40,8 @@ export interface LogOutreachParams {
   actorId: string;
   /** The next status computed by the pure `advanceOnOutreach` (may equal the current one). */
   status: string;
+  /** Wave 4.1 (Templates) — which template this send used, if any. */
+  templateId?: string | null;
 }
 
 /**
@@ -165,6 +167,7 @@ export const leadRepository = {
         note: params.note ?? null,
         at: params.at,
         actorId: params.actorId,
+        templateId: params.templateId ?? null,
       },
     });
     const lead = await client.sourceLead.update({
@@ -188,13 +191,31 @@ export const leadRepository = {
   },
 
   /**
+   * The most recent attempt for this lead with no `response` yet, or `null` if none exists (Wave
+   * 4.1 — `leadService.respond()` auto-backfills `response`/`respondedAt` onto this row when a
+   * lead is marked Hot/Cold).
+   */
+  findMostRecentUnresponded(leadId: string, tx?: Prisma.TransactionClient) {
+    return db(tx).outreachAttempt.findFirst({
+      where: { leadId, response: null },
+      orderBy: { at: "desc" },
+    });
+  },
+
+  /**
    * Patch one attempt, scoped to its lead (`updateMany` — an id belonging to another lead is a
    * 0-row no-op, never a cross-lead write). Returns the affected count.
    */
   async updateOutreachAttempt(
     leadId: string,
     attemptId: string,
-    data: { channel?: string; note?: string | null; at?: Date },
+    data: {
+      channel?: string;
+      note?: string | null;
+      at?: Date;
+      response?: string | null;
+      respondedAt?: Date | null;
+    },
     tx?: Prisma.TransactionClient,
   ) {
     const { count } = await db(tx).outreachAttempt.updateMany({

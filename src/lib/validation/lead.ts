@@ -113,13 +113,21 @@ export type CreateLeadInput = z.infer<typeof addLeadSchema>;
 /**
  * Body for `POST /api/leads/:id/outreach`. `channel` is validated against `OUTREACH_CHANNELS`; `at`
  * defaults to "now" server-side when absent. Logging advances the lead through the outreach stages
- * (server-authoritative, via `advanceOnOutreach`).
+ * (server-authoritative, via `advanceOnOutreach`). Shared verbatim by `POST /api/candidates/:id/
+ * outreach` (`candidateService.logOutreach` imports this same schema — one `outreach_attempts`
+ * table serves both recipient types, L-3).
+ *
+ * `templateId` (Wave 4.1, Templates) is an OPTIONAL key into the `TEMPLATES` constant
+ * (`lib/constants/templates.ts`) — set when this attempt was logged via the Templates page's
+ * Copy All / Open in Gmail actions, `null`/absent for a manually-logged attempt. Not a DB foreign
+ * key (templates aren't a DB table); Template Performance groups by this string.
  */
 export const logOutreachSchema = z
   .object({
     channel: z.enum(OUTREACH_CHANNELS),
     note: z.string().trim().max(2000).nullish(),
     at: z.coerce.date().optional(),
+    templateId: z.string().trim().min(1).max(64).nullish(),
   })
   .strict();
 export type LogOutreachInput = z.infer<typeof logOutreachSchema>;
@@ -147,12 +155,19 @@ export type SnoozeLeadInput = z.infer<typeof snoozeLeadSchema>;
  * Body for `PATCH /api/leads/:id/outreach/:attemptId` (`source_lead_edit_outreach` parity).
  * Partial — only supplied fields change. Editing NEVER touches the lead's status (legacy hid the
  * status selector on edit).
+ *
+ * `response`/`respondedAt` (Wave 4.1, Templates) manually mark/correct whether this specific
+ * attempt got a reply — the same fields `leadService.respond()` auto-sets on the most recent
+ * unresponded attempt when a lead is marked Hot/Cold. Manual edit exists for correction (e.g. the
+ * auto-backfill picked the wrong attempt, or a response came in for an OLDER attempt).
  */
 export const updateOutreachSchema = z
   .object({
     channel: z.enum(OUTREACH_CHANNELS).optional(),
     note: z.string().trim().max(2000).nullish(),
     at: z.coerce.date().optional(),
+    response: z.string().trim().max(500).nullish(),
+    respondedAt: z.coerce.date().nullish(),
   })
   .strict()
   .refine((v) => Object.values(v).some((x) => x !== undefined), {

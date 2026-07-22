@@ -12,6 +12,7 @@ const h = vi.hoisted(() => ({
   session: null as { user: { id: string; email: string; name: string; role?: string } } | null,
   update: vi.fn(),
   softDelete: vi.fn(),
+  getProfile: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
@@ -19,10 +20,10 @@ vi.mock("next/headers", () => ({ headers: async () => new Headers() }));
 vi.mock("@/server/auth/auth", () => ({ auth: { api: { getSession: async () => h.session } } }));
 vi.mock("@/server/db/prisma", () => ({ prisma: {} }));
 vi.mock("@/server/services/candidate.service", () => ({
-  candidateService: { update: h.update, softDelete: h.softDelete },
+  candidateService: { update: h.update, softDelete: h.softDelete, getProfile: h.getProfile },
 }));
 
-import { PATCH, DELETE } from "./route";
+import { GET, PATCH, DELETE } from "./route";
 
 function req(body: unknown) {
   return new Request("http://localhost/api/candidates/c1", {
@@ -36,6 +37,32 @@ beforeEach(() => {
   h.session = { user: { id: "u1", email: "u@desta.works", name: "U", role: "Associate" } };
   h.update.mockReset();
   h.softDelete.mockReset();
+  h.getProfile.mockReset();
+});
+
+describe("GET /api/candidates/:id", () => {
+  it("returns 401 when signed out and does not read", async () => {
+    h.session = null;
+    const res = await GET(new Request("http://localhost/api/candidates/c1"), ctx);
+    expect(res.status).toBe(401);
+    expect(h.getProfile).not.toHaveBeenCalled();
+  });
+
+  it("200 with the profile for a signed-in user", async () => {
+    h.getProfile.mockResolvedValue({ id: "c1", name: "Jane Doe", email: "jane@example.com" });
+    const res = await GET(new Request("http://localhost/api/candidates/c1"), ctx);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      candidate: { id: "c1", name: "Jane Doe", email: "jane@example.com" },
+    });
+    expect(h.getProfile).toHaveBeenCalledWith("c1", expect.objectContaining({ id: "u1" }));
+  });
+
+  it("maps a service NOT_FOUND to 404", async () => {
+    h.getProfile.mockRejectedValue(new AppError("NOT_FOUND", "Candidate not found"));
+    const res = await GET(new Request("http://localhost/api/candidates/c1"), ctx);
+    expect(res.status).toBe(404);
+  });
 });
 
 describe("PATCH /api/candidates/:id", () => {

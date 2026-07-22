@@ -514,6 +514,27 @@ function documentRow(overrides: Record<string, unknown> = {}) {
   };
 }
 
+describe("candidateService.getProfile", () => {
+  it("returns just the PII-gated profile fields (no documents/notes/history/outreach reads)", async () => {
+    h.candidateRepo.findById.mockResolvedValue(fullCandidate());
+
+    const profile = await candidateService.getProfile("c1", h.owner as AuthUser);
+
+    expect(profile.id).toBe("c1");
+    expect(profile.email).toBeDefined();
+    expect(h.docRepo.listByCandidate).not.toHaveBeenCalled();
+    expect(h.noteRepo.listByCandidate).not.toHaveBeenCalled();
+    expect(h.outreachRepo.listForCandidate).not.toHaveBeenCalled();
+  });
+
+  it("throws NOT_FOUND for a missing candidate", async () => {
+    h.candidateRepo.findById.mockResolvedValue(null);
+    await expect(candidateService.getProfile("nope", h.owner as AuthUser)).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
+  });
+});
+
 describe("candidateService.getCandidateDetail", () => {
   it("composes candidate + documents + notes + recent history + clientName", async () => {
     h.candidateRepo.findById.mockResolvedValue(fullCandidate());
@@ -718,7 +739,7 @@ describe("candidateService.logOutreach", () => {
     // insert — actor from the SESSION user, on the shared tx.
     expect(h.outreachRepo.createForCandidate).toHaveBeenCalledWith(
       "c1",
-      { channel: "phone", note: "Left a voicemail", actorId: "u1" },
+      { channel: "phone", note: "Left a voicemail", actorId: "u1", templateId: null },
       h.fakeTx,
     );
     // denormalized counter bumped in the same tx.

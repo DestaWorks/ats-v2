@@ -39,6 +39,12 @@ describe("activeNavHref", () => {
     ).toBe(true);
   });
 
+  it("includes Templates as a base nav item (visible to all operators)", () => {
+    expect(BASE_NAV_ITEMS.some((i) => i.href === "/templates" && i.label === "Templates")).toBe(
+      true,
+    );
+  });
+
   it("prefers the LONGEST match when prefixes overlap", () => {
     // The helper stays general even though the base items no longer overlap.
     const hrefs = ["/candidates", "/candidates/new"];

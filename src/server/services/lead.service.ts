@@ -236,6 +236,7 @@ export const leadService = {
           at,
           actorId: user.id,
           status: next,
+          templateId: input.templateId,
         },
         tx,
       );
@@ -256,18 +257,35 @@ export const leadService = {
    * Mark a lead Responded (Hot/Cold). Guard `canRespond` (Promoted → CONFLICT). Sets the responded
    * status + stamps `respondedAt` the FIRST time (re-settable Hot↔Cold keeps the original timestamp),
    * audited `respond`, in one transaction. Returns the fresh detail.
+   *
+   * Wave 4.1 (Templates) — also auto-backfills `response`/`respondedAt` on the most recent
+   * outreach attempt for this lead that doesn't have one yet (if any), so Template Performance
+   * gets response-rate data without requiring a separate manual "mark responded" step (legacy
+   * required a fully manual edit for this — see `docs/IMPLEMENTATION-PLAN.md` Wave 4.1 notes).
+   * Scoped to attempts with `response: null`, so a later `respond()` call never re-touches an
+   * attempt that was already backfilled or manually set.
    */
   async respond(id: string, kind: "hot" | "cold", user: AuthUser): Promise<LeadDetailDTO> {
     const existing = await requireLead(id);
     const status = existing.status as LeadStatus;
     if (!canRespond(status)) throw new AppError("CONFLICT", "Lead already promoted");
     const next = setResponse(kind === "hot" ? "Hot" : "Cold");
+    const respondedAt = new Date();
     const lead = await withTransaction(async (tx) => {
       const updated = await leadRepository.update(
         id,
-        { status: next, respondedAt: existing.respondedAt ?? new Date() },
+        { status: next, respondedAt: existing.respondedAt ?? respondedAt },
         tx,
       );
+      const lastAttempt = await leadRepository.findMostRecentUnresponded(id, tx);
+      if (lastAttempt) {
+        await leadRepository.updateOutreachAttempt(
+          id,
+          lastAttempt.id,
+          { response: kind, respondedAt },
+          tx,
+        );
+      }
       await writeAudit(tx, {
         entity: "source_lead",
         entityId: id,
@@ -425,6 +443,8 @@ export const leadService = {
           ...(input.channel !== undefined ? { channel: input.channel } : {}),
           ...(input.note !== undefined ? { note: input.note } : {}),
           ...(input.at !== undefined ? { at: input.at } : {}),
+          ...(input.response !== undefined ? { response: input.response } : {}),
+          ...(input.respondedAt !== undefined ? { respondedAt: input.respondedAt } : {}),
         },
         tx,
       );

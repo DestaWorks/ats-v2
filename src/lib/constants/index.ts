@@ -17,3 +17,4 @@ export * from "./open-role";
 export * from "./saved-view";
 export * from "./nppes";
 export * from "./screening";
+export * from "./templates";
