@@ -23,6 +23,7 @@ export const BASE_NAV_ITEMS: readonly NavItem[] = [
   { href: "/pipeline", label: "Pipeline" },
   { href: "/screening", label: "Screening" },
   { href: "/license-verify", label: "License Verify" },
+  { href: "/templates", label: "Templates" },
   { href: "/candidates", label: "Candidates" },
   { href: "/roles", label: "Open Roles" },
   { href: "/trash", label: "Trash" },

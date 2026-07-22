@@ -7,6 +7,18 @@ import { candidateService } from "@/server/services/candidate.service";
 import { toCandidateDTO } from "@/server/services/candidate.dto";
 
 /**
+ * GET /api/candidates/:id — one candidate's PROFILE fields (Wave 4.1, Templates — the recipient
+ * picker fetches this after a pick, since the list-search results don't carry email/phone/etc.).
+ * Guarded by `requireUser()`. NOT the full detail composite (`getCandidateDetail`, used by the RSC
+ * page) — deliberately lighter, no documents/notes/history/outreach.
+ */
+export const GET = apiHandler<{ params: Promise<{ id: string }> }>(async (_req, ctx) => {
+  const user = await requireUser();
+  const { id } = await ctx.params;
+  return json({ candidate: await candidateService.getProfile(id, user) });
+});
+
+/**
  * PATCH /api/candidates/:id — edit a candidate's PROFILE fields. Guarded by `requireUser()`
  * (working the pipeline is open to any signed-in user). `updateCandidateSchema.strict()` rejects
  * status / pipeline-timing / license-VERIFICATION keys (owned by `move` / `verify-license`) with a

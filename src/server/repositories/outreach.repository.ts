@@ -25,11 +25,17 @@ export const outreachRepository = {
   /** Insert one candidate-side attempt (`candidate_log_outreach`). Callers pass the session actor. */
   createForCandidate(
     candidateId: string,
-    data: { channel: string; note: string | null; actorId: string },
+    data: { channel: string; note: string | null; actorId: string; templateId?: string | null },
     tx?: Prisma.TransactionClient,
   ) {
     return db(tx).outreachAttempt.create({
-      data: { candidateId, channel: data.channel, note: data.note, actorId: data.actorId },
+      data: {
+        candidateId,
+        channel: data.channel,
+        note: data.note,
+        actorId: data.actorId,
+        templateId: data.templateId ?? null,
+      },
     });
   },
 };

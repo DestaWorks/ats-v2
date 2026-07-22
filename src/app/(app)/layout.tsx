@@ -2,12 +2,13 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/server/auth/guards";
 import { hasCapability } from "@/lib/constants";
 import { clientRepository } from "@/server/repositories/client.repository";
+import { StickyNote } from "@/components/sticky-note";
 import { AppHeader } from "./app-header";
 import { AppNav } from "./app-nav";
 import { BASE_NAV_ITEMS, type NavItem } from "./lib/nav";
 
 /**
- * App-shell layout for every `(app)` route (server component). Three jobs:
+ * App-shell layout for every `(app)` route (server component). Four jobs:
  *
  * 1. **Auth safety-net.** A single `getCurrentUser()` guard → `redirect("/sign-in")` so no future
  *    `(app)` page can fail open. Individual pages keep their own `getCurrentUser()` (they need the
@@ -18,6 +19,8 @@ import { BASE_NAV_ITEMS, type NavItem } from "./lib/nav";
  *    content in `<main id="content">` (the skip target). The **Import** link is appended only for
  *    viewers with `bulkImport` — UI hiding is UX; the route stays server-guarded.
  * 3. **Shared data.** `clients` for the sidebar's add-candidate modal, fetched once here.
+ * 4. **Global widgets.** `<StickyNote>` (Wave 4.1) mounts once here — a floating per-user
+ *    scratchpad available from every view, matching legacy.
  *
  * The `modal` parallel slot hosts ROUTE-intercepted overlays (the candidate detail opened
  * in-app renders there, over the still-mounted board/list); it is `null` otherwise.
@@ -68,6 +71,7 @@ export default async function AppLayout({
         </div>
       </div>
       {modal}
+      <StickyNote />
     </>
   );
 }

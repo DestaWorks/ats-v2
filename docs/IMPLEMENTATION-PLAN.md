@@ -380,13 +380,35 @@ format (blocks 1.3/1.4). *Trash auto-purge sign-off resolved 2026-07-14 — see 
 
 # WAVE 4 — Clients & Comms (Month 2–3)
 
-### 4.1 Templates (Module 11)
-- [ ] `fillTemplate` token engine (shared).
-- [ ] Log-sent → note/outreach route.
-- [ ] Port library + recipient picker + preview + send + signature editor 1:1.
-- [ ] **Template Performance** (usage + response-rate analytics per template) — **in scope**: build the metric off `outreach_attempts` + reply data; port the panel 1:1.
-- [ ] **Sticky Note** (quick per-user/per-record scratchpad) — **in scope**: port 1:1. *(If descoped, mark explicit v2 — do not drop silently.)*
-- **Done-when:** pick → auto-fill → send → logged; template performance shows real response rates; sticky notes persist.
+### 4.1 Templates (Module 11)  ✅ *(done — 2026-07-20)*
+- [x] `fillTemplate` token engine (shared) — `src/lib/rules/fill-template.ts`, all 33 legacy tokens
+      + `{today}` (new — see file header comment), pure/isomorphic.
+- [x] Log-sent → note/outreach route — reuses the EXISTING `POST /api/candidates/:id/outreach` +
+      `POST /api/leads/:id/outreach` (both already shared one `logOutreachSchema`, now extended
+      with an optional `templateId`); no new route needed. Deliberate improvement over legacy:
+      candidate-side sends log through the same unified `outreach_attempts` table as leads (legacy
+      inconsistently split candidate→note vs lead→outreach), which is what makes Template
+      Performance work for both recipient types instead of legacy's lead-only analytics.
+- [x] Port library + recipient picker + preview + send + signature editor 1:1 —
+      `src/lib/constants/templates.ts` (12 templates, 5 categories, verbatim from legacy), 
+      `src/app/(app)/templates/` (page + workspace + signature editor).
+- [x] **Template Performance** — `src/server/services/template-performance.service.ts` +
+      `GET /api/templates/performance` (gated `viewAnalytics`, diverges from legacy's flat access —
+      matches this app's established analytics-gating convention). Response-rate is lead-only
+      (candidates have no "responded" concept in this schema); `leadService.respond()` auto-
+      backfills `response`/`respondedAt` on the most recent unresponded attempt when a lead is
+      marked Hot/Cold, automating what legacy required a fully manual edit for.
+- [x] **Sticky Note** — `src/components/sticky-note.tsx`, DB-backed (`User.stickyNote`) instead of
+      legacy's `localStorage`, same one-global-scratchpad-per-user UX. Signature is DB-backed too
+      (`User.emailSignature`) — fixes a real legacy bug where the signature's `localStorage` key had
+      no user scoping at all (shared-browser users clobbered each other's signature).
+- **Done-when:** ✅ pick → auto-fill → send → logged (verified: real DB round-trip on the new
+  `OutreachAttempt.templateId`/`response`/`respondedAt` + `User.emailSignature`/`stickyNote`
+  columns); template performance computes real response rates; sticky notes + signature persist
+  server-side. 777/777 tests green, `next build` clean. **Not yet verified in a live browser this
+  session** (no interactive/browser tool available) — recommend a manual click-through pass
+  (recipient search, Copy All / Open in Gmail logging, signature/sticky-note persistence across a
+  reload, Hot/Cold auto-backfill) before/soon after this reaches production.
 
 ### 4.2 CRM (Module 13) — brings client tables incrementally, sub-feature by sub-feature
 - [ ] Add `clients` model → migrate; records CRUD + Client Info tab.

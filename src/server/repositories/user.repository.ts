@@ -34,4 +34,25 @@ export const userRepository = {
       orderBy: { name: "asc" },
     });
   },
+
+  /** Wave 4.1 (Templates) — one user's signature + sticky note. */
+  findPreferences(userId: string, tx?: Prisma.TransactionClient) {
+    return db(tx).user.findUnique({
+      where: { id: userId },
+      select: { emailSignature: true, stickyNote: true },
+    });
+  },
+
+  /** Own-record only (callers always pass the session user's own id). */
+  updatePreferences(
+    userId: string,
+    data: { emailSignature?: string | null; stickyNote?: string | null },
+    tx?: Prisma.TransactionClient,
+  ) {
+    return db(tx).user.update({
+      where: { id: userId },
+      data,
+      select: { emailSignature: true, stickyNote: true },
+    });
+  },
 };

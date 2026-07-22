@@ -15,6 +15,7 @@ import {
 } from "@/lib/constants";
 import type {
   CandidateDetailDTO,
+  CandidateProfileDTO,
   CandidateTrashDTO,
   CandidateTrashItemDTO,
   UpdateCandidateInput,
@@ -575,6 +576,19 @@ export const candidateService = {
   },
 
   /**
+   * Read just one candidate's PROFILE fields (Wave 4.1, Templates) — the recipient picker fetches
+   * this after a candidate is selected from the (lightweight `CandidateListItemDTO`) search
+   * results, since filling a template needs email/phone/city/employer/etc. that the list item
+   * doesn't carry. Deliberately NOT `getCandidateDetail` below — that composite also loads
+   * documents/notes/history/outreach, all unused here.
+   */
+  async getProfile(id: string, viewer: AuthUser): Promise<CandidateProfileDTO> {
+    const candidate = await candidateRepository.findById(id);
+    if (!candidate) throw new AppError("NOT_FOUND", "Candidate not found");
+    return toCandidateProfileDTO(toCandidateDTO(candidate, viewer));
+  },
+
+  /**
    * Read one candidate's full profile — the single composite the detail page needs (candidate +
    * documents + role-scoped notes + recent stage history + clientName), in one `CandidateDetailDTO`.
    * The RSC calls this DIRECTLY (no self-fetch); authZ is the caller's (`getCurrentUser()`), and
@@ -747,7 +761,12 @@ export const candidateService = {
     const attempt = await withTransaction(async (tx) => {
       const created = await outreachRepository.createForCandidate(
         id,
-        { channel: input.channel, note: input.note ?? null, actorId: user.id },
+        {
+          channel: input.channel,
+          note: input.note ?? null,
+          actorId: user.id,
+          templateId: input.templateId ?? null,
+        },
         tx,
       );
       await candidateRepository.incrementOutreach(id, tx);

@@ -28,6 +28,10 @@ model User {
   banned         Boolean        @default(false)
   banReason      String?
   banExpires     DateTime?
+  // Wave 4.1 (Templates) — per-user profile data, DB-backed (legacy kept both in unscoped/
+  // mis-scoped localStorage, see docs/IMPLEMENTATION-PLAN.md Wave 4.1 notes).
+  emailSignature String?
+  stickyNote     String?
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
   sessions       Session[]
@@ -474,11 +478,21 @@ model OutreachAttempt {
   note    String?
   actorId String
 
+  // Wave 4.1 (Templates) — templateId is a key into the TEMPLATES constant
+  // (src/lib/constants/templates.ts), NOT a DB foreign key (templates aren't a DB table).
+  // response/respondedAt drive Template Performance's response-rate math; set automatically by
+  // leadService.respond() (Hot/Cold) on the most recent unresponded attempt, or manually via the
+  // outreach-attempt edit path.
+  templateId  String?
+  response    String?
+  respondedAt DateTime?
+
   createdAt DateTime @default(now())
 
   @@index([leadId])
   @@index([candidateId])
   @@index([actorId, at]) // DECISIONS: outreach_attempts(actor, day) — the CRM/daily-log perf index
+  @@index([templateId])
   @@map("outreach_attempts")
 }
 

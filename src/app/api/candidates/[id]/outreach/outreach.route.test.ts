@@ -2,8 +2,9 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { AppError } from "@/server/http/app-error";
 
 /**
- * POST /api/leads/:id/outreach — unauth → 401; happy → 200 `{ lead }`; an invalid `channel` → 422; a
- * service CONFLICT (Promoted) → 409; NOT_FOUND → 404. `leadService.logOutreach` is mocked.
+ * POST /api/candidates/:id/outreach — unauth → 401; happy → 201 `{ attempt }`, forwarding
+ * `templateId` (Wave 4.1) through to the service; an invalid channel → 422; NOT_FOUND → 404.
+ * `candidateService.logOutreach` is mocked.
  */
 
 const h = vi.hoisted(() => ({
@@ -15,24 +16,26 @@ vi.mock("server-only", () => ({}));
 vi.mock("next/headers", () => ({ headers: async () => new Headers() }));
 vi.mock("@/server/auth/auth", () => ({ auth: { api: { getSession: async () => h.session } } }));
 vi.mock("@/server/db/prisma", () => ({ prisma: {} }));
-vi.mock("@/server/services/lead.service", () => ({ leadService: { logOutreach: h.logOutreach } }));
+vi.mock("@/server/services/candidate.service", () => ({
+  candidateService: { logOutreach: h.logOutreach },
+}));
 
 import { POST } from "./route";
 
 function req(body: unknown) {
-  return new Request("http://localhost/api/leads/l1/outreach", {
+  return new Request("http://localhost/api/candidates/c1/outreach", {
     method: "POST",
     body: JSON.stringify(body),
   });
 }
-const ctx = { params: Promise.resolve({ id: "l1" }) };
+const ctx = { params: Promise.resolve({ id: "c1" }) };
 
 beforeEach(() => {
   h.session = { user: { id: "u1", email: "u@desta.works", name: "U", role: "Associate" } };
   h.logOutreach.mockReset();
 });
 
-describe("POST /api/leads/:id/outreach", () => {
+describe("POST /api/candidates/:id/outreach", () => {
   it("returns 401 when signed out and does not log", async () => {
     h.session = null;
     const res = await POST(req({ channel: "email" }), ctx);
@@ -40,23 +43,23 @@ describe("POST /api/leads/:id/outreach", () => {
     expect(h.logOutreach).not.toHaveBeenCalled();
   });
 
-  it("200 happy path — forwards the validated input", async () => {
-    h.logOutreach.mockResolvedValue({ id: "l1", status: "Outreach 1" });
+  it("201 happy path — forwards the validated input", async () => {
+    h.logOutreach.mockResolvedValue({ id: "a1", channel: "email" });
     const res = await POST(req({ channel: "email", note: "hi" }), ctx);
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(201);
     expect(h.logOutreach).toHaveBeenCalledWith(
-      "l1",
+      "c1",
       expect.objectContaining({ channel: "email", note: "hi" }),
       expect.objectContaining({ id: "u1" }),
     );
-    expect((await res.json()).lead.status).toBe("Outreach 1");
+    expect((await res.json()).attempt.id).toBe("a1");
   });
 
   it("forwards templateId when the send came from the Templates page", async () => {
-    h.logOutreach.mockResolvedValue({ id: "l1", status: "Outreach 1" });
+    h.logOutreach.mockResolvedValue({ id: "a1", channel: "email" });
     await POST(req({ channel: "email", templateId: "initial" }), ctx);
     expect(h.logOutreach).toHaveBeenCalledWith(
-      "l1",
+      "c1",
       expect.objectContaining({ templateId: "initial" }),
       expect.anything(),
     );
@@ -68,14 +71,8 @@ describe("POST /api/leads/:id/outreach", () => {
     expect(h.logOutreach).not.toHaveBeenCalled();
   });
 
-  it("maps a service CONFLICT (Promoted) to 409", async () => {
-    h.logOutreach.mockRejectedValue(new AppError("CONFLICT", "Lead already promoted"));
-    const res = await POST(req({ channel: "email" }), ctx);
-    expect(res.status).toBe(409);
-  });
-
   it("maps a service NOT_FOUND to 404", async () => {
-    h.logOutreach.mockRejectedValue(new AppError("NOT_FOUND", "Lead not found"));
+    h.logOutreach.mockRejectedValue(new AppError("NOT_FOUND", "Candidate not found"));
     const res = await POST(req({ channel: "email" }), ctx);
     expect(res.status).toBe(404);
   });
