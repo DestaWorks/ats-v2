@@ -65,8 +65,6 @@ export const auth = betterAuth({
   // Auth's own `trustedOrigins` wildcard support (`"http://localhost:*"` matches the origin
   // string, port included — verified directly against the installed package's
   // `wildcardMatch`/`matchesOriginPattern` source, not just the docs).
-  ...(process.env.NODE_ENV !== "production"
-    ? { trustedOrigins: ["http://localhost:*"] }
-    : {}),
+  ...(process.env.NODE_ENV !== "production" ? { trustedOrigins: ["http://localhost:*"] } : {}),
   plugins: [nextCookies()],
 });
