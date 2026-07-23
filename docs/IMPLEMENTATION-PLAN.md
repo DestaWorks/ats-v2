@@ -480,11 +480,50 @@ format (blocks 1.3/1.4). *Trash auto-purge sign-off resolved 2026-07-14 — see 
 - [ ] Port report + analytics UIs 1:1.
 - **Done-when:** all reports + analytics compute; Mass Journey renders; Client Capacity alerts; CSV exports.
 
-### 5.3 Admin (Module 21) — brings admin tables
-- [ ] Add `invites` + `access_requests` models → migrate.
-- [ ] Routes: invite add/update/remove, block/unblock, reset password, approve/decline request.
-- [ ] Port users / requests / roles / permission-matrix / blocked / team / audit tabs 1:1.
-- **Done-when:** admin manages users + roles; RBAC changes take effect server-side.
+### 5.3 Admin (Module 21) — brings admin tables ✅
+- [x] **No `invites` model** (scope decision, see below) — `access_request` already existed
+  (Wave 0.3); Better Auth's own `User`/`Session`/`Account` tables already had the admin-plugin
+  fields (`banned`/`banReason`/`banExpires`) pre-migrated. No schema migration needed this wave.
+- [x] Configured Better Auth's **admin plugin** (`server/auth/auth.ts`) with `adminRoles: ["Owner",
+  "Admin"]` and a `roles` map assigning the plugin's own `adminAc`/`userAc` definitions onto this
+  app's real 6 role names — a SEPARATE authZ check from `hasCapability`; every route still gates
+  with `requireCapability` first.
+- [x] Routes (all in `/api/admin/*`, each double-gated: `requireCapability` + the plugin's own
+  inner check): users list/create/set-role/ban/unban/reset-password/remove; access-requests
+  list/approve(role picker → creates account → flips status)/decline.
+- [x] `/admin` page — **Users, Access Requests, Roles (read-only), Blocked** tabs.
+- **Scope decisions** (legacy's `AdminView` has 7 tabs; this wave ports 4):
+  - **Team/Profiles tab NOT ported** — it's a self-service bio/avatar/phone directory, not an
+    access-control feature; its real counterpart is the separate "My Profile" bullet below (5.4).
+  - **Audit tab NOT ported** — links out to the already-existing `/activity` page instead of
+    duplicating it (same call as Credentials Intelligence/CRM).
+  - **Shifts tab NOT ported** — not in this bullet's original tab list at all; an 8th tab legacy
+    has that was never in scope here.
+  - **"Create Role" NOT ported** — legacy's is vestigial (creates a label with zero attached
+    capabilities); matches CLAUDE.md's "custom roles deferred to v2."
+- **Legacy bugs fixed, not ported**: `approve_request` had no backend handler at all in legacy —
+  `AccessRequest.status` never flipped from "Pending" and approved requests reappeared forever;
+  fixed here (approve now creates the account THEN flips status). Legacy's "Blocked" was a fake
+  client-side-only gate (name-string array compared against email, could never match) — this
+  wave's ban is enforced at the DB/session-creation-hook layer, confirmed live (a banned user is
+  rejected at sign-in with `BANNED_USER`, not just hidden in the UI). Legacy's reset-password
+  bypassed admin verification via a client-supplied `admin:true` boolean — this wave's reset goes
+  through `auth.api.setUserPassword`, gated by `requireCapability("manageUsers")` server-side only.
+- **Security note**: this wave's research also surfaced 4 new CRITICAL/HIGH findings in the
+  *live legacy app itself* (hardcoded admin backdoor, unauthenticated plaintext-password leak,
+  a role self-escalation path, a disconnected RBAC assign-role button) — documented as F8-F11 in
+  `docs/SECURITY-AUDIT-LEGACY.md`, escalated to the owner, and explicitly NOT touched here (no
+  write access to the live legacy Apps Script; the owner applies fixes there).
+- **Done-when:** admin manages users + roles; RBAC changes take effect server-side. Verified live
+  against the real Supabase DB: created a user with an auto-generated password → the SAME
+  password signed them in; set their role; banned them → sign-in correctly rejected
+  (`BANNED_USER`, DB-enforced, not a client check) → unbanned; reset their password → the new
+  password worked; submitted a real access request → approved with a role → a working account
+  existed and `status` flipped to `"approved"` (not stuck `"pending"`) → re-approving the same
+  request correctly 409s; declined a second request; confirmed a non-`manageUsers` role (Manager)
+  gets both the page's no-access screen and a 403 on the routes directly. All test accounts/
+  requests removed afterward. 934/934 tests passing (up from 886); `tsc`/`eslint`/`prettier`/
+  `next build` all clean.
 
 ### 5.4 Flex / risk-buffer — first to slip (D5)
 > **The deferrable/flex items are CRM analytics (4.2 heavy analytics) + the heaviest reports (5.2)
