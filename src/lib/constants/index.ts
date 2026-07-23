@@ -18,3 +18,4 @@ export * from "./saved-view";
 export * from "./nppes";
 export * from "./screening";
 export * from "./templates";
+export * from "./client-contact";

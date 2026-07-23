@@ -16,14 +16,13 @@ import {
 import {
   addRoleNoteSchema,
   updateOpenRoleSchema,
-  type AddRoleNoteInput,
   type ClientMatchProfileDTO,
   type OpenRoleDetailDTO,
   type RoleMatchDTO,
   type SaveMatchProfileInput,
   type UpdateOpenRoleInput,
 } from "@/lib/validation/open-role";
-import { useZodForm } from "@/lib/forms/use-zod-form";
+import { useApiForm } from "@/lib/forms/use-api-form";
 import { emptyToNull } from "@/lib/forms/empty-to-null";
 import {
   deleteJson,
@@ -189,9 +188,8 @@ function EditRoleForm({
   onSaved: (role: OpenRoleDetailDTO) => void;
   onCancel: () => void;
 }) {
-  const [pending, startTransition] = useTransition();
   const [serverError, setServerError] = useState<string | null>(null);
-  const form = useZodForm(updateOpenRoleSchema, {
+  const { form, pending, onSubmit } = useApiForm(updateOpenRoleSchema, {
     // The DTO stores these as plain strings; they're only ever written through the validated
     // create/update schemas, so it's safe to narrow back to the enum types here.
     defaultValues: {
@@ -207,30 +205,17 @@ function EditRoleForm({
       status: role.status,
       clientId: role.clientId,
     },
+    submit: (values) => patchJson<{ role: OpenRoleDetailDTO }>(`/api/roles/${role.id}`, values),
+    onSuccess: (data) => {
+      toast.success("Role updated");
+      onSaved(data.role);
+    },
+    onFailure: setServerError,
   });
-
-  function onSubmit(values: UpdateOpenRoleInput) {
-    setServerError(null);
-    startTransition(async () => {
-      const res = await patchJson<{ role: OpenRoleDetailDTO }>(`/api/roles/${role.id}`, values);
-      if (res.ok) {
-        toast.success("Role updated");
-        onSaved(res.data.role);
-      } else if (res.failure.issues.length) {
-        for (const issue of res.failure.issues) {
-          form.setError(issue.path as keyof UpdateOpenRoleInput, { message: issue.message });
-        }
-        toast.error("Please fix the highlighted fields");
-      } else {
-        setServerError(messageForFailure(res.failure));
-        toast.error(messageForFailure(res.failure));
-      }
-    });
-  }
 
   return (
     <form
-      onSubmit={form.handleSubmit(onSubmit)}
+      onSubmit={onSubmit}
       noValidate
       className="flex flex-col gap-4 rounded-lg border border-black/10 bg-white p-4"
     >
@@ -507,23 +492,15 @@ function NotesPanel({
   role: OpenRoleDetailDTO;
   onChanged: (role: OpenRoleDetailDTO) => void;
 }) {
-  const [pending, startTransition] = useTransition();
-  const form = useZodForm(addRoleNoteSchema, { defaultValues: { body: "", category: "General" } });
-
-  function onSubmit(values: AddRoleNoteInput) {
-    startTransition(async () => {
-      const result = await postJson<{ role: OpenRoleDetailDTO }>(
-        `/api/roles/${role.id}/notes`,
-        values,
-      );
-      if (result.ok) {
-        onChanged(result.data.role);
-        form.reset({ body: "", category: "General" });
-      } else {
-        toast.error(messageForFailure(result.failure));
-      }
-    });
-  }
+  const { form, pending, onSubmit } = useApiForm(addRoleNoteSchema, {
+    defaultValues: { body: "", category: "General" },
+    submit: (values) =>
+      postJson<{ role: OpenRoleDetailDTO }>(`/api/roles/${role.id}/notes`, values),
+    onSuccess: (data) => {
+      onChanged(data.role);
+      form.reset({ body: "", category: "General" });
+    },
+  });
 
   async function handleDelete(noteId: string) {
     const res = await deleteJson<{ role: OpenRoleDetailDTO }>(
@@ -538,7 +515,7 @@ function NotesPanel({
 
   return (
     <div className="flex flex-col gap-4">
-      <form onSubmit={form.handleSubmit(onSubmit)} noValidate className="flex flex-col gap-2">
+      <form onSubmit={onSubmit} noValidate className="flex flex-col gap-2">
         <textarea
           rows={2}
           placeholder="Add a note…"

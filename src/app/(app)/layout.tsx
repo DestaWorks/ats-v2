@@ -45,6 +45,12 @@ export default async function AppLayout({
   if (hasCapability(user.role, "viewCredentials")) {
     items.push({ href: "/credentials", label: "Credentials" });
   }
+  if (hasCapability(user.role, "viewCrm")) {
+    items.push({ href: "/crm", label: "CRM" });
+  }
+  if (hasCapability(user.role, "manageUsers")) {
+    items.push({ href: "/admin", label: "Admin" });
+  }
 
   const clientRows = await clientRepository.list();
   const clients = clientRows.map((c) => ({ id: c.id, name: c.name }));

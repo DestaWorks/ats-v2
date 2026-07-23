@@ -23,21 +23,9 @@ export function isLeadStatus(value: string): value is LeadStatus {
   return (LEAD_STATUSES as readonly string[]).includes(value);
 }
 
-/** Statuses considered "closed / not actively working" (dropped from active lists). */
-export const INACTIVE_LEAD_STATUSES: readonly LeadStatus[] = [
-  "No Response",
-  "Bad Fit",
-  "Promoted",
-  "Future Collaboration",
-];
-
 /** The channels an outreach attempt can be logged on (validated vs this union in zod). */
 export const OUTREACH_CHANNELS = ["email", "phone", "linkedin", "other"] as const;
 export type OutreachChannel = (typeof OUTREACH_CHANNELS)[number];
-
-export function isOutreachChannel(value: string): value is OutreachChannel {
-  return (OUTREACH_CHANNELS as readonly string[]).includes(value);
-}
 
 /**
  * `Badge` tone per lead status (L-9) — isomorphic, tones limited to the Badge union. Active outreach

@@ -1,12 +1,12 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { NOTE_TYPES, type NoteType } from "@/lib/constants";
 import { mentionToken, splitMentions, type MentionTarget } from "@/lib/mentions";
-import { addNoteSchema, type AddNoteInput, type NoteDTO } from "@/lib/validation/candidate";
-import { useZodForm } from "@/lib/forms/use-zod-form";
+import { addNoteSchema, type NoteDTO } from "@/lib/validation/candidate";
+import { useApiForm } from "@/lib/forms/use-api-form";
 import { cn } from "@/lib/utils/cn";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
@@ -15,7 +15,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { fieldError } from "./lib/form-error";
 import { Textarea } from "@/components/ui/textarea";
 import { formatRelativeTime, noteTypeLabel, noteTypeTone } from "./lib/notes-format";
-import { messageForFailure, postNote } from "./lib/detail-fetch";
+import { postNote } from "./lib/detail-fetch";
 
 /** The open @autocomplete: where the token starts and what's typed after the `@`. */
 interface MentionDropdown {
@@ -50,13 +50,22 @@ export function NotesTab({
   announce: (message: string) => void;
 }) {
   const router = useRouter();
-  const [pending, startTransition] = useTransition();
   const [dropdown, setDropdown] = useState<MentionDropdown | null>(null);
   const [selected, setSelected] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
-  const form = useZodForm(addNoteSchema, {
+  const { form, pending, onSubmit } = useApiForm(addNoteSchema, {
     defaultValues: { body: "", noteType: "internal" },
+    submit: (values) => postNote(candidateId, values),
+    onSuccess: (note, values) => {
+      onAdded(note);
+      form.reset({ body: "", noteType: values.noteType });
+      setDropdown(null);
+      toast.success("Note added");
+      announce("Note added");
+      router.refresh();
+    },
+    onFailure: (message) => announce(`Couldn't add note: ${message}`),
   });
   const noteType = form.watch("noteType");
   const bodyField = form.register("body");
@@ -112,31 +121,10 @@ export function NotesTab({
     }
   }
 
-  function onSubmit(values: AddNoteInput) {
-    startTransition(async () => {
-      const result = await postNote(candidateId, values);
-      if (result.ok) {
-        onAdded(result.data);
-        form.reset({ body: "", noteType: values.noteType });
-        setDropdown(null);
-        toast.success("Note added");
-        announce("Note added");
-        router.refresh();
-      } else if (result.failure.issues.length) {
-        for (const issue of result.failure.issues) {
-          form.setError(issue.path as keyof AddNoteInput, { message: issue.message });
-        }
-      } else {
-        toast.error(messageForFailure(result.failure));
-        announce(`Couldn't add note: ${messageForFailure(result.failure)}`);
-      }
-    });
-  }
-
   return (
     <div className="flex flex-col gap-5">
       <form
-        onSubmit={form.handleSubmit(onSubmit)}
+        onSubmit={onSubmit}
         noValidate
         className="flex flex-col gap-3 rounded-xl border border-black/5 bg-white p-4"
       >

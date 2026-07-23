@@ -24,7 +24,6 @@ export const activityQuerySchema = z.object({
   to: z.coerce.date().optional(),
   cursor: z.string().min(1).optional(),
 });
-export type ActivityQuery = z.infer<typeof activityQuerySchema>;
 
 /**
  * One LIST row. NO raw `before`/`after` (AL-3) — carries only `hasChanges`. `at` is an ISO string.

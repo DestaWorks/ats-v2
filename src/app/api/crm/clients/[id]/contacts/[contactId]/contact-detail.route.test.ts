@@ -1,0 +1,103 @@
+import { describe, it, expect, beforeEach, vi } from "vitest";
+import { AppError } from "@/server/http/app-error";
+
+/**
+ * PATCH/DELETE /api/crm/clients/:id/contacts/:contactId — gated `requireCapability("viewCrm")`:
+ * unauth → 401; non-viewCrm role → 403; leadership → 200; a contact belonging to another client
+ * (or missing) → 404 (the service's `NOT_FOUND` mapped through `apiHandler`).
+ */
+
+const h = vi.hoisted(() => ({
+  session: null as { user: { id: string; email: string; name: string; role?: string } } | null,
+  updateContact: vi.fn(),
+  removeContact: vi.fn(),
+}));
+
+vi.mock("server-only", () => ({}));
+vi.mock("next/headers", () => ({ headers: async () => new Headers() }));
+vi.mock("@/server/auth/auth", () => ({ auth: { api: { getSession: async () => h.session } } }));
+vi.mock("@/server/db/prisma", () => ({ prisma: {} }));
+vi.mock("@/server/services/client.service", () => ({
+  clientService: { updateContact: h.updateContact, removeContact: h.removeContact },
+}));
+
+import { PATCH, DELETE } from "./route";
+
+const ctx = { params: Promise.resolve({ id: "c1", contactId: "cc1" }) };
+function patchReq(body: unknown) {
+  return new Request("http://localhost/api/crm/clients/c1/contacts/cc1", {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+const deleteReq = () =>
+  new Request("http://localhost/api/crm/clients/c1/contacts/cc1", { method: "DELETE" });
+
+beforeEach(() => {
+  h.session = null;
+  h.updateContact.mockReset();
+  h.removeContact.mockReset();
+});
+
+describe("PATCH /api/crm/clients/:id/contacts/:contactId", () => {
+  it("401 when signed out and does not update", async () => {
+    const res = await PATCH(patchReq({ status: "left" }), ctx);
+    expect(res.status).toBe(401);
+    expect(h.updateContact).not.toHaveBeenCalled();
+  });
+
+  it("403 for a non-viewCrm role (Screener)", async () => {
+    h.session = { user: { id: "u2", email: "s@desta.works", name: "S", role: "Screener" } };
+    const res = await PATCH(patchReq({ status: "left" }), ctx);
+    expect(res.status).toBe(403);
+    expect(h.updateContact).not.toHaveBeenCalled();
+  });
+
+  it("200 for a leadership role (Owner) — forwards id + contactId + validated input", async () => {
+    h.session = { user: { id: "u1", email: "o@desta.works", name: "O", role: "Owner" } };
+    h.updateContact.mockResolvedValue({ id: "cc1", status: "left" });
+    const res = await PATCH(patchReq({ status: "left" }), ctx);
+    expect(res.status).toBe(200);
+    expect(h.updateContact).toHaveBeenCalledWith(
+      "c1",
+      "cc1",
+      expect.objectContaining({ status: "left" }),
+      expect.objectContaining({ id: "u1" }),
+    );
+  });
+
+  it("maps a service NOT_FOUND to 404", async () => {
+    h.session = { user: { id: "u1", email: "o@desta.works", name: "O", role: "Owner" } };
+    h.updateContact.mockRejectedValue(new AppError("NOT_FOUND", "Contact not found"));
+    const res = await PATCH(patchReq({ status: "left" }), ctx);
+    expect(res.status).toBe(404);
+  });
+});
+
+describe("DELETE /api/crm/clients/:id/contacts/:contactId", () => {
+  it("401 when signed out and does not delete", async () => {
+    const res = await DELETE(deleteReq(), ctx);
+    expect(res.status).toBe(401);
+    expect(h.removeContact).not.toHaveBeenCalled();
+  });
+
+  it("403 for a non-viewCrm role (Associate)", async () => {
+    h.session = { user: { id: "u2", email: "a@desta.works", name: "A", role: "Associate" } };
+    const res = await DELETE(deleteReq(), ctx);
+    expect(res.status).toBe(403);
+    expect(h.removeContact).not.toHaveBeenCalled();
+  });
+
+  it("200 for a leadership role (Owner)", async () => {
+    h.session = { user: { id: "u1", email: "o@desta.works", name: "O", role: "Owner" } };
+    h.removeContact.mockResolvedValue(undefined);
+    const res = await DELETE(deleteReq(), ctx);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, id: "cc1" });
+    expect(h.removeContact).toHaveBeenCalledWith(
+      "c1",
+      "cc1",
+      expect.objectContaining({ id: "u1" }),
+    );
+  });
+});

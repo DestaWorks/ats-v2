@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -18,7 +18,7 @@ import {
   type CandidateProfileDTO,
   type UpdateCandidateInput,
 } from "@/lib/validation/candidate";
-import { useZodForm } from "@/lib/forms/use-zod-form";
+import { useApiForm } from "@/lib/forms/use-api-form";
 import { emptyToNull, emptyToNullNumber } from "@/lib/forms/empty-to-null";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
@@ -26,7 +26,7 @@ import { Card } from "@/components/ui/card";
 import { fieldError } from "./lib/form-error";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { messageForFailure, patchCandidate } from "./lib/detail-fetch";
+import { patchCandidate } from "./lib/detail-fetch";
 
 export interface ClientOption {
   id: string;
@@ -58,9 +58,8 @@ export function DetailsTab({
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
-  const [pending, startTransition] = useTransition();
 
-  const form = useZodForm(updateCandidateSchema, {
+  const { form, pending, onSubmit } = useApiForm(updateCandidateSchema, {
     defaultValues: {
       name: candidate.name,
       email: candidate.email ?? undefined,
@@ -81,28 +80,16 @@ export function DetailsTab({
       clientId: candidate.clientId ?? undefined,
       ...(canEditCredential ? { licenseNumber: candidate.licenseNumber ?? undefined } : {}),
     },
+    submit: (values) => patchCandidate(candidate.id, values),
+    onSuccess: (_data, values) => {
+      onSaved(values);
+      setEditing(false);
+      toast.success("Candidate updated");
+      announce("Candidate profile saved");
+      router.refresh();
+    },
+    onFailure: (message) => announce(`Save failed: ${message}`),
   });
-
-  function onSubmit(values: UpdateCandidateInput) {
-    startTransition(async () => {
-      const result = await patchCandidate(candidate.id, values);
-      if (result.ok) {
-        onSaved(values);
-        setEditing(false);
-        toast.success("Candidate updated");
-        announce("Candidate profile saved");
-        router.refresh();
-      } else if (result.failure.issues.length) {
-        for (const issue of result.failure.issues) {
-          form.setError(issue.path as keyof UpdateCandidateInput, { message: issue.message });
-        }
-        toast.error("Please fix the highlighted fields");
-      } else {
-        toast.error(messageForFailure(result.failure));
-        announce(`Save failed: ${messageForFailure(result.failure)}`);
-      }
-    });
-  }
 
   if (!editing) {
     return (
@@ -149,7 +136,7 @@ export function DetailsTab({
   const selectedTags = form.watch("tags") ?? [];
 
   return (
-    <form onSubmit={form.handleSubmit(onSubmit)} noValidate className="flex flex-col gap-5">
+    <form onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Name" htmlFor="cd-name" error={fieldError(form, "name")} required>
           <Input id="cd-name" {...form.register("name")} />

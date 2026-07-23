@@ -66,9 +66,6 @@ export const ROLE_CAPABILITIES: Record<Role, readonly Capability[]> = {
   Associate: [],
 };
 
-/** The roles that form the "leadership" capability group (for display/labelling only). */
-export const LEADERSHIP_ROLES: readonly Role[] = ["Owner", "Director", "Manager", "Admin"];
-
 export function hasCapability(role: Role, capability: Capability): boolean {
   return ROLE_CAPABILITIES[role].includes(capability);
 }

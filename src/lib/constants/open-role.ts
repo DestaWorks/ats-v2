@@ -8,16 +8,12 @@ export type RoleStatus = (typeof ROLE_STATUSES)[number];
 export function isRoleStatus(value: string): value is RoleStatus {
   return (ROLE_STATUSES as readonly string[]).includes(value);
 }
-/** Roles excluded from the triage strip (no longer being actively worked). */
-export const INACTIVE_ROLE_STATUSES: readonly RoleStatus[] = ["Filled", "Closed"];
 
 export const ROLE_PRIORITIES = ["P1", "P2", "P3"] as const;
 export type RolePriority = (typeof ROLE_PRIORITIES)[number];
 export function isRolePriority(value: string): value is RolePriority {
   return (ROLE_PRIORITIES as readonly string[]).includes(value);
 }
-export const DEFAULT_ROLE_PRIORITY: RolePriority = "P2";
-export const DEFAULT_ROLE_STATUS: RoleStatus = "Open";
 
 /** Role-note category — free text in legacy; this is a starter list for the select, not an enum gate. */
 export const ROLE_NOTE_CATEGORIES = [
@@ -26,7 +22,6 @@ export const ROLE_NOTE_CATEGORIES = [
   "Screening",
   "Follow-up",
 ] as const;
-export const DEFAULT_ROLE_NOTE_CATEGORY = "General";
 
 /** Triage-strip badge (legacy `index.html:4734-4790`). */
 export const TRIAGE_BADGES = ["HOT", "STALE", "GAP", "EASY", "P1", "P2", "P3"] as const;

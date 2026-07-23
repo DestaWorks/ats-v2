@@ -166,12 +166,10 @@ export type SubmitLogInput = z.infer<typeof submitLogSchema>;
 export const journalEntrySchema = z
   .object({ date: dateKey, text: z.string().trim().min(1).max(5000) })
   .strict();
-export type JournalEntryInput = z.infer<typeof journalEntrySchema>;
 
 export const journalGoalSchema = z
   .object({ weekStart: dateKey, text: z.string().trim().min(1).max(500) })
   .strict();
-export type JournalGoalInput = z.infer<typeof journalGoalSchema>;
 
 export const toggleGoalSchema = z.object({ done: z.boolean() }).strict();
 

@@ -2,6 +2,8 @@ import "server-only";
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { nextCookies } from "better-auth/next-js";
+import { admin as adminPlugin } from "better-auth/plugins/admin";
+import { adminAc, userAc } from "better-auth/plugins/admin/access";
 import { prisma } from "@/server/db/prisma";
 
 const googleClientId = process.env.GOOGLE_CLIENT_ID;
@@ -16,8 +18,13 @@ export const googleEnabled = Boolean(googleClientId && googleClientSecret);
  *   invite / approved access request (or the seed). Google added when configured.
  * - `role` is a server-controlled field on the user (`input: false` → clients can't set it);
  *   our own capability model (`lib/constants` + `server/auth/guards`) governs feature access.
- * - The Better Auth **admin** plugin (user management / ban) is added in Wave 5 (Admin module),
- *   where its access-control roles are configured.
+ * - The Better Auth **admin** plugin (Wave 5.3) provides user management (create/list/set-role/
+ *   ban/unban/reset-password/remove) with server-hashed passwords and DB-enforced bans. Its
+ *   `roles`/`adminRoles` are a SEPARATE authZ check from this app's own `hasCapability` — every
+ *   `/api/admin/*` route still gates with `requireCapability(...)` first (the one authoritative
+ *   system); this config just remaps the plugin's own built-in role definitions (`adminAc`/
+ *   `userAc`) onto our 6 real role names so a legitimately-authorized Owner/Admin isn't ALSO
+ *   rejected by the plugin's inner check.
  * - `nextCookies()` must be the LAST plugin (lets Server Actions set auth cookies).
  */
 export const auth = betterAuth({
@@ -66,5 +73,19 @@ export const auth = betterAuth({
   // string, port included — verified directly against the installed package's
   // `wildcardMatch`/`matchesOriginPattern` source, not just the docs).
   ...(process.env.NODE_ENV !== "production" ? { trustedOrigins: ["http://localhost:*"] } : {}),
-  plugins: [nextCookies()],
+  plugins: [
+    adminPlugin({
+      adminRoles: ["Owner", "Admin"],
+      defaultRole: "Associate",
+      roles: {
+        Owner: adminAc,
+        Admin: adminAc,
+        Director: userAc,
+        Manager: userAc,
+        Screener: userAc,
+        Associate: userAc,
+      },
+    }),
+    nextCookies(),
+  ],
 });

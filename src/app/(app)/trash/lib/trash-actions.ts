@@ -1,11 +1,11 @@
 /**
- * Client action helpers for the candidate lifecycle (Delete → Trash / Restore / Purge). Thin
- * wrappers over the gated API routes that turn the uniform `{ error: { code, message } }` envelope
- * into a discriminated `ApiResult` the UI can surface. The shared plumbing (`ApiResult`/`ApiFailure`/
+ * Client action helpers for the candidate lifecycle (Restore / Purge). Thin wrappers over the
+ * gated API routes that turn the uniform `{ error: { code, message } }` envelope into a
+ * discriminated `ApiResult` the UI can surface. The shared plumbing (`ApiResult`/`ApiFailure`/
  * `readFailure`/`postJson`/`messageForFailure`) lives in `@/lib/api/client`; only the route-specific
  * calls + the pure type-to-confirm gate live here (no server imports — safe to bundle client-side).
  */
-import { deleteJson, postJson, type ApiResult } from "@/lib/api/client";
+import { postJson, type ApiResult } from "@/lib/api/client";
 
 export { messageForFailure } from "@/lib/api/client";
 
@@ -20,11 +20,6 @@ export function canConfirmPurge(typedName: string, candidateName: string): boole
   const target = candidateName.trim();
   if (target === "") return false;
   return typedName.trim() === target;
-}
-
-/** POST a soft-delete (→ Trash). `DELETE /api/candidates/[id]` → `{ ok, id }` on success. */
-export function deleteCandidate(id: string): Promise<ApiResult<{ ok: true; id: string }>> {
-  return deleteJson(`/api/candidates/${id}`);
 }
 
 /** POST a restore (Trash → back to its original stage). `POST /api/candidates/[id]/restore`. */

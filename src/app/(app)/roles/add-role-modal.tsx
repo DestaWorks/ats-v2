@@ -10,7 +10,7 @@ import {
   type ParsedJdDTO,
 } from "@/lib/validation/open-role";
 import type { OpenRoleDetailDTO } from "@/lib/validation/open-role";
-import { useZodForm } from "@/lib/forms/use-zod-form";
+import { useApiForm } from "@/lib/forms/use-api-form";
 import { emptyToNull } from "@/lib/forms/empty-to-null";
 import { messageForFailure, postJson } from "@/lib/api/client";
 import { Button, type ButtonProps } from "@/components/ui/button";
@@ -56,13 +56,18 @@ export function AddRoleButton({
 
 function AddRoleForm({ clients, onCancel }: { clients: ClientOption[]; onCancel: () => void }) {
   const router = useRouter();
-  const [pending, startTransition] = useTransition();
   const [jdText, setJdText] = useState("");
   const [jdPending, startJdTransition] = useTransition();
   const [serverError, setServerError] = useState<string | null>(null);
 
-  const form = useZodForm(createOpenRoleSchema, {
+  const { form, pending, onSubmit } = useApiForm(createOpenRoleSchema, {
     defaultValues: { title: "", priority: "P2" },
+    submit: (values) => postJson<{ role: OpenRoleDetailDTO }>("/api/roles", values),
+    onSuccess: (data) => {
+      toast.success("Role added");
+      router.push(`/roles/${data.role.id}`);
+    },
+    onFailure: setServerError,
   });
 
   function handleAutofill() {
@@ -94,27 +99,8 @@ function AddRoleForm({ clients, onCancel }: { clients: ClientOption[]; onCancel:
     });
   }
 
-  function onSubmit(values: CreateOpenRoleInput) {
-    setServerError(null);
-    startTransition(async () => {
-      const result = await postJson<{ role: OpenRoleDetailDTO }>("/api/roles", values);
-      if (result.ok) {
-        toast.success("Role added");
-        router.push(`/roles/${result.data.role.id}`);
-      } else if (result.failure.issues.length) {
-        for (const issue of result.failure.issues) {
-          form.setError(issue.path as keyof CreateOpenRoleInput, { message: issue.message });
-        }
-        toast.error("Please fix the highlighted fields");
-      } else {
-        setServerError(messageForFailure(result.failure));
-        toast.error(messageForFailure(result.failure));
-      }
-    });
-  }
-
   return (
-    <form onSubmit={form.handleSubmit(onSubmit)} noValidate className="flex flex-col gap-5">
+    <form onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
       {serverError ? <ErrorState message={serverError} /> : null}
 
       <div className="flex flex-col gap-2 rounded-md border border-black/10 bg-black/[0.02] p-3">

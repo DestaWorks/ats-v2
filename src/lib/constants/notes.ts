@@ -13,10 +13,6 @@
 export const NOTE_TYPES = ["internal", "client", "call", "email", "text"] as const;
 export type NoteType = (typeof NOTE_TYPES)[number];
 
-export function isNoteType(v: string): v is NoteType {
-  return (NOTE_TYPES as readonly string[]).includes(v);
-}
-
 /** Display labels (legacy picker: Note / Client Note / Call Log / Email Log / Text Log). */
 export const NOTE_TYPE_LABELS: Record<NoteType, string> = {
   internal: "Note",
