@@ -57,10 +57,6 @@ export function isCandidateStatus(value: string): value is CandidateStatus {
   return value in BY_CODE;
 }
 
-export function getStage(code: CandidateStatus): PipelineStage {
-  return BY_CODE[code];
-}
-
 export function statusLabel(code: CandidateStatus): string {
   return BY_CODE[code].label;
 }

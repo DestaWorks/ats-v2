@@ -56,7 +56,6 @@ export const US_STATES = [
   "WY",
   "DC",
 ] as const;
-export type UsState = (typeof US_STATES)[number];
 
 /** Nurse Licensure Compact member states (legacy `COMPACT_STATES`). */
 export const COMPACT_STATES = [

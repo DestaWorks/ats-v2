@@ -148,14 +148,12 @@ export const tagsParamSchema = z.preprocess(
 export const moveInputSchema = z.object({
   toStatus: candidateStatusSchema,
 });
-export type MoveInput = z.infer<typeof moveInputSchema>;
 
 /** Body for `POST /api/candidates/bulk-move` (partial-success, gated per id). */
 export const bulkMoveInputSchema = z.object({
   ids: z.array(z.string().min(1)).min(1).max(200),
   toStatus: candidateStatusSchema,
 });
-export type BulkMoveInput = z.infer<typeof bulkMoveInputSchema>;
 
 /**
  * Query for `GET /api/candidates` (board read + per-column load-more). All filters optional.
@@ -180,7 +178,6 @@ export const boardQuerySchema = z.object({
   column: activeStatusSchema.optional(),
   cursor: z.string().min(1).optional(),
 });
-export type BoardQuery = z.infer<typeof boardQuerySchema>;
 
 /**
  * Query for `GET /api/candidates/list` (the flat browse list's load-more). Mirrors the board
@@ -210,7 +207,6 @@ export const listQuerySchema = z.object({
   /** 1-based page for OFFSET pagination. Anything not a positive int falls back to page 1. */
   page: z.coerce.number().int().min(1).catch(1),
 });
-export type ListQuery = z.infer<typeof listQuerySchema>;
 
 /** The list's user-facing sort options. `newest`/`oldest` are DB sorts; `fit` sorts by score. */
 export type ListSort = "newest" | "oldest" | "fit";

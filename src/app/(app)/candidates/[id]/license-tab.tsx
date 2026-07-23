@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { LICENSE_STATUSES, stateBoardLink } from "@/lib/constants";
@@ -9,7 +9,7 @@ import {
   type CandidateProfileDTO,
   type VerifyLicenseInput,
 } from "@/lib/validation/candidate";
-import { useZodForm } from "@/lib/forms/use-zod-form";
+import { useApiForm } from "@/lib/forms/use-api-form";
 import { emptyToNull } from "@/lib/forms/empty-to-null";
 import { cn } from "@/lib/utils/cn";
 import { Button } from "@/components/ui/button";
@@ -18,7 +18,7 @@ import { Card } from "@/components/ui/card";
 import { fieldError } from "./lib/form-error";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { messageForFailure, postVerifyLicense } from "./lib/detail-fetch";
+import { postVerifyLicense } from "./lib/detail-fetch";
 import { formatDate } from "@/lib/utils/format-date";
 
 /** Status dot color: Active = green, negative statuses = red, "Not Verified" = orange. */
@@ -40,15 +40,23 @@ export function LicenseTab({
   announce: (message: string) => void;
 }) {
   const router = useRouter();
-  const [pending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
 
-  const form = useZodForm(verifyLicenseSchema, {
+  const { form, pending, onSubmit } = useApiForm(verifyLicenseSchema, {
     defaultValues: {
       licenseStatus: candidate.licenseStatus as VerifyLicenseInput["licenseStatus"],
       licenseExpiry: undefined,
       ...(canEditCredential ? { licenseNumber: candidate.licenseNumber ?? undefined } : {}),
     },
+    submit: (values) => postVerifyLicense(candidate.id, values),
+    onSuccess: (_data, values) => {
+      onVerified(values);
+      setOpen(false);
+      toast.success("License verification saved");
+      announce(`License marked ${values.licenseStatus}`);
+      router.refresh();
+    },
+    onFailure: (message) => announce(`Verification failed: ${message}`),
   });
 
   if (candidate.track === "Operations") {
@@ -60,27 +68,6 @@ export function LicenseTab({
         </p>
       </Card>
     );
-  }
-
-  function onSubmit(values: VerifyLicenseInput) {
-    startTransition(async () => {
-      const result = await postVerifyLicense(candidate.id, values);
-      if (result.ok) {
-        onVerified(values);
-        setOpen(false);
-        toast.success("License verification saved");
-        announce(`License marked ${values.licenseStatus}`);
-        router.refresh();
-      } else if (result.failure.issues.length) {
-        for (const issue of result.failure.issues) {
-          form.setError(issue.path as keyof VerifyLicenseInput, { message: issue.message });
-        }
-        toast.error("Please fix the highlighted fields");
-      } else {
-        toast.error(messageForFailure(result.failure));
-        announce(`Verification failed: ${messageForFailure(result.failure)}`);
-      }
-    });
   }
 
   return (
@@ -144,7 +131,7 @@ export function LicenseTab({
 
       {open ? (
         <form
-          onSubmit={form.handleSubmit(onSubmit)}
+          onSubmit={onSubmit}
           noValidate
           className="flex flex-col gap-4 rounded-xl border border-black/5 bg-white p-5"
         >

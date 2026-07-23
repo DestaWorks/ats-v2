@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { SOURCES } from "@/lib/constants";
-import { addLeadSchema, type CreateLeadInput } from "@/lib/validation/lead";
-import { useZodForm } from "@/lib/forms/use-zod-form";
+import { addLeadSchema } from "@/lib/validation/lead";
+import { useApiForm } from "@/lib/forms/use-api-form";
 import { emptyToNull } from "@/lib/forms/empty-to-null";
-import { messageForFailure, postJson } from "@/lib/api/client";
+import { postJson } from "@/lib/api/client";
 import type { LeadDetailDTO } from "@/lib/validation/lead";
 import { Button, type ButtonProps } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
@@ -79,35 +79,21 @@ function AddLeadForm({
   onAdded?: (lead: LeadDetailDTO) => void;
   onDone: () => void;
 }) {
-  const [pending, startTransition] = useTransition();
   const [serverError, setServerError] = useState<string | null>(null);
 
-  const form = useZodForm(addLeadSchema, {
+  const { form, pending, onSubmit } = useApiForm(addLeadSchema, {
     defaultValues: { name: "", tags: [] },
+    submit: (values) => postJson<{ lead: LeadDetailDTO }>("/api/leads", values),
+    onSuccess: (data) => {
+      toast.success("Lead added");
+      onAdded?.(data.lead);
+      onDone();
+    },
+    onFailure: setServerError,
   });
 
-  function onSubmit(values: CreateLeadInput) {
-    setServerError(null);
-    startTransition(async () => {
-      const result = await postJson<{ lead: LeadDetailDTO }>("/api/leads", values);
-      if (result.ok) {
-        toast.success("Lead added");
-        onAdded?.(result.data.lead);
-        onDone();
-      } else if (result.failure.issues.length) {
-        for (const issue of result.failure.issues) {
-          form.setError(issue.path as keyof CreateLeadInput, { message: issue.message });
-        }
-        toast.error("Please fix the highlighted fields");
-      } else {
-        setServerError(messageForFailure(result.failure));
-        toast.error(messageForFailure(result.failure));
-      }
-    });
-  }
-
   return (
-    <form onSubmit={form.handleSubmit(onSubmit)} noValidate className="flex flex-col gap-5">
+    <form onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
       {serverError ? <ErrorState message={serverError} /> : null}
 
       <div className="grid gap-4 sm:grid-cols-2">

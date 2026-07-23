@@ -43,7 +43,6 @@ export const roleListQuerySchema = z.object({
   search: z.string().trim().min(1).max(200).optional(),
   page: z.coerce.number().int().min(1).optional(),
 });
-export type RoleListQuery = z.infer<typeof roleListQuerySchema>;
 
 /** Body for `PATCH /api/roles/:id` — every field optional, incl. `status` (legacy has no gate machine). */
 export const updateOpenRoleSchema = z

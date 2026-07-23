@@ -138,7 +138,6 @@ export const respondSchema = z
     kind: z.enum(["hot", "cold"]),
   })
   .strict();
-export type RespondInput = z.infer<typeof respondSchema>;
 
 /**
  * Body for `POST /api/leads/:id/snooze` (`source_lead_snooze` parity). A date sets the snooze
@@ -149,7 +148,6 @@ export const snoozeLeadSchema = z
     until: z.coerce.date().nullable(),
   })
   .strict();
-export type SnoozeLeadInput = z.infer<typeof snoozeLeadSchema>;
 
 /**
  * Body for `PATCH /api/leads/:id/outreach/:attemptId` (`source_lead_edit_outreach` parity).
@@ -246,4 +244,3 @@ export const leadListQuerySchema = z.object({
   /** 1-based OFFSET page (clamped server-side to `[1, totalPages]`). */
   page: z.coerce.number().int().min(1).optional(),
 });
-export type LeadListQuery = z.infer<typeof leadListQuerySchema>;

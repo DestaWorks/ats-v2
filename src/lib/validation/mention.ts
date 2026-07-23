@@ -38,4 +38,3 @@ export const markMentionReadSchema = z
       ? { mentionId: v.mentionId, all: false as const }
       : { mentionId: null, all: true as const },
   );
-export type MarkMentionReadInput = z.infer<typeof markMentionReadSchema>;

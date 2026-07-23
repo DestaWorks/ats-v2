@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -14,8 +14,8 @@ import {
   US_STATES,
   type Track,
 } from "@/lib/constants";
-import { createCandidateSchema, type CreateCandidateInput } from "@/lib/validation/candidate";
-import { useZodForm } from "@/lib/forms/use-zod-form";
+import { createCandidateSchema } from "@/lib/validation/candidate";
+import { useApiForm } from "@/lib/forms/use-api-form";
 import { emptyToNull, emptyToNullNumber } from "@/lib/forms/empty-to-null";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
@@ -23,7 +23,7 @@ import { ErrorState } from "@/components/ui/error-state";
 import { fieldError } from "../[id]/lib/form-error";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { messageForFailure, postCandidate } from "./lib/create-fetch";
+import { postCandidate } from "./lib/create-fetch";
 import { trackFieldVisibility } from "./lib/track-fields";
 
 export interface ClientOption {
@@ -50,15 +50,21 @@ export function AddCandidateForm({
   onCancel?: () => void;
 }) {
   const router = useRouter();
-  const [pending, startTransition] = useTransition();
   const [serverError, setServerError] = useState<string | null>(null);
 
-  const form = useZodForm(createCandidateSchema, {
+  const { form, pending, onSubmit } = useApiForm(createCandidateSchema, {
     defaultValues: {
       name: "",
       track: "Clinical",
       tags: [],
     },
+    submit: (values) => postCandidate(values),
+    onSuccess: (data) => {
+      toast.success("Candidate created");
+      router.push(`/candidates/${data.id}`);
+      router.refresh();
+    },
+    onFailure: setServerError,
   });
 
   const track = (form.watch("track") ?? "Clinical") as Track;
@@ -68,28 +74,8 @@ export function AddCandidateForm({
   );
   const selectedTags = form.watch("tags") ?? [];
 
-  function onSubmit(values: CreateCandidateInput) {
-    setServerError(null);
-    startTransition(async () => {
-      const result = await postCandidate(values);
-      if (result.ok) {
-        toast.success("Candidate created");
-        router.push(`/candidates/${result.data.id}`);
-        router.refresh();
-      } else if (result.failure.issues.length) {
-        for (const issue of result.failure.issues) {
-          form.setError(issue.path as keyof CreateCandidateInput, { message: issue.message });
-        }
-        toast.error("Please fix the highlighted fields");
-      } else {
-        setServerError(messageForFailure(result.failure));
-        toast.error(messageForFailure(result.failure));
-      }
-    });
-  }
-
   return (
-    <form onSubmit={form.handleSubmit(onSubmit)} noValidate className="flex flex-col gap-5">
+    <form onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
       {serverError ? <ErrorState message={serverError} /> : null}
 
       {/* Field labels + order follow the LEGACY Add New Candidate modal. Deliberate deltas:

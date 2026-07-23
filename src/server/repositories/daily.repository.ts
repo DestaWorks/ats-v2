@@ -1,6 +1,5 @@
 import "server-only";
 import type {
-  DailyActual,
   DailyLog,
   DailyTarget,
   JournalEntry,
@@ -10,7 +9,6 @@ import type {
 import { db } from "@/server/db/prisma";
 
 export type DailyTargetRow = DailyTarget;
-export type DailyActualRow = DailyActual;
 export type DailyLogRow = DailyLog;
 export type JournalEntryRow = JournalEntry;
 export type JournalGoalRow = JournalGoal;

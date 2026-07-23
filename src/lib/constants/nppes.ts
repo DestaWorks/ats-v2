@@ -89,7 +89,6 @@ export const TAXONOMY_OPTIONS: readonly TaxonomyOption[] = [
     credential: "LMHC",
   },
 ] as const;
-export type TaxonomyValue = (typeof TAXONOMY_OPTIONS)[number]["value"];
 
 /**
  * The verified NPPES taxonomy option for a candidate's credential (Wave 3.2, Smarter Sourcing) —

@@ -21,7 +21,6 @@ export type CreateSavedViewInput = z.infer<typeof createSavedViewSchema>;
 export const savedViewListQuerySchema = z.object({
   scope: z.enum(SAVED_VIEW_SCOPES),
 });
-export type SavedViewListQuery = z.infer<typeof savedViewListQuerySchema>;
 
 export interface SavedViewDTO {
   id: string;

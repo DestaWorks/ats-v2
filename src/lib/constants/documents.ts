@@ -10,10 +10,6 @@ import type { Track } from "./candidate";
 export const DOCUMENT_TYPES = ["resume", "license", "other"] as const;
 export type DocumentType = (typeof DOCUMENT_TYPES)[number];
 
-export function isDocumentType(v: string): v is DocumentType {
-  return (DOCUMENT_TYPES as readonly string[]).includes(v);
-}
-
 /**
  * The résumé layout / extraction variant chosen at upload (the legacy "role picker").
  * DISTINCT from the app `Role` enum (Owner/Director/…) — this selects the parse schema + render
@@ -21,10 +17,6 @@ export function isDocumentType(v: string): v is DocumentType {
  */
 export const RESUME_VARIANTS = ["clinical", "prescriber", "operations"] as const;
 export type ResumeVariant = (typeof RESUME_VARIANTS)[number];
-
-export function isResumeVariant(v: string): v is ResumeVariant {
-  return (RESUME_VARIANTS as readonly string[]).includes(v);
-}
 
 /** Résumé variant → candidate track. */
 export const VARIANT_TO_TRACK: Record<ResumeVariant, Track> = {
