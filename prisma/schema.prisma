@@ -146,10 +146,25 @@ model ActivityLog {
 // encrypted at rest at the repository boundary when `FIELD_ENCRYPTION_KEY` is set.
 
 model Client {
-  id           String              @id @default(cuid())
-  legacyId     String?             @unique
-  name         String
-  capacity     Int?
+  id       String  @id @default(cuid())
+  legacyId String? @unique
+  name     String
+  capacity Int?
+
+  // Wave 4.2 (CRM) — client profile fields (legacy's "Client Info" tab). Legacy persisted these
+  // as activity-log events replayed on read (`ats_log crm_update_client`), not real columns —
+  // real nullable columns here instead, matching every other wave's replacement of that pattern.
+  contact       String? // primary contact NAME (free text) — distinct from the ClientContact table
+  location      String?
+  priority      String? // HIGH | MED | STANDARD | NEW (free-vocab select, not a DB enum)
+  cadence       String? // Weekly | Bi-weekly | Monthly | Quarterly | As needed
+  schedule      String?
+  contractStart DateTime?
+  renewalDate   DateTime?
+  states        String[] @default([])
+  specialties   String[] @default([])
+  services      String[] @default([])
+
   createdAt    DateTime            @default(now())
   updatedAt    DateTime            @updatedAt
   deletedAt    DateTime?
@@ -158,9 +173,133 @@ model Client {
   sourceLeads  SourceLead[]        @relation("LeadTargetClient") // pre-pipeline leads targeting this client
   openRoles    OpenRole[] // Wave 3.5 — this client's job requisitions
   matchProfile ClientMatchProfile? // 1:1 back-relation — this client's active-matcher weight overrides
+  contacts     ClientContact[] // Wave 4.2 — CRM contacts tracked at this client
+  tasks        ClientTask[] // Wave 4.2 slice 2 — CRM follow-up tasks
+  meetings     ClientMeeting[] // Wave 4.2 slice 2 — CRM meeting log
+  deals        Deal[] // Wave 4.2 slice 3 — CRM sales opportunities
 
   @@index([deletedAt])
   @@map("clients")
+}
+
+/// Wave 4.2 (CRM) — a person tracked at a client (legacy "Contacts" tab, `ATS_ClientContacts`).
+/// Soft-delete + `status` ("active"|"left") are separate concerns: a departed contact stays
+/// visible (collapsed) until explicitly deleted, matching legacy parity.
+model ClientContact {
+  id       String @id @default(cuid())
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  fullName  String
+  title     String?
+  role      String  @default("unknown") // decision_maker | gatekeeper | influencer | user | unknown
+  email     String?
+  phone     String?
+  linkedin  String?
+  reportsTo String? // free text (legacy parity — not a self-FK; often names someone untracked)
+  status    String  @default("active") // active | left
+  notes     String?
+
+  addedById String?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  deletedById String?
+
+  @@index([clientId])
+  @@map("client_contacts")
+}
+
+/// Wave 4.2 slice 2 (CRM) — a follow-up task for a client (legacy "Tasks" tab). Legacy has no real
+/// mutable state here at all: "marking done" appends a SECOND independent activity-log row instead
+/// of updating anything, so the "Open Tasks" filter never actually shrinks (confirmed by tracing
+/// the append/filter logic — a real bug, not a pattern to port). Real `status` + `completedAt`
+/// columns here instead.
+model ClientTask {
+  id           String    @id @default(cuid())
+  clientId     String
+  client       Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  title        String
+  dueDate      DateTime?
+  assignedToId String? // free id, not FK-enforced (matches OpenRole.assignedToId)
+  status       String    @default("open") // open | done
+  completedAt  DateTime?
+  createdById  String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+  deletedById  String?
+
+  @@index([clientId])
+  @@map("client_tasks")
+}
+
+/// Wave 4.2 slice 2 (CRM) — a logged meeting for a client (legacy "Meetings" tab). Genuinely
+/// append-only in legacy (no edit/delete anywhere) — that part of "(activity-based)" IS a real
+/// design to preserve, unlike Tasks. Create + soft-delete-for-correction only (mirrors
+/// `CandidateNote`'s precedent), no update.
+model ClientMeeting {
+  id          String    @id @default(cuid())
+  clientId    String
+  client      Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  type        String // weekly | monthly | qbr | adhoc
+  attendees   String?
+  notes       String?
+  actionItems String?
+  loggedById  String?
+  createdAt   DateTime  @default(now())
+  deletedAt   DateTime?
+  deletedById String?
+
+  @@index([clientId])
+  @@map("client_meetings")
+}
+
+/// Wave 4.2 slice 3 (CRM) — a sales opportunity for a client (legacy "Deals" tab, DROP 76).
+/// `stage` drives the kanban column (5 open stages + Signed/Lost, see `DEAL_STAGES`). No computed
+/// close-probability here — legacy's formula needs Gmail-synced sentiment data this app doesn't
+/// have yet (confirmed by reading `dealProbability()`); `probabilityOverride` is legacy's own
+/// manual-only escape hatch, ported as-is. `name` collapses legacy's redundant `PracticeName` +
+/// `ClientName` string pair now that a real `clientId` FK exists.
+model Deal {
+  id                  String    @id @default(cuid())
+  clientId            String
+  client              Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  name                String
+  stage               String    @default("Lead") // Lead|Contacted|Meeting|Proposal|Negotiation|Signed|Lost
+  estValue            Int?
+  expectedCloseDate   DateTime?
+  probabilityOverride Int? // 0-100, manual only
+  closedAt            DateTime?
+  closeReason         String?
+  postMortem          String?
+  createdById         String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  deletedAt           DateTime?
+  deletedById         String?
+  blockers            DealBlocker[]
+
+  @@index([clientId])
+  @@map("deals")
+}
+
+/// Wave 4.2 slice 3 (CRM) — a real table (legacy's `Deal.Blockers` is a JSON-string blob, not a
+/// table at all, despite the plan doc calling for a `deal_blockers` model). Same `text`/`resolved`
+/// shape as the JSON entries — no severity/category, legacy never had them. Hard-deletable (a
+/// small checklist item; `resolved` already captures the audit-worthy state).
+model DealBlocker {
+  id         String    @id @default(cuid())
+  dealId     String
+  deal       Deal      @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  text       String
+  resolved   Boolean   @default(false)
+  resolvedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([dealId])
+  @@map("deal_blockers")
 }
 
 /// Per-client scoring/matching rules — DATA, not code (DECISIONS: scoring rules live in a table,

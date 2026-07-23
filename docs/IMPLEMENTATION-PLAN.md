@@ -411,10 +411,38 @@ format (blocks 1.3/1.4). *Trash auto-purge sign-off resolved 2026-07-14 — see 
   reload, Hot/Cold auto-backfill) before/soon after this reaches production.
 
 ### 4.2 CRM (Module 13) — brings client tables incrementally, sub-feature by sub-feature
-- [ ] Add `clients` model → migrate; records CRUD + Client Info tab.
-- [ ] Add `client_contacts` model → migrate; contacts CRUD + UI.
-- [ ] Tasks / meetings / timeline (activity-based) + UI.
-- [ ] Add `deals` + `deal_blockers` models → migrate; deals CRUD + kanban UI.
+- [x] Add `clients` model → migrate; records CRUD + Client Info tab ✅ *(slice 1, done 2026-07-23)*
+      — real profile columns (contact/location/priority/cadence/schedule/contractStart/
+      renewalDate/states/specialties/services) replacing legacy's activity-log-reconstruction
+      storage; `/crm` list + `/crm/:id` detail/edit, gated `viewCrm` (leadership, matches legacy's
+      `!isLeadership` CRM redirect). "Roles Needed" / legacy's in-CRM Open Roles tab intentionally
+      NOT ported — superseded by the real `OpenRole` table (Wave 3.5); the client detail page
+      links out to `/roles?clientId=X` instead.
+- [x] Add `client_contacts` model → migrate; contacts CRUD + UI ✅ *(slice 1, done 2026-07-23)*
+      — full field set (fullName/title/role/email/phone/linkedin/reportsTo/status/notes),
+      add/edit/mark-departed/soft-delete, on the same `/crm/:id` page. Per-contact **strength
+      score**, champion/detractor classification, and **whitespace detection** deliberately
+      deferred — both depend on Gmail-synced email data that doesn't exist until the Gmail-sync
+      sub-task below lands.
+- [x] Tasks / meetings / timeline (activity-based) + UI ✅ *(slice 2, done 2026-07-23)* — real
+      `ClientTask` (mutable `status`/`completedAt`) and `ClientMeeting` (append + soft-delete-only,
+      no edit — legacy's Meetings tab genuinely is immutable, unlike Tasks) tables; legacy's Tasks
+      "mark done" is a real bug (appends a second, independent activity-log row instead of
+      updating anything, so the "Open Tasks" filter never shrinks) — not ported. Timeline is a
+      capped (40), read-time aggregation composed from Task/Meeting/Contact/Client data, not
+      sourced from the generic `activity_log` (whose `entityId` doesn't carry a `clientId`) and
+      not unbounded like legacy's equivalent tab.
+- [x] Add `deals` + `deal_blockers` models → migrate; deals CRUD + kanban UI ✅ *(slice 3, done
+      2026-07-23)* — real `Deal` (5 open kanban stages + Signed/Lost, `closedAt`/`closeReason`/
+      `postMortem` on close) + real `DealBlocker` table (upgrading legacy's JSON-blob `Blockers`
+      column). **No computed close-probability this slice** — legacy's `dealProbability()` needs
+      Gmail-synced sentiment data for its "stakeholder relationship scoring" term (the same
+      reimplemented-3× scan the shared-scorer bullet below exists to consolidate); only legacy's
+      own manual `probabilityOverride` field is ported. Stakeholder linking also deferred (its only
+      value is feeding that same deferred formula). Confirmed legacy bug NOT ported: deal recency
+      scans ALL of a client's `crm_*` activity (any task/meeting/contact/other-deal touch), so the
+      same inflated score applies to every deal card — moot for now since no score is computed,
+      but the later probability slice should use `deal.updatedAt` instead.
 - [ ] Gmail sync route + email rendering.
 - [ ] **Shared email-sentiment/response scoring service (build ONCE).**
 - [ ] Churn-risk analytic (uses shared scorer) + UI.
@@ -424,7 +452,10 @@ format (blocks 1.3/1.4). *Trash auto-purge sign-off resolved 2026-07-14 — see 
 - [ ] AI Client Workspace route + UI.
 - [ ] **ETL: backfill clients / contacts / deals** from the Sheet — `legacy_id` idempotent upsert, **email-primary dedupe** (name secondary/manual) on contacts, keep-newest+flag merge; freeze the CRM source at final backfill. *(Wave-1 minimal `clients` seed is upgraded in place, not duplicated.)*
 - [ ] **ETL: reconstruct historical activity** into `activity_log` where recoverable (carry `legacy_id`).
-- **Done-when:** clients managed end-to-end; historical clients/contacts/deals migrated; analytics spot-checked vs legacy.
+- **Done-when:** clients managed end-to-end ✅; contacts managed end-to-end ✅; tasks/meetings/
+  timeline managed end-to-end ✅; deals managed end-to-end ✅ (kanban CRUD; probability analytic
+  deferred to the shared-scorer slice below); historical clients/contacts/deals migrated ⬜;
+  analytics spot-checked vs legacy ⬜ (not started).
 
 ### 4.3 Client Portal (Module 14)
 - [ ] Read-only portal data route + `?portal=true` mode.
