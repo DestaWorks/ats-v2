@@ -207,8 +207,53 @@ model ClientContact {
   deletedAt   DateTime?
   deletedById String?
 
+  /// Wave 4.3 (Client Portal) — explicit opt-in, separate from just existing as a CRM contact
+  /// record (legacy conflated the two: any contact logged for relationship-tracking purposes was
+  /// automatically portal-login-eligible). Only contacts with this true can hold a portal token.
+  portalEnabled Boolean             @default(false)
+  portalTokens  ClientPortalToken[]
+  postedRoles   OpenRole[]          @relation("PortalPostedRoles")
+
   @@index([clientId])
   @@map("client_contacts")
+}
+
+/// Wave 4.3 (Client Portal) — a magic-link credential scoped to one `ClientContact`. Only the
+/// SHA-256 hash is ever stored (mirrors `field-crypto.ts`'s never-persist-the-usable-secret
+/// posture); the raw token is shown to an admin exactly once at generation time. Generating a new
+/// token for a contact revokes any prior one (one live link per contact at a time).
+model ClientPortalToken {
+  id        String        @id @default(cuid())
+  contactId String
+  contact   ClientContact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  tokenHash String   @unique
+  expiresAt DateTime
+
+  createdById String?
+  createdAt   DateTime  @default(now())
+  lastUsedAt  DateTime?
+  revokedAt   DateTime?
+
+  @@index([contactId])
+  @@map("client_portal_tokens")
+}
+
+/// Wave 4.3 (Client Portal) — an external, unauthenticated visitor asking for portal access.
+/// Deliberately NOT the same model as `AccessRequest` (staff account requests): approving this
+/// grants a `ClientContact` a portal token, never one of the 6 internal RBAC roles — conflating
+/// the two approval flows would be a real bug, not just a naming clash.
+model PortalAccessRequest {
+  id                  String   @id @default(cuid())
+  name                String
+  email               String
+  requestedClientName String
+  note                String?
+  status              String   @default("pending") // pending | approved | declined
+  createdAt           DateTime @default(now())
+
+  @@index([status])
+  @@map("portal_access_requests")
 }
 
 /// Wave 4.2 slice 2 (CRM) — a follow-up task for a client (legacy "Tasks" tab). Legacy has no real
@@ -811,6 +856,13 @@ model OpenRole {
   createdById String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  /// Wave 4.3 (Client Portal) — set when this role was submitted via `portal_post_role`, distinct
+  /// from `createdById` (a free `User.id` string for STAFF-authored roles). A real FK (unlike
+  /// `createdById`) since `ClientContact` lives fully in this schema; `SetNull` so revoking/
+  /// deleting the contact never cascade-deletes the role.
+  postedByContactId String?
+  postedByContact   ClientContact? @relation("PortalPostedRoles", fields: [postedByContactId], references: [id], onDelete: SetNull)
 
   notes            RoleNote[]
   filledCandidates Candidate[]
