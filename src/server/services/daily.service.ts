@@ -1,8 +1,18 @@
 import "server-only";
 import type { Prisma } from "@/generated/prisma/client";
 import { hasCapability } from "@/lib/constants";
-import { dayWindow, mondayOf, rampFor, sourcingStreak, tenureWeek } from "@/lib/daily";
+import {
+  businessDaysLeft,
+  daysAfter,
+  dayWindow,
+  mondayOf,
+  rampFor,
+  sourcingStreak,
+  tenureWeek,
+  weeklyPacing,
+} from "@/lib/daily";
 import type {
+  AddFeedbackInput,
   DailyLogDTO,
   DailyLogViewDTO,
   DailyOverviewDTO,
@@ -10,10 +20,12 @@ import type {
   JournalEntryDTO,
   JournalGoalDTO,
   LiveActualsDTO,
+  ManagerFeedbackDTO,
   RecapDTO,
   SaveActualsInput,
   SetTargetInput,
   SubmitLogInput,
+  TeamBreakdownDTO,
 } from "@/lib/validation/daily";
 import { toIso } from "@/lib/utils/iso";
 import type { AuthUser } from "@/server/auth/guards";
@@ -25,6 +37,7 @@ import {
   type DailyTargetRow,
   type JournalEntryRow,
   type JournalGoalRow,
+  type ManagerFeedbackRow,
 } from "@/server/repositories/daily.repository";
 import { clientRepository } from "@/server/repositories/client.repository";
 import { userRepository } from "@/server/repositories/user.repository";
@@ -86,6 +99,10 @@ function toEntryDTO(row: JournalEntryRow): JournalEntryDTO {
 
 function toGoalDTO(row: JournalGoalRow): JournalGoalDTO {
   return { id: row.id, weekStart: row.weekStart, text: row.text, done: row.done };
+}
+
+function toFeedbackDTO(row: ManagerFeedbackRow): ManagerFeedbackDTO {
+  return { authorName: row.authorName, body: row.body, createdAt: toIso(row.createdAt) };
 }
 
 /**
@@ -213,7 +230,7 @@ export const dailyService = {
   /** The Daily Log page composite for the SESSION user. */
   async logView(user: AuthUser, date: string, tz: number): Promise<DailyLogViewDTO> {
     const w = dayWindow(date, tz);
-    const [log, added, moved, notes, verified, history, entries, userRow, clients] =
+    const [log, added, moved, notes, verified, history, entries, userRow, clients, feedback] =
       await Promise.all([
         dailyRepository.logFor(user.id, date),
         dailyRepository.countCandidatesAdded(user.id, w),
@@ -224,11 +241,28 @@ export const dailyService = {
         dailyRepository.entriesForUser(user.id, 20),
         prisma.user.findUnique({ where: { id: user.id }, select: { createdAt: true } }),
         clientRepository.list(),
+        dailyRepository.feedbackForUser(user.id, 2),
       ]);
     const goals = await dailyRepository.goalsForWeek(user.id, mondayOf(date));
     const weekNum = tenureWeek(userRow?.createdAt ?? new Date(), date);
     const ramp = rampFor(weekNum);
     const logsByDate = new Map(history.map((l) => [l.date, l.sourced]));
+
+    // "Predictive pacing" (Wave 3.1 backlog, legacy Daily Log): the rolling Monday-anchored
+    // week's self-reported sourcing so far vs. the daily ramp target.
+    const monday = mondayOf(date);
+    const weekLogs = history.filter((l) => l.date >= monday && l.date <= date);
+    const weekTotals = {
+      sourced: weekLogs.reduce((sum, l) => sum + l.sourced, 0),
+      days: weekLogs.length,
+    };
+    const pacing = weeklyPacing(
+      weekTotals.sourced,
+      ramp.sourced,
+      weekTotals.days,
+      businessDaysLeft(date),
+    );
+
     return {
       log: log ? toLogDTO(log) : null,
       auto: { added, moved, notes, verified },
@@ -240,6 +274,9 @@ export const dailyService = {
       clients: clients
         .filter((c) => !PER_CLIENT_BREAKDOWN_EXCLUDED.has(c.name))
         .map((c) => ({ id: c.id, name: c.name })),
+      weekTotals,
+      pacing,
+      feedback: feedback.map(toFeedbackDTO),
     };
   },
 
@@ -325,5 +362,78 @@ export const dailyService = {
   async setGoalDone(id: string, done: boolean, user: AuthUser): Promise<void> {
     const count = await dailyRepository.setGoalDone(id, user.id, done);
     if (count === 0) throw new AppError("NOT_FOUND", "Goal not found");
+  },
+
+  /**
+   * Manager → associate feedback note (Wave 3.1 backlog, legacy `mgr_feedback`) — LEADERSHIP
+   * only, same tier as `setTarget` (never Owner/Admin-only `manageUsers`). Audited.
+   */
+  async addFeedback(input: AddFeedbackInput, user: AuthUser): Promise<void> {
+    if (!hasCapability(user.role, SET_TARGETS_CAP)) {
+      throw new AppError("FORBIDDEN", "Only leadership can post feedback");
+    }
+    const names = await userRepository.namesByIds([input.userId]);
+    if (!names.has(input.userId)) throw new AppError("NOT_FOUND", "User not found");
+    await withTransaction(async (tx) => {
+      const row = await dailyRepository.createFeedback(
+        {
+          authorId: user.id,
+          authorName: user.name,
+          targetUserId: input.userId,
+          body: input.body,
+        },
+        tx,
+      );
+      await writeAudit(tx, {
+        entity: "manager_feedback",
+        entityId: row.id,
+        actor: user.id,
+        action: "mgr_feedback",
+        after: { targetUserId: input.userId },
+      });
+    });
+  },
+
+  /**
+   * Admin team breakdown (Wave 3.1 backlog, legacy `isAdmin`-only Daily Log table) — a
+   * per-associate weekly rollup built from real self-reported `DailyLog` rows (NOT event-derived
+   * live counts, matching legacy's own inputs). LEADERSHIP only, same tier as `setTarget`.
+   */
+  async teamBreakdown(weekStart: string, user: AuthUser): Promise<TeamBreakdownDTO> {
+    if (!hasCapability(user.role, SET_TARGETS_CAP)) {
+      throw new AppError("FORBIDDEN", "Only leadership can view the team breakdown");
+    }
+    const monday = mondayOf(weekStart);
+    const weekEnd = daysAfter(monday, 6);
+    const [logs, users] = await Promise.all([
+      dailyRepository.logsForDateRange(monday, weekEnd),
+      userRepository.list(),
+    ]);
+    const names = new Map(users.map((u) => [u.id, u.name]));
+    const byUser = new Map<string, TeamBreakdownDTO["rows"][number]>();
+    for (const log of logs) {
+      const row = byUser.get(log.userId) ?? {
+        userId: log.userId,
+        name: names.get(log.userId) ?? "—",
+        daysLogged: 0,
+        sourced: 0,
+        outreach: 0,
+        responses: 0,
+        screenings: 0,
+        submitted: 0,
+      };
+      row.daysLogged += 1;
+      row.sourced += log.sourced;
+      row.outreach += log.outreach;
+      row.responses += log.responses;
+      row.screenings += log.screenings;
+      row.submitted += log.submitted;
+      byUser.set(log.userId, row);
+    }
+    return {
+      weekStart: monday,
+      rows: [...byUser.values()].sort((a, b) => b.sourced - a.sourced),
+      teammates: users.map((u) => ({ id: u.id, name: u.name })),
+    };
   },
 };

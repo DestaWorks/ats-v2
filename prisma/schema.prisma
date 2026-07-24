@@ -17,41 +17,42 @@ datasource db {
 // --- Better Auth core models (+ admin plugin fields) ---
 
 model User {
-  id             String         @id @default(cuid())
-  name           String
-  email          String         @unique
-  emailVerified  Boolean        @default(false)
-  image          String?
+  id               String            @id @default(cuid())
+  name             String
+  email            String            @unique
+  emailVerified    Boolean           @default(false)
+  image            String?
   // RBAC (DECISIONS D3): one fixed role per account; `admin` is a role value.
-  role           String         @default("Associate")
+  role             String            @default("Associate")
   // admin plugin
-  banned         Boolean        @default(false)
-  banReason      String?
-  banExpires     DateTime?
+  banned           Boolean           @default(false)
+  banReason        String?
+  banExpires       DateTime?
   // Wave 4.1 (Templates) — per-user profile data, DB-backed (legacy kept both in unscoped/
   // mis-scoped localStorage, see docs/IMPLEMENTATION-PLAN.md Wave 4.1 notes).
-  emailSignature String?
-  stickyNote     String?
+  emailSignature   String?
+  stickyNote       String?
   // Wave 5.4 (My Profile) — self-service bio/contact fields (legacy `ATS_Profiles` sheet).
   // Avatar reuses the existing Better Auth `image` field above, not a new column.
-  bio            String?
-  phone          String?
-  location       String?
+  bio              String?
+  phone            String?
+  location         String?
   // Wave 5.4 (Learn tutorial) — per-chapter completion, `{chapterId: isoTimestamp}`. Legacy kept
   // this in unscoped `localStorage` (per-device, not per-user, never synced) — the same class of
   // bug Wave 4.1 already fixed once for signature/sticky-note; fixed the same way here.
-  learnProgress  Json           @default("{}")
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
-  sessions       Session[]
-  accounts       Account[]
-  mentions       Mention[]
-  targets        DailyTarget[]  @relation("targets")
-  actuals        DailyActual[]  @relation("actuals")
-  dailyLogs      DailyLog[]     @relation("dailyLogs")
-  journalEntries JournalEntry[] @relation("journalEntries")
-  journalGoals   JournalGoal[]  @relation("journalGoals")
-  savedViews     SavedView[]    @relation("savedViews")
+  learnProgress    Json              @default("{}")
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  sessions         Session[]
+  accounts         Account[]
+  mentions         Mention[]
+  targets          DailyTarget[]     @relation("targets")
+  actuals          DailyActual[]     @relation("actuals")
+  dailyLogs        DailyLog[]        @relation("dailyLogs")
+  journalEntries   JournalEntry[]    @relation("journalEntries")
+  journalGoals     JournalGoal[]     @relation("journalGoals")
+  savedViews       SavedView[]       @relation("savedViews")
+  receivedFeedback ManagerFeedback[] @relation("managerFeedback")
 
   @@map("user")
 }
@@ -405,8 +406,8 @@ model ClientRules {
 }
 
 model Candidate {
-  id                  String            @id @default(cuid())
-  legacyId            String?           @unique
+  id                  String               @id @default(cuid())
+  legacyId            String?              @unique
   // identity / contact (PII)
   name                String
   email               String?
@@ -421,35 +422,35 @@ model Candidate {
   population          String?
   setting             String?
   telehealthPref      String? // legacy TelehealthPref — preference, distinct from setting
-  track               String            @default("Clinical")
+  track               String               @default("Clinical")
   source              String?
-  tags                String[]          @default([])
-  outreachAttempts    Int               @default(0)
+  tags                String[]             @default([])
+  outreachAttempts    Int                  @default(0)
   // license / verification
   licenseState        String?
   licenseNumber       String? // SENSITIVE — DTO-gated + encrypted at rest when FIELD_ENCRYPTION_KEY is set
-  licenseStatus       String            @default("Not Verified")
+  licenseStatus       String               @default("Not Verified")
   licenseExpiry       DateTime?
   licenseVerifiedAt   DateTime?
   licenseVerifiedById String?
   // pipeline (code + ordinal + denormalized timing)
-  status              String            @default("NEW_CANDIDATE")
-  stageOrder          Int               @default(0)
-  stageEnteredAt      DateTime          @default(now())
+  status              String               @default("NEW_CANDIDATE")
+  stageOrder          Int                  @default(0)
+  stageEnteredAt      DateTime             @default(now())
   placedAt            DateTime?
   // client
   clientId            String?
-  client              Client?           @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  client              Client?              @relation(fields: [clientId], references: [id], onDelete: SetNull)
   // Wave 3.5: which Open Role this candidate was promoted to fill, if any. A DELIBERATE deviation
   // from legacy (`Code.gs:860`), which stuffed `"FilledFromRole:R123"` into the free-text `tags`
   // string with no real FK — this is a real, nullable relation instead. `onDelete: SetNull` so
   // deleting a role never takes a placed candidate's history with it.
   filledFromRoleId    String?
-  filledFromRole      OpenRole?         @relation(fields: [filledFromRoleId], references: [id], onDelete: SetNull)
+  filledFromRole      OpenRole?            @relation(fields: [filledFromRoleId], references: [id], onDelete: SetNull)
   // lifecycle
   createdById         String?
-  createdAt           DateTime          @default(now())
-  updatedAt           DateTime          @updatedAt
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
   deletedAt           DateTime?
   deletedById         String?
   stageHistory        StageHistory[]
@@ -459,7 +460,7 @@ model Candidate {
   // Sourcing (Wave 2.6) back-relations. `promotedFromLead` is the lead this candidate was promoted
   // FROM (0/1, `@unique` on the lead side); `outreachLog` is the shared outreach table (candidate
   // side is written later — the `outreachAttempts` Int column above is the DENORM count, not this).
-  promotedFromLead    SourceLead?       @relation("LeadPromotion")
+  promotedFromLead    SourceLead?          @relation("LeadPromotion")
   outreachLog         OutreachAttempt[]
 
   @@index([status])
@@ -830,6 +831,24 @@ model JournalGoal {
 
   @@index([userId, weekStart])
   @@map("journal_goals")
+}
+
+/// Manager → associate feedback note on the Daily Log page (Wave 3.1 backlog, legacy `mgr_feedback`
+/// — which repurposed `CandidateName` to hold the target associate's name; a real column here
+/// instead). Append-only (no soft-delete — mirrors `JournalEntry`, not `CandidateNote`). `authorId`
+/// is a plain actor column (mirrors `DailyTarget.setById`), never the relation side; `targetUserId`
+/// is the real FK (mirrors `DailyTarget.userId`) since the recipient's own page reads by it.
+model ManagerFeedback {
+  id           String   @id @default(cuid())
+  authorId     String
+  authorName   String? // denormalized display name (mirrors CandidateNote.authorName)
+  targetUserId String
+  targetUser   User     @relation("managerFeedback", fields: [targetUserId], references: [id], onDelete: Cascade)
+  body         String
+  createdAt    DateTime @default(now())
+
+  @@index([targetUserId, createdAt])
+  @@map("manager_feedback")
 }
 
 // Per-user saved filter/view (Wave 2.1 closeout; DECISIONS: shareable filters/saved-views → URL
