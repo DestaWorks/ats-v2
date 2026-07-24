@@ -36,6 +36,8 @@ export interface CandidateListFilters {
   licenseStatus?: LicenseStatus;
   /** Equality on the candidate source (canonical `SOURCES` value). */
   source?: string;
+  /** Equality on the clinical credential (e.g. "PMHNP") — Wave 5.2 report filter bar. */
+  credential?: string;
   /** Inclusive `createdAt` lower bound (service passes a UTC day start). */
   addedFrom?: Date;
   /** EXCLUSIVE `createdAt` upper bound (service passes the start of the day AFTER the `to` date). */
@@ -100,6 +102,7 @@ export function buildCandidateWhere(
   if (filters.clientId) where.clientId = filters.clientId;
   if (filters.licenseStatus) where.licenseStatus = filters.licenseStatus;
   if (filters.source) where.source = filters.source;
+  if (filters.credential) where.credential = filters.credential;
   if (filters.createdById) where.createdById = filters.createdById;
   if (filters.addedFrom || filters.addedTo) {
     where.createdAt = {
@@ -319,6 +322,24 @@ export const candidateRepository = {
   },
 
   /**
+   * Active (non-terminal, non-deleted) candidates grouped by (credential, state) — Discover's
+   * coverage-gap widget's "pipeline" count (Wave 5.5 backlog, legacy Drop 68). Rows with either
+   * field null are excluded.
+   */
+  groupActiveByCredentialState(tx?: Prisma.TransactionClient) {
+    return db(tx).candidate.groupBy({
+      by: ["credential", "state"],
+      where: {
+        deletedAt: null,
+        status: { in: [...ACTIVE_STATUS_CODES] },
+        credential: { not: null },
+        state: { not: null },
+      },
+      _count: { _all: true },
+    });
+  },
+
+  /**
    * Per-status counts with the shared (non-status) board filters applied — the board's TRUE
    * per-column totals in ONE query. `status` is intentionally dropped (the board groups ACROSS
    * statuses); every other filter (track/client/search/tags/licenseStatus/mine/overdue/stuck) counts.
@@ -345,6 +366,21 @@ export const candidateRepository = {
       take: limit,
     });
     return rows.map(decryptRow);
+  },
+
+  /**
+   * Team-wide (no owner scope) longest-overdue candidates, capped small — the AI Pipeline Health
+   * strip's context (Wave 5.5 backlog, legacy `ats_pipeline_health`). Same `overdueWhere` predicate
+   * `listBoard`'s `meta.overdue` and `alertBuckets`'s per-owner bucket already use. Only
+   * non-PII columns are selected → no crypto.
+   */
+  async topOverdue(limit: number, now: Date, tx?: Prisma.TransactionClient) {
+    return db(tx).candidate.findMany({
+      where: { deletedAt: null, AND: [overdueWhere(now)] },
+      select: { id: true, name: true, status: true, clientId: true, stageEnteredAt: true },
+      orderBy: { stageEnteredAt: "asc" },
+      take: limit,
+    });
   },
 
   /**

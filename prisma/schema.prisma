@@ -32,6 +32,15 @@ model User {
   // mis-scoped localStorage, see docs/IMPLEMENTATION-PLAN.md Wave 4.1 notes).
   emailSignature String?
   stickyNote     String?
+  // Wave 5.4 (My Profile) — self-service bio/contact fields (legacy `ATS_Profiles` sheet).
+  // Avatar reuses the existing Better Auth `image` field above, not a new column.
+  bio            String?
+  phone          String?
+  location       String?
+  // Wave 5.4 (Learn tutorial) — per-chapter completion, `{chapterId: isoTimestamp}`. Legacy kept
+  // this in unscoped `localStorage` (per-device, not per-user, never synced) — the same class of
+  // bug Wave 4.1 already fixed once for signature/sticky-note; fixed the same way here.
+  learnProgress  Json           @default("{}")
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
   sessions       Session[]
@@ -161,9 +170,15 @@ model Client {
   schedule      String?
   contractStart DateTime?
   renewalDate   DateTime?
-  states        String[] @default([])
-  specialties   String[] @default([])
-  services      String[] @default([])
+  states        String[]  @default([])
+  specialties   String[]  @default([])
+  services      String[]  @default([])
+
+  // Wave 4.2 (CRM, Revenue/Profitability slice) — client-entered inputs for the Revenue tab's
+  // ARR/gross-profit computation (legacy's "Revenue Inputs" modal, `index.html:7237-7272`).
+  monthlyRate     Int? // monthly retainer $
+  avgPlacementFee Int? // $ per placement
+  grossMargin     Int? // % margin assumption, 0-100
 
   createdAt    DateTime            @default(now())
   updatedAt    DateTime            @updatedAt
@@ -177,6 +192,7 @@ model Client {
   tasks        ClientTask[] // Wave 4.2 slice 2 — CRM follow-up tasks
   meetings     ClientMeeting[] // Wave 4.2 slice 2 — CRM meeting log
   deals        Deal[] // Wave 4.2 slice 3 — CRM sales opportunities
+  notes        ClientNote[] // Wave 4.2 (Health Score slice) — manual communication log
 
   @@index([deletedAt])
   @@map("clients")
@@ -207,8 +223,53 @@ model ClientContact {
   deletedAt   DateTime?
   deletedById String?
 
+  /// Wave 4.3 (Client Portal) — explicit opt-in, separate from just existing as a CRM contact
+  /// record (legacy conflated the two: any contact logged for relationship-tracking purposes was
+  /// automatically portal-login-eligible). Only contacts with this true can hold a portal token.
+  portalEnabled Boolean             @default(false)
+  portalTokens  ClientPortalToken[]
+  postedRoles   OpenRole[]          @relation("PortalPostedRoles")
+
   @@index([clientId])
   @@map("client_contacts")
+}
+
+/// Wave 4.3 (Client Portal) — a magic-link credential scoped to one `ClientContact`. Only the
+/// SHA-256 hash is ever stored (mirrors `field-crypto.ts`'s never-persist-the-usable-secret
+/// posture); the raw token is shown to an admin exactly once at generation time. Generating a new
+/// token for a contact revokes any prior one (one live link per contact at a time).
+model ClientPortalToken {
+  id        String        @id @default(cuid())
+  contactId String
+  contact   ClientContact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  tokenHash String   @unique
+  expiresAt DateTime
+
+  createdById String?
+  createdAt   DateTime  @default(now())
+  lastUsedAt  DateTime?
+  revokedAt   DateTime?
+
+  @@index([contactId])
+  @@map("client_portal_tokens")
+}
+
+/// Wave 4.3 (Client Portal) — an external, unauthenticated visitor asking for portal access.
+/// Deliberately NOT the same model as `AccessRequest` (staff account requests): approving this
+/// grants a `ClientContact` a portal token, never one of the 6 internal RBAC roles — conflating
+/// the two approval flows would be a real bug, not just a naming clash.
+model PortalAccessRequest {
+  id                  String   @id @default(cuid())
+  name                String
+  email               String
+  requestedClientName String
+  note                String?
+  status              String   @default("pending") // pending | approved | declined
+  createdAt           DateTime @default(now())
+
+  @@index([status])
+  @@map("portal_access_requests")
 }
 
 /// Wave 4.2 slice 2 (CRM) — a follow-up task for a client (legacy "Tasks" tab). Legacy has no real
@@ -256,6 +317,24 @@ model ClientMeeting {
   @@map("client_meetings")
 }
 
+/// Wave 4.2 (CRM, Health Score slice) — a manual call/note log entry (legacy `crm_note`). Fills
+/// a real gap: Health Score's "communication recency" factor and the Compare dashboard's "Last
+/// Contact" column both need a touch log that isn't a scheduled `ClientMeeting`. Same soft-delete
+/// shape as `ClientMeeting` (append + correct-by-delete, no edit).
+model ClientNote {
+  id          String    @id @default(cuid())
+  clientId    String
+  client      Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  text        String
+  loggedById  String?
+  createdAt   DateTime  @default(now())
+  deletedAt   DateTime?
+  deletedById String?
+
+  @@index([clientId])
+  @@map("client_notes")
+}
+
 /// Wave 4.2 slice 3 (CRM) — a sales opportunity for a client (legacy "Deals" tab, DROP 76).
 /// `stage` drives the kanban column (5 open stages + Signed/Lost, see `DEAL_STAGES`). No computed
 /// close-probability here — legacy's formula needs Gmail-synced sentiment data this app doesn't
@@ -263,11 +342,11 @@ model ClientMeeting {
 /// manual-only escape hatch, ported as-is. `name` collapses legacy's redundant `PracticeName` +
 /// `ClientName` string pair now that a real `clientId` FK exists.
 model Deal {
-  id                  String    @id @default(cuid())
+  id                  String        @id @default(cuid())
   clientId            String
-  client              Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  client              Client        @relation(fields: [clientId], references: [id], onDelete: Cascade)
   name                String
-  stage               String    @default("Lead") // Lead|Contacted|Meeting|Proposal|Negotiation|Signed|Lost
+  stage               String        @default("Lead") // Lead|Contacted|Meeting|Proposal|Negotiation|Signed|Lost
   estValue            Int?
   expectedCloseDate   DateTime?
   probabilityOverride Int? // 0-100, manual only
@@ -275,8 +354,8 @@ model Deal {
   closeReason         String?
   postMortem          String?
   createdById         String?
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
   deletedAt           DateTime?
   deletedById         String?
   blockers            DealBlocker[]
@@ -334,6 +413,7 @@ model Candidate {
   phone               String?
   city                String?
   state               String?
+  targetLocation      String? // legacy TargetLocation — comma-joined free text, outreach-template interpolation only
   employer            String?
   yearsExp            Int?
   // clinical profile (scoring/gate inputs)
@@ -812,6 +892,13 @@ model OpenRole {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  /// Wave 4.3 (Client Portal) — set when this role was submitted via `portal_post_role`, distinct
+  /// from `createdById` (a free `User.id` string for STAFF-authored roles). A real FK (unlike
+  /// `createdById`) since `ClientContact` lives fully in this schema; `SetNull` so revoking/
+  /// deleting the contact never cascade-deletes the role.
+  postedByContactId String?
+  postedByContact   ClientContact? @relation("PortalPostedRoles", fields: [postedByContactId], references: [id], onDelete: SetNull)
+
   notes            RoleNote[]
   filledCandidates Candidate[]
 
@@ -865,4 +952,62 @@ model ClientMatchProfile {
   updatedAt   DateTime @updatedAt
 
   @@map("client_match_profiles")
+}
+
+// --- Briefs (Wave 5.1, legacy `Daily_Briefs`/`Weekly_Briefs` sheets) ---
+// One row per period (team-wide operational document, not per-user — `savedById` is
+// attribution only, matching legacy's `SavedBy` column). Stores the AI's STRUCTURED output
+// (not a flattened text blob like legacy) so a saved brief can actually be redisplayed later —
+// legacy's archive only ever restored the manual input fields, never the brief content itself.
+
+/// Daily Brief (legacy `daily_brief_generate`/`daily_brief_save`).
+model DailyBrief {
+  id   String @id @default(cuid())
+  date String @unique // "YYYY-MM-DD"
+
+  headline       String?
+  exceptions     Json? // string[]
+  yesterdayCheck Json?
+  clientCards    Json?
+  perAssociate   Json?
+  teamPulse      String?
+
+  priorityClientId String?
+  shiftA           String?
+  shiftB           String?
+  watchItems       String?
+
+  savedById String?
+  savedAt   DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@map("daily_briefs")
+}
+
+/// Weekly Brief (legacy `weekly_brief_generate`/`weekly_brief_save`). Patterns are generate-only,
+/// never persisted (matches legacy — `weekly_brief_patterns` output was never saved either).
+model WeeklyBrief {
+  id        String @id @default(cuid())
+  weekStart String @unique // "YYYY-MM-DD", Monday of the ISO week (mondayOf)
+
+  headline      String?
+  kpiNarrative  String?
+  clientCards   Json?
+  perAssociate  Json?
+  lastWeekCheck Json?
+  decisions     Json?
+
+  highlights         String?
+  blockers           String?
+  nextWeekPriorities String?
+
+  statsSnapshot Json? // raw stats the brief was generated from — audit trail, not redisplayed
+
+  savedById String?
+  savedAt   DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@map("weekly_briefs")
 }

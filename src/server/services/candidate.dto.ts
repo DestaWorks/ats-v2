@@ -74,6 +74,7 @@ export function toCandidateProfileDTO(dto: CandidateDTO): CandidateProfileDTO {
     phone: dto.phone,
     city: dto.city,
     state: dto.state,
+    targetLocation: dto.targetLocation,
     employer: dto.employer,
     yearsExp: dto.yearsExp,
     credential: dto.credential,

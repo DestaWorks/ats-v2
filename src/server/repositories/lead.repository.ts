@@ -12,6 +12,11 @@ export type LeadMatchRow = Pick<
   "id" | "name" | "clientId" | "state" | "credential" | "status"
 >;
 
+const MS_PER_DAY = 86_400_000;
+/** Thresholds for the Daily Brief's stuck-lead alerts (legacy: 7d no outreach / 5d no response). */
+export const STUCK_SOURCED_DAYS = 7;
+export const STUCK_OUTREACH_DAYS = 5;
+
 /** Filters for `list`/`count`. Soft-deleted rows are excluded unless `includeDeleted`. */
 export interface LeadListFilters {
   /** Equality on the lead status label (a `LeadStatus`). */
@@ -105,6 +110,18 @@ export const leadRepository = {
   /** True filtered total for the same `where` as `list` (minus skip/take) — the "Showing N of M". */
   count(filters: LeadListFilters = {}, tx?: Prisma.TransactionClient) {
     return db(tx).sourceLead.count({ where: buildLeadWhere(filters) });
+  },
+
+  /**
+   * Non-deleted leads grouped by (credential, state) — Discover's coverage-gap widget's "sourcing
+   * pool" count (Wave 5.5 backlog, legacy Drop 68). Rows with either field null are excluded.
+   */
+  groupByCredentialState(tx?: Prisma.TransactionClient) {
+    return db(tx).sourceLead.groupBy({
+      by: ["credential", "state"],
+      where: { deletedAt: null, credential: { not: null }, state: { not: null } },
+      _count: { _all: true },
+    });
   },
 
   /**
@@ -316,5 +333,45 @@ export const leadRepository = {
    */
   findByPromotedCandidateId(candidateId: string, tx?: Prisma.TransactionClient) {
     return db(tx).sourceLead.findUnique({ where: { promotedCandidateId: candidateId } });
+  },
+
+  /**
+   * Leads sourced but never contacted, past `STUCK_SOURCED_DAYS` and not currently snoozed
+   * (Wave 5.1 Daily Brief alert — legacy's "sourced-stuck" bucket, made date-aware: an EXPIRED
+   * snooze no longer suppresses forever, unlike legacy's raw-truthiness check).
+   */
+  stuckSourced(now: Date, take: number, tx?: Prisma.TransactionClient) {
+    return db(tx).sourceLead.findMany({
+      where: {
+        deletedAt: null,
+        status: { not: "Promoted" },
+        outreachCount: 0,
+        createdAt: { lt: new Date(now.getTime() - STUCK_SOURCED_DAYS * MS_PER_DAY) },
+        OR: [{ snoozedUntil: null }, { snoozedUntil: { lt: now } }],
+      },
+      select: { id: true, name: true },
+      orderBy: { createdAt: "asc" },
+      take,
+    });
+  },
+
+  /**
+   * Leads with outreach sent but no response, past `STUCK_OUTREACH_DAYS` and not currently
+   * snoozed (Wave 5.1 Daily Brief alert — legacy's "outreach-stuck" bucket).
+   */
+  stuckOutreach(now: Date, take: number, tx?: Prisma.TransactionClient) {
+    return db(tx).sourceLead.findMany({
+      where: {
+        deletedAt: null,
+        status: { not: "Promoted" },
+        outreachCount: { gt: 0 },
+        respondedAt: null,
+        lastOutreachAt: { lt: new Date(now.getTime() - STUCK_OUTREACH_DAYS * MS_PER_DAY) },
+        OR: [{ snoozedUntil: null }, { snoozedUntil: { lt: now } }],
+      },
+      select: { id: true, name: true },
+      orderBy: { lastOutreachAt: "asc" },
+      take,
+    });
   },
 };

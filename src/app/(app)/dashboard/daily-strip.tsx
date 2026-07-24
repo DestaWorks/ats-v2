@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { dateKey, paceStatus } from "@/lib/daily";
 import type { DailyOverviewDTO } from "@/lib/validation/daily";
+import type { TargetsSuggestAiOutput } from "@/lib/validation/briefs";
 import { getJson, postJson, messageForFailure } from "@/lib/api/client";
 import { cn } from "@/lib/utils/cn";
 import { Button } from "@/components/ui/button";
@@ -346,6 +347,28 @@ function SetTargetsModal({
     watchFor: "",
   });
   const [pending, setPending] = useState(false);
+  const [suggesting, setSuggesting] = useState(false);
+
+  async function suggest() {
+    if (!form.userId) return;
+    setSuggesting(true);
+    const res = await postJson<TargetsSuggestAiOutput>("/api/targets/suggest", {
+      userId: form.userId,
+      date: today,
+    });
+    setSuggesting(false);
+    if (res.ok) {
+      setForm((f) => ({
+        ...f,
+        sourcing: String(res.data.sourcing),
+        outreach: String(res.data.outreach),
+        atsCleanup: String(res.data.atsCleanup),
+        inbound: String(res.data.inbound),
+        screens: String(res.data.screens),
+      }));
+      toast.success(res.data.rationale);
+    } else toast.error(messageForFailure(res.failure));
+  }
 
   async function submit() {
     if (!form.userId) return;
@@ -388,6 +411,19 @@ function SetTargetsModal({
             ))}
           </Select>
         </Field>
+        <div className="flex items-center justify-between">
+          <p className="text-[11px] font-semibold tracking-wide text-gray uppercase">Targets</p>
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            disabled={!form.userId}
+            loading={suggesting}
+            onClick={() => void suggest()}
+          >
+            ✨ AI Suggest
+          </Button>
+        </div>
         <div className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3">
           {EOS_FIELDS.map(([key, label]) => (
             <Field key={key} label={label} htmlFor={`tg-${key}`}>

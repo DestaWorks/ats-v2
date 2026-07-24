@@ -24,7 +24,9 @@ export function SignatureEditor({
   recruiterName: string;
   signature: string | null;
   onSaved: (next: string | null) => void;
-  onCancel: () => void;
+  /** Omit when embedding standalone (e.g. `/profile`) — the "← Back" toggle button only renders
+   *  when this is provided (Templates' own toggle-view usage). */
+  onCancel?: () => void;
 }) {
   const [draft, setDraft] = useState(signature ?? "");
   const [saving, setSaving] = useState(false);
@@ -57,9 +59,11 @@ export function SignatureEditor({
     <div className="flex flex-col gap-4 rounded-xl border border-black/5 bg-white p-4">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-bold text-navy">Email Signature</h2>
-        <Button type="button" variant="secondary" size="sm" onClick={() => onCancel()}>
-          ← Back to Templates
-        </Button>
+        {onCancel ? (
+          <Button type="button" variant="secondary" size="sm" onClick={() => onCancel()}>
+            ← Back to Templates
+          </Button>
+        ) : null}
       </div>
 
       <div className="flex gap-2">

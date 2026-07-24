@@ -7,6 +7,7 @@ import {
   rampFor,
   sourcingStreak,
   tenureWeek,
+  weekWindow,
 } from "./daily";
 
 describe("mondayOf (the ONE week anchor)", () => {
@@ -27,6 +28,15 @@ describe("dayWindow", () => {
     // UTC exactly.
     const utc = dayWindow("2026-07-13", 0);
     expect(utc.start.toISOString()).toBe("2026-07-13T00:00:00.000Z");
+  });
+});
+
+describe("weekWindow (Wave 5.1 — the ONE week window for briefs)", () => {
+  it("spans exactly 7 days from the Monday's local midnight", () => {
+    const w = weekWindow("2026-07-13", -180); // Monday, UTC+3
+    expect(w.start.toISOString()).toBe("2026-07-12T21:00:00.000Z");
+    expect(w.end.toISOString()).toBe("2026-07-19T21:00:00.000Z");
+    expect(w.end.getTime() - w.start.getTime()).toBe(7 * 86_400_000);
   });
 });
 

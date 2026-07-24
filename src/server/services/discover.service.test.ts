@@ -14,9 +14,14 @@ const h = vi.hoisted(() => ({
     findManyByNpis: vi.fn(),
     findManyByNames: vi.fn(),
     createMany: vi.fn(),
+    groupByCredentialState: vi.fn(),
   },
   candidateRepo: {
     findManyByNames: vi.fn(),
+    groupActiveByCredentialState: vi.fn(),
+  },
+  openRoleRepo: {
+    groupOpenByCredentialState: vi.fn(),
   },
   searchNppes: vi.fn(),
   writeAudit: vi.fn(),
@@ -26,6 +31,9 @@ vi.mock("server-only", () => ({}));
 vi.mock("@/server/repositories/lead.repository", () => ({ leadRepository: h.leadRepo }));
 vi.mock("@/server/repositories/candidate.repository", () => ({
   candidateRepository: h.candidateRepo,
+}));
+vi.mock("@/server/repositories/open-role.repository", () => ({
+  openRoleRepository: h.openRoleRepo,
 }));
 vi.mock("@/server/integrations/nppes", () => ({ searchNppes: h.searchNppes }));
 vi.mock("@/server/db/audit", () => ({ writeAudit: h.writeAudit }));
@@ -205,5 +213,84 @@ describe("discoverService.addToSourcing", () => {
     expect(result).toEqual({ added: 1, skipped: 1 });
     const [rows] = h.leadRepo.createMany.mock.calls[0]!;
     expect(rows).toHaveLength(1);
+  });
+});
+
+describe("discoverService.coverageGaps — Wave 5.5 backlog, legacy Drop 68", () => {
+  it("joins role/pool/pipeline groups by (credential, state), defaulting missing combos to 0", async () => {
+    h.openRoleRepo.groupOpenByCredentialState.mockResolvedValue([
+      { credential: "PMHNP", state: "CT", _count: { _all: 3 } },
+      { credential: "LCSW", state: "NJ", _count: { _all: 1 } },
+    ]);
+    h.leadRepo.groupByCredentialState.mockResolvedValue([
+      { credential: "PMHNP", state: "CT", _count: { _all: 5 } },
+    ]);
+    h.candidateRepo.groupActiveByCredentialState.mockResolvedValue([
+      { credential: "PMHNP", state: "CT", _count: { _all: 2 } },
+    ]);
+
+    const rows = await discoverService.coverageGaps();
+
+    expect(rows).toEqual([
+      { credential: "PMHNP", state: "CT", roleCount: 3, poolCount: 5, pipelineCount: 2 },
+      { credential: "LCSW", state: "NJ", roleCount: 1, poolCount: 0, pipelineCount: 0 },
+    ]);
+  });
+
+  it("sorts by roleCount descending", async () => {
+    h.openRoleRepo.groupOpenByCredentialState.mockResolvedValue([
+      { credential: "LCSW", state: "NJ", _count: { _all: 1 } },
+      { credential: "PMHNP", state: "CT", _count: { _all: 9 } },
+    ]);
+    h.leadRepo.groupByCredentialState.mockResolvedValue([]);
+    h.candidateRepo.groupActiveByCredentialState.mockResolvedValue([]);
+
+    const rows = await discoverService.coverageGaps();
+    expect(rows.map((r) => r.credential)).toEqual(["PMHNP", "LCSW"]);
+  });
+});
+
+describe("discoverService.supplyForCombo", () => {
+  it("throws BAD_REQUEST for a credential with no taxonomy mapping", async () => {
+    await expect(
+      discoverService.supplyForCombo({ credential: "Unmapped Credential", state: "CT" }, user),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(h.searchNppes).not.toHaveBeenCalled();
+  });
+
+  it("counts only results whose primary taxonomy exactly matches the target description", async () => {
+    h.searchNppes.mockResolvedValue({
+      resultCount: 2,
+      results: [
+        rawResult({
+          taxonomies: [
+            {
+              code: "363L00000X",
+              desc: "Nurse Practitioner, Psych/Mental Health",
+              state: "CT",
+              license: "1",
+              primary: true,
+            },
+          ],
+        }),
+        rawResult({
+          taxonomies: [
+            {
+              code: "2084P0800X",
+              desc: "Psychiatry & Neurology, Psychiatry",
+              state: "CT",
+              primary: true,
+            },
+          ],
+        }),
+      ],
+    });
+
+    const result = await discoverService.supplyForCombo({ credential: "PMHNP", state: "CT" }, user);
+    expect(result).toEqual({ supply: 1 });
+    expect(h.searchNppes).toHaveBeenCalledWith({
+      taxonomyDescription: "Psych/Mental Health",
+      state: "CT",
+    });
   });
 });

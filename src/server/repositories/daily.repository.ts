@@ -42,6 +42,12 @@ export const dailyRepository = {
   targetsForDate(date: string, tx?: Prisma.TransactionClient) {
     return db(tx).dailyTarget.findMany({ where: { date } });
   },
+  /** All targets across a set of date keys (Wave 5.2 Trends' "goal" column — sum of a rolling
+   *  7-day window's daily targets, ONE query instead of 7 `targetsForDate` calls). */
+  targetsForDateRange(dates: string[], tx?: Prisma.TransactionClient) {
+    if (dates.length === 0) return Promise.resolve([]);
+    return db(tx).dailyTarget.findMany({ where: { date: { in: dates } } });
+  },
 
   // --- end-of-shift actuals ---
   upsertActual(data: Prisma.DailyActualUncheckedCreateInput, tx?: Prisma.TransactionClient) {
@@ -146,6 +152,57 @@ export const dailyRepository = {
     return db(tx).activityLog.count({
       where: { actor: userId, action, at: { gte: w.start, lt: w.end } },
     });
+  },
+
+  // --- Wave 5.1 (Briefs) range aggregation — extends `actualsForRange` per IMPLEMENTATION-PLAN
+  // §5.1's own note ("5.1 briefs extend it"). Per-associate grouped counts over an arbitrary
+  // instant window (a day or a Monday-anchored week), batched via ONE `groupBy` each rather than
+  // looping `countX` per user. ---
+
+  /** Leads sourced per associate (`createdById`) within the window. */
+  async sourcedCountsByRange(w: InstantWindow, tx?: Prisma.TransactionClient) {
+    const rows = await db(tx).sourceLead.groupBy({
+      by: ["createdById"],
+      where: {
+        deletedAt: null,
+        createdById: { not: null },
+        createdAt: { gte: w.start, lt: w.end },
+      },
+      _count: { _all: true },
+    });
+    return new Map(rows.map((r) => [r.createdById as string, r._count._all]));
+  },
+
+  /** Outreach attempts (lead + candidate) per actor within the window. */
+  async outreachCountsByRange(w: InstantWindow, tx?: Prisma.TransactionClient) {
+    const rows = await db(tx).outreachAttempt.groupBy({
+      by: ["actorId"],
+      where: { at: { gte: w.start, lt: w.end } },
+      _count: { _all: true },
+    });
+    return new Map(rows.map((r) => [r.actorId, r._count._all]));
+  },
+
+  /** Outreach attempts that GOT a response, per actor, within the window (`respondedAt` — legacy's
+   *  "Responses" metric, sourced from the same table as `outreachCountsByRange`, not a guess). */
+  async responseCountsByRange(w: InstantWindow, tx?: Prisma.TransactionClient) {
+    const rows = await db(tx).outreachAttempt.groupBy({
+      by: ["actorId"],
+      where: { respondedAt: { gte: w.start, lt: w.end } },
+      _count: { _all: true },
+    });
+    return new Map(rows.map((r) => [r.actorId, r._count._all]));
+  },
+
+  /** Leads promoted per actor within the window (the audit trail `lead.service.ts::promote` writes
+   *  — ONE definition, not legacy's divergent activity-Action-text vs candidate-Tags pair). */
+  async promotedCountsByRange(w: InstantWindow, tx?: Prisma.TransactionClient) {
+    const rows = await db(tx).activityLog.groupBy({
+      by: ["actor"],
+      where: { entity: "source_lead", action: "promote", at: { gte: w.start, lt: w.end } },
+      _count: { _all: true },
+    });
+    return new Map(rows.map((r) => [r.actor, r._count._all]));
   },
 
   // --- "since you closed" recap reads (domain tables — never gated audit payloads) ---

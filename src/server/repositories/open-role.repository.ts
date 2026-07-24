@@ -68,6 +68,22 @@ export const openRoleRepository = {
     });
   },
 
+  /**
+   * Open (non-terminal) roles grouped by (credential, state) — Discover's coverage-gap widget
+   * (Wave 5.5 backlog, legacy Drop 68). Rows with either field null are excluded (no combo key).
+   */
+  groupOpenByCredentialState(tx?: Prisma.TransactionClient) {
+    return db(tx).openRole.groupBy({
+      by: ["credential", "state"],
+      where: {
+        status: { notIn: ["Filled", "Closed"] },
+        credential: { not: null },
+        state: { not: null },
+      },
+      _count: { _all: true },
+    });
+  },
+
   update(id: string, data: Prisma.OpenRoleUncheckedUpdateInput, tx?: Prisma.TransactionClient) {
     return db(tx).openRole.update({ where: { id }, data });
   },

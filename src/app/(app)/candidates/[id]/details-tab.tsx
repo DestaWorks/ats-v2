@@ -66,6 +66,7 @@ export function DetailsTab({
       phone: candidate.phone ?? undefined,
       city: candidate.city ?? undefined,
       state: (candidate.state as UpdateCandidateInput["state"]) ?? undefined,
+      targetLocation: candidate.targetLocation ?? undefined,
       employer: candidate.employer ?? undefined,
       yearsExp: candidate.yearsExp ?? undefined,
       credential: (candidate.credential as UpdateCandidateInput["credential"]) ?? undefined,
@@ -163,6 +164,17 @@ export function DetailsTab({
               </option>
             ))}
           </Select>
+        </Field>
+        <Field
+          label="Target Locations"
+          htmlFor="cd-target-location"
+          error={fieldError(form, "targetLocation")}
+        >
+          <Input
+            id="cd-target-location"
+            placeholder="Danbury CT, Stamford CT"
+            {...form.register("targetLocation", { setValueAs: emptyToNull })}
+          />
         </Field>
         <Field label="Employer" htmlFor="cd-employer" error={fieldError(form, "employer")}>
           <Input id="cd-employer" {...form.register("employer", { setValueAs: emptyToNull })} />

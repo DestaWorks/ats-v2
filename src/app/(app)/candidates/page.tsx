@@ -13,6 +13,8 @@ import { getCurrentUser } from "@/server/auth/guards";
 import { candidateService } from "@/server/services/candidate.service";
 import { clientRepository } from "@/server/repositories/client.repository";
 import { userRepository } from "@/server/repositories/user.repository";
+import { savedViewService } from "@/server/services/saved-view.service";
+import { SavedViewsBar } from "../lib/saved-views-bar";
 import { AddCandidateButton } from "../add-candidate-modal";
 import { CandidatesList } from "./candidates-list";
 import { ListFilters } from "./list-filters";
@@ -65,7 +67,7 @@ export default async function CandidatesPage({
     return Number.isNaN(d.getTime()) ? undefined : d;
   };
 
-  const [list, clientRows, userRows] = await Promise.all([
+  const [list, clientRows, userRows, savedViews] = await Promise.all([
     candidateService.listCandidates(
       {
         track,
@@ -89,6 +91,7 @@ export default async function CandidatesPage({
     ),
     clientRepository.list(),
     userRepository.list(),
+    savedViewService.list("candidates", user),
   ]);
   const clients = clientRows.map((c) => ({ id: c.id, name: c.name }));
   const owners = userRows.map((u) => ({ id: u.id, name: u.name }));
@@ -113,6 +116,7 @@ export default async function CandidatesPage({
       </header>
 
       <ListFilters clients={clients} owners={owners} />
+      <SavedViewsBar scope="candidates" initial={savedViews} />
 
       <CandidatesList list={list} searchParams={sp} />
     </div>

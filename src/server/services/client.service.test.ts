@@ -41,6 +41,7 @@ const h = vi.hoisted(() => ({
     softDelete: vi.fn(),
   },
   blockerRepo: { listForDeal: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
+  noteRepo: { listForClient: vi.fn(), create: vi.fn(), softDelete: vi.fn() },
   candidateRepo: { groupByStatusFiltered: vi.fn(), count: vi.fn() },
   userRepo: { namesByIds: vi.fn() },
   writeAudit: vi.fn(),
@@ -60,6 +61,9 @@ vi.mock("@/server/repositories/client-meeting.repository", () => ({
 vi.mock("@/server/repositories/deal.repository", () => ({ dealRepository: h.dealRepo }));
 vi.mock("@/server/repositories/deal-blocker.repository", () => ({
   dealBlockerRepository: h.blockerRepo,
+}));
+vi.mock("@/server/repositories/client-note.repository", () => ({
+  clientNoteRepository: h.noteRepo,
 }));
 vi.mock("@/server/repositories/candidate.repository", () => ({
   candidateRepository: h.candidateRepo,
@@ -192,6 +196,7 @@ beforeEach(() => {
   for (const fn of Object.values(h.meetingRepo)) fn.mockReset();
   for (const fn of Object.values(h.dealRepo)) fn.mockReset();
   for (const fn of Object.values(h.blockerRepo)) fn.mockReset();
+  for (const fn of Object.values(h.noteRepo)) fn.mockReset();
   h.candidateRepo.groupByStatusFiltered.mockReset();
   h.candidateRepo.count.mockReset();
   h.userRepo.namesByIds.mockReset();
@@ -201,6 +206,7 @@ beforeEach(() => {
   h.meetingRepo.listForClient.mockResolvedValue([]);
   h.dealRepo.listForClient.mockResolvedValue([]);
   h.blockerRepo.listForDeal.mockResolvedValue([]);
+  h.noteRepo.listForClient.mockResolvedValue([]);
 });
 
 describe("clientService.list", () => {

@@ -23,6 +23,7 @@ const row: CandidateRow = {
   phone: "555-0100",
   city: "Newark",
   state: "NJ",
+  targetLocation: null,
   employer: "Acme Health",
   yearsExp: 8,
   credential: "PMHNP",

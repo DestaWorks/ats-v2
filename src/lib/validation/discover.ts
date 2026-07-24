@@ -72,3 +72,28 @@ export interface DiscoverSearchResultDTO {
   /** NPPES's true match count — may exceed `results.length` when more than 50 matched. */
   resultCount: number;
 }
+
+// --- coverage gaps (Wave 5.5 backlog, legacy Drop 68) -------------------------
+
+/** One (credential, state) combo with open-role demand vs. sourced/pipeline supply. NPPES supply
+ *  is fetched on demand (see `coverageGapSupplyQuerySchema`) — not included here to avoid an
+ *  NPPES call per combo on every Discover page load. */
+export interface CoverageGapRowDTO {
+  credential: string;
+  state: string;
+  roleCount: number;
+  poolCount: number;
+  pipelineCount: number;
+}
+
+/** Query for `GET /api/discover/coverage-gaps/supply` — looks up live NPPES supply for one combo. */
+export const coverageGapSupplyQuerySchema = z.object({
+  credential: z.string().trim().min(1).max(120),
+  state: z.enum(US_STATES),
+});
+export type CoverageGapSupplyQuery = z.infer<typeof coverageGapSupplyQuerySchema>;
+
+export interface CoverageGapSupplyDTO {
+  /** NPPES result count for this combo, capped at `NPPES_RESULT_LIMIT` (50) — matches legacy's own cap. */
+  supply: number;
+}

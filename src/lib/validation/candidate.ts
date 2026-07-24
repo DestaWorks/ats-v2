@@ -77,6 +77,8 @@ export interface CandidateProfileDTO {
   phone: string | null;
   city: string | null;
   state: string | null;
+  /** legacy TargetLocation — comma-joined free text, used only for `{targetLocations}` template interpolation. */
+  targetLocation: string | null;
   employer: string | null;
   yearsExp: number | null;
   credential: string | null;
@@ -207,6 +209,7 @@ export const updateCandidateSchema = z
     phone: z.string().trim().max(50).nullish(),
     city: z.string().trim().max(120).nullish(),
     state: z.enum(US_STATES).nullish(),
+    targetLocation: z.string().trim().max(500).nullish(),
     employer: z.string().trim().max(200).nullish(),
     yearsExp: z.number().int().min(0).max(80).nullish(),
     credential: z.enum(CREDENTIALS).nullish(),
@@ -239,6 +242,7 @@ export const createCandidateSchema = z
     phone: z.string().trim().max(50).nullish(),
     city: z.string().trim().max(120).nullish(),
     state: z.enum(US_STATES).nullish(),
+    targetLocation: z.string().trim().max(500).nullish(),
     employer: z.string().trim().max(200).nullish(),
     yearsExp: z.number().int().min(0).max(80).nullish(),
     credential: z.enum(CREDENTIALS).nullish(),
