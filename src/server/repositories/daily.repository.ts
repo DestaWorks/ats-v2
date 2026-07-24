@@ -42,6 +42,12 @@ export const dailyRepository = {
   targetsForDate(date: string, tx?: Prisma.TransactionClient) {
     return db(tx).dailyTarget.findMany({ where: { date } });
   },
+  /** All targets across a set of date keys (Wave 5.2 Trends' "goal" column — sum of a rolling
+   *  7-day window's daily targets, ONE query instead of 7 `targetsForDate` calls). */
+  targetsForDateRange(dates: string[], tx?: Prisma.TransactionClient) {
+    if (dates.length === 0) return Promise.resolve([]);
+    return db(tx).dailyTarget.findMany({ where: { date: { in: dates } } });
+  },
 
   // --- end-of-shift actuals ---
   upsertActual(data: Prisma.DailyActualUncheckedCreateInput, tx?: Prisma.TransactionClient) {

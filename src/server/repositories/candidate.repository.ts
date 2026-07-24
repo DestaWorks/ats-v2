@@ -36,6 +36,8 @@ export interface CandidateListFilters {
   licenseStatus?: LicenseStatus;
   /** Equality on the candidate source (canonical `SOURCES` value). */
   source?: string;
+  /** Equality on the clinical credential (e.g. "PMHNP") — Wave 5.2 report filter bar. */
+  credential?: string;
   /** Inclusive `createdAt` lower bound (service passes a UTC day start). */
   addedFrom?: Date;
   /** EXCLUSIVE `createdAt` upper bound (service passes the start of the day AFTER the `to` date). */
@@ -100,6 +102,7 @@ export function buildCandidateWhere(
   if (filters.clientId) where.clientId = filters.clientId;
   if (filters.licenseStatus) where.licenseStatus = filters.licenseStatus;
   if (filters.source) where.source = filters.source;
+  if (filters.credential) where.credential = filters.credential;
   if (filters.createdById) where.createdById = filters.createdById;
   if (filters.addedFrom || filters.addedTo) {
     where.createdAt = {

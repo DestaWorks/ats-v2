@@ -48,6 +48,12 @@ export default async function AppLayout({
   if (hasCapability(user.role, "viewCrm")) {
     items.push({ href: "/crm", label: "CRM" });
   }
+  if (hasCapability(user.role, "viewReports")) {
+    items.push({ href: "/reports", label: "Reports" });
+  }
+  if (hasCapability(user.role, "viewAnalytics")) {
+    items.push({ href: "/analytics", label: "Analytics" });
+  }
   if (hasCapability(user.role, "manageUsers")) {
     items.push({ href: "/admin", label: "Admin" });
   }
