@@ -3,6 +3,8 @@ import { hasCapability } from "@/lib/constants";
 import { getCurrentUser } from "@/server/auth/guards";
 import { adminUserService } from "@/server/services/admin-user.service";
 import { accessRequestService } from "@/server/services/access-request.service";
+import { portalAccessRequestService } from "@/server/services/portal-access-request.service";
+import { clientRepository } from "@/server/repositories/client.repository";
 import { ErrorState } from "@/components/ui/error-state";
 import { AdminDashboard } from "./admin-dashboard";
 
@@ -28,10 +30,23 @@ export default async function AdminPage() {
     );
   }
 
-  const [{ users }, requests] = await Promise.all([
+  const canConfigurePortal = hasCapability(user.role, "configureClientPortal");
+  const [{ users }, requests, portalRequests, clientRows] = await Promise.all([
     adminUserService.list(),
     accessRequestService.list(),
+    canConfigurePortal ? portalAccessRequestService.list() : Promise.resolve([]),
+    canConfigurePortal ? clientRepository.list() : Promise.resolve([]),
   ]);
+  const clients = clientRows.map((c) => ({ id: c.id, name: c.name }));
 
-  return <AdminDashboard initialUsers={users} initialRequests={requests} currentUserId={user.id} />;
+  return (
+    <AdminDashboard
+      initialUsers={users}
+      initialRequests={requests}
+      currentUserId={user.id}
+      canConfigurePortal={canConfigurePortal}
+      initialPortalRequests={portalRequests}
+      clients={clients}
+    />
+  );
 }
