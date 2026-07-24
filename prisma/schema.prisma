@@ -413,6 +413,7 @@ model Candidate {
   phone               String?
   city                String?
   state               String?
+  targetLocation      String? // legacy TargetLocation — comma-joined free text, outreach-template interpolation only
   employer            String?
   yearsExp            Int?
   // clinical profile (scoring/gate inputs)
