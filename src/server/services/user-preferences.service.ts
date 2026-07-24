@@ -5,10 +5,11 @@ import type { AuthUser } from "@/server/auth/guards";
 import { AppError } from "@/server/http/app-error";
 
 /**
- * Per-user profile preferences (Wave 4.1, Templates) — email signature + the global sticky-note
- * scratchpad. Own-record only: every method takes the SESSION user and reads/writes exactly that
- * user's row, never an id param — there's no cross-user access to gate. Not audited (personal UI
- * preferences, not a business record — matches legacy, which never tracked these at all).
+ * Per-user profile preferences (Wave 4.1 Templates + Wave 5.4 My Profile) — email signature,
+ * sticky-note scratchpad, and bio/phone/location. Own-record only: every method takes the
+ * SESSION user and reads/writes exactly that user's row, never an id param — there's no
+ * cross-user access to gate. Not audited (personal UI preferences, not a business record —
+ * matches legacy, which never tracked these at all).
  */
 export const userPreferencesService = {
   async getMine(user: AuthUser): Promise<UserPreferencesDTO> {

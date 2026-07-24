@@ -35,24 +35,73 @@ export const userRepository = {
     });
   },
 
-  /** Wave 4.1 (Templates) — one user's signature + sticky note. */
+  /** Wave 4.1 (Templates) + Wave 5.4 (My Profile) — one user's self-service profile fields. */
   findPreferences(userId: string, tx?: Prisma.TransactionClient) {
     return db(tx).user.findUnique({
       where: { id: userId },
-      select: { emailSignature: true, stickyNote: true },
+      select: {
+        emailSignature: true,
+        stickyNote: true,
+        bio: true,
+        phone: true,
+        location: true,
+      },
     });
   },
 
   /** Own-record only (callers always pass the session user's own id). */
   updatePreferences(
     userId: string,
-    data: { emailSignature?: string | null; stickyNote?: string | null },
+    data: {
+      emailSignature?: string | null;
+      stickyNote?: string | null;
+      bio?: string | null;
+      phone?: string | null;
+      location?: string | null;
+    },
     tx?: Prisma.TransactionClient,
   ) {
     return db(tx).user.update({
       where: { id: userId },
       data,
-      select: { emailSignature: true, stickyNote: true },
+      select: {
+        emailSignature: true,
+        stickyNote: true,
+        bio: true,
+        phone: true,
+        location: true,
+      },
     });
+  },
+
+  /** Wave 5.4 (Learn tutorial) — the signed-in user's per-chapter completion map. */
+  async getLearnProgress(
+    userId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<Record<string, string>> {
+    const row = await db(tx).user.findUnique({
+      where: { id: userId },
+      select: { learnProgress: true },
+    });
+    return (row?.learnProgress as Record<string, string> | undefined) ?? {};
+  },
+
+  /** Own-record only. `done: false` removes the chapter's entry entirely. */
+  async setChapterProgress(
+    userId: string,
+    chapterId: string,
+    done: boolean,
+    tx?: Prisma.TransactionClient,
+  ): Promise<Record<string, string>> {
+    const current = await userRepository.getLearnProgress(userId, tx);
+    const next = { ...current };
+    if (done) next[chapterId] = new Date().toISOString();
+    else delete next[chapterId];
+    const row = await db(tx).user.update({
+      where: { id: userId },
+      data: { learnProgress: next },
+      select: { learnProgress: true },
+    });
+    return row.learnProgress as Record<string, string>;
   },
 };

@@ -32,6 +32,15 @@ model User {
   // mis-scoped localStorage, see docs/IMPLEMENTATION-PLAN.md Wave 4.1 notes).
   emailSignature String?
   stickyNote     String?
+  // Wave 5.4 (My Profile) — self-service bio/contact fields (legacy `ATS_Profiles` sheet).
+  // Avatar reuses the existing Better Auth `image` field above, not a new column.
+  bio            String?
+  phone          String?
+  location       String?
+  // Wave 5.4 (Learn tutorial) — per-chapter completion, `{chapterId: isoTimestamp}`. Legacy kept
+  // this in unscoped `localStorage` (per-device, not per-user, never synced) — the same class of
+  // bug Wave 4.1 already fixed once for signature/sticky-note; fixed the same way here.
+  learnProgress  Json           @default("{}")
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
   sessions       Session[]
