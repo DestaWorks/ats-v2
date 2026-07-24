@@ -12,6 +12,7 @@ import {
   DEAL_STAGES,
   MEETING_TYPES,
 } from "@/lib/constants";
+import type { ClientNoteDTO } from "./client-note";
 
 // --- Client -------------------------------------------------------------
 
@@ -45,6 +46,10 @@ export interface ClientProfileDTO {
   states: string[];
   specialties: string[];
   services: string[];
+  // Wave 4.2 (Revenue slice) — client-entered inputs for the Revenue tab.
+  monthlyRate: number | null;
+  avgPlacementFee: number | null;
+  grossMargin: number | null;
   createdAt: string; // ISO
   updatedAt: string; // ISO
 }
@@ -63,6 +68,7 @@ export interface ClientDetailDTO {
   tasks: ClientTaskDTO[];
   meetings: ClientMeetingDTO[];
   deals: DealDTO[];
+  notes: ClientNoteDTO[];
   /** Newest-first combined feed, capped at 40 — legacy's Timeline tab is unbounded; this isn't. */
   timeline: ClientTimelineEntryDTO[];
 }
@@ -81,6 +87,9 @@ export const createClientSchema = z
     states: z.array(z.string().trim().min(1).max(60)).max(60).optional(),
     specialties: z.array(z.string().trim().min(1).max(120)).max(40).optional(),
     services: z.array(z.string().trim().min(1).max(120)).max(40).optional(),
+    monthlyRate: z.number().int().min(0).max(10_000_000).nullish(),
+    avgPlacementFee: z.number().int().min(0).max(10_000_000).nullish(),
+    grossMargin: z.number().int().min(0).max(100).nullish(),
   })
   .strict();
 export type CreateClientInput = z.infer<typeof createClientSchema>;
@@ -279,7 +288,8 @@ export type ClientTimelineEntryKind =
   | "task_completed"
   | "meeting_logged"
   | "deal_created"
-  | "deal_closed";
+  | "deal_closed"
+  | "note_logged";
 
 export interface ClientTimelineEntryDTO {
   kind: ClientTimelineEntryKind;

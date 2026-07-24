@@ -161,9 +161,15 @@ model Client {
   schedule      String?
   contractStart DateTime?
   renewalDate   DateTime?
-  states        String[] @default([])
-  specialties   String[] @default([])
-  services      String[] @default([])
+  states        String[]  @default([])
+  specialties   String[]  @default([])
+  services      String[]  @default([])
+
+  // Wave 4.2 (CRM, Revenue/Profitability slice) — client-entered inputs for the Revenue tab's
+  // ARR/gross-profit computation (legacy's "Revenue Inputs" modal, `index.html:7237-7272`).
+  monthlyRate     Int? // monthly retainer $
+  avgPlacementFee Int? // $ per placement
+  grossMargin     Int? // % margin assumption, 0-100
 
   createdAt    DateTime            @default(now())
   updatedAt    DateTime            @updatedAt
@@ -177,6 +183,7 @@ model Client {
   tasks        ClientTask[] // Wave 4.2 slice 2 — CRM follow-up tasks
   meetings     ClientMeeting[] // Wave 4.2 slice 2 — CRM meeting log
   deals        Deal[] // Wave 4.2 slice 3 — CRM sales opportunities
+  notes        ClientNote[] // Wave 4.2 (Health Score slice) — manual communication log
 
   @@index([deletedAt])
   @@map("clients")
@@ -301,6 +308,24 @@ model ClientMeeting {
   @@map("client_meetings")
 }
 
+/// Wave 4.2 (CRM, Health Score slice) — a manual call/note log entry (legacy `crm_note`). Fills
+/// a real gap: Health Score's "communication recency" factor and the Compare dashboard's "Last
+/// Contact" column both need a touch log that isn't a scheduled `ClientMeeting`. Same soft-delete
+/// shape as `ClientMeeting` (append + correct-by-delete, no edit).
+model ClientNote {
+  id          String    @id @default(cuid())
+  clientId    String
+  client      Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  text        String
+  loggedById  String?
+  createdAt   DateTime  @default(now())
+  deletedAt   DateTime?
+  deletedById String?
+
+  @@index([clientId])
+  @@map("client_notes")
+}
+
 /// Wave 4.2 slice 3 (CRM) — a sales opportunity for a client (legacy "Deals" tab, DROP 76).
 /// `stage` drives the kanban column (5 open stages + Signed/Lost, see `DEAL_STAGES`). No computed
 /// close-probability here — legacy's formula needs Gmail-synced sentiment data this app doesn't
@@ -308,11 +333,11 @@ model ClientMeeting {
 /// manual-only escape hatch, ported as-is. `name` collapses legacy's redundant `PracticeName` +
 /// `ClientName` string pair now that a real `clientId` FK exists.
 model Deal {
-  id                  String    @id @default(cuid())
+  id                  String        @id @default(cuid())
   clientId            String
-  client              Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  client              Client        @relation(fields: [clientId], references: [id], onDelete: Cascade)
   name                String
-  stage               String    @default("Lead") // Lead|Contacted|Meeting|Proposal|Negotiation|Signed|Lost
+  stage               String        @default("Lead") // Lead|Contacted|Meeting|Proposal|Negotiation|Signed|Lost
   estValue            Int?
   expectedCloseDate   DateTime?
   probabilityOverride Int? // 0-100, manual only
@@ -320,8 +345,8 @@ model Deal {
   closeReason         String?
   postMortem          String?
   createdById         String?
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
   deletedAt           DateTime?
   deletedById         String?
   blockers            DealBlocker[]

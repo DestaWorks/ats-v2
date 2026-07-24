@@ -30,5 +30,10 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
     throw err;
   }
 
-  return <ClientDetail initial={detail} />;
+  return (
+    <ClientDetail
+      initial={detail}
+      canConfigurePortal={hasCapability(user.role, "configureClientPortal")}
+    />
+  );
 }

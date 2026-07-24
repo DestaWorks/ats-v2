@@ -40,7 +40,12 @@ export default async function CrmPage() {
             contacts.
           </p>
         </div>
-        <AddClientButton size="sm" variant="success" />
+        <div className="flex items-center gap-2">
+          <Link href="/crm/compare" className="text-sm font-semibold text-navy hover:underline">
+            Compare clients →
+          </Link>
+          <AddClientButton size="sm" variant="success" />
+        </div>
       </header>
 
       {clients.length === 0 ? (

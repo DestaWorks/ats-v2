@@ -47,6 +47,11 @@ import {
   type DealBlockerRow,
 } from "@/server/repositories/deal-blocker.repository";
 import {
+  clientNoteRepository,
+  type ClientNoteRow,
+} from "@/server/repositories/client-note.repository";
+import { toClientNoteDTO } from "@/server/services/client-note.service";
+import {
   candidateRepository,
   FIRST_TERMINAL_ORDER,
 } from "@/server/repositories/candidate.repository";
@@ -84,6 +89,9 @@ function toClientProfile(row: ClientRow): ClientProfileDTO {
     states: row.states,
     specialties: row.specialties,
     services: row.services,
+    monthlyRate: row.monthlyRate,
+    avgPlacementFee: row.avgPlacementFee,
+    grossMargin: row.grossMargin,
     createdAt: toIso(row.createdAt),
     updatedAt: toIso(row.updatedAt),
   };
@@ -179,6 +187,7 @@ function buildTimeline(
   tasks: ClientTaskRow[],
   meetings: ClientMeetingRow[],
   deals: DealRow[],
+  notes: ClientNoteRow[],
 ): ClientTimelineEntryDTO[] {
   const entries: ClientTimelineEntryDTO[] = [
     { kind: "client_created", at: toIso(client.createdAt), summary: `${client.name} added` },
@@ -186,6 +195,11 @@ function buildTimeline(
       kind: "contact_added" as const,
       at: toIso(c.createdAt),
       summary: `${c.fullName} added as a contact`,
+    })),
+    ...notes.map((n) => ({
+      kind: "note_logged" as const,
+      at: toIso(n.createdAt),
+      summary: `Note logged: ${n.text.length > 120 ? `${n.text.slice(0, 120)}…` : n.text}`,
     })),
     ...tasks.map((t) => ({
       kind: "task_created" as const,
@@ -244,18 +258,22 @@ export const clientService = {
 
   async detail(id: string): Promise<ClientDetailDTO> {
     const client = await requireClient(id);
-    const [contactRows, taskRows, meetingRows, dealRows, statusGroups, verified] =
+    const [contactRows, taskRows, meetingRows, dealRows, noteRows, statusGroups, verified] =
       await Promise.all([
         clientContactRepository.listForClient(id),
         clientTaskRepository.listForClient(id),
         clientMeetingRepository.listForClient(id),
         dealRepository.listForClient(id),
+        clientNoteRepository.listForClient(id),
         candidateRepository.groupByStatusFiltered({ clientId: id }),
         candidateRepository.count({ clientId: id, licenseStatus: "Active" }),
       ]);
-    const [userNames, blockersByDeal] = await Promise.all([
+    const [userNames, noteUserNames, blockersByDeal] = await Promise.all([
       userRepository.namesByIds(
         contactRows.map((c) => c.addedById).filter((id): id is string => id != null),
+      ),
+      userRepository.namesByIds(
+        noteRows.map((n) => n.loggedById).filter((id): id is string => id != null),
       ),
       Promise.all(dealRows.map((d) => dealBlockerRepository.listForDeal(d.id))),
     ]);
@@ -273,7 +291,8 @@ export const clientService = {
       tasks: taskRows.map(toTaskDTO),
       meetings: meetingRows.map(toMeetingDTO),
       deals: dealRows.map((d, i) => toDealDTO(d, blockersByDeal[i]!)),
-      timeline: buildTimeline(client, contactRows, taskRows, meetingRows, dealRows),
+      notes: noteRows.map((n) => toClientNoteDTO(n, noteUserNames)),
+      timeline: buildTimeline(client, contactRows, taskRows, meetingRows, dealRows, noteRows),
       pipelineSnapshot,
     };
   },
