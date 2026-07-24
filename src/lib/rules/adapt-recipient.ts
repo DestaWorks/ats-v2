@@ -4,12 +4,11 @@
  * the token engine runs identically regardless of who's being written to.
  *
  * Leads leave clinical fields (`licenseNumber`/`licenseStatus`/`npi`/`yearsExp`/`specialty`/
- * `employer`/`population`/`setting`/`telehealthPref`) `null` — leads don't track them, matching
- * legacy's synthesized `cand` object. `specialty`/`targetLocations` are `null` for BOTH recipient
- * types: neither `Candidate` nor `SourceLead` has a column for them in this schema (legacy's own
- * `{targetLocations}` token checked two inconsistently-cased keys, `TargetLocation`/`targetLocation`,
- * suggesting it was never reliably populated there either). `fillTemplate`'s existing bracket-
- * placeholder fallback already handles every `null` correctly — no special-casing needed here.
+ * `employer`/`population`/`setting`/`telehealthPref`/`targetLocations`) `null` — leads don't track
+ * them, matching legacy's synthesized `cand` object (`SourceLead` has no `targetLocation` column).
+ * `specialty` is `null` for BOTH recipient types: neither `Candidate` nor `SourceLead` has a column
+ * for it in this schema. `fillTemplate`'s existing bracket-placeholder fallback already handles
+ * every `null` correctly — no special-casing needed here.
  */
 import type { TemplateRecipient } from "./fill-template";
 
@@ -28,6 +27,7 @@ export interface CandidateRecipientSource {
   city: string | null;
   email: string | null;
   phone: string | null;
+  targetLocation: string | null;
 }
 
 export function adaptCandidateToRecipient(c: CandidateRecipientSource): TemplateRecipient {
@@ -47,7 +47,7 @@ export function adaptCandidateToRecipient(c: CandidateRecipientSource): Template
     city: c.city,
     email: c.email,
     phone: c.phone,
-    targetLocations: null,
+    targetLocations: c.targetLocation,
   };
 }
 

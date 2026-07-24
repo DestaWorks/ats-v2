@@ -2,13 +2,18 @@ import "server-only";
 import { searchNppes } from "@/server/integrations/nppes";
 import { leadRepository } from "@/server/repositories/lead.repository";
 import { candidateRepository } from "@/server/repositories/candidate.repository";
+import { openRoleRepository } from "@/server/repositories/open-role.repository";
 import { classifyDiscoverRow, type DupCandidateSets } from "@/lib/rules/discover-dedupe";
-import { TAXONOMY_OPTIONS } from "@/lib/constants";
+import { TAXONOMY_OPTIONS, taxonomyForCredential } from "@/lib/constants";
 import { writeAudit } from "@/server/db/audit";
 import { withTransaction } from "@/server/db/with-transaction";
 import { checkRateLimit } from "@/server/http/rate-limit";
+import { AppError } from "@/server/http/app-error";
 import type { AuthUser } from "@/server/auth/guards";
 import type {
+  CoverageGapRowDTO,
+  CoverageGapSupplyDTO,
+  CoverageGapSupplyQuery,
   DiscoverAddToSourcingInput,
   DiscoverResultItemDTO,
   DiscoverSearchQuery,
@@ -189,5 +194,59 @@ export const discoverService = {
     }
 
     return { added: kept.length, skipped: input.rows.length - kept.length };
+  },
+
+  /**
+   * Coverage-gap widget (Wave 5.5 backlog, legacy Drop 68 "Coverage Gaps"): open-role demand vs.
+   * sourced/pipeline supply, grouped by (credential, state). Three grouped queries joined
+   * in-memory by combo key — cheaper than one query per combo. NPPES supply is NOT included here
+   * (see `supplyForCombo`) — that's a live external call, kept lazy/on-demand per combo instead of
+   * fired for every row on every page load.
+   */
+  async coverageGaps(): Promise<CoverageGapRowDTO[]> {
+    const [roleGroups, poolGroups, pipelineGroups] = await Promise.all([
+      openRoleRepository.groupOpenByCredentialState(),
+      leadRepository.groupByCredentialState(),
+      candidateRepository.groupActiveByCredentialState(),
+    ]);
+
+    const key = (credential: string | null, state: string | null) => `${credential}::${state}`;
+    const poolByKey = new Map(poolGroups.map((g) => [key(g.credential, g.state), g._count._all]));
+    const pipelineByKey = new Map(
+      pipelineGroups.map((g) => [key(g.credential, g.state), g._count._all]),
+    );
+
+    return roleGroups
+      .map((g) => ({
+        credential: g.credential!,
+        state: g.state!,
+        roleCount: g._count._all,
+        poolCount: poolByKey.get(key(g.credential, g.state)) ?? 0,
+        pipelineCount: pipelineByKey.get(key(g.credential, g.state)) ?? 0,
+      }))
+      .sort((a, b) => b.roleCount - a.roleCount);
+  },
+
+  /** Live NPPES supply for one (credential, state) combo — lazy/on-demand, rate-limited. */
+  async supplyForCombo(
+    query: CoverageGapSupplyQuery,
+    user: AuthUser,
+  ): Promise<CoverageGapSupplyDTO> {
+    const taxonomyOpt = taxonomyForCredential(query.credential);
+    if (!taxonomyOpt) {
+      throw new AppError("BAD_REQUEST", "No NPPES supply lookup available for this credential yet");
+    }
+
+    checkRateLimit(`discover-supply:${user.id}`, { limit: 20, windowMs: 60_000 });
+
+    const { results } = await searchNppes({
+      taxonomyDescription: taxonomyOpt.query,
+      state: query.state,
+    });
+    const matched = results.filter((r) => {
+      const tax = r.taxonomies.find((t) => t.primary) ?? r.taxonomies[0];
+      return tax?.desc === taxonomyOpt.matchDesc;
+    });
+    return { supply: matched.length };
   },
 };

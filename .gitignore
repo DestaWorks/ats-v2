@@ -42,3 +42,4 @@ yarn-error.log*
 # Never committed: keep it on the dev machine, not in the shared repo.
 /legacy/
 .vercel
+.env*

@@ -223,3 +223,27 @@ describe("count / groupByStatusFiltered", () => {
     expect("status" in arg.where).toBe(false); // status is NOT applied (board groups across statuses)
   });
 });
+
+describe("topOverdue — AI Pipeline Health strip's context (Wave 5.5 backlog)", () => {
+  it("uses the SAME overdueWhere predicate, team-wide, oldest-in-stage first, capped", async () => {
+    await candidateRepository.topOverdue(5, NOW);
+    const arg = h.findMany.mock.calls[0]![0];
+    expect(arg.where.deletedAt).toBeNull();
+    expect(arg.where.AND).toEqual([overdueWhere(NOW)]);
+    expect(arg.where.createdById).toBeUndefined(); // team-wide, NOT owner-scoped
+    expect(arg.orderBy).toEqual({ stageEnteredAt: "asc" });
+    expect(arg.take).toBe(5);
+  });
+});
+
+describe("groupActiveByCredentialState — Discover coverage-gap widget (Wave 5.5 backlog)", () => {
+  it("groups by (credential, state), active-only, excluding nulls", async () => {
+    await candidateRepository.groupActiveByCredentialState();
+    const arg = h.groupBy.mock.calls[0]![0];
+    expect(arg.by).toEqual(["credential", "state"]);
+    expect(arg.where.deletedAt).toBeNull();
+    expect(arg.where.status).toEqual({ in: [...ACTIVE_STATUS_CODES] });
+    expect(arg.where.credential).toEqual({ not: null });
+    expect(arg.where.state).toEqual({ not: null });
+  });
+});

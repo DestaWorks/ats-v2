@@ -322,6 +322,24 @@ export const candidateRepository = {
   },
 
   /**
+   * Active (non-terminal, non-deleted) candidates grouped by (credential, state) — Discover's
+   * coverage-gap widget's "pipeline" count (Wave 5.5 backlog, legacy Drop 68). Rows with either
+   * field null are excluded.
+   */
+  groupActiveByCredentialState(tx?: Prisma.TransactionClient) {
+    return db(tx).candidate.groupBy({
+      by: ["credential", "state"],
+      where: {
+        deletedAt: null,
+        status: { in: [...ACTIVE_STATUS_CODES] },
+        credential: { not: null },
+        state: { not: null },
+      },
+      _count: { _all: true },
+    });
+  },
+
+  /**
    * Per-status counts with the shared (non-status) board filters applied — the board's TRUE
    * per-column totals in ONE query. `status` is intentionally dropped (the board groups ACROSS
    * statuses); every other filter (track/client/search/tags/licenseStatus/mine/overdue/stuck) counts.
@@ -348,6 +366,21 @@ export const candidateRepository = {
       take: limit,
     });
     return rows.map(decryptRow);
+  },
+
+  /**
+   * Team-wide (no owner scope) longest-overdue candidates, capped small — the AI Pipeline Health
+   * strip's context (Wave 5.5 backlog, legacy `ats_pipeline_health`). Same `overdueWhere` predicate
+   * `listBoard`'s `meta.overdue` and `alertBuckets`'s per-owner bucket already use. Only
+   * non-PII columns are selected → no crypto.
+   */
+  async topOverdue(limit: number, now: Date, tx?: Prisma.TransactionClient) {
+    return db(tx).candidate.findMany({
+      where: { deletedAt: null, AND: [overdueWhere(now)] },
+      select: { id: true, name: true, status: true, clientId: true, stageEnteredAt: true },
+      orderBy: { stageEnteredAt: "asc" },
+      take: limit,
+    });
   },
 
   /**

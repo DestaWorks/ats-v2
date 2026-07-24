@@ -113,6 +113,18 @@ export const leadRepository = {
   },
 
   /**
+   * Non-deleted leads grouped by (credential, state) — Discover's coverage-gap widget's "sourcing
+   * pool" count (Wave 5.5 backlog, legacy Drop 68). Rows with either field null are excluded.
+   */
+  groupByCredentialState(tx?: Prisma.TransactionClient) {
+    return db(tx).sourceLead.groupBy({
+      by: ["credential", "state"],
+      where: { deletedAt: null, credential: { not: null }, state: { not: null } },
+      _count: { _all: true },
+    });
+  },
+
+  /**
    * Lean projection for the Open Roles matchers (`RuleLead` scoring only reads these 6 columns) —
    * every non-deleted lead, unbounded (the matchers score the whole active pool, not one page).
    * Skips PII/large columns (email, phone, notes, tags, …) the scorers never touch.

@@ -179,7 +179,7 @@ share a database.** *(`zyx.com` below is a placeholder for the real domain.)*
 > to the new app — there is never a window where a legacy promote writes a candidate the new
 > pipeline can't see.
 
-### 2.1 Pipeline (Module 3) — brings `saved_views`  🟡 *(board + list + polish done 2026-07-10, saved_views done 2026-07-15 — open: park/snooze, AI health strip)*
+### 2.1 Pipeline (Module 3) — brings `saved_views`  🟡 *(board + list + polish done 2026-07-10, saved_views done 2026-07-15, AI health strip + saved_views-on-candidates done 2026-07-24 — open: park/snooze)*
 - [x] Candidate service: `move(id, toStatus)` — `STAGE_REQUIRED` gate, `stage_history` + audit, in a transaction *(shipped Wave 1.1)*.
 - [x] `GET /api/candidates` — **funnel-grouped** board data + filters (track/client/search/includeTerminal).
 - [x] `POST /api/candidates/:id/move` route (gated; returns only pipeline fields — no PII).
@@ -189,8 +189,20 @@ share a database.** *(`zyx.com` below is a placeholder for the real domain.)*
 - [x] Tests: move gating (single + bulk STAGE_BLOCKED), funnel grouping, exact optimistic-revert, no-PII-on-move. Reviewed (architect→backend→frontend→review; M1 PII-over-return fixed, M2 client gate pre-check deferred w/ sign-off). **161 tests, build green.**
 - [x] Follow-ups shipped (2026-07-07..10, PR #19): `/candidates` table view w/ server-side sort/filter/OFFSET pages; filter chips (mine/overdue/stuck/hot/needs-verification) + owner filter + hide-empty + per-column avg-days; bulk-select UI; card scoring vs `client_rules` (+ advisory auto-DQ flags); client-side gate pre-check (board select + detail MOVE-TO pills dim invalid targets).
 - [x] **`saved_views` (2026-07-15):** personal, per-user saved filter combos — `SavedView` model (`scope` discriminates pipeline vs. candidates so the two incompatible URL param sets never collide; `query` is the raw `searchParams` string, not a structured/parsed shape; hard delete, no soft-delete — matches `DailyTarget`/`JournalGoal`, not `CandidateNote`/`RoleNote`). `savedViewService` (`list`/`create`/`remove`, ownership-scoped authZ — a compound `(id, userId)` delete match, `NOT_FOUND` on any mismatch so the error can't enumerate other users' ids) + `GET`/`POST /api/saved-views`, `DELETE /api/saved-views/:id`. Wired into the Pipeline board only (`SavedViewsBar`, a "+ Save view" trigger + a "VIEWS:" chip row, legacy `pSavedViews` parity but DB-backed instead of `localStorage`); the candidates-list wiring is a cheap follow-up, not built yet. 5 new tests (ownership isolation + create round-trip); full stack verified against the real dev server + Postgres (create/list/duplicate-409/delete/persist-after-reload).
-- [ ] **Still deferred:** pipeline park/snooze (product decision); AI health strip (`server/ai/pipeline-health`). *(TanStack Query dropped — plain fetch + RSC re-seed proved sufficient; formalized as DECISIONS D7.)*
-- **Done-when:** recruiters work candidates; gates block invalid moves; every move audited. *(Core loop + views + saved_views ✅; open: park/snooze, AI strip.)*
+- [x] **AI Pipeline Health strip** ✅ *(done 2026-07-24, Wave 5.5 backlog, legacy Drop 53
+      `ats_pipeline_health`)* — `server/ai/pipeline-health/pipeline-health.ts` (same `generateAi`
+      pattern as Daily/Weekly Brief), `POST /api/pipeline/health` (`requireUser()` only,
+      rate-limited), a strip above the board (`pipeline/health-strip.tsx`) auto-fetching once on
+      mount + a manual refresh, color-coded 0-40/40-70/70-100 per legacy's own rubric. Context:
+      team-wide active/overdue/stuck counts (same predicates `listBoard`'s `meta` already used) +
+      a new `candidateRepository.topOverdue` (top-5 longest-in-stage, team-wide not per-owner).
+- [x] **`saved_views` on `/candidates`** ✅ *(done 2026-07-24)* — the schema/service/routes/UI
+      component were already scope-generic (built for exactly this reuse in the 2026-07-15 pass);
+      wired `SavedViewsBar scope="candidates"` into `candidates/page.tsx`, zero service changes.
+- [ ] **Still deferred:** pipeline park/snooze (product decision). *(TanStack Query dropped — plain
+  fetch + RSC re-seed proved sufficient; formalized as DECISIONS D7.)*
+- **Done-when:** recruiters work candidates; gates block invalid moves; every move audited. *(Core
+  loop + views + saved_views (both scopes) + AI health strip ✅; open: park/snooze.)*
 
 ### 2.2 Candidate Detail — notes (brings ONLY note tables)  ✅ *(done 2026-07-10 — notes + @mentions + 5-way types + outreach tab; notes ETL deferred to 1.3; design `docs/design/wave-2.3-candidate-detail.md`)*
 - [x] Add `candidate_notes` model → migrated (`add_candidate_notes`); `mentions` model → migrated (`add_mentions_expand_note_types`).
@@ -214,7 +226,18 @@ share a database.** *(`zyx.com` below is a placeholder for the real domain.)*
 
 ### 2.4 Add Candidate (Module 5)  ✅ *(done — legacy field order/labels restored 2026-07-11)*
 - [x] `TelehealthPref` added (nullable column + select, 2026-07-11).
-- [ ] **Target Locations** deferred — legacy `targetLocation` is a **Candidate** field (comma-joined `"State / City"` free text, cascading state→city picker), used ONLY to interpolate `{targetLocations}` into outreach email templates. It does **not** feed `scoreMatch`/`scoreMatchDormant`/Inbound Triage's client matcher, and legacy has **no `client_locations` table** (corrected 2026-07-14 — an earlier note here wrongly assumed a Client-side table gated on Open Roles 3.5; it isn't). Port as a nullable `Candidate.targetLocation` string column whenever outreach-template interpolation is built — not a 3.5 dependency. Legacy `contactSource` is write-only dead data — deliberately NOT ported.
+- [x] **Target Locations** ✅ *(done 2026-07-24, Wave 5.5 backlog)* — legacy `targetLocation` is a
+      **Candidate** field, used ONLY to interpolate `{targetLocations}` into outreach email
+      templates (now built, Wave 4.1). Read `legacy/index.html:9341` directly before porting:
+      legacy's "cascading state→city picker" turned out to be a tiny hardcoded 5-client
+      office-list, not a real dataset — and the field was actually **write-only/dead** in the
+      current legacy source (`ats_add_candidate` never persisted it). Ported as a plain nullable
+      `Candidate.targetLocation` free-text column (matching the actual comma-joined stored shape,
+      not the fake cascade UI) — `createCandidateSchema`/`updateCandidateSchema`, both candidate
+      forms, `CandidateProfileDTO`, and `adaptCandidateToRecipient` (`{targetLocations}` was
+      already a wired fallback-safe token — `fillTemplate` itself needed no changes). It does
+      **not** feed `scoreMatch`/`scoreMatchDormant`/Inbound Triage's client matcher. Legacy
+      `contactSource` is write-only dead data — deliberately NOT ported.
 - [x] `POST /api/candidates` route + `createCandidateSchema` (strict; `licenseNumber` gated on `viewCredentials`; can't set status).
 - [x] Track-aware add-candidate form at `/candidates/new` (clinical/prescriber show credential+license; operations contact-only) → redirects to the new candidate detail. Entry: "+ Add candidate" on the board header.
 - **Done-when:** ✅ manual create works + validated (262 tests, build green).
@@ -237,13 +260,21 @@ share a database.** *(`zyx.com` below is a placeholder for the real domain.)*
 - [x] Port bulk actions + 30s-undo 1:1 (select-all, status/assign/client/delete/log toolbar, undo = bulk restore).
 - **Done-when:** full lead lifecycle + promote → candidate **in Postgres**; historical leads migrated; legacy lead writes frozen/redirected. **Open: leads ETL only.**
 
-### 2.7 Discover / NPPES (Module 7) — moved up with the funnel (find step)  ✅ *(core flow done — 2026-07-15; Coverage Gaps/Boolean Search/contact enrichment out of scope, see below)*
+### 2.7 Discover / NPPES (Module 7) — moved up with the funnel (find step)  ✅ *(core flow done — 2026-07-15; coverage gaps done 2026-07-24; Boolean Search/contact enrichment out of scope, see below)*
 - [x] NPPES search proxy route — no route needed; `/discover` is an RSC read (`discoverService.search()` calls `server/integrations/nppes.ts` directly, matching `docs/CONVENTIONS.md` §5's "RSC reads call services directly" — same pattern as `/sourcing`). Rate-limited per-user (real external-API cost/abuse surface a normal DB read doesn't have).
 - [ ] **`enrich_provider_contact` — deliberately NOT built.** Turned out not to be an AI/Claude feature at all: legacy's version (`legacy/Code.gs:1613-1712`) is a Clay-webhook → Apollo.io → NPPES-phone-fallback waterfall, needing `CLAY_WEBHOOK_URL`/`APOLLO_API_KEY` that don't exist in this repo/env. **Blocked** pending those credentials from Biruh — no route, UI, or feature flag exists for it yet.
-- [ ] **Coverage-gap query — out of scope for this pass** (a separate widget on the same legacy Discover page; not required by the done-when below). A natural, cheap follow-up once core flow is validated.
+- [x] **Coverage-gap widget** ✅ *(done 2026-07-24, Wave 5.5 backlog, legacy Drop 68 "Coverage
+      Gaps")* — a collapsible section above the search form (`discover/coverage-gaps.tsx`): open
+      `OpenRole`s grouped by (credential, state) vs. sourced (`SourceLead`) + pipeline
+      (`Candidate`) counts (`discoverService.coverageGaps`, RSC-direct, no self-fetch — matches
+      the search's own pattern; 3 grouped repo queries joined in-memory, not one query per combo).
+      NPPES supply stays **lazy/on-demand per row** (`GET /api/discover/coverage-gaps/supply`,
+      rate-limited, reuses `taxonomyForCredential`/`searchNppes`) rather than firing on page load —
+      legacy's 7-day client cache wasn't worth replicating for a first cut. `gap = max(0, supply -
+      pool - pipeline)`, capped at NPPES's own 50-result limit, matching legacy's cap.
 - [x] Cross-system dedupe helper — **NPI-primary, name-fallback** (not email-primary — NPPES results carry an NPI, not an email). Pure function `classifyDiscoverRow` (`src/lib/rules/discover-dedupe.ts`, unit-tested), checks a lead-NPI match, then a lead-name match, then a candidate-name match (candidate wins — further down the funnel). `SourceLead.npi String? @unique` added; deliberately no `Candidate.npi` (see the migration's/service's doc comments for why).
 - [x] Add-to-sourcing route — `POST /api/discover/add` (`discoverService.addToSourcing`), bulk-creates via `leadRepository.createMany` with `source` forced server-side to `"NPPES"` (added to the `SOURCES` enum so it survives promote), audited, re-derives the dedupe check server-side (never trusts the client's search-time `dupStatus`).
-- [x] Port search + results table + verify links 1:1 — `/discover` (nav item after Sourcing): search form (provider type/state/city/name — NPPES itself requires at least one of type/city/name, not state alone) + results table (bulk-select "new" rows, target-client picker, "Add N to Sourcing") + verify links (reused existing `stateBoardLink()`, not extended beyond its current 4 states — a separate follow-up). **Coverage gaps not ported** (see above).
+- [x] Port search + results table + verify links 1:1 — `/discover` (nav item after Sourcing): search form (provider type/state/city/name — NPPES itself requires at least one of type/city/name, not state alone) + results table (bulk-select "new" rows, target-client picker, "Add N to Sourcing") + verify links (reused existing `stateBoardLink()`, not extended beyond its current 4 states — a separate follow-up).
 - **Done-when:** ✅ search → dedupe → add to sourcing — all on the new app alongside promote + pipeline. Verified against the live NPPES API end-to-end (real provider results, NPI values, taxonomy labels rendering; insufficient-criteria and empty-query cases handled gracefully) — the add-to-sourcing *write* itself not yet exercised against the shared dev/demo DB (same caution as recent features).
 
 ### 2.8 Inbound Triage (Sourcing/CRM) *(net-new build task — was missing)*  ✅ *(done — PR #24, 2026-07-11)*
@@ -301,7 +332,8 @@ format (blocks 1.3/1.4). *Trash auto-purge sign-off resolved 2026-07-14 — see 
 - [x] Overview port: "No targets" banner (leadership gets Set-targets modal — legacy sent them to the Brief page), TODAY'S TARGETS strip (serif x/y + 9–5 pace status), End-of-Shift modal pre-filled from live actuals, "Since you closed" recap (localStorage last-seen + 30s dwell, buckets from DOMAIN tables so no audit capability needed; mentions live in the Alerts bell).
 - [x] Daily Log & Journal page (`/daily-log`, nav item): tenure-ramp phase (weekNum from the USER's start date, not a hardcoded epoch) + 🔥 streak, auto-capture tiles, once-a-day self-report (409 on resubmit; autos snapshotted server-side), log history, weekly goals (REAL toggles — legacy appended duplicates), journal notes.
 - [x] **Per-client sourcing breakdown (2026-07-15):** legacy never had a *display* grid for this — it was an optional input (a row of small per-client count fields) on the Daily Log self-report and the End-of-Shift modal, tracking "where sourcing effort went." Ported input-only, matching legacy exactly: `DailyActual.perClientSourcing`/`DailyLog.perClient` (JSON `{clientId:count}`, no FK, already in the schema but previously unwired) now flow through `saveActualsSchema`/`submitLogSchema` → `dailyService`. Daily Log excludes the 2 non-recruiting placeholder clients ("NJ-Psych Candidates"/"Future Potential Clients"); the EOS modal doesn't (legacy's own asymmetry, replicated intentionally). No new display/report view — that's a separate, unscoped ask if wanted later.
-- [ ] **Open:** `ats_targets_suggest` AI suggest (deferred — needs the AI provider plumbing, D. AI-agnostic); 7-day trend / predictive pacing / Indeed-credit-burn / admin team-breakdown widgets; manager feedback notes.
+- [x] `ats_targets_suggest` AI suggest ✅ *(done 2026-07-23, Wave 5.1 — the AI-provider plumbing this was deferred pending now exists; `POST /api/targets/suggest` + the "✨ AI Suggest" button on the manager target-setting modal, `dashboard/daily-strip.tsx`.)*
+- [ ] **Still open:** 7-day trend / predictive pacing / Indeed-credit-burn / admin team-breakdown widgets; manager feedback notes.
 - **Done-when:** the daily loop (Overview + Daily Log) runs on live data early — **it is not deferrable.**
 
 ### 3.2 Smarter Sourcing (Biruh priority #4) *(net-new — distinct from Open-Roles matching)*  ✅ *(done — 2026-07-16)*
@@ -443,42 +475,185 @@ format (blocks 1.3/1.4). *Trash auto-purge sign-off resolved 2026-07-14 — see 
       scans ALL of a client's `crm_*` activity (any task/meeting/contact/other-deal touch), so the
       same inflated score applies to every deal card — moot for now since no score is computed,
       but the later probability slice should use `deal.updatedAt` instead.
-- [ ] Gmail sync route + email rendering.
-- [ ] **Shared email-sentiment/response scoring service (build ONCE).**
-- [ ] Churn-risk analytic (uses shared scorer) + UI.
-- [ ] Contact-strength + whitespace analytic (uses shared scorer) + UI.
-- [ ] Deal close-probability analytic (uses shared scorer) + UI.
-- [ ] Revenue/profitability + health score + compare dashboard + UI.
-- [ ] AI Client Workspace route + UI.
+- [ ] Gmail sync route + email rendering. *(Needs Biruh's decisions first: whose account syncs,
+      OAuth app/consent-screen setup, PII/retention posture — flagged, not started.)*
+- [ ] **Shared email-sentiment/response scoring service (build ONCE).** *(Depends on Gmail sync.)*
+- [ ] Churn-risk analytic (uses shared scorer) + UI. *(Depends on the shared scorer.)*
+- [ ] Contact-strength + whitespace analytic (uses shared scorer) + UI. *(Depends on the shared scorer.)*
+- [ ] Deal close-probability analytic (uses shared scorer) + UI. *(Depends on the shared scorer.)*
+- [x] **Revenue/profitability + Health Score + Compare dashboard** ✅ *(done 2026-07-24 — confirmed
+      via research this does NOT depend on Gmail/the shared scorer.)* Added `Client.monthlyRate`/
+      `avgPlacementFee`/`grossMargin` + a new `ClientNote` model (a real gap: Health Score's
+      "communication recency" factor and Compare's "Last Contact" column both needed a manual
+      call/note log legacy calls `crm_note`, which this rebuild never had — filled it, not
+      worked around it). **Fixed, not ported**: legacy computed client health 3 DIFFERENT,
+      independently-drifted ways (Overview tab, Compare's own "Quick Health," and a separate
+      Churn-Risk %) — `lib/rules/client-health.ts`'s `computeHealthScore()` is now the ONE
+      formula both the detail page and Compare call (verified live: identical score for the same
+      client from both endpoints). Deliberately **dropped legacy's 4th "onboarding steps"
+      factor** (reweighted to 3: pipeline/communication/tasks) — that data source is a
+      checklist concept never built in this rebuild and never asked for in this plan; inventing
+      a whole onboarding subsystem just to satisfy one formula term was out of scope.
+      Revenue's `hoursInvested` proxy is scoped to REAL touch tables (notes/tasks/meetings/deals)
+      rather than a generic activity-log scan, so it stays accurate once Gmail sync lands later
+      (won't silently inflate from auto-pulled emails). New `/crm/compare` page + Health/AI-
+      Workspace tabs on `/crm/:id`.
+- [x] **AI Client Workspace** ✅ *(done 2026-07-24 — confirmed via research this is only a SOFT
+      dependency on Gmail: it reads Gmail-sourced sentiment/summary fields as optional context
+      when present, but degrades gracefully to zero Gmail data today.)* Legacy called raw Gemini
+      REST directly (`Code.gs:4694-4843` — the exact anti-pattern Wave 5.1 already fixed for
+      Daily/Weekly Brief); ported through the same `generateStructured()`/`AppError`-mapping
+      wrapper instead. That wrapper (`generateBrief` → renamed `generateAi`) was relocated from
+      `ai/briefs/shared.ts` to `ai/shared.ts` since it's now used by 2 unrelated modules, not
+      brief-specific. "Log to CRM" writes a REAL `ClientNote` row — legacy's version wrote a
+      truncated, stringly-typed activity-log blob.
 - [ ] **ETL: backfill clients / contacts / deals** from the Sheet — `legacy_id` idempotent upsert, **email-primary dedupe** (name secondary/manual) on contacts, keep-newest+flag merge; freeze the CRM source at final backfill. *(Wave-1 minimal `clients` seed is upgraded in place, not duplicated.)*
 - [ ] **ETL: reconstruct historical activity** into `activity_log` where recoverable (carry `legacy_id`).
 - **Done-when:** clients managed end-to-end ✅; contacts managed end-to-end ✅; tasks/meetings/
   timeline managed end-to-end ✅; deals managed end-to-end ✅ (kanban CRUD; probability analytic
-  deferred to the shared-scorer slice below); historical clients/contacts/deals migrated ⬜;
-  analytics spot-checked vs legacy ⬜ (not started).
+  deferred to the shared-scorer slice below); Revenue/Health-Score/Compare ✅; AI Client
+  Workspace ✅; historical clients/contacts/deals migrated ⬜; the Gmail-dependent chain
+  (sentiment scorer, churn-risk, contact-strength/whitespace, deal-probability) remains the
+  ONLY open flex work in this wave, gated on Biruh's Gmail/OAuth/PII decisions.
 
-### 4.3 Client Portal (Module 14)
-- [ ] Read-only portal data route + `?portal=true` mode.
-- [ ] Request-access + post-a-role routes.
-- [ ] Port portal view 1:1; isolate from internal RBAC.
-- **Done-when:** shareable read-only client view works.
+### 4.3 Client Portal (Module 14) ✅ *(done 2026-07-23)*
+- [x] **NOT ported 1:1** (scope correction, see below) — legacy's external `?portal=true` portal
+  was never actually functional in production: its own auth gate unconditionally required a
+  session token the frontend never sent (every `portal_*` call 401s, full stop), and even past
+  that, handlers resolved "which client" from a client-supplied `email` in the request body — a
+  textbook IDOR letting anyone read any other client's full PII by swapping the email. `portal_data`
+  also sent full candidate rows (email/phone/licenseNumber/resume URLs) minus a 3-column denylist,
+  regardless of what the UI rendered.
+- [x] **New auth mechanism: per-contact magic link**, since neither `DECISIONS.md` nor
+  `STACK-ARCHITECTURE.md` define one (`DECISIONS.md`'s only word was "gets extra security/QA
+  budget"). An Owner/Admin generates a link for a specific `ClientContact` (new
+  `ClientContact.portalEnabled` flag + `ClientPortalToken` model, only the SHA-256 hash ever
+  stored); visiting it sets a short-lived signed HttpOnly cookie; every `/portal/*`/
+  `/api/portal/*` request resolves identity from that cookie server-side ONLY — never from
+  anything the client sends. Closes the legacy IDOR by construction. Generating a new link
+  auto-revokes the prior one (one live link per contact); revocation is checked on every request
+  (DB-backed), not just cookie expiry — verified live.
+- [x] Read-only portal data: `/portal` (RSC) shows the curated visible-pipeline-stage set (kept
+  from legacy — hiding New/Not-Qualified/No-Response/Client-Rejected/Future-Pipeline from an
+  external client is sound UX, not a bug) via an **allow-list DTO** (`PortalCandidateDTO`/
+  `PortalRoleDTO` name every exposed field explicitly — no email/phone/licenseNumber/npi/notes/
+  documents/internal recruiter attribution) instead of legacy's send-everything-minus-a-denylist
+  approach. Verified live: the rendered page contains zero PII beyond what's allow-listed.
+- [x] `POST /api/portal/roles` — a client posts an open role; `clientId`/`postedByContactId`
+  are always server-set from the resolved cookie identity, never the request body. New
+  `OpenRole.postedByContactId` FK (distinct from the existing free-string `createdById`, which
+  is for staff `User` actors) attributes portal-submitted roles without corrupting that column's
+  meaning. Verified live end-to-end, including the DB-level attribution.
+- [x] Portal-side request-access (`/portal/request-access`, new `PortalAccessRequest` model —
+  deliberately NOT the same table as staff `AccessRequest`, since approving one grants a
+  `ClientContact` a portal token, never one of the 6 internal RBAC roles) + an admin Approve
+  flow (`/admin` → Portal Requests tab) that links to/creates a `ClientContact` and generates a
+  link in one step — fixing legacy's confirmed no-op (`portal_request_access`'s target sheet was
+  never reviewable from anywhere in the Admin Panel).
+- [x] Admin management UI: `/crm/:id` → new **Portal** tab (Owner/Admin only, gated by the
+  previously-unwired `configureClientPortal` capability) — generate/revoke a link per contact,
+  shown once in a dismissible banner (same pattern as Wave 5.3's generated-password banner).
+- **Done-when:** shareable read-only client view works ✅ — verified live against the real dev DB:
+  generated a link, exchanged it, confirmed cookie-scoped identity and zero PII leakage; posted a
+  role and confirmed DB-level attribution; revoked a link and confirmed immediate lockout;
+  submitted + approved + declined portal-access requests, confirming status flips (fixing the
+  legacy no-op) and that re-approval correctly 409s. 972 tests passing (up from 934);
+  `tsc`/`eslint`/`prettier`/`next build` all clean.
 
 ---
 
 # WAVE 5 — Intelligence & Admin (Month 3)
 
-### 5.1 Briefs (Modules 15, 16) — brings brief tables
-- [ ] Add `briefs` model → migrate. *(`targets`/`actuals` + the shared `live-actuals`/`stats-for-range` services already landed in 3.1 — reuse them, do not re-add.)*
-- [ ] One brief engine (`server/ai/briefs`) + generate/save/patterns routes.
-- [ ] Port Daily Brief + Weekly Brief 1:1. *(Overview already shipped in 3.1.)*
-- **Done-when:** briefs generate off live data; numbers agree with the Overview/Daily Log from 3.1.
+### 5.1 Briefs ✅ *(done 2026-07-23 — Daily Brief + Weekly Brief, `docs/MODULE-BREAKDOWN.md` §12/§13
+  — this plan's own "Modules 15, 16" label pointed at the wrong module numbers, MODULE-BREAKDOWN's
+  own 15/16 are Screening Scorecards/CRM; corrected here)*
+- [x] Added `DailyBrief`/`WeeklyBrief` models (one row per period, `date`/`weekStart` unique) →
+      migrated. Reused 3.1's `dailyRepository`/`liveActuals` — extended it (per this doc's own
+      3.1 note) with 3 new batched `groupBy` range-aggregation methods (sourced/outreach/response
+      counts per associate over an arbitrary window) instead of looping per-user; "hires"/"promoted"
+      sourced from the existing canonical `stage_history`/audit trail (ONE definition — legacy had
+      2-3 divergent ones for "promoted"/"stuck", consolidated here to what `stage-timing.ts`'s
+      `isStuck`/the Pipeline `stuck` chip already established).
+- [x] `server/ai/briefs/{daily-brief,weekly-brief,weekly-patterns,targets-suggest}.ts` — one
+      `generateStructured()` call each (provider-agnostic, same layer as `extract-inbound.ts`),
+      replacing legacy's raw hardcoded-Gemini-REST calls with no schema enforcement (legacy: a
+      malformed model response silently became `{}`, no user-facing error). Voice/style prompt
+      (Biruh's) ported verbatim, defined once (`lib/constants/briefs.ts`), not copy-pasted 3×.
+      `generate`/`save`/`patterns` routes under `/api/briefs/{daily,weekly}/*` + `/api/targets/suggest`
+      (the previously-3.1-deferred `ats_targets_suggest`, now unblocked — small addition to the
+      existing manager target-setting panel's AI Suggest button).
+- [x] Daily Brief + Weekly Brief ported with deliberate fixes, not 1:1: persists the AI's
+      STRUCTURED output (not legacy's flattened plain-text blob) — legacy's archive only ever
+      restored manual input fields, never the actual saved brief; here, re-visiting a past date
+      shows the real saved content. Weekly Brief's legacy "Anomalies/Funnel/Trends" rolling-window
+      block (~36 unmemoized client-side scans/render, the heaviest render path in the whole legacy
+      app) is intentionally **deferred to 5.2** (Reports + Analytics already owns real
+      time-analysis reporting — building it twice, once rushed here, would be wasted work).
+- **Done-when:** ✅ briefs generate off live context (verified live against the dev DB — save/get
+  round-trip, archive re-fetch, targets-suggest's 403 leadership gate, all confirmed working);
+  numbers reuse the same `dailyRepository`/`stage_history` sources as the Overview/Daily Log from
+  3.1, never a parallel recomputation. **Note:** live AI generation itself could not be exercised
+  in this session's dev environment — `aiEnabled` resolved false locally for EVERY AI feature
+  (including the pre-existing `inbound/triage`, confirmed not a regression), which traced to the
+  local `.env`'s `ANTHROPIC_API_KEY` not actually loading (a `dotenv`-vault-style loader intercepts
+  it — needs a `DOTENV_PRIVATE_KEY`/equivalent that isn't set locally). Not a code defect; flagged
+  for Biruh to confirm the real deployed environment resolves the key normally.
 
-### 5.2 Reports + Perf + Analytics (Modules 18, 19, `vw="kpi"`)
-- [ ] Report services (server-computed): executive, per-client funnel (WoW via stage_history), mass journey (Gantt), pipeline funnel, team performance, source ROI, client portfolio, time analysis, compliance.
-- [ ] **Analytics view (`vw="kpi"`)**: period/user-filtered By-Status/Client/Source breakdowns, Time-to-Fill, Source-of-Hire, and **Client Capacity** (per-client capacity limits + "approaching capacity → open a new req" alert).
-- [ ] CSV export route.
-- [ ] Port report + analytics UIs 1:1.
-- **Done-when:** all reports + analytics compute; Mass Journey renders; Client Capacity alerts; CSV exports.
+### 5.2 Reports + Analytics ✅ *(done 2026-07-24 — `docs/MODULE-BREAKDOWN.md` §18 (Reports) + §25
+  (Standalone Analytics/`kpi`) — this plan's own "Modules 18, 19" label didn't match
+  MODULE-BREAKDOWN's own numbering (same issue found in 5.1), corrected here; "+ Perf" in the
+  original title referred to legacy's separate `vw="perf"` leaderboard, which the task bullets
+  never actually described — confirmed out of scope with Biruh, see below)*
+- [x] Report services (server-computed, `server/services/reports/`): executive, per-client funnel
+      (real WoW via a new `stageHistoryRepository.maxStageOrderAsOf` primitive — legacy's version
+      was a lagged 7d-ago-vs-14d-ago delta shown next to a third, current-day count), mass journey
+      (Gantt, computed server-side and capped at 50 visible rows — median/p90/bottleneck stats
+      still run over the full filtered cohort, never silently), pipeline funnel, team performance,
+      source ROI, client portfolio, time analysis, compliance.
+- [x] **Fixed, not ported**: legacy's `STATUSES.indexOf(status) >= idx` "reached-or-beyond" bug —
+      terminal/rejection status codes sort ABOVE most active stages (order 9-12 vs. Started's 8),
+      so a rejected candidate was silently counted as having "reached" every earlier stage
+      including Placed, in Pipeline Funnel/Source ROI/Team Performance. `maxStageOrderAsOf` fixes
+      this by computing "highest ACTIVE stage ever reached" from real `stage_history`, excluding
+      terminal transitions entirely (`lib/reports/stage-progress.ts`'s `activeOrderAsOf`, unit-
+      tested for exactly this scenario). Also fixed: every time metric now uses `stageEnteredAt`/
+      `placedAt` (already-correct schema columns), never legacy's generic `UpdatedAt`; Time-to-Fill
+      and Source-of-Hire are each computed ONCE (`lib/reports/metrics.ts`), not duplicated with
+      disagreeing definitions across Reports and the KPI view like legacy.
+- [x] **Analytics** (`/analytics`, `viewAnalytics`-gated) — By-Status/Client/Source breakdowns,
+      Time-to-Fill, Source-of-Hire, and **Client Capacity**. Client Capacity numerator is
+      **all-time cumulative placements** at that client vs. the real `Client.capacity` column
+      (confirmed with Biruh — legacy's period-filtered numerator barely ever fired outside "All
+      Time"); no hardcoded per-client capacity map like legacy's three separate ones.
+- [x] CSV export (`GET /api/reports/export`) — a genuinely new route; legacy's export was 100%
+      client-side (blob-URL trick, no backend call at all).
+- [x] **Trends** ✅ *(done 2026-07-24, the "heaviest reports" flex item from D5/5.4 — legacy's
+      rolling W/M/Q Anomalies/Funnel/Trends block, Weekly Brief's "DROP 50",
+      `legacy/index.html:6379-6557`)*: unfiltered/team-wide (matches legacy's own scope, distinct
+      from the 9 filtered reports above). 6 metrics × 3 rolling horizons (7d/30d/90d) + prior
+      period, reusing the ALREADY-FIXED Wave 5.1 primitives instead of legacy's per-metric bugs —
+      "Promoted" used candidate-`Tags` text-matching in legacy (one of two divergent app-wide
+      definitions, now the one canonical audit-trail count); "Submitted"/"Hires" used
+      `Status===X && UpdatedAt in range` (a generic last-write timestamp any unrelated edit
+      resets), now real `stage_history` FLOW counts (entered-that-status-in-window, not a
+      status-now snapshot). Anomaly thresholds ported verbatim (noise floor <5 on both sides,
+      "new" at lastWeek=0 && thisWeek>=10, else flag at ≥30% WoW) — unit-tested for all 4 branches.
+      Funnel conversion-%-of-preceding-stage math also unit-tested. Goal column: Sourced/Outreach
+      = sum of the current rolling week's `DailyTarget`s (one new `targetsForDateRange` query);
+      Hires = a hardcoded `DEFAULT_WEEKLY_PLACEMENT_GOAL=4` (legacy's own default — no app-wide
+      settings mechanism exists yet to make this configurable, flagged as a known gap not a bug).
+- [x] `/reports` (10 tabs) + `/analytics` (single page), both leadership-gated server-side
+      (`viewReports`/`viewAnalytics`) — legacy had a real gate mismatch (nav showed Reports to all
+      leadership, but the view body only rendered for the literal `admin` role) and ZERO server
+      gating on `kpi`/`activity`/`perf` (UI-hidden only, trivially bypassed); every route here is
+      `requireCapability`-gated regardless of what the client sends.
+- [x] `vw="perf"` (KPI-targets-vs-actuals leaderboard) confirmed **out of scope** for this wave —
+      its underlying data (targets/actuals) already shipped in 3.1/5.1; the leaderboard UI itself
+      is a small, separate follow-up if wanted.
+- **Done-when:** ✅ all reports + analytics compute (verified live against the dev DB, including a
+  real Client Capacity alert round-trip — set a client's capacity to 1, confirmed the `red`/
+  `approachingCapacity` alert fired, reverted); Mass Journey renders; Client Capacity alerts;
+  CSV exports (verified headers + RFC4180 escaping on real data with a comma in a candidate name).
 
 ### 5.3 Admin (Module 21) — brings admin tables ✅
 - [x] **No `invites` model** (scope decision, see below) — `access_request` already existed
@@ -528,10 +703,39 @@ format (blocks 1.3/1.4). *Trash auto-purge sign-off resolved 2026-07-14 — see 
 ### 5.4 Flex / risk-buffer — first to slip (D5)
 > **The deferrable/flex items are CRM analytics (4.2 heavy analytics) + the heaviest reports (5.2)
 > + these low-priority ports** — **never** the daily loop, pipeline, or funnel. (Daily Log & Overview
-> moved to 3.1 and are *not* deferrable.)
-- [ ] My Profile (avatar/bio/password/signature) — port 1:1.
-- [ ] Learn tutorial — port 1:1.
-- **Done-when:** each works. *(If time runs short: CRM analytics + heaviest reports flex to a fast-follow first, then these.)*
+> moved to 3.1 and are *not* deferrable.) *(2026-07-24: "the heaviest reports" — the rolling
+> Anomalies/Funnel/Trends block — shipped as part of 5.2's Trends report. Revenue/Health-Score/
+> Compare and AI Client Workspace also shipped (2026-07-24) — confirmed via research neither
+> hard-depends on Gmail. My Profile + Learn tutorial (below) also shipped (2026-07-24). The
+> remaining flex work is now ONLY 4.2's Gmail-dependent chain: Gmail sync → shared sentiment
+> scorer → churn-risk/contact-strength+whitespace/deal-probability — blocked on Biruh's
+> account/OAuth/PII decisions.)*
+- [x] **My Profile** ✅ *(done 2026-07-24, legacy `ProfileView` `index.html:8934-9005`)* —
+      `/profile`: avatar (client-side canvas-resize to 160×160 JPEG data URI, uploaded via Better
+      Auth's own `updateUser({image})` — reuses the existing `User.image` core column instead of
+      adding a redundant one), name/email/role (read-only, from session), Bio/Phone/Location form
+      (`User.bio/phone/location`, new columns, `PATCH /api/me/preferences`), the existing
+      `SignatureEditor` embedded as-is (made reusable via an optional `onCancel` prop), and Change
+      Password wired straight to Better Auth's native `changePassword` endpoint (server-hashed) —
+      legacy posted to its own `change_password` event with a plaintext current-password
+      comparison against the custom auth sheet (one of the flagged legacy security findings); no
+      custom backend logic needed or wanted here.
+- [x] **Learn tutorial** ✅ *(done 2026-07-24, legacy `index.html:5201-5275`)* — `/learn`: 8
+      chapters ported verbatim (title/blurb/steps/"Try it" deep links onto real app routes),
+      progress bar, mark complete/not-complete. **Fixed, not ported**: legacy tracked progress in
+      unscoped `localStorage` (`desta_learn_progress`) — per-device, never synced, the same class
+      of bug Wave 4.1 already fixed once for signature/sticky-note. Now real server-backed
+      per-user state (`User.learnProgress Json`, `GET`/`PATCH /api/me/learn-progress`). Legacy's
+      tutorial GIF media was never actually produced (confirmed in the source — it shows a "record
+      a Loom and drop it here" placeholder when the file 404s); ported as the same placeholder,
+      not invented.
+- **Done-when:** each works. ✅ Verified live against the real dev DB: set bio/phone/location →
+  persisted/redisplayed; uploaded an avatar via `updateUser` → persisted on `User.image`; changed
+  password via the new form → old password correctly rejected, new password signed in → reverted
+  to the dev seed password (`DestaDev123!` for `leliso@desta.works`); marked 2 Learn chapters
+  complete then unmarked one → per-user progress persisted correctly across requests. All test
+  data (avatar/bio/phone/location/learn-progress/password) cleaned up afterward. 1106/1106 tests
+  passing (up from 1085); `tsc`/`eslint`/`prettier`/`next build` all clean.
 
 ---
 

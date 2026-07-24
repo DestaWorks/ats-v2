@@ -182,6 +182,17 @@ export function AddCandidateForm({
             ))}
           </Select>
         </Field>
+        <Field
+          label="Target Locations"
+          htmlFor="ac-target-location"
+          error={fieldError(form, "targetLocation")}
+        >
+          <Input
+            id="ac-target-location"
+            placeholder="Danbury CT, Stamford CT"
+            {...form.register("targetLocation", { setValueAs: emptyToNull })}
+          />
+        </Field>
         <Field label="Employer" htmlFor="ac-employer" error={fieldError(form, "employer")}>
           <Input id="ac-employer" {...form.register("employer", { setValueAs: emptyToNull })} />
         </Field>

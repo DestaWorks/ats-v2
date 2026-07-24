@@ -23,6 +23,7 @@ import { SavedViewsBar } from "../lib/saved-views-bar";
 import { BoardColumn } from "./board-column";
 import { BoardFilters, type ClientOption } from "./board-filters";
 import { CandidateCardContent, CandidateCardFooterPreview } from "./candidate-card";
+import { HealthStrip } from "./health-strip";
 import { TerminalRail } from "./terminal-rail";
 import { applyBoardMove } from "./lib/optimistic-move";
 import { fetchBoard, fetchColumnPage, postMove } from "./lib/board-fetch";
@@ -189,6 +190,7 @@ export function PipelineBoard({
 
   return (
     <div className="flex flex-col gap-4">
+      <HealthStrip />
       <BoardFilters
         clients={clients}
         owners={owners}

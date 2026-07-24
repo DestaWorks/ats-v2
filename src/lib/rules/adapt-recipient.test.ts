@@ -20,6 +20,7 @@ const CANDIDATE: CandidateRecipientSource = {
   city: "Hartford",
   email: "jane@example.com",
   phone: "555-1234",
+  targetLocation: "Danbury CT, Stamford CT",
 };
 
 const LEAD: LeadRecipientSource = {
@@ -48,7 +49,7 @@ describe("adaptCandidateToRecipient", () => {
       city: "Hartford",
       email: "jane@example.com",
       phone: "555-1234",
-      targetLocations: null,
+      targetLocations: "Danbury CT, Stamford CT",
     });
   });
 
@@ -56,6 +57,12 @@ describe("adaptCandidateToRecipient", () => {
     const { licenseNumber, ...rest } = CANDIDATE;
     void licenseNumber;
     expect(adaptCandidateToRecipient(rest).licenseNumber).toBeNull();
+  });
+
+  it("carries a null targetLocation through as null", () => {
+    expect(
+      adaptCandidateToRecipient({ ...CANDIDATE, targetLocation: null }).targetLocations,
+    ).toBeNull();
   });
 });
 
