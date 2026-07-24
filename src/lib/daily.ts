@@ -42,6 +42,16 @@ export function dayWindow(key: string, tzOffsetMinutes: number): { start: Date; 
   return { start: new Date(start), end: new Date(start + 86_400_000) };
 }
 
+/**
+ * The UTC instant window `[start, end)` of a Monday-anchored ISO week (7 days from `weekStart`,
+ * the ONE week definition — see module doc). Used by Wave 5.1's Weekly Brief so "this week"
+ * always means the same thing as `mondayOf` everywhere else in the app.
+ */
+export function weekWindow(weekStart: string, tzOffsetMinutes: number): { start: Date; end: Date } {
+  const { start } = dayWindow(weekStart, tzOffsetMinutes);
+  return { start, end: new Date(start.getTime() + 7 * 86_400_000) };
+}
+
 /** Pace status vs a 9am–5pm linear ramp (legacy `expectedByNow`): hit / on pace / behind. */
 export type PaceStatus = "hit" | "on pace" | "behind";
 export function paceStatus(actual: number, target: number, hour: number): PaceStatus {

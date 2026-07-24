@@ -20,3 +20,4 @@ export * from "./screening";
 export * from "./templates";
 export * from "./client-contact";
 export * from "./portal";
+export * from "./briefs";

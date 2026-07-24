@@ -918,3 +918,61 @@ model ClientMatchProfile {
 
   @@map("client_match_profiles")
 }
+
+// --- Briefs (Wave 5.1, legacy `Daily_Briefs`/`Weekly_Briefs` sheets) ---
+// One row per period (team-wide operational document, not per-user — `savedById` is
+// attribution only, matching legacy's `SavedBy` column). Stores the AI's STRUCTURED output
+// (not a flattened text blob like legacy) so a saved brief can actually be redisplayed later —
+// legacy's archive only ever restored the manual input fields, never the brief content itself.
+
+/// Daily Brief (legacy `daily_brief_generate`/`daily_brief_save`).
+model DailyBrief {
+  id   String @id @default(cuid())
+  date String @unique // "YYYY-MM-DD"
+
+  headline       String?
+  exceptions     Json? // string[]
+  yesterdayCheck Json?
+  clientCards    Json?
+  perAssociate   Json?
+  teamPulse      String?
+
+  priorityClientId String?
+  shiftA           String?
+  shiftB           String?
+  watchItems       String?
+
+  savedById String?
+  savedAt   DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@map("daily_briefs")
+}
+
+/// Weekly Brief (legacy `weekly_brief_generate`/`weekly_brief_save`). Patterns are generate-only,
+/// never persisted (matches legacy — `weekly_brief_patterns` output was never saved either).
+model WeeklyBrief {
+  id        String @id @default(cuid())
+  weekStart String @unique // "YYYY-MM-DD", Monday of the ISO week (mondayOf)
+
+  headline      String?
+  kpiNarrative  String?
+  clientCards   Json?
+  perAssociate  Json?
+  lastWeekCheck Json?
+  decisions     Json?
+
+  highlights         String?
+  blockers           String?
+  nextWeekPriorities String?
+
+  statsSnapshot Json? // raw stats the brief was generated from — audit trail, not redisplayed
+
+  savedById String?
+  savedAt   DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@map("weekly_briefs")
+}

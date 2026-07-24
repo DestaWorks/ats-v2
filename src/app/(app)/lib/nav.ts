@@ -18,6 +18,8 @@ export interface NavItem {
 export const BASE_NAV_ITEMS: readonly NavItem[] = [
   { href: "/dashboard", label: "Overview" },
   { href: "/daily-log", label: "Daily Log" },
+  { href: "/daily-brief", label: "Daily Brief" },
+  { href: "/weekly-brief", label: "Weekly Brief" },
   { href: "/sourcing", label: "Sourcing" },
   { href: "/discover", label: "Discover" },
   { href: "/pipeline", label: "Pipeline" },
