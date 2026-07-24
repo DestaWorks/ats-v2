@@ -4,6 +4,7 @@ import type {
   DailyTarget,
   JournalEntry,
   JournalGoal,
+  ManagerFeedback,
   Prisma,
 } from "@/generated/prisma/client";
 import { db } from "@/server/db/prisma";
@@ -12,6 +13,7 @@ export type DailyTargetRow = DailyTarget;
 export type DailyLogRow = DailyLog;
 export type JournalEntryRow = JournalEntry;
 export type JournalGoalRow = JournalGoal;
+export type ManagerFeedbackRow = ManagerFeedback;
 
 /** A UTC instant window `[start, end)` (one user-local day, resolved by `lib/daily.dayWindow`). */
 export interface InstantWindow {
@@ -82,6 +84,11 @@ export const dailyRepository = {
       take,
     });
   },
+  /** Every self-reported log across ALL users in a date range (inclusive) — the admin team
+   *  breakdown's input (Wave 3.1 backlog). Mirrors `actualsForRange`'s shape one level up. */
+  logsForDateRange(startDate: string, endDate: string, tx?: Prisma.TransactionClient) {
+    return db(tx).dailyLog.findMany({ where: { date: { gte: startDate, lte: endDate } } });
+  },
 
   // --- journal ---
   createEntry(data: Prisma.JournalEntryUncheckedCreateInput, tx?: Prisma.TransactionClient) {
@@ -110,6 +117,19 @@ export const dailyRepository = {
       data: { done },
     });
     return count;
+  },
+
+  // --- manager feedback (Wave 3.1 backlog, legacy `mgr_feedback`) ---
+  createFeedback(data: Prisma.ManagerFeedbackUncheckedCreateInput, tx?: Prisma.TransactionClient) {
+    return db(tx).managerFeedback.create({ data });
+  },
+  /** Own-record only (callers always pass the session user's own id as `targetUserId`). */
+  feedbackForUser(targetUserId: string, take: number, tx?: Prisma.TransactionClient) {
+    return db(tx).managerFeedback.findMany({
+      where: { targetUserId },
+      orderBy: { createdAt: "desc" },
+      take,
+    });
   },
 
   // --- live-actuals counting predicates (legacy `liveActuals`, server-side) ---

@@ -21,11 +21,14 @@ const h = vi.hoisted(() => ({
     createLog: vi.fn(),
     logFor: vi.fn(),
     logsForUser: vi.fn(),
+    logsForDateRange: vi.fn(),
     createEntry: vi.fn(),
     entriesForUser: vi.fn(),
     createGoal: vi.fn(),
     goalsForWeek: vi.fn(),
     setGoalDone: vi.fn(),
+    createFeedback: vi.fn(),
+    feedbackForUser: vi.fn(),
     countLeadsSourced: vi.fn(),
     countOutreach: vi.fn(),
     countCleanup: vi.fn(),
@@ -72,8 +75,10 @@ beforeEach(() => {
   h.repo.actualFor.mockResolvedValue(null);
   h.repo.logFor.mockResolvedValue(null);
   h.repo.logsForUser.mockResolvedValue([]);
+  h.repo.logsForDateRange.mockResolvedValue([]);
   h.repo.entriesForUser.mockResolvedValue([]);
   h.repo.goalsForWeek.mockResolvedValue([]);
+  h.repo.feedbackForUser.mockResolvedValue([]);
   h.prismaUser.findUnique.mockResolvedValue({ createdAt: new Date("2026-07-01T00:00:00Z") });
 });
 
@@ -226,5 +231,131 @@ describe("dailyService.recap", () => {
     expect(recap.added).toEqual({ count: 4, names: ["A", "B", "C"] });
     expect(recap.moves).toEqual({ count: 1, names: ["Jane"] });
     expect(recap.outreach).toEqual({ count: 2, actors: ["Test User"] }); // distinct actors
+  });
+});
+
+describe("dailyService.addFeedback — Wave 3.1 backlog", () => {
+  const input = { userId: "u2", body: "Great week sourcing!" };
+
+  it("FORBIDDEN for a non-leadership caller (server-side gate, no writes)", async () => {
+    await expect(dailyService.addFeedback(input, h.user as AuthUser)).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+    expect(h.repo.createFeedback).not.toHaveBeenCalled();
+  });
+
+  it("leadership posts with authorId/authorName from the session + audits", async () => {
+    h.userRepo.namesByIds.mockResolvedValue(new Map([["u2", "Associate Two"]]));
+    h.repo.createFeedback.mockResolvedValue({ id: "f1" });
+
+    await dailyService.addFeedback(input, h.owner as AuthUser);
+
+    const [data, tx] = h.repo.createFeedback.mock.calls[0]!;
+    expect(tx).toBe(h.fakeTx);
+    expect(data).toMatchObject({
+      authorId: "o1",
+      authorName: "Owner",
+      targetUserId: "u2",
+      body: "Great week sourcing!",
+    });
+    expect(h.writeAudit.mock.calls[0]![1]).toMatchObject({
+      entity: "manager_feedback",
+      action: "mgr_feedback",
+      actor: "o1",
+    });
+  });
+
+  it("unknown associate → NOT_FOUND", async () => {
+    h.userRepo.namesByIds.mockResolvedValue(new Map());
+    await expect(
+      dailyService.addFeedback({ ...input, userId: "ghost" }, h.owner as AuthUser),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+});
+
+describe("dailyService.teamBreakdown — Wave 3.1 backlog", () => {
+  it("FORBIDDEN for a non-leadership caller (server-side gate, no query)", async () => {
+    await expect(
+      dailyService.teamBreakdown("2026-07-13", h.user as AuthUser),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(h.repo.logsForDateRange).not.toHaveBeenCalled();
+  });
+
+  it("groups self-reported logs by user, summing the 5 metrics + counting days logged", async () => {
+    h.repo.logsForDateRange.mockResolvedValue([
+      {
+        userId: "u1",
+        date: "2026-07-13",
+        sourced: 10,
+        outreach: 5,
+        responses: 1,
+        screenings: 1,
+        submitted: 0,
+      },
+      {
+        userId: "u1",
+        date: "2026-07-14",
+        sourced: 8,
+        outreach: 4,
+        responses: 0,
+        screenings: 0,
+        submitted: 1,
+      },
+      {
+        userId: "u2",
+        date: "2026-07-13",
+        sourced: 20,
+        outreach: 10,
+        responses: 3,
+        screenings: 2,
+        submitted: 1,
+      },
+    ]);
+    h.userRepo.list.mockResolvedValue([
+      { id: "u1", name: "Test User" },
+      { id: "u2", name: "Associate Two" },
+    ]);
+
+    const out = await dailyService.teamBreakdown("2026-07-15", h.owner as AuthUser);
+
+    expect(out.weekStart).toBe("2026-07-13"); // normalized to the Monday
+    expect(out.rows).toEqual([
+      // sorted by sourced desc
+      {
+        userId: "u2",
+        name: "Associate Two",
+        daysLogged: 1,
+        sourced: 20,
+        outreach: 10,
+        responses: 3,
+        screenings: 2,
+        submitted: 1,
+      },
+      {
+        userId: "u1",
+        name: "Test User",
+        daysLogged: 2,
+        sourced: 18,
+        outreach: 9,
+        responses: 1,
+        screenings: 1,
+        submitted: 1,
+      },
+    ]);
+    expect(out.teammates).toEqual([
+      { id: "u1", name: "Test User" },
+      { id: "u2", name: "Associate Two" },
+    ]);
+    const [start, end] = h.repo.logsForDateRange.mock.calls[0]!;
+    expect(start).toBe("2026-07-13");
+    expect(end).toBe("2026-07-19"); // Monday + 6 = Sunday
+  });
+
+  it("returns an empty rows array (not an error) when nobody has logged yet", async () => {
+    h.repo.logsForDateRange.mockResolvedValue([]);
+    h.userRepo.list.mockResolvedValue([{ id: "u1", name: "Test User" }]);
+    const out = await dailyService.teamBreakdown("2026-07-13", h.owner as AuthUser);
+    expect(out.rows).toEqual([]);
+    expect(out.teammates).toEqual([{ id: "u1", name: "Test User" }]);
   });
 });

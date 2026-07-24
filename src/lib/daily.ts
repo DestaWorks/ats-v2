@@ -31,6 +31,11 @@ export function daysBefore(key: string, n: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+/** The key `n` days after `key` (e.g. `daysAfter(monday, 6)` = that week's Sunday). */
+export function daysAfter(key: string, n: number): string {
+  return daysBefore(key, -n);
+}
+
 /**
  * The UTC instant window `[start, end)` of a user-local calendar day. `tzOffsetMinutes` is the
  * JS `Date.getTimezoneOffset()` value (minutes BEHIND UTC — e.g. -180 for UTC+3), so
@@ -126,4 +131,38 @@ export function sourcingStreak(
     else break;
   }
   return streak;
+}
+
+/** Business (Mon-Fri) days remaining in `key`'s week, INCLUSIVE of `key` itself if it's a
+ *  weekday — 0 on a weekend (legacy's own 5-day work-week assumption for pacing). */
+export function businessDaysLeft(key: string): number {
+  const dow = new Date(`${key}T00:00:00Z`).getUTCDay(); // 0 Sun .. 6 Sat
+  if (dow === 0 || dow === 6) return 0;
+  return 5 - dow + 1;
+}
+
+export interface WeeklyPacing {
+  neededPerDay: number;
+  projectedTotal: number;
+}
+
+/**
+ * Legacy "predictive pacing" (Daily Log, `index.html:2208-2210`) — a linear projection of the
+ * rolling Monday-anchored week's self-reported sourcing against the daily ramp target (a 5-day
+ * work week). `daysLogged` is how many days this week already have a submitted log (drives the
+ * average in `projectedTotal`); `daysLeft` is business days remaining (`businessDaysLeft`).
+ * `neededPerDay` is clamped to 0 (legacy's raw `ceil` can go negative once the week's target is
+ * already hit — a negative "needed per day" reads as a bug, not a signal, so it's floored here).
+ */
+export function weeklyPacing(
+  weekSourced: number,
+  dailyTarget: number,
+  daysLogged: number,
+  daysLeft: number,
+): WeeklyPacing {
+  const weeklyTarget = dailyTarget * 5;
+  const neededPerDay =
+    daysLeft > 0 ? Math.max(0, Math.ceil((weeklyTarget - weekSourced) / daysLeft)) : 0;
+  const projectedTotal = daysLogged > 0 ? Math.round((weekSourced / daysLogged) * 5) : 0;
+  return { neededPerDay, projectedTotal };
 }

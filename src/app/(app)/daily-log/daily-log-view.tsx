@@ -2,14 +2,16 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { dateKey, mondayOf } from "@/lib/daily";
-import { BLOCKERS, type DailyLogViewDTO } from "@/lib/validation/daily";
+import { dateKey, daysBefore, mondayOf } from "@/lib/daily";
+import { BLOCKERS, type DailyLogViewDTO, type TeamBreakdownDTO } from "@/lib/validation/daily";
 import { getJson, postJson, patchJson, messageForFailure } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { Table, Td } from "@/components/ui/table";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils/cn";
 
 const FIELDS = [
@@ -100,6 +102,158 @@ function RampTrack({ weekNum }: { weekNum: number }) {
   );
 }
 
+/**
+ * 7-day sourced-per-day bar chart (Wave 3.1 backlog, legacy "7-day trend") — zero-filled from
+ * `history` (a sparse last-15-logs list) so a day with no submitted log renders as an empty bar
+ * rather than being skipped, oldest→newest left to right. Plain CSS bars, matching this app's
+ * no-charting-library convention (see the Reports tabs' own bar visuals).
+ */
+function WeekTrendBars({ today, history }: { today: string; history: DailyLogViewDTO["history"] }) {
+  const byDate = new Map(history.map((l) => [l.date, l.sourced]));
+  const days = Array.from({ length: 7 }, (_, i) => {
+    const date = daysBefore(today, 6 - i);
+    return { date, sourced: byDate.get(date) ?? 0 };
+  });
+  const max = Math.max(1, ...days.map((d) => d.sourced));
+  return (
+    <div className="flex items-end gap-2">
+      {days.map((d) => (
+        <div key={d.date} className="flex flex-1 flex-col items-center gap-1">
+          <div className="flex h-16 w-full items-end rounded bg-black/5">
+            <div
+              className="w-full rounded bg-brand"
+              style={{ height: `${Math.max(4, (d.sourced / max) * 100)}%` }}
+            />
+          </div>
+          <span className="text-[10px] font-semibold text-gray tabular-nums">{d.sourced}</span>
+          <span className="text-[9px] text-gray/70">{d.date.slice(5)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Admin/leadership team breakdown + manager-feedback composer (Wave 3.1 backlog, legacy
+ * `isAdmin`-only Daily Log table). Attempts the fetch on mount and renders nothing on a 403 —
+ * the route double-gates server-side (`viewReports`), so a non-leadership viewer simply never
+ * sees this section, no client-side capability plumbing needed.
+ */
+function TeamBreakdownSection({ weekStart }: { weekStart: string }) {
+  const [data, setData] = useState<TeamBreakdownDTO | null>(null);
+  const [visible, setVisible] = useState(true);
+  const [targetUserId, setTargetUserId] = useState("");
+  const [feedbackBody, setFeedbackBody] = useState("");
+  const [pending, setPending] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const res = await getJson<TeamBreakdownDTO>(
+        `/api/daily/team-breakdown?weekStart=${weekStart}`,
+      );
+      if (cancelled) return;
+      if (res.ok) setData(res.data);
+      else setVisible(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [weekStart]);
+
+  async function postFeedback() {
+    if (!targetUserId || !feedbackBody.trim()) return;
+    setPending(true);
+    const res = await postJson("/api/daily/manager-feedback", {
+      userId: targetUserId,
+      body: feedbackBody.trim(),
+    });
+    setPending(false);
+    if (res.ok) {
+      toast.success("Feedback sent");
+      setFeedbackBody("");
+    } else {
+      toast.error(messageForFailure(res.failure));
+    }
+  }
+
+  if (!visible || !data) return null;
+
+  return (
+    <Card as="section" className="p-5">
+      <h2 className="mb-3 text-sm font-bold tracking-wide text-navy uppercase">
+        Team breakdown — week of {data.weekStart}
+      </h2>
+      {data.rows.length === 0 ? (
+        <p className="text-sm text-gray">No logs submitted yet this week.</p>
+      ) : (
+        <Table
+          caption="Per-associate weekly self-report totals"
+          columns={[
+            "Associate",
+            "Days logged",
+            "Sourced",
+            "Outreach",
+            "Responses",
+            "Screens",
+            "To client",
+          ]}
+        >
+          {data.rows.map((r) => (
+            <tr key={r.userId} className="border-t border-black/5">
+              <Td>{r.name}</Td>
+              <Td>{r.daysLogged}</Td>
+              <Td>{r.sourced}</Td>
+              <Td>{r.outreach}</Td>
+              <Td>{r.responses}</Td>
+              <Td>{r.screenings}</Td>
+              <Td>{r.submitted}</Td>
+            </tr>
+          ))}
+        </Table>
+      )}
+
+      <div className="mt-4 flex flex-col gap-2 border-t border-black/5 pt-4">
+        <p className="text-xs font-semibold tracking-wide text-gray uppercase">
+          Send feedback to an associate
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <Select
+            aria-label="Associate"
+            value={targetUserId}
+            onChange={(e) => setTargetUserId(e.target.value)}
+            className="max-w-xs"
+          >
+            <option value="">Select an associate…</option>
+            {data.teammates.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </Select>
+        </div>
+        <Textarea
+          rows={2}
+          placeholder="A specific, actionable note…"
+          value={feedbackBody}
+          onChange={(e) => setFeedbackBody(e.target.value)}
+        />
+        <div className="flex justify-end">
+          <Button
+            type="button"
+            size="sm"
+            loading={pending}
+            disabled={!targetUserId || !feedbackBody.trim()}
+            onClick={() => void postFeedback()}
+          >
+            Send
+          </Button>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 type TileLabel = "Added (auto)" | "Moves (auto)" | "Notes (auto)" | "Verified (auto)";
 
 /** Icon mirrors legacy's own tile icons (🔍/➡/📝/✓) — one accent per auto-captured metric. */
@@ -165,7 +319,19 @@ export function DailyLogView() {
   }, [refresh]);
 
   if (!view) return <p className="text-sm text-gray">Loading…</p>;
-  const { log, auto, ramp, streak, history, goals, entries, clients } = view;
+  const {
+    log,
+    auto,
+    ramp,
+    streak,
+    history,
+    goals,
+    entries,
+    clients,
+    weekTotals,
+    pacing,
+    feedback,
+  } = view;
 
   async function submitLog() {
     setPending(true);
@@ -253,6 +419,48 @@ export function DailyLogView() {
         </div>
         <RampTrack weekNum={ramp.weekNum} />
       </section>
+
+      {/* Predictive pacing + 7-day trend (Wave 3.1 backlog) — this week's sourcing so far vs.
+          the daily ramp target, and a zero-filled bar chart of the last 7 calendar days. */}
+      <Card as="section" className="grid gap-4 p-5 sm:grid-cols-2">
+        <div>
+          <h2 className="mb-2 text-sm font-bold tracking-wide text-navy uppercase">
+            This week&apos;s pace
+          </h2>
+          <p className="text-sm text-charcoal">
+            {weekTotals.sourced} sourced over {weekTotals.days}{" "}
+            {weekTotals.days === 1 ? "day" : "days"} logged.
+          </p>
+          <p className="mt-1 text-sm text-gray">
+            Need <span className="font-semibold text-charcoal">{pacing.neededPerDay}/day</span> to
+            hit the weekly target · projected total:{" "}
+            <span className="font-semibold text-charcoal">{pacing.projectedTotal}</span>
+          </p>
+        </div>
+        <div>
+          <h2 className="mb-2 text-sm font-bold tracking-wide text-navy uppercase">Last 7 days</h2>
+          <WeekTrendBars today={today} history={history} />
+        </div>
+      </Card>
+
+      {/* Manager feedback (Wave 3.1 backlog, legacy `mgr_feedback`) — last 2, own-record only. */}
+      {feedback.length > 0 ? (
+        <Card as="section" className="p-5">
+          <h2 className="mb-3 text-sm font-bold tracking-wide text-navy uppercase">
+            Feedback from your manager
+          </h2>
+          <ul className="flex flex-col gap-3">
+            {feedback.map((f, i) => (
+              <li key={i} className="text-sm text-charcoal">
+                <p className="whitespace-pre-wrap">{f.body}</p>
+                <p className="mt-1 text-xs text-gray">
+                  {f.authorName ?? "A manager"} · {new Date(f.createdAt).toLocaleDateString()}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      ) : null}
 
       {/* Live shift tracker (auto-captured from the ATS) — an icon badge + accent per metric
           (mirrors legacy's own icon tiles) instead of four cramped, identical boxes. */}
@@ -500,6 +708,8 @@ export function DailyLogView() {
           </ul>
         </Card>
       </div>
+
+      <TeamBreakdownSection weekStart={mondayOf(today)} />
 
       {/* Log history (last 10). */}
       <Card as="section" className="p-5">

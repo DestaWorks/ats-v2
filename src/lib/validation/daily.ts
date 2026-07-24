@@ -94,6 +94,19 @@ export interface JournalGoalDTO {
   done: boolean;
 }
 
+/** Legacy "predictive pacing" (Daily Log) — see `lib/daily.ts::weeklyPacing`. */
+export interface WeeklyPacingDTO {
+  neededPerDay: number;
+  projectedTotal: number;
+}
+
+/** One received manager-feedback note (Wave 3.1 backlog, legacy `mgr_feedback`). */
+export interface ManagerFeedbackDTO {
+  authorName: string | null;
+  body: string;
+  createdAt: string; // ISO
+}
+
 /** The Daily Log page composite. */
 export interface DailyLogViewDTO {
   log: DailyLogDTO | null;
@@ -106,7 +119,49 @@ export interface DailyLogViewDTO {
   /** Options for the optional "Sourced by client" breakdown (excludes non-recruiting placeholder
    *  clients — see `PER_CLIENT_BREAKDOWN_EXCLUDED` in `daily.service.ts`). */
   clients: { id: string; name: string }[];
+  /** This Monday-anchored week's self-reported sourcing so far — the "predictive pacing" input. */
+  weekTotals: { sourced: number; days: number };
+  pacing: WeeklyPacingDTO;
+  /** Last 2 manager-feedback notes addressed to the SESSION user, newest first. */
+  feedback: ManagerFeedbackDTO[];
 }
+
+/** One row of `GET /api/daily/team-breakdown` — a per-associate weekly self-report rollup
+ *  (legacy's `isAdmin`-only Daily Log table). Built from self-reported `DailyLog` rows, NOT
+ *  event-derived live counts — matches legacy's own inputs. Omits legacy's "quality %" column
+ *  (advanced-past-status-index-3 ratio) — a second, heavier query not worth the complexity for
+ *  this low-priority item; a follow-up if actually wanted. */
+export interface TeamBreakdownRowDTO {
+  userId: string;
+  name: string;
+  daysLogged: number;
+  sourced: number;
+  outreach: number;
+  responses: number;
+  screenings: number;
+  submitted: number;
+}
+export interface TeamBreakdownDTO {
+  weekStart: string;
+  rows: TeamBreakdownRowDTO[];
+  /** The full roster (not just associates who logged this week) — for the feedback composer's
+   *  target picker, which must reach anyone, not only whoever shows up in `rows`. */
+  teammates: { id: string; name: string }[];
+}
+
+/** `GET /api/daily/team-breakdown?weekStart=` — `viewReports` only (enforced server-side). */
+export const teamBreakdownQuerySchema = z.object({ weekStart: dateKey });
+export type TeamBreakdownQuery = z.infer<typeof teamBreakdownQuerySchema>;
+
+/** `POST /api/daily/manager-feedback` — `viewReports` only (a manager acting on an associate,
+ *  same tier as `setTargetSchema` below — never Owner/Admin-only `manageUsers`). */
+export const addFeedbackSchema = z
+  .object({
+    userId: z.string().min(1),
+    body: z.string().trim().min(1).max(2000),
+  })
+  .strict();
+export type AddFeedbackInput = z.infer<typeof addFeedbackSchema>;
 
 // --- request schemas ------------------------------------------------------
 

@@ -326,15 +326,32 @@ format (blocks 1.3/1.4). *Trash auto-purge sign-off resolved 2026-07-14 — see 
 
 # WAVE 3 — Funnel Intelligence & Daily Loop (Month 2)
 
-### 3.1 Daily accountability loop — Overview + Daily Log *(pulled EARLIER from the tail — D5; daily-use)*  🟡 *(core built 2026-07-13 — see open items)*
+### 3.1 Daily accountability loop — Overview + Daily Log *(pulled EARLIER from the tail — D5; daily-use)*  ✅ *(core built 2026-07-13; remaining widgets done 2026-07-24)*
 - [x] `daily_targets` + `daily_actuals` + `daily_logs` + `journal_entries` + `journal_goals` models → migrated (`add_daily_loop_tables`). Keyed (userId, "YYYY-MM-DD") — real user ids, not legacy's synthesized emails.
 - [x] Shared `lib/daily` + `dailyService.liveActuals` (**one source of truth**: Monday-anchored weeks everywhere — legacy's 3 week-defs consolidated; user-local day windows via a tz offset; sourcing = leads by `createdById`, outreach = attempts by `actorId`, cleanup = move/update/verify_license audit rows). *(`stats-for-range` minimal: `actualsForRange` — 5.1 briefs extend it.)*
 - [x] Overview port: "No targets" banner (leadership gets Set-targets modal — legacy sent them to the Brief page), TODAY'S TARGETS strip (serif x/y + 9–5 pace status), End-of-Shift modal pre-filled from live actuals, "Since you closed" recap (localStorage last-seen + 30s dwell, buckets from DOMAIN tables so no audit capability needed; mentions live in the Alerts bell).
 - [x] Daily Log & Journal page (`/daily-log`, nav item): tenure-ramp phase (weekNum from the USER's start date, not a hardcoded epoch) + 🔥 streak, auto-capture tiles, once-a-day self-report (409 on resubmit; autos snapshotted server-side), log history, weekly goals (REAL toggles — legacy appended duplicates), journal notes.
 - [x] **Per-client sourcing breakdown (2026-07-15):** legacy never had a *display* grid for this — it was an optional input (a row of small per-client count fields) on the Daily Log self-report and the End-of-Shift modal, tracking "where sourcing effort went." Ported input-only, matching legacy exactly: `DailyActual.perClientSourcing`/`DailyLog.perClient` (JSON `{clientId:count}`, no FK, already in the schema but previously unwired) now flow through `saveActualsSchema`/`submitLogSchema` → `dailyService`. Daily Log excludes the 2 non-recruiting placeholder clients ("NJ-Psych Candidates"/"Future Potential Clients"); the EOS modal doesn't (legacy's own asymmetry, replicated intentionally). No new display/report view — that's a separate, unscoped ask if wanted later.
 - [x] `ats_targets_suggest` AI suggest ✅ *(done 2026-07-23, Wave 5.1 — the AI-provider plumbing this was deferred pending now exists; `POST /api/targets/suggest` + the "✨ AI Suggest" button on the manager target-setting modal, `dashboard/daily-strip.tsx`.)*
-- [ ] **Still open:** 7-day trend / predictive pacing / Indeed-credit-burn / admin team-breakdown widgets; manager feedback notes.
-- **Done-when:** the daily loop (Overview + Daily Log) runs on live data early — **it is not deferrable.**
+- [x] **Predictive pacing + 7-day trend** ✅ *(done 2026-07-24)* — `lib/daily.ts::weeklyPacing`
+      (linear projection of the rolling Monday-anchored week's self-reported sourcing vs. the
+      daily ramp target) + a zero-filled 7-day bar chart, both on `/daily-log`. No schema change
+      — reuses `logsForUser`'s already-fetched history.
+- [x] **Admin team breakdown** ✅ *(done 2026-07-24)* — a `viewReports`-gated per-associate
+      weekly rollup (`GET /api/daily/team-breakdown`), built from real self-reported `DailyLog`
+      rows across all users (matches legacy's own inputs — NOT event-derived live counts).
+      Legacy's "quality %" column (advanced-past-status-index-3 ratio) deliberately NOT ported —
+      a second, heavier query for a number legacy itself buried in a table cell; a cheap
+      follow-up if actually wanted.
+- [x] **Manager feedback** ✅ *(done 2026-07-24, legacy `mgr_feedback`)* — new `ManagerFeedback`
+      model (append-only, mirrors `JournalEntry` — legacy repurposed an unrelated field to fake
+      this; nothing backed it before). `POST /api/daily/manager-feedback` (`viewReports`-gated,
+      same tier as target-setting), last 2 shown on the recipient's own Daily Log page.
+- [x] **"Indeed credit burn" — deliberately NOT ported.** Traced to legacy source: it's the
+      generic `outreach` self-report number relabeled, checked against a hardcoded, unconfigured
+      "100/month" cap — zero backend/`Code.gs` support anywhere for real Indeed credits. Porting
+      it as-is would just relocate a fake metric; skipped per owner confirmation.
+- **Done-when:** the daily loop (Overview + Daily Log) runs on live data early — **it is not deferrable.** ✅
 
 ### 3.2 Smarter Sourcing (Biruh priority #4) *(net-new — distinct from Open-Roles matching)*  ✅ *(done — 2026-07-16)*
 - [x] Confirmed genuinely net-new (no legacy precedent — the only "similarity"-adjacent legacy code scores prospective *agency clients* for the CRM module, unrelated). Since results must be "net-new candidates to source," they come from NPPES (not our own DB); NPPES doesn't return `population`/`setting` at all, so `scoreStateSimilarity` (`lib/rules/similarity.ts`) scores the one real available dimension — state closeness (exact/NLC-compact/other, 100/60/30) — against a taxonomy-hard-filtered NPPES search.

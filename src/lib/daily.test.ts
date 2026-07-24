@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  businessDaysLeft,
   dayWindow,
   daysBefore,
   mondayOf,
@@ -7,6 +8,7 @@ import {
   rampFor,
   sourcingStreak,
   tenureWeek,
+  weeklyPacing,
   weekWindow,
 } from "./daily";
 
@@ -84,5 +86,40 @@ describe("sourcingStreak", () => {
 describe("daysBefore", () => {
   it("crosses month boundaries", () => {
     expect(daysBefore("2026-07-01", 1)).toBe("2026-06-30");
+  });
+});
+
+describe("businessDaysLeft", () => {
+  it("counts INCLUSIVE remaining weekdays, 0 on a weekend", () => {
+    expect(businessDaysLeft("2026-07-13")).toBe(5); // Monday
+    expect(businessDaysLeft("2026-07-15")).toBe(3); // Wednesday
+    expect(businessDaysLeft("2026-07-17")).toBe(1); // Friday
+    expect(businessDaysLeft("2026-07-18")).toBe(0); // Saturday
+    expect(businessDaysLeft("2026-07-19")).toBe(0); // Sunday
+  });
+});
+
+describe("weeklyPacing", () => {
+  it("projects the rest of the week from the average sourced/day so far", () => {
+    // 40 sourced over 2 logged days → avg 20/day * 5 = 100 projected.
+    expect(weeklyPacing(40, 20, 2, 3).projectedTotal).toBe(100);
+  });
+
+  it("computes neededPerDay against the weekly target (dailyTarget * 5)", () => {
+    // weekly target 100 (20*5), 40 so far, 3 days left → ceil(60/3) = 20/day.
+    expect(weeklyPacing(40, 20, 2, 3).neededPerDay).toBe(20);
+  });
+
+  it("clamps neededPerDay to 0 once the weekly target is already met", () => {
+    expect(weeklyPacing(150, 20, 5, 0).neededPerDay).toBe(0);
+    expect(weeklyPacing(150, 20, 5, 2).neededPerDay).toBe(0);
+  });
+
+  it("returns 0/0 with no data yet (week just started, nothing logged)", () => {
+    expect(weeklyPacing(0, 20, 0, 5)).toEqual({ neededPerDay: 20, projectedTotal: 0 });
+  });
+
+  it("neededPerDay is 0 when no business days remain (weekend)", () => {
+    expect(weeklyPacing(10, 20, 3, 0).neededPerDay).toBe(0);
   });
 });
