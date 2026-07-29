@@ -12,8 +12,9 @@ export interface NavItem {
 /**
  * The base nav (in display order). The capability-gated **Import** item is appended by the layout
  * only for viewers with `bulkImport` — it is intentionally NOT here, so an ungated render can never
- * surface it. **Trash** is a base item: soft-delete/restore are open to every operator (the
- * separately capability-gated Purge action lives inside the page), so all operators see it.
+ * surface it. **Trash is deliberately NOT a nav item** (2026-07-28) — the page/feature (soft-delete
+ * list + restore + capability-gated purge) still exists at `/trash` and is fully functional, it's
+ * just not linked from the sidebar; reachable via direct URL or a future in-context "restore" link.
  */
 export const BASE_NAV_ITEMS: readonly NavItem[] = [
   { href: "/dashboard", label: "Overview" },
@@ -28,7 +29,6 @@ export const BASE_NAV_ITEMS: readonly NavItem[] = [
   { href: "/templates", label: "Templates" },
   { href: "/candidates", label: "Candidates" },
   { href: "/roles", label: "Open Roles" },
-  { href: "/trash", label: "Trash" },
   { href: "/learn", label: "Learn" },
   { href: "/profile", label: "My Profile" },
 ];

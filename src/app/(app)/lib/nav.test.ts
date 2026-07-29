@@ -12,11 +12,10 @@ describe("activeNavHref", () => {
     expect(activeNavHref("/screening", HREFS)).toBe("/screening");
     expect(activeNavHref("/license-verify", HREFS)).toBe("/license-verify");
     expect(activeNavHref("/candidates", HREFS)).toBe("/candidates");
-    expect(activeNavHref("/trash", HREFS)).toBe("/trash");
   });
 
-  it("includes Trash as a base nav item (visible to all operators)", () => {
-    expect(BASE_NAV_ITEMS.some((i) => i.href === "/trash" && i.label === "Trash")).toBe(true);
+  it("does NOT include Trash as a base nav item (2026-07-28 — page still exists, not linked)", () => {
+    expect(BASE_NAV_ITEMS.some((i) => i.href === "/trash")).toBe(false);
   });
 
   it("includes Sourcing as a base nav item (visible to all operators)", () => {
