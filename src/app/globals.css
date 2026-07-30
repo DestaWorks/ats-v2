@@ -38,6 +38,14 @@
   --color-status-future: #78909c; /* 12 Future Pipeline */
 }
 
+html {
+  /* Legacy's body font-size is 14px (index.html:14) against the browser's 16px default. Tailwind's
+     text/padding/gap/margin utilities are all rem, sized relative to THIS root element — so this
+     one line rescales every already-built page/component to legacy's actual size, uniformly,
+     without touching per-component classes. 14/16 = 87.5%. */
+  font-size: 87.5%;
+}
+
 html,
 body {
   /* Light-only app: without this, OS dark mode styles NATIVE controls (select popups,
