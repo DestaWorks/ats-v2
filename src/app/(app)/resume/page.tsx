@@ -14,12 +14,12 @@ export default async function ResumePage() {
   if (!user) redirect("/sign-in");
 
   return (
-    <div className="mx-auto flex max-w-4xl flex-col gap-6 p-6 sm:p-8">
+    <div className="flex flex-col gap-6 px-8 py-6">
       {/* no-print: when printing the branded résumé, only the document itself lands on paper. */}
       <header className="no-print">
-        <h1 className="text-2xl font-bold text-navy">Résumé Converter</h1>
+        <h1 className="text-2xl font-bold text-navy">Resume Converter</h1>
         <p className="text-sm text-gray">
-          Pick the role, upload the résumé, get the finished DestaHealth profile.
+          Pick the role, upload the resume, get the finished DestaHealth profile.
         </p>
       </header>
       <ResumeFlow recruiterName={user.name} resumeExtractionEnabled={aiEnabled} />

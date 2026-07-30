@@ -26,11 +26,11 @@ function messageForError(body: ApiErrorBody, fallback: string): string {
   const code = body.error?.code;
   switch (code) {
     case "FEATURE_DISABLED":
-      return "Résumé extraction isn't configured on this environment. Ask an administrator to add an AI provider key.";
+      return "Resume extraction isn't configured on this environment. Ask an administrator to add an AI provider key.";
     case "RATE_LIMITED":
       return "The AI service is busy right now — wait a moment and try again.";
     case "EXTRACTION_FAILED":
-      return "The résumé couldn't be extracted. Try again, or paste the text manually.";
+      return "The resume couldn't be extracted. Try again, or paste the text manually.";
     case "BAD_REQUEST":
       return body.error?.message ?? fallback;
     default:
@@ -98,7 +98,7 @@ export function ResumeFlow({
     if (!variant) return;
     const text = pastedText.trim().length > 50 ? pastedText.trim() : fileText;
     if (!text || text.trim().length <= 50) {
-      setError("Upload a PDF or paste at least 50 characters of résumé text first.");
+      setError("Upload a PDF or paste at least 50 characters of resume text first.");
       return;
     }
     setStep("extracting");

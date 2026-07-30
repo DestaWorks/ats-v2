@@ -50,7 +50,7 @@ export function UploadZone({
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm font-semibold text-charcoal">
-          Step 2 — Upload résumé for{" "}
+          Step 2 — Upload resume for{" "}
           <span className="text-navy">{RESUME_VARIANT_LABELS[variant]}</span>
         </p>
         <Button type="button" variant="ghost" size="xs" onClick={onChangeRole}>
@@ -93,9 +93,9 @@ export function UploadZone({
               htmlFor={fileInputId}
               className="cursor-pointer text-sm font-semibold text-navy hover:underline focus-within:underline"
             >
-              Drag &amp; drop a résumé, or browse
+              Drag &amp; drop resume here
             </label>
-            <p className="text-xs text-gray">PDF preferred</p>
+            <p className="text-xs text-gray">PDF preferred — or click to browse</p>
           </div>
         )}
         <input
@@ -114,14 +114,14 @@ export function UploadZone({
 
       <div className="flex flex-col gap-1">
         <label htmlFor={pasteId} className="text-sm font-medium text-charcoal">
-          Or paste résumé text
+          Or paste resume text
         </label>
         <textarea
           id={pasteId}
           rows={5}
           value={pasted}
           onChange={(event) => setPasted(event.target.value)}
-          placeholder="Paste the candidate's résumé text here (only if no PDF available)…"
+          placeholder="Paste the candidate's resume text here (only if no PDF available)…"
           className={cn(controlClass, "resize-y px-3 py-2 font-mono text-xs")}
         />
         {pasted.trim().length > 0 ? (
@@ -131,8 +131,8 @@ export function UploadZone({
 
       {!extractionEnabled ? (
         <p role="status" className="rounded-md bg-orange/10 px-3 py-2 text-xs text-orange">
-          Résumé extraction isn&apos;t configured on this environment, so the AI step is
-          unavailable. You can still upload and read the résumé; ask an administrator to add an AI
+          Resume extraction isn&apos;t configured on this environment, so the AI step is
+          unavailable. You can still upload and read the resume; ask an administrator to add an AI
           provider key to enable conversion.
         </p>
       ) : null}

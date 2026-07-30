@@ -58,7 +58,7 @@ export function VariantPicker({
   return (
     <div>
       <p className="mb-3 text-sm font-semibold text-charcoal">Step 1 — What&apos;s the role?</p>
-      <div role="radiogroup" aria-label="Résumé role" className="grid gap-4 sm:grid-cols-3">
+      <div role="radiogroup" aria-label="Resume role" className="grid gap-4 sm:grid-cols-3">
         {RESUME_VARIANTS.map((variant, index) => {
           const meta = VARIANT_META[variant];
           const selected = value === variant;

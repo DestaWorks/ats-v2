@@ -28,6 +28,6 @@ export const VARIANT_TO_TRACK: Record<ResumeVariant, Track> = {
 /** Human labels for the upload picker (copy mirrors the legacy ROLES). */
 export const RESUME_VARIANT_LABELS: Record<ResumeVariant, string> = {
   clinical: "Clinical",
-  prescriber: "Prescriber (MD/DO/NP)",
+  prescriber: "Prescriber",
   operations: "Operations",
 };
