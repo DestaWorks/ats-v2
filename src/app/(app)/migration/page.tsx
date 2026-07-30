@@ -26,15 +26,12 @@ export default async function MigrationPage() {
   }
 
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-6 p-6 sm:p-8">
+    <div className="flex flex-col gap-6 px-8 py-6">
       <header>
-        <p className="text-xs font-semibold tracking-widest text-brand uppercase">
-          Wave 1.3 · Migration
-        </p>
-        <h1 className="text-2xl font-bold text-navy">Bulk Import</h1>
+        <h1 className="text-2xl font-bold text-navy">Bulk Import from Indrasur</h1>
         <p className="text-sm text-gray">
-          One-shot Sheet→Postgres import of the historical candidates. Upload the export, review the
-          report, then commit — re-running is safe (matched by legacy id).
+          CSV + resume ZIP → AI parse → Pipeline candidates. Upload the export, review the match
+          preview, then commit — re-running is safe (matched by legacy id).
         </p>
       </header>
       <MigrationWizard />

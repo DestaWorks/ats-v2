@@ -28,8 +28,10 @@ import { classifyMatch, matchResumeToCandidate } from "./resume.match";
  * persisted but never logged, and are gated behind `viewCredentials` in `toDocumentDTO`.
  */
 
-/** Only fill candidate fields that are currently EMPTY (OQ-2: attach never overwrites human data). */
-function fillEmptyFields(
+/** Only fill candidate fields that are currently EMPTY (OQ-2: attach never overwrites human data).
+ *  Exported for reuse by `migration.service.ts`'s bulk résumé-attach path — same conservative
+ *  merge, one definition. */
+export function fillEmptyFields(
   existing: Record<string, unknown>,
   mapped: Record<string, unknown>,
 ): Record<string, unknown> {

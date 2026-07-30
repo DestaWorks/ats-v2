@@ -159,6 +159,17 @@ share a database.** *(`zyx.com` below is a placeholder for the real domain.)*
 - [x] `POST /api/migration/commit` route. *(The "résumé→profile match confidence threshold" phrase in the original plan line doesn't apply to this flow — bulk import attaches résumés deterministically by `legacyId`/`ResumeFileID`, since it already has an authoritative identity key; the confidence-gated fuzzy matcher is Wave 1.2's separate interactive upload flow. Formally closed as design-doc E-5, not a gap.)*
 - [x] Port the 3-step wizard UI 1:1 (upload → preview → commit) — `migration-wizard.tsx` (`Stepper`, in-browser file read + sha256 checksum).
 - [x] Test: re-running import doesn't duplicate (upsert by `legacy_id`); email-dupes collapse; conflicts are flagged not silently merged — `migration.service.test.ts` (46 tests total across the module, all passing).
+- [x] **Indrasur bulk-résumé flow** ✅ *(done 2026-07-29 — a later, separate addition; see
+      `docs/design/wave-1.3-etl.md` §5.1)* — an optional résumé ZIP alongside the CSV/JSON,
+      matched to rows by name (client-side unzip + pdf.js text extraction, same as the Wave 1.2
+      single-résumé flow — no binary ever reaches the server), and an opt-in AI-extraction step
+      reusing Wave 1.2's real `parseResume` schema. Fixes 3 confirmed legacy bugs rather than
+      porting them: filename collisions are surfaced as `"ambiguous"` (never a silent overwrite);
+      a row with no matched résumé still imports (never hard-blocked, unlike legacy's
+      `matchedFile`-required commit filter); AI failures mark the row `"ai-extraction-failed"`
+      instead of silently succeeding with blank fields (legacy's own field-harvesting read schema
+      keys its Gemini call never produced, swallowed by a triple-nested try/catch). Unmatched
+      résumé files are always listed in the report, never silently dropped.
 - **Done-when:** ✅ importer built, tested, reviewed — **not yet run against the real historical export** (needs the actual Sheet file from Biruh; that one-time production run is Wave 1.4, still open below).
 
 ### 1.4 Parity check + Sheet freeze

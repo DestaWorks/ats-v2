@@ -17,10 +17,32 @@ export const importFormatSchema = z.enum(["csv", "json"]);
 export type ImportFormat = z.infer<typeof importFormatSchema>;
 
 /**
+ * One résumé pulled from the optional bulk-import ZIP (Indrasur flow) — already unzipped and
+ * pdf.js-extracted to text CLIENT-SIDE (same as the single-résumé flow, `resume/lib/pdf-extract.ts`
+ * — no binary ever reaches the server). `filenamePrefix` is the ZIP entry's name up to the first
+ * `_`, lowercased/trimmed — the correlation key matched against each row's `name` server-side.
+ */
+export const importResumeSchema = z.object({
+  filenamePrefix: z.string().trim().min(1).max(200),
+  /** The full ZIP entry filename (e.g. "Jane Carter_resume.pdf") — shown in the match-preview
+   *  report so a reviewer can see WHICH file matched, not just that one did (legacy parity). */
+  originalFilename: z.string().trim().min(1).max(255),
+  text: z.string().min(1).max(60_000),
+});
+export type ImportResume = z.infer<typeof importResumeSchema>;
+
+/** Combined résumé-text payload cap — conservative, safely under Vercel's default serverless body
+ *  limit (this is ON TOP OF the CSV/JSON `content`, so the two caps are independent). */
+export const MAX_IMPORT_RESUMES = 300;
+
+/**
  * POST /api/migration/{prepare,commit} — request body. `content` is the raw CSV/JSON text (the
  * client reads the file). `checksum` (sha256, hex) is an advisory prepare→commit hand-off (E-7):
  * commit recomputes it and, on mismatch, appends a NON-blocking warning (legacy_id upsert makes a
  * re-parse safe). Stateless: no parsed batch is parked server-side.
+ *
+ * `resumes`/`extractWithAi` (Wave 1.3 backlog, the "Indrasur" bulk-résumé flow) are OPTIONAL and
+ * independent of the base CSV/JSON import — a request with neither behaves exactly as before.
  */
 export const importInputSchema = z.object({
   format: importFormatSchema,
@@ -34,6 +56,9 @@ export const importInputSchema = z.object({
     ),
   filename: z.string().min(1).max(255).optional(),
   checksum: z.string().length(64).optional(),
+  resumes: z.array(importResumeSchema).max(MAX_IMPORT_RESUMES).optional(),
+  /** Explicit opt-in — each matched résumé is a paid, rate-limited LLM call. Omitted/false = off. */
+  extractWithAi: z.boolean().optional(),
 });
 export type ImportInput = z.infer<typeof importInputSchema>;
 
@@ -43,14 +68,22 @@ export type ImportInput = z.infer<typeof importInputSchema>;
  */
 export type ImportAction = "add" | "update" | "softDelete" | "skip" | "error";
 
+/** Whether a bulk-import row's résumé (if any were uploaded) was attached — always present so the
+ *  UI can render a consistent column; `"none"` when no résumé ZIP was uploaded at all. */
+export type ResumeMatchStatus = "matched" | "ambiguous" | "none";
+
 /** One row in the report — the diffable surface (no PII beyond the name already shown in-app). */
 export interface ImportRowReport {
   legacyId: string;
   name: string;
   action: ImportAction;
   /** Machine-readable codes: flags ("unknown-client", "email-duplicate"), errors
-   *  ("unrecognized-status", "missing-id"), and non-blocking notes ("unmapped-credential"). */
+   *  ("unrecognized-status", "missing-id"), and non-blocking notes ("unmapped-credential",
+   *  "resume-ambiguous", "ai-extraction-failed"). */
   reasons: string[];
+  resumeMatch: ResumeMatchStatus;
+  /** The matched résumé's original filename — set only when `resumeMatch === "matched"`. */
+  resumeFilename?: string;
 }
 
 /** A suspected same-person collision: >1 distinct legacy row sharing an email (E-4, D8). */
@@ -80,4 +113,11 @@ export interface ImportReport {
   checksum: string;
   /** Non-blocking advisories (e.g. "checksum-mismatch"). Present only when non-empty. */
   warnings?: string[];
+  /** Uploaded résumé filenames whose prefix matched NO row's name — full visibility, never
+   *  silently dropped (unlike legacy's orphaned Drive-staging files). Present only when non-empty. */
+  unmatchedResumeFiles?: string[];
+  /** Résumé-match tally across all rows (legacy parity — "Resumes matched"/"No resume found" stats).
+   *  Present only when a résumé ZIP was actually part of the request; absent when the import is
+   *  CSV/JSON-only, so the UI never shows a misleading "0 matched" for imports with no résumés at all. */
+  resumeCounts?: { matched: number; ambiguous: number; none: number };
 }

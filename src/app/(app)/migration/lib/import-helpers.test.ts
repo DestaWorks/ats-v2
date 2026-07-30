@@ -3,7 +3,7 @@ import type { ImportReport, ImportRowReport } from "@/lib/validation/migration";
 import { detectFormat, importableCount } from "./import-helpers";
 
 function row(action: ImportRowReport["action"]): ImportRowReport {
-  return { legacyId: "L1", name: "Test", action, reasons: [] };
+  return { legacyId: "L1", name: "Test", action, reasons: [], resumeMatch: "none" };
 }
 
 function report(rows: ImportRowReport[]): ImportReport {

@@ -1,19 +1,25 @@
 import "server-only";
 import { createHash } from "node:crypto";
-import { hasCapability } from "@/lib/constants";
+import { hasCapability, DEFAULT_TRACK } from "@/lib/constants";
+import { RESUME_VARIANTS, VARIANT_TO_TRACK, type ResumeVariant } from "@/lib/constants/documents";
 import type {
   EmailDuplicateGroup,
   ImportInput,
   ImportReport,
+  ImportResume,
   ImportRowReport,
 } from "@/lib/validation/migration";
 import type { AuthUser } from "@/server/auth/guards";
+import { parseResume } from "@/server/ai/parse-resume";
 import { writeAudit } from "@/server/db/audit";
 import { withTransaction } from "@/server/db/with-transaction";
 import { candidateRepository } from "@/server/repositories/candidate.repository";
 import { clientRepository } from "@/server/repositories/client.repository";
 import { documentRepository } from "@/server/repositories/document.repository";
 import { AppError } from "@/server/http/app-error";
+import { checkRateLimit } from "@/server/http/rate-limit";
+import { fillEmptyFields } from "./resume.service";
+import { toCandidateCreateInput } from "./resume.mapper";
 import {
   dedupeByEmail,
   normalizeClientKey,
@@ -21,6 +27,70 @@ import {
   type ImportRowPlan,
 } from "./candidate-import.transform";
 import { parseSheet } from "./sheet-parse";
+
+/** Track label → résumé variant, derived from the SAME table Wave 1.2 uses (never a second source
+ *  of truth). Rows carry no explicit track from the Indrasur CSV — `DEFAULT_TRACK` ("Clinical")
+ *  is what `transformRow` implicitly relies on today (via the DB column default), so that's the
+ *  safe fallback here too. */
+const TRACK_TO_VARIANT: Record<string, ResumeVariant> = Object.fromEntries(
+  RESUME_VARIANTS.map((v) => [VARIANT_TO_TRACK[v], v]),
+);
+
+function variantForPlan(plan: ImportRowPlan): ResumeVariant {
+  const track = String((plan.create as { track?: string }).track ?? DEFAULT_TRACK);
+  return TRACK_TO_VARIANT[track] ?? "clinical";
+}
+
+/**
+ * Match uploaded résumé texts to plan rows by normalized name (Wave 1.3 backlog, the "Indrasur"
+ * bulk-résumé flow). UNLIKE legacy's filename-prefix matcher: a collision in EITHER direction
+ * (>1 résumé file for one name, or >1 row sharing a name) marks every affected row `"ambiguous"`
+ * rather than silently letting one file win; a résumé file matching no row is collected into
+ * `unmatchedFiles` rather than silently discarded; a row with no résumé still imports normally
+ * (`resumeMatch: "none"`) rather than being hard-blocked from commit.
+ */
+function matchResumes(plans: ImportRowPlan[], resumes: ImportResume[] | undefined): string[] {
+  for (const p of plans) {
+    p.resumeMatch = "none";
+    p.resumeText = null;
+  }
+  if (!resumes || resumes.length === 0) return [];
+
+  const filesByKey = new Map<string, ImportResume[]>();
+  for (const r of resumes) {
+    const key = r.filenamePrefix.trim().toLowerCase();
+    filesByKey.set(key, [...(filesByKey.get(key) ?? []), r]);
+  }
+
+  const plansByKey = new Map<string, ImportRowPlan[]>();
+  for (const p of plans) {
+    const key = p.name.trim().toLowerCase();
+    plansByKey.set(key, [...(plansByKey.get(key) ?? []), p]);
+  }
+
+  const usedKeys = new Set<string>();
+  for (const [key, filesForKey] of filesByKey) {
+    const plansForKey = plansByKey.get(key);
+    if (!plansForKey || plansForKey.length === 0) continue; // reported as unmatched below
+    usedKeys.add(key);
+    const ambiguous = filesForKey.length > 1 || plansForKey.length > 1;
+    for (const p of plansForKey) {
+      if (ambiguous) {
+        p.resumeMatch = "ambiguous";
+      } else {
+        p.resumeMatch = "matched";
+        p.resumeText = filesForKey[0]!.text;
+        p.resumeFilename = filesForKey[0]!.originalFilename;
+      }
+    }
+  }
+
+  const unmatchedFiles: string[] = [];
+  for (const [key, filesForKey] of filesByKey) {
+    if (!usedKeys.has(key)) unmatchedFiles.push(...filesForKey.map((f) => f.originalFilename));
+  }
+  return unmatchedFiles;
+}
 
 /**
  * Bulk-import / candidate ETL orchestration (Wave 1.3, Module 20). The pure pipeline (`sheet-parse`
@@ -44,9 +114,14 @@ interface Planned {
   groups: EmailDuplicateGroup[];
   checksum: string;
   parseErrors: string[];
+  unmatchedResumeFiles: string[];
+  /** Whether a résumé ZIP was actually part of this request — distinguishes "0 matched because no
+   *  ZIP was uploaded" from "0 matched despite a ZIP" so the report never shows a misleading stat. */
+  resumesProvided: boolean;
 }
 
-/** Parse → transform → resolve add/update against the DB → dedupe. No writes. Shared by both ops. */
+/** Parse → transform → resolve add/update against the DB → dedupe → match résumés. No writes.
+ *  Shared by both ops. */
 async function planImport(input: ImportInput): Promise<Planned> {
   const { rows, parseErrors } = parseSheet(input.content, input.format);
   const checksum = createHash("sha256").update(input.content).digest("hex");
@@ -80,12 +155,28 @@ async function planImport(input: ImportInput): Promise<Planned> {
     })),
   );
 
-  return { plans, groups, checksum, parseErrors };
+  const unmatchedResumeFiles = matchResumes(plans, input.resumes);
+  const resumesProvided = Boolean(input.resumes && input.resumes.length > 0);
+
+  return { plans, groups, checksum, parseErrors, unmatchedResumeFiles, resumesProvided };
 }
 
 function toRowReport(plan: ImportRowPlan): ImportRowReport {
   const reasons = [...new Set([...plan.errors, ...plan.flags, ...plan.notes])];
-  return { legacyId: plan.legacyId, name: plan.name, action: plan.action, reasons };
+  if (plan.resumeMatch === "ambiguous" && !reasons.includes("resume-ambiguous")) {
+    reasons.push("resume-ambiguous");
+  }
+  const report: ImportRowReport = {
+    legacyId: plan.legacyId,
+    name: plan.name,
+    action: plan.action,
+    reasons,
+    resumeMatch: plan.resumeMatch ?? "none",
+  };
+  if (plan.resumeMatch === "matched" && plan.resumeFilename) {
+    report.resumeFilename = plan.resumeFilename;
+  }
+  return report;
 }
 
 function buildReport(planned: Planned): ImportReport {
@@ -109,7 +200,72 @@ function buildReport(planned: Planned): ImportReport {
   if (planned.parseErrors.length > 0) {
     report.warnings = planned.parseErrors.map((e) => `parse: ${e}`);
   }
+  // Résumé files that matched no row (Wave 1.3 backlog) — visible, never silently dropped.
+  if (planned.unmatchedResumeFiles.length > 0) {
+    report.unmatchedResumeFiles = planned.unmatchedResumeFiles;
+  }
+  // Legacy parity — "Resumes matched" / "No resume found" stats — only when a ZIP was actually
+  // uploaded, so a CSV-only import never shows a misleading "0 matched".
+  if (planned.resumesProvided) {
+    const resumeCounts = { matched: 0, ambiguous: 0, none: 0 };
+    for (const p of planned.plans) {
+      resumeCounts[p.resumeMatch ?? "none"]++;
+    }
+    report.resumeCounts = resumeCounts;
+  }
   return report;
+}
+
+/**
+ * AI-extract one matched résumé and attach it (Wave 1.3 backlog). Reuses Wave 1.2's REAL
+ * extraction schema/prompt (`parseResume`) — never legacy's own broken field-harvesting — and
+ * its conservative "fill empty fields only" merge (`fillEmptyFields`, `resume.service.ts`).
+ * Rate-limited per user since a bulk commit can trigger many calls in a row. Any failure
+ * (rate-limit, provider error, disabled) marks the row `"ai-extraction-failed"` and returns —
+ * the candidate itself was already committed by the caller, so this never blocks the batch.
+ */
+async function attachResumeWithAi(
+  plan: ImportRowPlan,
+  candidateId: string,
+  user: AuthUser,
+): Promise<void> {
+  try {
+    checkRateLimit(`migration-resume-ai:${user.id}`, { limit: 20, windowMs: 60_000 });
+    const variant = variantForPlan(plan);
+    const data = await parseResume({ variant, text: plan.resumeText! });
+    const mapped = toCandidateCreateInput(variant, data) as unknown as Record<string, unknown>;
+
+    await withTransaction(async (tx) => {
+      const existing = await candidateRepository.findById(candidateId, undefined, tx);
+      if (existing) {
+        const fills = fillEmptyFields(existing as unknown as Record<string, unknown>, mapped);
+        if (Object.keys(fills).length > 0) {
+          await candidateRepository.update(candidateId, fills, tx);
+        }
+      }
+      const document = await documentRepository.create(
+        {
+          candidateId,
+          type: "resume",
+          originalFilename: `${plan.name}.pdf`,
+          mimeType: "application/pdf",
+          extractedText: plan.resumeText,
+          extractedData: data,
+          uploadedById: user.id,
+        },
+        tx,
+      );
+      await writeAudit(tx, {
+        entity: "document",
+        entityId: document.id,
+        actor: user.id,
+        action: "import-resume-ai",
+      });
+    });
+  } catch {
+    // Never log the row (PII). Surface the failure instead of legacy's silent swallow.
+    plan.errors.push("ai-extraction-failed");
+  }
 }
 
 export const migrationService = {
@@ -137,6 +293,7 @@ export const migrationService = {
 
     for (const plan of planned.plans) {
       if (plan.action === "error" || plan.action === "skip") continue;
+      let candidateId: string | null = null;
       try {
         await withTransaction(async (tx) => {
           const candidate = await candidateRepository.upsertByLegacyId(
@@ -145,6 +302,7 @@ export const migrationService = {
             plan.update,
             tx,
           );
+          candidateId = candidate.id;
           if (plan.document) {
             await documentRepository.upsertByLegacyId(
               plan.document.legacyId,
@@ -171,6 +329,14 @@ export const migrationService = {
         // Never log the row (PII). Mark it errored and continue.
         plan.action = "error";
         plan.errors.push("commit-failed");
+        continue;
+      }
+
+      // Wave 1.3 backlog (Indrasur bulk-résumé flow) — deliberately OUTSIDE the upsert transaction
+      // (a paid, slow LLM call has no business holding a DB lock). Runs only for rows with an
+      // unambiguously matched résumé, and only when the caller opted in.
+      if (input.extractWithAi && plan.resumeMatch === "matched" && plan.resumeText && candidateId) {
+        await attachResumeWithAi(plan, candidateId, user);
       }
     }
 

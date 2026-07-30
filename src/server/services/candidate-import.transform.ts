@@ -22,7 +22,11 @@ import {
   fromLegacyStatusLabel,
   statusOrder,
 } from "@/lib/constants";
-import type { ImportAction, EmailDuplicateGroup } from "@/lib/validation/migration";
+import type {
+  ImportAction,
+  EmailDuplicateGroup,
+  ResumeMatchStatus,
+} from "@/lib/validation/migration";
 import type { LegacyRow } from "./sheet-parse";
 
 /** A résumé document to upsert alongside the candidate, keyed deterministically by legacy id (§5). */
@@ -57,6 +61,16 @@ export interface ImportRowPlan {
   /** Legacy row carries a DeletedAt → imports soft-deleted (to Trash). */
   softDeleted: boolean;
   action: ImportAction;
+  /** Wave 1.3 backlog (Indrasur bulk-résumé flow) — set by `migration.service.ts`'s `planImport`
+   *  AFTER `transformRow` runs (matching needs every row's name at once, not just this one's).
+   *  Optional/undefined when no résumé ZIP was uploaded at all. */
+  resumeMatch?: ResumeMatchStatus;
+  /** The matched résumé's already-extracted text (client-side pdf.js) — only set when
+   *  `resumeMatch === "matched"`. Never persisted on the plan beyond the commit request's lifetime. */
+  resumeText?: string | null;
+  /** The matched résumé's original filename — only set when `resumeMatch === "matched"`. Surfaced
+   *  in the report so a reviewer can see WHICH file matched (legacy parity), not just that one did. */
+  resumeFilename?: string | null;
 }
 
 // --- tolerant scalar parsers (unit-tested; validated later via the prepare preview) ----------

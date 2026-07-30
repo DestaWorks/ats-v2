@@ -13,9 +13,11 @@ import type { AuthUser } from "@/server/auth/guards";
 const h = vi.hoisted(() => ({
   fakeTx: { __tx: true },
   clientRepo: { list: vi.fn() },
-  candidateRepo: { list: vi.fn(), upsertByLegacyId: vi.fn() },
-  documentRepo: { upsertByLegacyId: vi.fn() },
+  candidateRepo: { list: vi.fn(), upsertByLegacyId: vi.fn(), findById: vi.fn(), update: vi.fn() },
+  documentRepo: { upsertByLegacyId: vi.fn(), create: vi.fn() },
   writeAudit: vi.fn(),
+  parseResume: vi.fn(),
+  checkRateLimit: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
@@ -30,6 +32,8 @@ vi.mock("@/server/db/audit", () => ({ writeAudit: h.writeAudit }));
 vi.mock("@/server/db/with-transaction", () => ({
   withTransaction: (fn: (tx: unknown) => unknown) => fn(h.fakeTx),
 }));
+vi.mock("@/server/ai/parse-resume", () => ({ parseResume: h.parseResume }));
+vi.mock("@/server/http/rate-limit", () => ({ checkRateLimit: h.checkRateLimit }));
 
 import { migrationService } from "./migration.service";
 
@@ -55,6 +59,11 @@ beforeEach(() => {
     .mockReset()
     .mockImplementation((legacyId: string) => Promise.resolve({ id: `db-${legacyId}`, legacyId }));
   h.documentRepo.upsertByLegacyId.mockReset().mockResolvedValue({ id: "doc-1" });
+  h.documentRepo.create.mockReset().mockResolvedValue({ id: "doc-ai-1" });
+  h.candidateRepo.findById.mockReset().mockResolvedValue({ id: "db-L-1", name: "Jane" });
+  h.candidateRepo.update.mockReset().mockResolvedValue({ id: "db-L-1" });
+  h.parseResume.mockReset();
+  h.checkRateLimit.mockReset();
   h.writeAudit.mockReset().mockResolvedValue(undefined);
   errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
   logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
@@ -214,5 +223,264 @@ describe("migrationService.commit", () => {
     // the other row still committed
     expect(report.counts.added).toBe(1);
     assertNoPiiLogged("SEKRET-jane@x.com");
+  });
+});
+
+/** A minimal but shape-valid clinical résumé extraction, for mocking `parseResume`. */
+const FAKE_RESUME_DATA = {
+  name: "Jane Doe",
+  email: "jane.new@x.com",
+  phone: "555-1234",
+  homeBase: { city: "Austin", stateOrCountry: "TX", timezone: "CT" },
+  workMode: "Remote",
+  targetStart: null,
+  snapshot: "",
+  verificationLine: "",
+  experience: [
+    {
+      title: "RN",
+      dates: "",
+      employer: "Acme Health",
+      setting: "Outpatient",
+      location: "",
+      contextLine: "",
+      bullets: [],
+    },
+  ],
+  education: [],
+  licensure: [
+    { type: "PMHNP", state: "TX", number: "12345", status: "Active", expires: "Jan 2027" },
+  ],
+  npi: null,
+  caqhAttestedDate: null,
+  skills: { modalities: [], populations: ["Adult"] },
+};
+
+describe("migrationService — résumé ZIP matching (Wave 1.3 backlog, Indrasur flow)", () => {
+  it("matches a résumé to its row by normalized name, unmatched files are surfaced (never dropped)", async () => {
+    const content = csv([
+      { ID: "L-1", Name: "Jane Doe", Status: NEW },
+      { ID: "L-2", Name: "No Resume Here", Status: NEW },
+    ]);
+    const report = await migrationService.prepare(
+      {
+        format: "csv",
+        content,
+        resumes: [
+          {
+            filenamePrefix: "Jane Doe",
+            originalFilename: "Jane Doe.pdf",
+            text: "resume text for jane",
+          },
+          {
+            filenamePrefix: "Someone Else",
+            originalFilename: "Someone Else.pdf",
+            text: "orphaned resume text",
+          },
+        ],
+      },
+      owner,
+    );
+    expect(report.rows.find((r) => r.legacyId === "L-1")!.resumeMatch).toBe("matched");
+    expect(report.rows.find((r) => r.legacyId === "L-1")!.resumeFilename).toBe("Jane Doe.pdf");
+    expect(report.rows.find((r) => r.legacyId === "L-2")!.resumeMatch).toBe("none");
+    expect(report.unmatchedResumeFiles).toEqual(["Someone Else.pdf"]);
+    expect(report.resumeCounts).toEqual({ matched: 1, ambiguous: 0, none: 1 });
+  });
+
+  it("a row with no résumé still imports normally (never hard-blocked, unlike legacy)", async () => {
+    const content = csv([{ ID: "L-1", Name: "No Resume", Status: NEW }]);
+    const report = await migrationService.prepare(
+      {
+        format: "csv",
+        content,
+        resumes: [
+          {
+            filenamePrefix: "Somebody Else",
+            originalFilename: "Somebody Else.pdf",
+            text: "x".repeat(60),
+          },
+        ],
+      },
+      owner,
+    );
+    expect(report.rows[0]!.action).toBe("add");
+    expect(report.rows[0]!.resumeMatch).toBe("none");
+  });
+
+  it("collision — >1 résumé file for one name → ambiguous for every affected row, no silent overwrite", async () => {
+    const content = csv([{ ID: "L-1", Name: "Jane Doe", Status: NEW }]);
+    const report = await migrationService.prepare(
+      {
+        format: "csv",
+        content,
+        resumes: [
+          { filenamePrefix: "Jane Doe", originalFilename: "Jane Doe.pdf", text: "resume A" },
+          { filenamePrefix: "jane doe", originalFilename: "jane doe.pdf", text: "resume B" }, // same normalized key
+        ],
+      },
+      owner,
+    );
+    expect(report.rows[0]!.resumeMatch).toBe("ambiguous");
+    expect(report.rows[0]!.reasons).toContain("resume-ambiguous");
+  });
+
+  it("collision — >1 row sharing a name with exactly 1 résumé → ambiguous for both rows", async () => {
+    const content = csv([
+      { ID: "L-1", Name: "Same Name", Status: NEW },
+      { ID: "L-2", Name: "Same Name", Status: NEW },
+    ]);
+    const report = await migrationService.prepare(
+      {
+        format: "csv",
+        content,
+        resumes: [
+          { filenamePrefix: "Same Name", originalFilename: "Same Name.pdf", text: "one resume" },
+        ],
+      },
+      owner,
+    );
+    expect(report.rows.every((r) => r.resumeMatch === "ambiguous")).toBe(true);
+  });
+
+  it('no ZIP uploaded at all → every row reports resumeMatch "none", no unmatchedResumeFiles/resumeCounts', async () => {
+    const content = csv([{ ID: "L-1", Name: "Jane", Status: NEW }]);
+    const report = await migrationService.prepare({ format: "csv", content }, owner);
+    expect(report.rows[0]!.resumeMatch).toBe("none");
+    expect(report.unmatchedResumeFiles).toBeUndefined();
+    expect(report.resumeCounts).toBeUndefined();
+  });
+});
+
+describe("migrationService.commit — AI résumé extraction (Wave 1.3 backlog, Indrasur flow)", () => {
+  it("extractWithAi=false (default) never calls parseResume even when a résumé matched", async () => {
+    const content = csv([{ ID: "L-1", Name: "Jane Doe", Status: NEW }]);
+    await migrationService.commit(
+      {
+        format: "csv",
+        content,
+        resumes: [
+          { filenamePrefix: "Jane Doe", originalFilename: "Jane Doe.pdf", text: "resume text" },
+        ],
+      },
+      owner,
+    );
+    expect(h.parseResume).not.toHaveBeenCalled();
+    expect(h.documentRepo.create).not.toHaveBeenCalled();
+  });
+
+  it("extractWithAi=true + matched résumé → parseResume called, Document created, empty fields filled", async () => {
+    h.parseResume.mockResolvedValue(FAKE_RESUME_DATA);
+    h.candidateRepo.findById.mockResolvedValue({
+      id: "db-L-1",
+      name: "Jane Doe",
+      email: null,
+      phone: null,
+    });
+
+    const content = csv([{ ID: "L-1", Name: "Jane Doe", Status: NEW }]);
+    await migrationService.commit(
+      {
+        format: "csv",
+        content,
+        resumes: [
+          {
+            filenamePrefix: "Jane Doe",
+            originalFilename: "Jane Doe.pdf",
+            text: "resume text for jane",
+          },
+        ],
+        extractWithAi: true,
+      },
+      owner,
+    );
+
+    expect(h.checkRateLimit).toHaveBeenCalledWith(
+      "migration-resume-ai:u1",
+      expect.objectContaining({ limit: 20 }),
+    );
+    expect(h.parseResume).toHaveBeenCalledWith({
+      variant: "clinical",
+      text: "resume text for jane",
+    });
+    expect(h.documentRepo.create).toHaveBeenCalledTimes(1);
+    const [docData] = h.documentRepo.create.mock.calls[0]!;
+    expect(docData).toMatchObject({
+      candidateId: "db-L-1",
+      type: "resume",
+      extractedText: "resume text for jane",
+    });
+    // email/phone were empty on the existing candidate → filled from the extraction
+    expect(h.candidateRepo.update).toHaveBeenCalledWith(
+      "db-L-1",
+      expect.objectContaining({ email: "jane.new@x.com" }),
+      h.fakeTx,
+    );
+  });
+
+  it("never overwrites an existing (non-empty) candidate field", async () => {
+    h.parseResume.mockResolvedValue(FAKE_RESUME_DATA);
+    h.candidateRepo.findById.mockResolvedValue({
+      id: "db-L-1",
+      name: "Jane Doe",
+      email: "already-set@x.com",
+      phone: null,
+    });
+
+    const content = csv([{ ID: "L-1", Name: "Jane Doe", Status: NEW }]);
+    await migrationService.commit(
+      {
+        format: "csv",
+        content,
+        resumes: [
+          { filenamePrefix: "Jane Doe", originalFilename: "Jane Doe.pdf", text: "resume text" },
+        ],
+        extractWithAi: true,
+      },
+      owner,
+    );
+
+    const fills = h.candidateRepo.update.mock.calls[0]?.[1] as Record<string, unknown> | undefined;
+    expect(fills?.email).toBeUndefined(); // NOT overwritten
+    expect(fills?.phone).toBe("555-1234"); // empty field WAS filled
+  });
+
+  it("a failed extraction marks the row (not the whole batch) and the candidate is still committed", async () => {
+    h.parseResume.mockRejectedValue(new Error("provider down"));
+    const content = csv([{ ID: "L-1", Name: "Jane Doe", Status: NEW }]);
+    const report = await migrationService.commit(
+      {
+        format: "csv",
+        content,
+        resumes: [
+          { filenamePrefix: "Jane Doe", originalFilename: "Jane Doe.pdf", text: "resume text" },
+        ],
+        extractWithAi: true,
+      },
+      owner,
+    );
+    expect(report.rows[0]!.action).toBe("add"); // candidate itself still committed
+    expect(report.rows[0]!.reasons).toContain("ai-extraction-failed");
+    expect(h.documentRepo.create).not.toHaveBeenCalled();
+  });
+
+  it("ambiguous/unmatched rows never trigger AI extraction even with extractWithAi=true", async () => {
+    const content = csv([
+      { ID: "L-1", Name: "Same Name", Status: NEW },
+      { ID: "L-2", Name: "Same Name", Status: NEW },
+      { ID: "L-3", Name: "No Resume", Status: NEW },
+    ]);
+    await migrationService.commit(
+      {
+        format: "csv",
+        content,
+        resumes: [
+          { filenamePrefix: "Same Name", originalFilename: "Same Name.pdf", text: "one resume" },
+        ],
+        extractWithAi: true,
+      },
+      owner,
+    );
+    expect(h.parseResume).not.toHaveBeenCalled();
   });
 });
