@@ -28,6 +28,19 @@ function resolveModel(provider: AiProvider, modelId: string) {
  */
 const DEFAULT_MAX_OUTPUT_TOKENS = 16000;
 
+/**
+ * Google's newer Gemini models ("-latest" aliases, 3.x) think by default, spending part of
+ * `maxOutputTokens` on an invisible reasoning pass before the actual JSON — callers with a tight
+ * cap (e.g. Pipeline Health's 512) got silently truncated mid-response after the AI_MODEL swap to
+ * `gemini-flash-latest`. `thinkingLevel: "minimal"` keeps the low caps meaningful again; Claude/
+ * OpenAI have no such option, so this only applies for the google provider.
+ */
+function providerOptionsFor(provider: AiProvider) {
+  return provider === "google"
+    ? { google: { thinkingConfig: { thinkingLevel: "minimal" } } }
+    : undefined;
+}
+
 export async function generateStructured<T>(opts: {
   schema: ZodType<T>;
   system: string;
@@ -43,6 +56,7 @@ export async function generateStructured<T>(opts: {
     system: opts.system,
     prompt: opts.prompt,
     maxOutputTokens: opts.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
+    providerOptions: providerOptionsFor(provider),
   });
   return object;
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { activeNavHref, BASE_NAV_ITEMS } from "./nav";
+import { activeNavHref, BASE_NAV_ITEMS, groupNavItems, type NavItem } from "./nav";
 
 const HREFS = BASE_NAV_ITEMS.map((i) => i.href);
 
@@ -80,5 +80,72 @@ describe("activeNavHref", () => {
 
   it("does not treat a sibling prefix as a match (/candidates ≠ /candidatesX)", () => {
     expect(activeNavHref("/candidatesX", HREFS)).toBeNull();
+  });
+});
+
+describe("groupNavItems", () => {
+  it("renders a headerless single-item section for items with no group", () => {
+    const items: NavItem[] = [{ href: "/dashboard", label: "Overview" }];
+    expect(groupNavItems(items)).toEqual([
+      { group: null, items: [{ href: "/dashboard", label: "Overview" }] },
+    ]);
+  });
+
+  it("buckets consecutive same-group items into one section", () => {
+    const items: NavItem[] = [
+      { href: "/a", label: "A", group: "Home" },
+      { href: "/b", label: "B", group: "Home" },
+    ];
+    expect(groupNavItems(items)).toEqual([
+      {
+        group: "Home",
+        items: [
+          { href: "/a", label: "A", group: "Home" },
+          { href: "/b", label: "B", group: "Home" },
+        ],
+      },
+    ]);
+  });
+
+  it("merges a same-group item appended LATER in the array into the section at its first occurrence", () => {
+    // Mirrors layout.tsx: capability-gated "Import" is pushed after the base array, but should
+    // still land inside the "Recruiting" section, not form a second trailing "Recruiting" section.
+    const items: NavItem[] = [
+      { href: "/sourcing", label: "Sourcing", group: "Recruiting" },
+      { href: "/profile", label: "My Profile" },
+      { href: "/migration", label: "Import", group: "Recruiting" },
+    ];
+    expect(groupNavItems(items)).toEqual([
+      {
+        group: "Recruiting",
+        items: [
+          { href: "/sourcing", label: "Sourcing", group: "Recruiting" },
+          { href: "/migration", label: "Import", group: "Recruiting" },
+        ],
+      },
+      { group: null, items: [{ href: "/profile", label: "My Profile" }] },
+    ]);
+  });
+
+  it("produces exactly one section per ungrouped item, in place, never merging separate ungrouped items", () => {
+    const items: NavItem[] = [
+      { href: "/dashboard", label: "Overview" },
+      { href: "/a", label: "A", group: "Home" },
+      { href: "/profile", label: "My Profile" },
+    ];
+    const sections = groupNavItems(items);
+    expect(sections).toHaveLength(3);
+    expect(sections[0]).toEqual({ group: null, items: [items[0]] });
+    expect(sections[2]).toEqual({ group: null, items: [items[2]] });
+  });
+
+  it("groups the real BASE_NAV_ITEMS into the expected sections", () => {
+    const sections = groupNavItems(BASE_NAV_ITEMS);
+    // Overview is ungrouped and first; Home/Recruiting/Tools follow; My Profile is ungrouped last.
+    expect(sections.map((s) => s.group)).toEqual([null, "Home", "Recruiting", "Tools", null]);
+    expect(sections[0]!.group).toBeNull();
+    expect(sections[0]!.items[0]!.href).toBe("/dashboard");
+    expect(sections.at(-1)!.group).toBeNull();
+    expect(sections.at(-1)!.items[0]!.href).toBe("/profile");
   });
 });

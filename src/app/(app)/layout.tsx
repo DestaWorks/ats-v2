@@ -37,25 +37,25 @@ export default async function AppLayout({
 
   const items: NavItem[] = [...BASE_NAV_ITEMS];
   if (hasCapability(user.role, "bulkImport")) {
-    items.push({ href: "/migration", label: "Import" });
+    items.push({ href: "/migration", label: "Import", group: "Recruiting", icon: "upload" });
   }
   if (hasCapability(user.role, "viewAudit")) {
-    items.push({ href: "/activity", label: "Activity" });
+    items.push({ href: "/activity", label: "Activity", group: "Tools", icon: "clock" });
   }
   if (hasCapability(user.role, "viewCredentials")) {
-    items.push({ href: "/credentials", label: "Credentials" });
+    items.push({ href: "/credentials", label: "Credentials", group: "Tools", icon: "id" });
   }
   if (hasCapability(user.role, "viewCrm")) {
-    items.push({ href: "/crm", label: "CRM" });
+    items.push({ href: "/crm", label: "CRM", group: "Client", icon: "building" });
   }
   if (hasCapability(user.role, "viewReports")) {
-    items.push({ href: "/reports", label: "Reports" });
+    items.push({ href: "/reports", label: "Reports", group: "Insights", icon: "chart" });
   }
   if (hasCapability(user.role, "viewAnalytics")) {
-    items.push({ href: "/analytics", label: "Analytics" });
+    items.push({ href: "/analytics", label: "Analytics", group: "Insights", icon: "trending" });
   }
   if (hasCapability(user.role, "manageUsers")) {
-    items.push({ href: "/admin", label: "Admin" });
+    items.push({ href: "/admin", label: "Admin", icon: "settings" });
   }
 
   const clientRows = await clientRepository.list();

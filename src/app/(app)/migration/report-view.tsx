@@ -1,17 +1,31 @@
+"use client";
+
+import { useState } from "react";
 import type { BadgeTone } from "@/components/ui/badge";
-import type { ImportAction, ImportReport } from "@/lib/validation/migration";
+import type {
+  ImportAction,
+  ImportFormat,
+  ImportReport,
+  ImportResume,
+  ResumeMatchStatus,
+} from "@/lib/validation/migration";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Table, Td } from "@/components/ui/table";
 import { cn } from "@/lib/utils/cn";
+import { RowInspectModal } from "./row-inspect-modal";
 
 /**
  * Presentational render of an `ImportReport` — shared by the preview (what commit WOULD do) and the
- * commit result (what it DID). Pure/stateless: summary count badges, the email-duplicate groups,
- * any warnings, and the full row table with a per-row action badge + reason chips. Flagged/errored
- * rows are made visually prominent (a tinted row + prominent action badge). No hooks → no client
- * directive; it renders inside the wizard's client boundary.
+ * commit result (what it DID). Summary count badges, the email-duplicate groups, any warnings, and
+ * the full row table with a per-row action badge + reason chips. Flagged/errored rows are made
+ * visually prominent (a tinted row + prominent action badge).
+ *
+ * `csvContent`/`csvFormat`/`resumes` are optional — when the caller has them (the wizard does, in
+ * both the preview and commit-result steps), rows become clickable to open the legacy-parity
+ * "inspect before commit" modal (CSV data + matched résumé text). Without them, the table is
+ * read-only, same as before.
  */
 
 /** Tone per action for the row badge (flagged = amber, errored = danger; writes lean success/navy). */
@@ -31,6 +45,18 @@ const ACTION_LABEL: Record<ImportAction, string> = {
   error: "error",
 };
 
+/** Wave 1.3 backlog (Indrasur bulk-resume flow) — per-row resume-match badge. */
+const RESUME_MATCH_TONE: Record<ResumeMatchStatus, BadgeTone> = {
+  matched: "success",
+  ambiguous: "amber",
+  none: "neutral",
+};
+const RESUME_MATCH_LABEL: Record<ResumeMatchStatus, string> = {
+  matched: "matched",
+  ambiguous: "ambiguous",
+  none: "—",
+};
+
 /** One summary stat with a count badge + text label (never colour-only — a11y). */
 function Stat({ label, value, tone }: { label: string; value: number; tone: BadgeTone }) {
   return (
@@ -43,8 +69,21 @@ function Stat({ label, value, tone }: { label: string; value: number; tone: Badg
   );
 }
 
-export function ReportView({ report }: { report: ImportReport }) {
+export function ReportView({
+  report,
+  csvContent,
+  csvFormat,
+  resumes,
+}: {
+  report: ImportReport;
+  csvContent?: string;
+  csvFormat?: ImportFormat;
+  resumes?: ImportResume[];
+}) {
   const { counts } = report;
+  const [openIndex, setOpenIndex] = useState<number | null>(null);
+  const inspectable = Boolean(csvContent && csvFormat);
+
   return (
     <div className="flex flex-col gap-4">
       <section aria-label="Import summary" className="grid grid-cols-2 gap-2 sm:grid-cols-6">
@@ -55,6 +94,17 @@ export function ReportView({ report }: { report: ImportReport }) {
         <Stat label="Flagged" value={counts.flagged} tone="amber" />
         <Stat label="Errored" value={counts.errored} tone="danger" />
       </section>
+
+      {report.resumeCounts ? (
+        <section
+          aria-label="Resume match summary"
+          className="grid grid-cols-2 gap-2 sm:grid-cols-3"
+        >
+          <Stat label="Resumes matched" value={report.resumeCounts.matched} tone="success" />
+          <Stat label="Ambiguous" value={report.resumeCounts.ambiguous} tone="amber" />
+          <Stat label="No resume found" value={report.resumeCounts.none} tone="neutral" />
+        </section>
+      ) : null}
 
       {report.warnings && report.warnings.length > 0 ? (
         <div
@@ -68,6 +118,25 @@ export function ReportView({ report }: { report: ImportReport }) {
             ))}
           </ul>
         </div>
+      ) : null}
+
+      {report.unmatchedResumeFiles && report.unmatchedResumeFiles.length > 0 ? (
+        <Card as="section" className="p-4" aria-label="Unmatched resume files">
+          <h3 className="text-sm font-bold tracking-wide text-navy uppercase">
+            Unmatched resume files · {report.unmatchedResumeFiles.length}
+          </h3>
+          <p className="mt-1 text-xs text-gray">
+            These resume filenames didn&apos;t match any row&apos;s name — they were NOT attached to
+            anything. Attach them manually afterward via the candidate&apos;s own resume upload.
+          </p>
+          <ul className="mt-2 flex flex-wrap gap-1.5">
+            {report.unmatchedResumeFiles.map((f) => (
+              <Badge key={f} tone="amber" size="sm" pill={false}>
+                {f}
+              </Badge>
+            ))}
+          </ul>
+        </Card>
       ) : null}
 
       {report.emailDuplicateGroups.length > 0 ? (
@@ -97,19 +166,39 @@ export function ReportView({ report }: { report: ImportReport }) {
         <h3 className="text-sm font-bold tracking-wide text-navy uppercase">
           Rows · {report.rows.length}
         </h3>
+        {inspectable ? (
+          <p className="text-xs text-navy italic">
+            💡 Click any row to inspect the CSV data and preview the matched resume before
+            committing.
+          </p>
+        ) : null}
         {report.rows.length === 0 ? (
           <EmptyState title="No rows" description="The parsed export produced no candidate rows." />
         ) : (
           <Table
             caption="Per-row import report"
-            columns={["Legacy ID", "Name", "Action", "Reasons"]}
+            columns={["Legacy ID", "Name", "Action", "Resume", "Reasons"]}
           >
-            {report.rows.map((r) => {
+            {report.rows.map((r, i) => {
               const prominent = r.action === "error";
               return (
                 <tr
                   key={r.legacyId}
-                  className={cn("hover:bg-black/[0.02]", r.action === "error" && "bg-red/5")}
+                  role={inspectable ? "button" : undefined}
+                  tabIndex={inspectable ? 0 : undefined}
+                  onClick={inspectable ? () => setOpenIndex(i) : undefined}
+                  onKeyDown={
+                    inspectable
+                      ? (e) => {
+                          if (e.key === "Enter" || e.key === " ") setOpenIndex(i);
+                        }
+                      : undefined
+                  }
+                  className={cn(
+                    "hover:bg-black/[0.02]",
+                    r.action === "error" && "bg-red/5",
+                    inspectable && "cursor-pointer",
+                  )}
                 >
                   <Td className="font-mono text-xs">{r.legacyId}</Td>
                   <Td className="font-medium">{r.name}</Td>
@@ -117,6 +206,22 @@ export function ReportView({ report }: { report: ImportReport }) {
                     <Badge tone={ACTION_TONE[r.action]} size="sm">
                       {ACTION_LABEL[r.action]}
                     </Badge>
+                  </Td>
+                  <Td>
+                    {r.resumeMatch === "matched" && r.resumeFilename ? (
+                      <span className="text-xs font-medium text-green">
+                        ✓{" "}
+                        {r.resumeFilename.length > 30
+                          ? `${r.resumeFilename.slice(0, 30)}…`
+                          : r.resumeFilename}
+                      </span>
+                    ) : r.resumeMatch === "none" ? (
+                      <span className="text-xs text-gray">—</span>
+                    ) : (
+                      <Badge tone={RESUME_MATCH_TONE[r.resumeMatch]} size="sm">
+                        {RESUME_MATCH_LABEL[r.resumeMatch]}
+                      </Badge>
+                    )}
                   </Td>
                   <Td>
                     {r.reasons.length === 0 ? (
@@ -142,6 +247,17 @@ export function ReportView({ report }: { report: ImportReport }) {
           </Table>
         )}
       </section>
+
+      {inspectable && openIndex !== null ? (
+        <RowInspectModal
+          report={report}
+          startIndex={openIndex}
+          csvContent={csvContent!}
+          csvFormat={csvFormat!}
+          resumes={resumes ?? []}
+          onClose={() => setOpenIndex(null)}
+        />
+      ) : null}
     </div>
   );
 }

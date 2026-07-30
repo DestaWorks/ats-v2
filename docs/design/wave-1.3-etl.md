@@ -231,6 +231,33 @@ interface DocumentUpsertPlan {
   needs `documentRepository.upsertByLegacyId(legacyId, data)` (+ `findByLegacyId`), mirroring the candidate
   repo. `Document.legacyId` is already `@unique` (1.2). Add these two small methods in this wave.
 
+### 5.1. Addendum (2026-07-29): the Indrasur bulk-résumé flow — a separate, later, safer addition
+
+E-5 above still fully governs the *original* Sheet→Postgres historical-migration path (legacy_id-keyed,
+no fuzzy matching, no LLM). Separately, `migrationService` now ALSO supports an optional résumé-ZIP +
+AI-extraction capability for the **Indrasur** bulk-import case (a recurring, smaller-batch external-data
+ingestion — distinct from the one-shot Sheet cutover). This mirrors legacy's own "Bulk Import from
+Indrasur" feature, but fixes three confirmed legacy bugs rather than porting them:
+
+- **Filename collisions never silently overwrite** — legacy's `forEach` let the last-iterated file win
+  with zero warning; here, ANY collision (>1 file for one name, or >1 row sharing a name) marks every
+  affected row `"ambiguous"` and attaches no résumé.
+- **A row with no matched résumé still imports** — legacy's commit UI hard-required a `matchedFile`,
+  silently excluding resume-less rows from ever being written at all. Here résumé matching is purely
+  additive: `resumeMatch: "none"` rows commit exactly as they would with no ZIP uploaded.
+- **AI extraction reuses Wave 1.2's real, correct schema** (`parseResume`/`resumeSchemaFor`), not
+  legacy's own broken field-harvesting (which read flattened top-level keys — `licenseNumber`,
+  `yearsExperience` — that its own Gemini schema never actually produced, silently swallowed by a
+  triple-nested try/catch so the bug went unnoticed). Extraction is opt-in (`extractWithAi`, default
+  off — a paid, rate-limited LLM call per matched résumé) and any failure marks the row
+  `"ai-extraction-failed"` rather than silently succeeding with blank fields.
+
+Résumés are still never stored as bytes — the client unzips + pdf.js-extracts text exactly like the
+single-résumé flow (`resume/lib/pdf-extract.ts`), and only `extractedText`/`extractedData` persist
+(`Document.storageKey` stays null, same as everywhere else in the app pending Wave 6 object storage).
+See `src/lib/validation/migration.ts` (`importResumeSchema`, `resumeMatch`, `unmatchedResumeFiles`) and
+`src/server/services/migration.service.ts` (`matchResumes`, `attachResumeWithAi`).
+
 ---
 
 ## 6. Soft-deleted rows → Trash (E-6)
