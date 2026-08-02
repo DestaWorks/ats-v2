@@ -36,8 +36,8 @@ export interface NavItem {
   href: string;
   label: string;
   /** Section header this item renders under (e.g. "Recruiting"). Omitted → renders as a plain,
-   *  headerless link in its array position (used for anchors like Overview/My Profile/Admin that
-   *  shouldn't live inside a collapsible section). */
+   *  headerless link in its array position (used for anchors like Overview/Admin that shouldn't
+   *  live inside a collapsible section). */
   group?: string;
   icon?: NavIconKey;
 }
@@ -69,12 +69,12 @@ export const BASE_NAV_ITEMS: readonly NavItem[] = [
 
   { href: "/templates", label: "Templates", group: "Tools", icon: "documents" },
   { href: "/learn", label: "Learn", group: "Tools", icon: "academic" },
-
-  { href: "/profile", label: "My Profile", icon: "profile" },
 ];
 
-/** One rendered sidebar section — `group: null` is a headerless anchor item (Overview, My Profile,
- *  Admin, …), always rendered as its own single-item "section". */
+/** One rendered sidebar section — `group: null` is a headerless anchor item (Overview, Admin, …),
+ *  always rendered as its own single-item "section". **My Profile is NOT a nav item** (2026-07-31)
+ *  — it moved into the header's account menu (`user-menu.tsx`) alongside Sign out, matching the
+ *  standard "avatar → account menu" pattern instead of a standalone sidebar link. */
 export interface NavSection {
   group: string | null;
   items: NavItem[];

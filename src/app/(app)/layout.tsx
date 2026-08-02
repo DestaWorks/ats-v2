@@ -70,7 +70,7 @@ export default async function AppLayout({
         Skip to content
       </a>
       <div className="flex min-h-screen flex-col">
-        <AppHeader userName={user.name} userRole={user.role} />
+        <AppHeader userName={user.name} userEmail={user.email} userRole={user.role} />
         <div className="flex flex-1 flex-col md:flex-row">
           <AppNav
             items={items}
