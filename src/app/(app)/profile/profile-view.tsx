@@ -102,90 +102,94 @@ export function ProfileView({
   });
 
   return (
-    <div className="flex max-w-2xl flex-col gap-5">
-      <Card as="section" className="flex flex-col gap-4 p-5">
-        <div className="flex items-center gap-5">
-          <div className="relative">
-            {image ? (
-              // eslint-disable-next-line @next/next/no-img-element -- a user-uploaded data URI, not a static asset
-              <img
-                src={image}
-                alt=""
-                className="h-20 w-20 rounded-full border-2 border-brand object-cover"
+    <div className="grid w-full grid-cols-12 gap-6">
+      <div className="col-span-12 flex flex-col gap-5 lg:col-span-8">
+        <Card as="section" className="flex flex-col gap-4 p-5">
+          <div className="flex items-center gap-5">
+            <div className="relative">
+              {image ? (
+                // eslint-disable-next-line @next/next/no-img-element -- a user-uploaded data URI, not a static asset
+                <img
+                  src={image}
+                  alt=""
+                  className="h-20 w-20 rounded-full border-2 border-brand object-cover"
+                />
+              ) : (
+                <span className="flex h-20 w-20 items-center justify-center rounded-full bg-navy/10 text-2xl font-bold text-navy">
+                  {(userName.trim()[0] ?? "?").toUpperCase()}
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                disabled={uploading}
+                className="absolute -right-1 -bottom-1 flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-navy text-sm font-bold text-white"
+                aria-label="Change avatar"
+              >
+                +
+              </button>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*"
+                onChange={(e) => void handleAvatarChange(e)}
+                className="hidden"
               />
-            ) : (
-              <span className="flex h-20 w-20 items-center justify-center rounded-full bg-navy/10 text-2xl font-bold text-navy">
-                {(userName.trim()[0] ?? "?").toUpperCase()}
-              </span>
-            )}
-            <button
-              type="button"
-              onClick={() => fileRef.current?.click()}
-              disabled={uploading}
-              className="absolute -right-1 -bottom-1 flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-navy text-sm font-bold text-white"
-              aria-label="Change avatar"
-            >
-              +
-            </button>
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/*"
-              onChange={(e) => void handleAvatarChange(e)}
-              className="hidden"
-            />
+            </div>
+            <div>
+              <p className="text-xl font-bold text-charcoal">{userName}</p>
+              <p className="text-sm text-gray">{userEmail}</p>
+              <Badge tone="navy" size="sm">
+                {userRole}
+              </Badge>
+            </div>
           </div>
-          <div>
-            <p className="text-xl font-bold text-charcoal">{userName}</p>
-            <p className="text-sm text-gray">{userEmail}</p>
-            <Badge tone="navy" size="sm">
-              {userRole}
-            </Badge>
-          </div>
-        </div>
 
-        <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
-          {serverError ? <ErrorState message={serverError} /> : null}
-          <Field label="Bio" htmlFor="pf-bio" error={fieldError(form, "bio")}>
-            <Textarea
-              id="pf-bio"
-              rows={3}
-              className="resize-y"
-              placeholder="Tell your team about yourself…"
-              {...form.register("bio", { setValueAs: emptyToNull })}
-            />
-          </Field>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Phone" htmlFor="pf-phone" error={fieldError(form, "phone")}>
-              <Input
-                id="pf-phone"
-                placeholder="+251 9XX XXX XXXX"
-                {...form.register("phone", { setValueAs: emptyToNull })}
+          <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
+            {serverError ? <ErrorState message={serverError} /> : null}
+            <Field label="Bio" htmlFor="pf-bio" error={fieldError(form, "bio")}>
+              <Textarea
+                id="pf-bio"
+                rows={3}
+                className="resize-y"
+                placeholder="Tell your team about yourself…"
+                {...form.register("bio", { setValueAs: emptyToNull })}
               />
             </Field>
-            <Field label="Location" htmlFor="pf-location" error={fieldError(form, "location")}>
-              <Input
-                id="pf-location"
-                placeholder="Addis Ababa, Ethiopia"
-                {...form.register("location", { setValueAs: emptyToNull })}
-              />
-            </Field>
-          </div>
-          <div className="flex justify-end border-t border-black/5 pt-3">
-            <Button type="submit" variant="success" loading={pending}>
-              Save Profile
-            </Button>
-          </div>
-        </form>
-      </Card>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Phone" htmlFor="pf-phone" error={fieldError(form, "phone")}>
+                <Input
+                  id="pf-phone"
+                  placeholder="+251 9XX XXX XXXX"
+                  {...form.register("phone", { setValueAs: emptyToNull })}
+                />
+              </Field>
+              <Field label="Location" htmlFor="pf-location" error={fieldError(form, "location")}>
+                <Input
+                  id="pf-location"
+                  placeholder="Addis Ababa, Ethiopia"
+                  {...form.register("location", { setValueAs: emptyToNull })}
+                />
+              </Field>
+            </div>
+            <div className="flex justify-end border-t border-black/5 pt-3">
+              <Button type="submit" variant="success" loading={pending}>
+                Save Profile
+              </Button>
+            </div>
+          </form>
+        </Card>
 
-      <SignatureEditor
-        recruiterName={userName}
-        signature={signature}
-        onSaved={(next) => setSignature(next)}
-      />
+        <SignatureEditor
+          recruiterName={userName}
+          signature={signature}
+          onSaved={(next) => setSignature(next)}
+        />
+      </div>
 
-      <ChangePasswordCard />
+      <div className="col-span-12 lg:col-span-4">
+        <ChangePasswordCard />
+      </div>
     </div>
   );
 }
@@ -225,7 +229,7 @@ function ChangePasswordCard() {
   return (
     <Card as="section" className="flex flex-col gap-4 p-5">
       <h2 className="text-sm font-bold text-navy">Change Password</h2>
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="flex flex-col gap-4">
         <Field label="Current password" htmlFor="pw-current">
           <Input
             id="pw-current"
