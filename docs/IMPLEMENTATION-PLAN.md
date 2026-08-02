@@ -79,7 +79,7 @@ share a database.** *(`zyx.com` below is a placeholder for the real domain.)*
 - [x] Define **capability groups in code** (`ROLE_CAPABILITIES` map) + `hasCapability(role, cap)`; **"leadership" is a capability group** (`hasCapability(role, 'viewReports')`), *not* a hardcoded role list.
 - [x] Write guards: `requireUser`, `requireRole`, `requireCapability` (`server/auth/guards.ts`) — role is read from the session/DB and coerced through `isRole`, never trusted from the client.
 - [x] Port sign-in screen 1:1 + wire it (`(auth)/sign-in`, `useZodForm` + `signInSchema`, conditional Google button).
-- [x] Port request-access (writes `access_requests` via service → repository) 1:1. **Forgot-password screen deferred** — needs an email transport (not yet configured) and sign-up is off, so it's low-priority; tracked for a later Wave 0 slice.
+- [x] Port request-access (writes `access_requests` via service → repository) 1:1. **Forgot-password screen still deferred** — the original blocker (no email transport) is now resolved: `server/email/{config,provider}.ts` (2026-08-02) wraps Nodemailer, provider-agnostic via SMTP env vars (`EMAIL_HOST`/`PORT`/`SECURE`/`USER`/`PASS`/`FROM`), staging wired to Ethereal (https://ethereal.email — a fake SMTP catcher, view sent mail at ethereal.email/messages, nothing reaches a real inbox), verified live end-to-end (`sendEmail()` → real Ethereal preview URL). Production still needs a real SMTP provider chosen (swap the 5 env vars, no code change). The screen itself is still not built — tracked for a later Wave 0 slice.
 - [x] Test: `guards.test.ts` proves a non-admin (`Associate`) is blocked from `requireCapability('viewReports')` and `requireRole('Owner','Admin')` server-side, that a forged/unknown role coerces to `Associate`, and that leadership/admin roles pass. Verified end-to-end against the live DB: correct password → 200 + session (role `Owner` from DB); wrong password → 401.
 - **Done-when:** real sign-in works; public signup is off; role comes from DB; capability checks enforced server-side; a non-admin provably can't reach admin. ✅
 
@@ -770,7 +770,9 @@ format (blocks 1.3/1.4). *Trash auto-purge sign-off resolved 2026-07-14 — see 
 # WAVE 6 — Cutover & Decommission (Month 3)
 
 - [ ] Full QA pass + fix integration bugs.
-- [ ] Move rÃ©sumÃ© files to object storage (signed, expiring URLs).
+- [ ] Move rÃ©sumÃ© files AND profile avatars to object storage (signed, expiring URLs) — D8:
+      no file/image bytes stay in the DB after this (avatars currently persist a base64 `data:`
+      URI in `User.image`; a known, tracked exception until this lands, not a pattern to repeat).
 - [ ] Add error tracking + structured logs; finalize audit log.
 - [ ] Compliance checklist (HIPAA + Ethiopian Proclamation 1321/2024).
 - [ ] Retire Apps Script + Sheet; rotate exposed credentials.

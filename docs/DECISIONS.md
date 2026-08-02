@@ -65,6 +65,19 @@ gap** — this proven pattern is the standard going forward; do not reach for Ta
 any other client cache library) in new work. Full detail: `STACK-ARCHITECTURE.md` §6, code
 standard rules: `CONVENTIONS.md` §5.
 
+**D8 — No file/image bytes stored in the database; binaries always go to real object storage.**
+Confirmed 2026-07-31 (My Profile avatar-upload review): avatars currently persist a resized
+JPEG as a base64 `data:` URI directly in `User.image` (a Postgres text column) via Better Auth's
+`updateUser`. This is functional ONLY because the image is deliberately tiny (160×160, resized
+client-side before upload) — it is not a pattern to extend. Résumés already avoid this correctly
+(`Document.storageKey` is a Wave-6 placeholder; only extracted TEXT persists server-side, the
+original PDF bytes are discarded after client-side `pdf.js` extraction). This decision
+generalizes that constraint explicitly: no feature, present or future, may persist file/image
+bytes — or a base64 encoding of them — as a database column. Wave 6's "move résumé files to
+object storage" checklist item is amended to cover **avatars too**; until then, the avatar
+upload is a **known, tracked exception** (small, bounded, functional), not a precedent for new
+work.
+
 ---
 
 ## Resolved review findings (apply across docs)
