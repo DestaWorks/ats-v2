@@ -141,11 +141,15 @@ describe("groupNavItems", () => {
 
   it("groups the real BASE_NAV_ITEMS into the expected sections", () => {
     const sections = groupNavItems(BASE_NAV_ITEMS);
-    // Overview is ungrouped and first; Home/Recruiting/Tools follow; My Profile is ungrouped last.
-    expect(sections.map((s) => s.group)).toEqual([null, "Home", "Recruiting", "Tools", null]);
+    // Overview is ungrouped and first; Home/Recruiting/Tools follow. My Profile is NOT here — it
+    // lives in the header's account menu now, not the sidebar (2026-07-31).
+    expect(sections.map((s) => s.group)).toEqual([null, "Home", "Recruiting", "Tools"]);
     expect(sections[0]!.group).toBeNull();
     expect(sections[0]!.items[0]!.href).toBe("/dashboard");
-    expect(sections.at(-1)!.group).toBeNull();
-    expect(sections.at(-1)!.items[0]!.href).toBe("/profile");
+    expect(sections.at(-1)!.group).toBe("Tools");
+  });
+
+  it("does NOT include My Profile as a base nav item (2026-07-31 — moved to the header account menu)", () => {
+    expect(BASE_NAV_ITEMS.some((i) => i.href === "/profile")).toBe(false);
   });
 });

@@ -205,12 +205,19 @@ function NavLink({
       aria-current={isActive ? "page" : undefined}
       onClick={onNavigate}
       className={cn(
-        "flex items-center gap-2.5 rounded-lg px-4 py-2.5 text-sm font-medium transition",
+        "flex items-center gap-3 rounded-lg px-4 py-2.5 text-sm font-medium transition",
         "focus-visible:ring-2 focus-visible:ring-navy focus-visible:outline-none",
         isActive ? "bg-navy font-semibold text-white shadow-sm" : "text-charcoal hover:bg-black/5",
       )}
     >
-      {Icon ? <Icon aria-hidden="true" className="h-[18px] w-[18px] shrink-0" /> : null}
+      {/* The icon is deliberately quieter than the label — gray at rest, soft white when active
+          on the navy pill — never the same full-strength color as the text next to it. */}
+      {Icon ? (
+        <Icon
+          aria-hidden="true"
+          className={cn("h-[18px] w-[18px] shrink-0", isActive ? "text-white/70" : "text-gray")}
+        />
+      ) : null}
       {item.label}
     </Link>
   );
