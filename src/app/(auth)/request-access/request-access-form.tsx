@@ -1,19 +1,18 @@
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
-import { toast } from "sonner";
+import { useId, useState } from "react";
 import { useZodForm } from "@/lib/forms/use-zod-form";
 import { accessRequestSchema, type AccessRequestInput } from "@/lib/validation/auth";
-import { Field } from "@/components/ui/field";
-import { EmptyState } from "@/components/ui/empty-state";
-import { Button } from "@/components/ui/button";
-import { controlClass } from "@/components/ui/input";
-import { cn } from "@/lib/utils/cn";
+import { authInputClass, AuthLabel } from "../auth-field";
 import { submitAccessRequest } from "./actions";
 
 export function RequestAccessForm() {
   const [sent, setSent] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
+  const nameId = useId();
+  const emailId = useId();
+  const orgId = useId();
+  const messageId = useId();
   const {
     register,
     handleSubmit,
@@ -21,59 +20,103 @@ export function RequestAccessForm() {
   } = useZodForm(accessRequestSchema);
 
   async function onSubmit(values: AccessRequestInput) {
+    setServerError(null);
     const res = await submitAccessRequest(values);
     if (!res.ok) {
-      toast.error(res.error);
+      setServerError(res.error);
       return;
     }
     setSent(true);
   }
 
-  const inputClass = cn(controlClass, "px-3 py-2 text-sm");
-
   if (sent) {
     return (
-      <EmptyState
-        title="Request sent"
-        description="An administrator will review your request and set up your account."
-        action={
-          <Link href="/sign-in" className="text-sm font-semibold text-navy hover:underline">
-            Back to sign in
-          </Link>
-        }
-      />
+      <div className="py-6 text-center">
+        <span className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-green/15 text-2xl text-green">
+          ✓
+        </span>
+        <p className="mb-1.5 text-base font-semibold text-ivory">Request Submitted</p>
+        <p className="text-[13px] text-ivory/40">
+          You will receive an email when your access is approved.
+        </p>
+      </div>
     );
   }
 
   return (
-    <div className="flex w-full max-w-sm flex-col gap-5">
-      <div>
-        <h1 className="text-2xl font-bold text-navy">Request access</h1>
-        <p className="text-sm text-gray">Accounts are approved by an administrator.</p>
-      </div>
-      <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-3" noValidate>
-        <Field label="Name" htmlFor="name" required error={errors.name?.message}>
-          <input id="name" {...register("name")} className={inputClass} />
-        </Field>
-        <Field label="Email" htmlFor="email" required error={errors.email?.message}>
-          <input id="email" type="email" {...register("email")} className={inputClass} />
-        </Field>
-        <Field label="Organization" htmlFor="organization" error={errors.organization?.message}>
-          <input id="organization" {...register("organization")} className={inputClass} />
-        </Field>
-        <Field label="Message" htmlFor="message" error={errors.message?.message}>
-          <textarea id="message" rows={3} {...register("message")} className={inputClass} />
-        </Field>
-        <Button type="submit" disabled={isSubmitting}>
-          {isSubmitting ? "Sending…" : "Send request"}
-        </Button>
-      </form>
-      <p className="text-sm text-gray">
-        Have an account?{" "}
-        <Link href="/sign-in" className="font-semibold text-navy hover:underline">
-          Sign in
-        </Link>
+    <div>
+      <p className="mb-3.5 text-[13px] leading-relaxed text-ivory/40">
+        Access is restricted to authorized Desta Works team members. Submit a request and
+        you&apos;ll be notified when approved.
       </p>
+
+      <form onSubmit={handleSubmit(onSubmit)} noValidate>
+        <div className="mb-3.5">
+          <AuthLabel htmlFor={nameId}>Full name *</AuthLabel>
+          <input
+            id={nameId}
+            placeholder="Your full name"
+            {...register("name")}
+            className={authInputClass}
+          />
+          {errors.name ? (
+            <p className="mt-1 text-xs text-[#EF9A9A]">{errors.name.message}</p>
+          ) : null}
+        </div>
+
+        <div className="mb-3.5">
+          <AuthLabel htmlFor={emailId}>Email *</AuthLabel>
+          <input
+            id={emailId}
+            type="email"
+            placeholder="your@email.com"
+            {...register("email")}
+            className={authInputClass}
+          />
+          {errors.email ? (
+            <p className="mt-1 text-xs text-[#EF9A9A]">{errors.email.message}</p>
+          ) : null}
+        </div>
+
+        <div className="mb-3.5">
+          <AuthLabel htmlFor={orgId}>
+            Organization <span className="text-ivory/25">(optional)</span>
+          </AuthLabel>
+          <input
+            id={orgId}
+            placeholder="Your organization"
+            {...register("organization")}
+            className={authInputClass}
+          />
+        </div>
+
+        <div className="mb-4.5">
+          <AuthLabel htmlFor={messageId}>
+            Message <span className="text-ivory/25">(optional)</span>
+          </AuthLabel>
+          <textarea
+            id={messageId}
+            rows={3}
+            placeholder="A message to the admin"
+            {...register("message")}
+            className={authInputClass + " resize-y"}
+          />
+        </div>
+
+        {serverError ? (
+          <div className="mb-3.5 rounded-lg border border-red/25 bg-red/[0.12] px-3 py-2.5 text-[13px] text-[#EF9A9A]">
+            {serverError}
+          </div>
+        ) : null}
+
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          className="w-full rounded-lg bg-navy py-3.5 text-[15px] font-semibold text-ivory transition hover:opacity-90 disabled:opacity-40"
+        >
+          {isSubmitting ? "Sending…" : "Submit Request"}
+        </button>
+      </form>
     </div>
   );
 }

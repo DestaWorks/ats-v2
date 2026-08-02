@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { googleEnabled } from "@/server/auth/auth";
 import { getCurrentUser } from "@/server/auth/guards";
+import { AuthShell } from "../auth-shell";
 import { SignInForm } from "./sign-in-form";
 
 export default async function SignInPage() {
@@ -9,8 +10,8 @@ export default async function SignInPage() {
   if (user) redirect("/dashboard");
 
   return (
-    <main className="flex min-h-screen items-center justify-center p-8">
+    <AuthShell activeTab="signin">
       <SignInForm googleEnabled={googleEnabled} />
-    </main>
+    </AuthShell>
   );
 }
