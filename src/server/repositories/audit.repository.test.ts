@@ -30,6 +30,16 @@ beforeEach(() => {
   h.groupBy.mockReset().mockResolvedValue([]);
 });
 
+describe("auditRepository.listForEntity — per-entity trail", () => {
+  it("filters by entity/entityId, orders newest-first, and caps the result (perf audit 2026-08-03 — was unbounded)", async () => {
+    await auditRepository.listForEntity("candidate", "c1");
+    const arg = h.findMany.mock.calls[0]![0];
+    expect(arg.where).toEqual({ entity: "candidate", entityId: "c1" });
+    expect(arg.orderBy).toEqual({ at: "desc" });
+    expect(arg.take).toBe(200);
+  });
+});
+
 describe("auditRepository.list — filters + keyset", () => {
   it("orders (at desc, id desc), passes `take`, and selects before/after ONLY to derive hasChanges", async () => {
     await auditRepository.list({}, null, 51);

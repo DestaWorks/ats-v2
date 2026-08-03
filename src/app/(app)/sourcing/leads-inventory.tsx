@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
@@ -13,10 +14,18 @@ import { Pager } from "@/components/ui/pager";
 import { Select } from "@/components/ui/select";
 import { Table } from "@/components/ui/table";
 import { pageHrefFor } from "@/lib/pagination";
-import { AddLeadButton, type ClientOption } from "./add-lead-modal";
-import { ImportLeadsButton } from "./import-leads-modal";
+import type { ClientOption } from "./add-lead-modal";
 import { LeadRow } from "./lead-row";
 import { postBulkAction } from "./lib/lead-fetch";
+
+// Perf audit 2026-08-03: both buttons' real weight is their modal body (a full form / CSV-import
+// wizard), only needed once a user actually clicks — deferred to its own chunk instead of the
+// initial `/sourcing` page bundle. `LeadRow` renders unconditionally for every row and stays a
+// static import.
+const AddLeadButton = dynamic(() => import("./add-lead-modal").then((m) => m.AddLeadButton));
+const ImportLeadsButton = dynamic(() =>
+  import("./import-leads-modal").then((m) => m.ImportLeadsButton),
+);
 
 /** A teammate option for the bulk "Assign owner…" select. */
 export interface UserOption {

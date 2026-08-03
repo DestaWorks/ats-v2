@@ -42,11 +42,17 @@ function filterWhere(filters: AuditListFilters): Prisma.ActivityLogWhereInput {
   };
 }
 
+/** Cap on `listForEntity` — was unbounded (perf audit 2026-08-03); a single long-lived entity
+ *  (e.g. a candidate that's been in the pipeline for months) could otherwise return its entire
+ *  history in one query. 200 comfortably covers any real per-entity trail while staying bounded. */
+const ENTITY_TRAIL_CAP = 200;
+
 export const auditRepository = {
   listForEntity(entity: string, entityId: string) {
     return prisma.activityLog.findMany({
       where: { entity, entityId },
       orderBy: { at: "desc" },
+      take: ENTITY_TRAIL_CAP,
     });
   },
 

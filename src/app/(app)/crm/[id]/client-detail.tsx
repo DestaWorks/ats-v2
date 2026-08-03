@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { toast } from "sonner";
 import { CLIENT_CADENCES, CLIENT_PRIORITIES, CLOSED_DEAL_STAGES } from "@/lib/constants";
@@ -20,15 +21,37 @@ import { ErrorState } from "@/components/ui/error-state";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import { fieldError } from "../../candidates/[id]/lib/form-error";
-import { ContactsTab } from "./contacts-tab";
-import { TasksTab } from "./tasks-tab";
-import { MeetingsTab } from "./meetings-tab";
-import { DealsTab } from "./deals-tab";
-import { TimelineTab } from "./timeline-tab";
-import { PortalAccessTab } from "./portal-tab";
-import { HealthTab } from "./health-tab";
-import { AiWorkspaceTab } from "./ai-workspace-tab";
+
+// Perf audit 2026-08-03: DetailTabs only ever mounts the selected panel, but a static import
+// still bundles all eight tabs into the initial page chunk. Loading each on demand keeps first
+// paint to the "info" tab only.
+const tabLoading = <Skeleton className="h-40 w-full" />;
+const ContactsTab = dynamic(() => import("./contacts-tab").then((m) => m.ContactsTab), {
+  loading: () => tabLoading,
+});
+const TasksTab = dynamic(() => import("./tasks-tab").then((m) => m.TasksTab), {
+  loading: () => tabLoading,
+});
+const MeetingsTab = dynamic(() => import("./meetings-tab").then((m) => m.MeetingsTab), {
+  loading: () => tabLoading,
+});
+const DealsTab = dynamic(() => import("./deals-tab").then((m) => m.DealsTab), {
+  loading: () => tabLoading,
+});
+const TimelineTab = dynamic(() => import("./timeline-tab").then((m) => m.TimelineTab), {
+  loading: () => tabLoading,
+});
+const PortalAccessTab = dynamic(() => import("./portal-tab").then((m) => m.PortalAccessTab), {
+  loading: () => tabLoading,
+});
+const HealthTab = dynamic(() => import("./health-tab").then((m) => m.HealthTab), {
+  loading: () => tabLoading,
+});
+const AiWorkspaceTab = dynamic(() => import("./ai-workspace-tab").then((m) => m.AiWorkspaceTab), {
+  loading: () => tabLoading,
+});
 
 /** `YYYY-MM-DD` for a native `<input type="date">`; `""` for the field's empty state. */
 function toDateInputValue(iso: string | null): string {

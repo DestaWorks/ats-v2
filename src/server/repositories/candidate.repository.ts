@@ -355,6 +355,20 @@ export const candidateRepository = {
   },
 
   /**
+   * STARTED_DAY1 counts grouped by client, for a given set of client ids — the Client Capacity
+   * KPI's per-client "placed" figure (analytics.service.ts). Perf audit 2026-08-03: was one
+   * `count()` per client run via `Promise.all`; this does the same aggregation in ONE query.
+   */
+  countStartedByClient(clientIds: string[], tx?: Prisma.TransactionClient) {
+    if (clientIds.length === 0) return Promise.resolve([]);
+    return db(tx).candidate.groupBy({
+      by: ["clientId"],
+      where: { deletedAt: null, clientId: { in: clientIds }, status: "STARTED_DAY1" },
+      _count: { _all: true },
+    });
+  },
+
+  /**
    * The oldest-in-stage ACTIVE candidates (stageOrder 0..8), capped small — the dashboard's targeted
    * "needs attention" read. Ordered by `stageEnteredAt` asc (longest in stage first) so the service
    * can flag overdue/stuck without scanning the whole table.
