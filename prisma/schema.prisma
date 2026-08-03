@@ -101,6 +101,10 @@ model Verification {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
+  // Better Auth only ever looks this up by identifier (email-verification tokens,
+  // reset-password:<token> — see password.mjs findVerificationValue/consumeVerificationValue).
+  // Without this, every lookup is a sequential scan of the whole table (perf audit 2026-08-03).
+  @@index([identifier])
   @@map("verification")
 }
 
@@ -475,6 +479,15 @@ model Candidate {
   @@index([deletedAt, createdAt, id]) // list, createdAt sorts (Newest/Oldest)
   @@index([status, deletedAt, createdAt, id]) // board per-column keyset (status + createdAt desc, id)
   @@index([status, deletedAt, stageEnteredAt]) // stuck/overdue thresholds + listStaleActive
+  // Perf audit 2026-08-03: candidate.repository.ts's search does `name`/`email` `contains`
+  // (case-insensitive) — a plain btree (the `email` index above) can only accelerate PREFIX
+  // matches, never substring search, so every keystroke was a sequential scan of the whole table.
+  // Fixed with two pg_trgm GIN indexes (candidates_name_trgm_idx, candidates_email_trgm_idx) —
+  // hand-written raw SQL in prisma/migrations/…_add_pg_trgm_candidate_search_indexes/, NOT
+  // declared here: this DB (Supabase-managed) already has extensions Prisma never tracked
+  // (pgcrypto, uuid-ossp, …) — turning on the `postgresqlExtensions` preview feature to declare
+  // `pg_trgm` in the datasource block makes Prisma try to reconcile ALL of them against migration
+  // history, which it can only do via a full schema reset. Not worth that risk for one extension.
   @@map("candidates")
 }
 
@@ -579,6 +592,11 @@ model StageHistory {
 
   @@index([candidateId])
   @@index([candidateId, enteredAt])
+  // Perf audit 2026-08-03: maxStageOrderAsOf (5 report endpoints) filters enteredAt/toStageOrder
+  // and groups by candidateId, across ALL candidates — the two indexes above are candidateId-
+  // leading (a per-candidate lookup shape) and don't help a cross-candidate scan. This one covers
+  // the WHERE + the grouped column, enabling an index-only scan.
+  @@index([enteredAt, toStageOrder, candidateId])
   @@map("stage_history")
 }
 
@@ -712,6 +730,12 @@ model OutreachAttempt {
   @@index([leadId])
   @@index([candidateId])
   @@index([actorId, at]) // DECISIONS: outreach_attempts(actor, day) — the CRM/daily-log perf index
+  // Perf audit 2026-08-03: daily.repository.ts's outreachCountsByRange/responseCountsByRange
+  // groupBy ACROSS all actors, filtered only by date — [actorId, at] above doesn't help there
+  // (actorId isn't in the WHERE), so both ran an unindexed scan of the whole table. These serve
+  // that shape (date-range filter leading, actorId second for the groupBy).
+  @@index([at, actorId])
+  @@index([respondedAt, actorId])
   @@index([templateId])
   @@map("outreach_attempts")
 }

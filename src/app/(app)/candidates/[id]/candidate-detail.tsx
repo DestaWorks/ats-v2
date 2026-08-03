@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import type {
   CandidateDetailDTO,
   CandidateProfileDTO,
@@ -11,15 +12,35 @@ import type {
 import type { OutreachAttemptDTO } from "@/lib/validation/lead";
 import type { MentionTarget } from "@/lib/mentions";
 import { DetailTabs, type TabDef } from "@/components/ui/tabs";
+import { Skeleton } from "@/components/ui/skeleton";
 import { DetailHeader } from "./detail-header";
-import { DetailsTab, type ClientOption } from "./details-tab";
-import { ScoringCard } from "./scoring-card";
-import { FindSimilarButton } from "../../sourcing/similar-providers-modal";
-import { LicenseTab } from "./license-tab";
-import { ResumeTab } from "./resume-tab";
-import { NotesTab } from "./notes-tab";
-import { OutreachTab } from "./outreach-tab";
+import type { ClientOption } from "./details-tab";
 import type { MovedFields } from "./lib/detail-fetch";
+
+// Perf audit 2026-08-03: each tab body is only ever mounted when its tab is selected
+// (DetailTabs renders `tabs[selected].panel` alone), but a static import still bundles all six
+// into the initial page chunk. Loading each on demand keeps the first paint to the "details" tab
+// only — the rest ship as separate chunks fetched when a user actually clicks that tab.
+const tabLoading = <Skeleton className="h-40 w-full" />;
+const DetailsTab = dynamic(() => import("./details-tab").then((m) => m.DetailsTab), {
+  loading: () => tabLoading,
+});
+const ScoringCard = dynamic(() => import("./scoring-card").then((m) => m.ScoringCard));
+const FindSimilarButton = dynamic(() =>
+  import("../../sourcing/similar-providers-modal").then((m) => m.FindSimilarButton),
+);
+const LicenseTab = dynamic(() => import("./license-tab").then((m) => m.LicenseTab), {
+  loading: () => tabLoading,
+});
+const ResumeTab = dynamic(() => import("./resume-tab").then((m) => m.ResumeTab), {
+  loading: () => tabLoading,
+});
+const NotesTab = dynamic(() => import("./notes-tab").then((m) => m.NotesTab), {
+  loading: () => tabLoading,
+});
+const OutreachTab = dynamic(() => import("./outreach-tab").then((m) => m.OutreachTab), {
+  loading: () => tabLoading,
+});
 
 /**
  * Client shell for the candidate detail page. Seeded from the RSC's `CandidateDetailDTO` (no

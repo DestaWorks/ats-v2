@@ -70,29 +70,29 @@ export const analyticsService = {
     }));
 
     const clients = await clientRepository.list();
-    const capacityRows = await Promise.all(
-      clients
-        .filter((c) => c.capacity !== null && c.capacity > 0)
-        .map(async (c) => {
-          const placed = await candidateRepository.count({
-            clientId: c.id,
-            status: "STARTED_DAY1",
-          });
-          const capacity = c.capacity as number;
-          const capPct = Math.round((placed / capacity) * 100);
-          const tone =
-            capPct >= CAPACITY_RED ? "red" : capPct >= CAPACITY_ORANGE ? "orange" : "green";
-          return {
-            clientId: c.id,
-            clientName: c.name,
-            capacity,
-            placed,
-            pct: capPct,
-            tone: tone as "red" | "orange" | "green",
-            approachingCapacity: capPct >= CAPACITY_RED,
-          };
-        }),
+    const capacityClients = clients.filter((c) => c.capacity !== null && c.capacity > 0);
+    const placedGroups = await candidateRepository.countStartedByClient(
+      capacityClients.map((c) => c.id),
     );
+    const placedByClient = new Map<string, number>();
+    for (const g of placedGroups) {
+      if (g.clientId) placedByClient.set(g.clientId, g._count._all);
+    }
+    const capacityRows = capacityClients.map((c) => {
+      const placed = placedByClient.get(c.id) ?? 0;
+      const capacity = c.capacity as number;
+      const capPct = Math.round((placed / capacity) * 100);
+      const tone = capPct >= CAPACITY_RED ? "red" : capPct >= CAPACITY_ORANGE ? "orange" : "green";
+      return {
+        clientId: c.id,
+        clientName: c.name,
+        capacity,
+        placed,
+        pct: capPct,
+        tone: tone as "red" | "orange" | "green",
+        approachingCapacity: capPct >= CAPACITY_RED,
+      };
+    });
 
     return {
       total,

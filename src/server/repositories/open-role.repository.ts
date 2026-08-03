@@ -84,6 +84,21 @@ export const openRoleRepository = {
     });
   },
 
+  /**
+   * Open-role counts grouped by client, for a given set of client ids — the Client Funnel
+   * report's per-client "Open Roles" column (client-reports.service.ts). Perf audit 2026-08-03:
+   * was one `count()` per client run via `Promise.all`; this does the same aggregation in ONE
+   * query.
+   */
+  countOpenByClient(clientIds: string[], tx?: Prisma.TransactionClient) {
+    if (clientIds.length === 0) return Promise.resolve([]);
+    return db(tx).openRole.groupBy({
+      by: ["clientId"],
+      where: { clientId: { in: clientIds }, status: "Open" },
+      _count: { _all: true },
+    });
+  },
+
   update(id: string, data: Prisma.OpenRoleUncheckedUpdateInput, tx?: Prisma.TransactionClient) {
     return db(tx).openRole.update({ where: { id }, data });
   },

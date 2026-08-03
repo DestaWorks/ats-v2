@@ -42,13 +42,8 @@ export const clientReportsService = {
       byClient.set(c.clientId, list);
     }
 
-    const openRoleCounts = await Promise.all(
-      [...byClient.keys()].map(async (clientId) => ({
-        clientId,
-        count: await openRoleRepository.count({ clientId, status: "Open" }),
-      })),
-    );
-    const openRolesByClient = new Map(openRoleCounts.map((r) => [r.clientId, r.count]));
+    const openRoleGroups = await openRoleRepository.countOpenByClient([...byClient.keys()]);
+    const openRolesByClient = new Map(openRoleGroups.map((r) => [r.clientId, r._count._all]));
 
     const clients_ = clients
       .filter((client) => byClient.has(client.id))

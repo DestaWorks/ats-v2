@@ -100,14 +100,18 @@ export const stageHistoryRepository = {
    * already loaded (per client/associate/source), so this runs ONCE per report request.
    */
   async maxStageOrderAsOf(asOf: Date, tx?: Prisma.TransactionClient): Promise<Map<string, number>> {
-    const rows = await db(tx).stageHistory.findMany({
+    // Perf audit 2026-08-03: was `findMany` + a manual per-candidate max reduced in JS — pulled
+    // EVERY matching row into memory on every call (5 report endpoints call this). MAX(...) GROUP
+    // BY candidateId does the exact same aggregation in Postgres instead, covered by the
+    // (enteredAt, toStageOrder, candidateId) index below (index-only scan, no heap access).
+    const rows = await db(tx).stageHistory.groupBy({
+      by: ["candidateId"],
       where: { enteredAt: { lte: asOf }, toStageOrder: { lt: FIRST_TERMINAL_ORDER } },
-      select: { candidateId: true, toStageOrder: true },
+      _max: { toStageOrder: true },
     });
     const max = new Map<string, number>();
     for (const row of rows) {
-      const prev = max.get(row.candidateId);
-      if (prev === undefined || row.toStageOrder > prev) max.set(row.candidateId, row.toStageOrder);
+      if (row._max.toStageOrder !== null) max.set(row.candidateId, row._max.toStageOrder);
     }
     return max;
   },
