@@ -1,14 +1,28 @@
 "use client";
 
-import { useId, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useId, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { signIn, requestPasswordReset } from "@/lib/auth-client";
 import { useZodForm } from "@/lib/forms/use-zod-form";
 import { signInSchema, type SignInInput } from "@/lib/validation/auth";
-import { authInputClass, AuthLabel } from "../auth-field";
+import { authInputClass, AuthLabel, PasswordToggleButton } from "../auth-field";
+
+/**
+ * Google OAuth error codes → a message the user (who has already proven they own that Google
+ * account, unlike a typed email) can act on. Not an enumeration risk the way the email/password
+ * "wrong password vs. no such user" case is (SECURITY-AUDIT-APP.md) — Google already verified
+ * identity before Better Auth's `disableSignUp` check ever runs, so naming the real reason is
+ * safe and more useful than a generic message. Anything unrecognized falls back to generic.
+ */
+const GOOGLE_ERROR_MESSAGES: Record<string, string> = {
+  signup_disabled:
+    "That Google account isn't registered yet. Use “Request Access” below to ask for an invite.",
+};
+const GOOGLE_ERROR_FALLBACK = "Something went wrong signing in with Google. Please try again.";
 
 export function SignInForm({ googleEnabled }: { googleEnabled: boolean }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [serverError, setServerError] = useState<string | null>(null);
@@ -23,6 +37,18 @@ export function SignInForm({ googleEnabled }: { googleEnabled: boolean }) {
     formState: { errors, isSubmitting },
   } = useZodForm(signInSchema);
 
+  // Better Auth redirects failed Google sign-in attempts back here with `?error=<code>` (no
+  // route in this app ever rendered Better Auth's own default `/error` page, so this was a bare
+  // 404 for a real, unregistered user before this fix). Surface it once, then clean the URL so
+  // reloading/sharing the link doesn't keep re-showing it.
+  useEffect(() => {
+    const error = searchParams.get("error");
+    if (!error) return;
+    setServerError(GOOGLE_ERROR_MESSAGES[error] ?? GOOGLE_ERROR_FALLBACK);
+    router.replace("/sign-in");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
   async function onSubmit(values: SignInInput) {
     setServerError(null);
     const { error } = await signIn.email({ ...values, rememberMe });
@@ -35,7 +61,11 @@ export function SignInForm({ googleEnabled }: { googleEnabled: boolean }) {
   }
 
   async function onGoogle() {
-    await signIn.social({ provider: "google", callbackURL: "/dashboard" });
+    await signIn.social({
+      provider: "google",
+      callbackURL: "/dashboard",
+      errorCallbackURL: "/sign-in",
+    });
   }
 
   async function onForgotPassword() {
@@ -123,13 +153,10 @@ export function SignInForm({ googleEnabled }: { googleEnabled: boolean }) {
               {...register("password")}
               className={authInputClass + " pr-14"}
             />
-            <button
-              type="button"
-              onClick={() => setShowPassword((v) => !v)}
-              className="absolute top-1/2 right-3.5 -translate-y-1/2 text-[11px] font-semibold tracking-wide text-ivory/40 hover:text-ivory/70"
-            >
-              {showPassword ? "HIDE" : "SHOW"}
-            </button>
+            <PasswordToggleButton
+              visible={showPassword}
+              onToggle={() => setShowPassword((v) => !v)}
+            />
           </div>
           {errors.password ? (
             <p className="mt-1 text-xs text-[#EF9A9A]">{errors.password.message}</p>

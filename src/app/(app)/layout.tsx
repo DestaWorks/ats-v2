@@ -51,9 +51,6 @@ export default async function AppLayout({
   if (hasCapability(user.role, "viewReports")) {
     items.push({ href: "/reports", label: "Reports", group: "Insights", icon: "chart" });
   }
-  if (hasCapability(user.role, "viewAnalytics")) {
-    items.push({ href: "/analytics", label: "Analytics", group: "Insights", icon: "trending" });
-  }
   if (hasCapability(user.role, "manageUsers")) {
     items.push({ href: "/admin", label: "Admin", icon: "settings" });
   }

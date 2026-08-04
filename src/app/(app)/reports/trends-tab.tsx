@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils/cn";
 import { ReportTabShell } from "./lib/report-tab-shell";
 import { useReportFetch } from "./lib/use-report-fetch";
+import { TrendsChart } from "./trends-chart";
 
 const HORIZONS = [
   { key: "Week", curr: "thisWeek", prev: "lastWeek" },
@@ -82,6 +83,13 @@ export function TrendsTab() {
                 </div>
               ))}
             </div>
+          </Card>
+
+          <Card as="section" className="flex flex-col gap-3 p-5">
+            <h3 className="text-[11px] font-bold tracking-wide text-navy uppercase">
+              This Week vs Last Week
+            </h3>
+            <TrendsChart metrics={d.metrics} />
           </Card>
 
           <Card as="section" className="flex flex-col gap-3 p-5">

@@ -123,20 +123,54 @@ export const dailyService = {
     return { sourcing, outreach, atsCleanup };
   },
 
-  /** The Overview strip composite for the SESSION user. */
+  /**
+   * The Overview strip composite for the SESSION user. When `canSetTargets`, also builds the
+   * target-roster (design pass 2026-08-04): who already has a target today, and each teammate's
+   * week-to-date sourced/outreach/days-logged — legacy's "MANAGER · SET TODAY'S TARGETS" card
+   * grid, reusing the same week-to-date aggregation shape `teamBreakdown` already does (Monday
+   * through TODAY here, not the full week, since this drives an in-progress "WTD" summary).
+   */
   async overview(user: AuthUser, date: string, tz: number): Promise<DailyOverviewDTO> {
     const canSetTargets = hasCapability(user.role, SET_TARGETS_CAP);
-    const [target, live, actual, clients, teammates] = await Promise.all([
+    const monday = mondayOf(date);
+    const [target, live, actual, clients, users, targetsToday, weekLogs] = await Promise.all([
       dailyRepository.targetFor(user.id, date),
       this.liveActuals(user.id, date, tz),
       dailyRepository.actualFor(user.id, date),
       clientRepository.list(),
       canSetTargets ? userRepository.list() : Promise.resolve(undefined),
+      canSetTargets ? dailyRepository.targetsForDate(date) : Promise.resolve(undefined),
+      canSetTargets ? dailyRepository.logsForDateRange(monday, date) : Promise.resolve(undefined),
     ]);
     const clientNames = new Map(clients.map((c) => [c.id, c.name]));
     const userNames = target
       ? await userRepository.namesByIds([target.setById])
       : new Map<string, string>();
+
+    let teammates: DailyOverviewDTO["teammates"];
+    if (canSetTargets && users) {
+      const targetedUserIds = new Set((targetsToday ?? []).map((t) => t.userId));
+      const wtd = new Map<string, { sourced: number; outreach: number; days: number }>();
+      for (const log of weekLogs ?? []) {
+        const row = wtd.get(log.userId) ?? { sourced: 0, outreach: 0, days: 0 };
+        row.sourced += log.sourced;
+        row.outreach += log.outreach;
+        row.days += 1;
+        wtd.set(log.userId, row);
+      }
+      teammates = users.map((u) => {
+        const w = wtd.get(u.id) ?? { sourced: 0, outreach: 0, days: 0 };
+        return {
+          id: u.id,
+          name: u.name,
+          hasTargetToday: targetedUserIds.has(u.id),
+          weekSourced: w.sourced,
+          weekOutreach: w.outreach,
+          daysLoggedThisWeek: w.days,
+        };
+      });
+    }
+
     return {
       target: target ? toTargetDTO(target, clientNames, userNames) : null,
       live,

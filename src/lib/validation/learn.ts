@@ -49,7 +49,7 @@ export const LEARN_CHAPTERS: LearnChapter[] = [
     blurb: "Read yesterday's results. Set today's targets. Spot what's stuck.",
     mins: 4,
     media: "learn-02-daily-brief.gif",
-    tryHref: "/daily-brief",
+    tryHref: "/daily-log",
     tryLabel: "Open Daily Brief",
     steps: [
       "Open the Daily Brief tab on the left.",

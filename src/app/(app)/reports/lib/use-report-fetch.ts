@@ -21,7 +21,7 @@ export const EMPTY_FILTERS: ReportFilterState = {
   addedTo: "",
 };
 
-/** Query string for a `ReportFilterState` — shared by every `/api/reports/*` + `/api/analytics` call. */
+/** Query string for a `ReportFilterState` — shared by every filtered `/api/reports/*` call. */
 export function buildReportQuery(f: ReportFilterState): string {
   const p = new URLSearchParams();
   if (f.clientId) p.set("clientId", f.clientId);

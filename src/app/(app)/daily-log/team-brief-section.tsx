@@ -45,12 +45,13 @@ function toPlainText(draft: Draft): string {
 }
 
 /**
- * Daily Brief (Wave 5.1, legacy `daily_brief_generate`/`daily_brief_save`). Generate assembles
- * live context server-side and calls the AI; the draft is editable before Save. A date picker
- * doubles as the archive — jumping to a past date shows the REAL saved content (legacy's archive
- * only ever restored manual fields, never the brief itself).
+ * Team Brief — the AI-generated, leadership-facing daily summary (formerly the standalone
+ * `/daily-brief` page; folded into Daily Log 2026-08-04 so there's one destination instead of two
+ * same-shaped nav items). Only ever mounted inside Daily Log's "Team" tab, which `DailyLogView`
+ * only includes when the server-computed `canViewTeam` prop is true — no client-side capability
+ * plumbing here; the brief routes still double-gate (`viewReports`) as the real check.
  */
-export function DailyBriefView() {
+export function TeamBriefSection() {
   const [date, setDate] = useState(dateKey());
   const [overview, setOverview] = useState<DailyOverviewDTO | null>(null);
   const [saved, setSaved] = useState<DailyBriefDTO | null | undefined>(undefined);
@@ -133,7 +134,11 @@ export function DailyBriefView() {
   const clients = overview?.clients ?? [];
 
   return (
-    <div className="flex flex-col gap-5">
+    <section className="flex flex-col gap-3">
+      <h2 className="text-sm font-bold tracking-wide text-navy uppercase">
+        Today&apos;s team brief
+      </h2>
+
       <Card as="section" className="flex flex-wrap items-end gap-4 p-5">
         <Field label="Date" htmlFor="db-date">
           <Input id="db-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
@@ -187,7 +192,7 @@ export function DailyBriefView() {
       {draft ? (
         <Card as="section" className="flex flex-col gap-4 p-5">
           <div className="flex items-center justify-between">
-            <h2 className="font-serif text-xl font-bold text-charcoal">{draft.headline}</h2>
+            <h3 className="font-serif text-xl font-bold text-charcoal">{draft.headline}</h3>
             <div className="flex gap-2">
               <Button type="button" variant="secondary" size="sm" onClick={copyText}>
                 Copy
@@ -211,9 +216,9 @@ export function DailyBriefView() {
           ) : null}
 
           <section>
-            <h3 className="mb-1.5 text-[11px] font-bold tracking-wide text-orange uppercase">
+            <h4 className="mb-1.5 text-[11px] font-bold tracking-wide text-orange uppercase">
               Exceptions
-            </h3>
+            </h4>
             <ul className="flex flex-col gap-1 text-sm text-charcoal">
               {draft.exceptions.map((e, i) => (
                 <li key={i}>• {e}</li>
@@ -224,9 +229,9 @@ export function DailyBriefView() {
 
           {draft.yesterdayCheck.length > 0 ? (
             <section>
-              <h3 className="mb-1.5 text-[11px] font-bold tracking-wide text-gray uppercase">
+              <h4 className="mb-1.5 text-[11px] font-bold tracking-wide text-gray uppercase">
                 Yesterday check
-              </h3>
+              </h4>
               <ul className="flex flex-col gap-1 text-sm text-charcoal">
                 {draft.yesterdayCheck.map((y, i) => (
                   <li key={i}>
@@ -239,9 +244,9 @@ export function DailyBriefView() {
 
           {draft.clientCards.length > 0 ? (
             <section>
-              <h3 className="mb-1.5 text-[11px] font-bold tracking-wide text-gray uppercase">
+              <h4 className="mb-1.5 text-[11px] font-bold tracking-wide text-gray uppercase">
                 Clients
-              </h3>
+              </h4>
               <ul className="flex flex-col gap-1 text-sm text-charcoal">
                 {draft.clientCards.map((c, i) => (
                   <li key={i}>
@@ -253,9 +258,9 @@ export function DailyBriefView() {
           ) : null}
 
           <section>
-            <h3 className="mb-1.5 text-[11px] font-bold tracking-wide text-gray uppercase">
+            <h4 className="mb-1.5 text-[11px] font-bold tracking-wide text-gray uppercase">
               Per associate
-            </h3>
+            </h4>
             <div className="grid gap-3 sm:grid-cols-2">
               {draft.perAssociate.map((a, i) => (
                 <div key={i} className="rounded-lg border border-black/5 bg-black/[0.02] p-3">
@@ -278,6 +283,6 @@ export function DailyBriefView() {
           </p>
         </Card>
       ) : null}
-    </div>
+    </section>
   );
 }

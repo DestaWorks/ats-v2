@@ -359,3 +359,69 @@ describe("dailyService.teamBreakdown — Wave 3.1 backlog", () => {
     expect(out.teammates).toEqual([{ id: "u1", name: "Test User" }]);
   });
 });
+
+describe("dailyService.overview — target roster (design pass 2026-08-04)", () => {
+  it("omits the roster entirely for a non-leadership caller (no extra queries)", async () => {
+    const out = await dailyService.overview(h.user as AuthUser, "2026-07-15", 0);
+    expect(out.canSetTargets).toBe(false);
+    expect(out.teammates).toBeUndefined();
+    expect(h.repo.targetsForDate).not.toHaveBeenCalled();
+    expect(h.repo.logsForDateRange).not.toHaveBeenCalled();
+  });
+
+  it("flags hasTargetToday per teammate and sums week-to-date (Monday through today, not the full week)", async () => {
+    h.userRepo.list.mockResolvedValue([
+      { id: "u1", name: "Test User" },
+      { id: "u2", name: "Associate Two" },
+    ]);
+    h.repo.targetsForDate.mockResolvedValue([{ userId: "u1", date: "2026-07-15" }]);
+    h.repo.logsForDateRange.mockResolvedValue([
+      { userId: "u1", date: "2026-07-13", sourced: 10, outreach: 5 },
+      { userId: "u1", date: "2026-07-14", sourced: 8, outreach: 4 },
+      { userId: "u2", date: "2026-07-13", sourced: 20, outreach: 10 },
+    ]);
+
+    const out = await dailyService.overview(h.owner as AuthUser, "2026-07-15", 0);
+
+    expect(out.teammates).toEqual([
+      {
+        id: "u1",
+        name: "Test User",
+        hasTargetToday: true,
+        weekSourced: 18,
+        weekOutreach: 9,
+        daysLoggedThisWeek: 2,
+      },
+      {
+        id: "u2",
+        name: "Associate Two",
+        hasTargetToday: false,
+        weekSourced: 20,
+        weekOutreach: 10,
+        daysLoggedThisWeek: 1,
+      },
+    ]);
+    const [start, end] = h.repo.logsForDateRange.mock.calls[0]!;
+    expect(start).toBe("2026-07-13"); // Monday of that week
+    expect(end).toBe("2026-07-15"); // through TODAY, not the full week
+  });
+
+  it("a teammate with zero logs this week still appears, zeroed (not omitted)", async () => {
+    h.userRepo.list.mockResolvedValue([{ id: "u1", name: "Test User" }]);
+    h.repo.targetsForDate.mockResolvedValue([]);
+    h.repo.logsForDateRange.mockResolvedValue([]);
+
+    const out = await dailyService.overview(h.owner as AuthUser, "2026-07-15", 0);
+
+    expect(out.teammates).toEqual([
+      {
+        id: "u1",
+        name: "Test User",
+        hasTargetToday: false,
+        weekSourced: 0,
+        weekOutreach: 0,
+        daysLoggedThisWeek: 0,
+      },
+    ]);
+  });
+});

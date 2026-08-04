@@ -50,7 +50,7 @@ export function SinceYouClosed({ userId }: { userId: string }) {
   );
 
   return (
-    <section className="flex flex-col gap-2 rounded-xl border border-black/5 bg-white p-4">
+    <section className="flex flex-col gap-2 rounded-xl border border-black/5 bg-white p-4 shadow-card">
       <p className="text-[11px] font-bold tracking-[0.08em] text-gray uppercase">
         Since you closed · {label}
       </p>

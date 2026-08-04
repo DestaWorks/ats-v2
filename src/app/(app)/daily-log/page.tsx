@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { hasCapability } from "@/lib/constants";
 import { getCurrentUser } from "@/server/auth/guards";
 import { DailyLogView } from "./daily-log-view";
 
@@ -8,10 +9,16 @@ import { DailyLogView } from "./daily-log-view";
  * `GET /api/daily/log?date&tz`. Full-width layout (no `max-w` cap) — matches legacy (its dailylog
  * view has no width cap either, its 5-column KPI/form grids fill the whole container) and every
  * other page in this app (Sourcing/Roles/Candidates/Dashboard all use `px-8 py-6`, no cap).
+ *
+ * `canViewTeam` (design pass 2026-08-04) is computed here, server-side, from the real session
+ * role — `DailyLogView` uses it to decide whether the "Team" tab (the former standalone
+ * `/daily-brief` page) exists at all, so a non-leadership viewer never sees it, not even as an
+ * empty/hidden tab.
  */
 export default async function DailyLogPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/sign-in");
+  const canViewTeam = hasCapability(user.role, "viewReports");
 
   return (
     <div className="flex flex-col gap-6 px-8 py-6">
@@ -21,7 +28,7 @@ export default async function DailyLogPage() {
           Self-report today&apos;s numbers, track your ramp, and keep your journal.
         </p>
       </header>
-      <DailyLogView />
+      <DailyLogView canViewTeam={canViewTeam} />
     </div>
   );
 }

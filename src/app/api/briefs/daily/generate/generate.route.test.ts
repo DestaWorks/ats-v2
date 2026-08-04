@@ -1,6 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
-/** POST /api/briefs/daily/generate — guarded: unauth → 401 (no service call, no rate-limit consumed). */
+/**
+ * POST /api/briefs/daily/generate — guarded: unauth → 401, non-leadership → 403 (`viewReports`);
+ * neither consumes the rate limit or calls the service.
+ */
 
 const h = vi.hoisted(() => ({
   session: null as { user: { id: string; email: string; name: string; role?: string } } | null,
@@ -26,7 +29,7 @@ function req(body: unknown) {
 const body = { date: "2026-07-23", tz: -180, priorityClientId: null };
 
 beforeEach(() => {
-  h.session = { user: { id: "u1", email: "u@desta.works", name: "U", role: "Associate" } };
+  h.session = { user: { id: "u1", email: "u@desta.works", name: "U", role: "Owner" } };
   h.generateDaily.mockReset();
 });
 
@@ -35,6 +38,13 @@ describe("POST /api/briefs/daily/generate", () => {
     h.session = null;
     const res = await POST(req(body), undefined);
     expect(res.status).toBe(401);
+    expect(h.generateDaily).not.toHaveBeenCalled();
+  });
+
+  it("403 for a non-leadership role (no service call)", async () => {
+    h.session = { user: { id: "u1", email: "a@desta.works", name: "A", role: "Associate" } };
+    const res = await POST(req(body), undefined);
+    expect(res.status).toBe(403);
     expect(h.generateDaily).not.toHaveBeenCalled();
   });
 

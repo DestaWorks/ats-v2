@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { resetPassword } from "@/lib/auth-client";
 import { useZodForm } from "@/lib/forms/use-zod-form";
 import { resetPasswordSchema, type ResetPasswordInput } from "@/lib/validation/auth";
-import { authInputClass, AuthLabel } from "../auth-field";
+import { authInputClass, AuthLabel, PasswordToggleButton } from "../auth-field";
 
 export function ResetPasswordForm() {
   const router = useRouter();
@@ -94,13 +94,10 @@ export function ResetPasswordForm() {
               {...register("newPassword")}
               className={authInputClass + " pr-14"}
             />
-            <button
-              type="button"
-              onClick={() => setShowPassword((v) => !v)}
-              className="absolute top-1/2 right-3.5 -translate-y-1/2 text-[11px] font-semibold tracking-wide text-ivory/40 hover:text-ivory/70"
-            >
-              {showPassword ? "HIDE" : "SHOW"}
-            </button>
+            <PasswordToggleButton
+              visible={showPassword}
+              onToggle={() => setShowPassword((v) => !v)}
+            />
           </div>
           {errors.newPassword ? (
             <p className="mt-1 text-xs text-[#EF9A9A]">{errors.newPassword.message}</p>

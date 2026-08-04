@@ -1,48 +1,42 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
 /**
- * `analyticsService` — Wave 5.2. Focused on Client Capacity's threshold/tone logic (legacy
+ * `clientReportsService.clientCapacity` — folded from the standalone Analytics page 2026-08-03
+ * (`docs/MODULE-BREAKDOWN.md` §25). Focused on the threshold/tone logic (legacy
  * `index.html:2911-2913`, preserved: red >=80%, orange >=60%, else green) and the "all-time
- * cumulative placements" numerator decision (never period-filtered —
- * `candidateRepository.countStartedByClient` takes only client ids, no date-range args, regardless
- * of what `loadCohort` was asked for; perf audit 2026-08-03 replaced the former per-client
- * `count()` loop with this single grouped query).
+ * cumulative placements" numerator decision (`countStartedByClient` takes only client ids, no
+ * date-range args).
  */
 
 const h = vi.hoisted(() => ({
-  loadCohort: vi.fn(),
   listClients: vi.fn(),
   countStartedByClient: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
-vi.mock("./reports/cohort", () => ({ loadCohort: h.loadCohort }));
 vi.mock("@/server/repositories/client.repository", () => ({
   clientRepository: { list: h.listClients },
 }));
 vi.mock("@/server/repositories/candidate.repository", () => ({
   candidateRepository: { countStartedByClient: h.countStartedByClient },
 }));
+vi.mock("@/server/repositories/open-role.repository", () => ({ openRoleRepository: {} }));
+vi.mock("@/server/repositories/stage-history.repository", () => ({ stageHistoryRepository: {} }));
+vi.mock("./cohort", () => ({ loadCohort: vi.fn(), scoreFor: vi.fn() }));
 
-import { analyticsService } from "./analytics.service";
+import { clientReportsService } from "./client-reports.service";
 
 beforeEach(() => {
-  Object.values(h).forEach((fn) => fn.mockReset());
-  h.loadCohort.mockResolvedValue({
-    candidates: [],
-    clientNames: new Map(),
-    userNames: new Map(),
-    rulesByClient: new Map(),
-    capped: false,
-  });
+  h.listClients.mockReset();
+  h.countStartedByClient.mockReset();
 });
 
-describe("analyticsService.overview — Client Capacity", () => {
+describe("clientReportsService.clientCapacity", () => {
   it("skips clients with no capacity set", async () => {
     h.listClients.mockResolvedValue([{ id: "c1", name: "Acme", capacity: null }]);
     h.countStartedByClient.mockResolvedValue([]);
-    const dto = await analyticsService.overview({});
-    expect(dto.clientCapacity).toEqual([]);
+    const dto = await clientReportsService.clientCapacity();
+    expect(dto.clients).toEqual([]);
     expect(h.countStartedByClient).toHaveBeenCalledWith([]);
   });
 
@@ -58,8 +52,8 @@ describe("analyticsService.overview — Client Capacity", () => {
       { clientId: "green", _count: { _all: 3 } },
     ]);
 
-    const dto = await analyticsService.overview({});
-    const byId = new Map(dto.clientCapacity.map((c) => [c.clientId, c]));
+    const dto = await clientReportsService.clientCapacity();
+    const byId = new Map(dto.clients.map((c) => [c.clientId, c]));
 
     expect(byId.get("red")).toMatchObject({ pct: 80, tone: "red", approachingCapacity: true });
     expect(byId.get("orange")).toMatchObject({
@@ -74,20 +68,8 @@ describe("analyticsService.overview — Client Capacity", () => {
     h.listClients.mockResolvedValue([{ id: "c1", name: "Acme", capacity: 5 }]);
     h.countStartedByClient.mockResolvedValue([]);
 
-    const dto = await analyticsService.overview({});
+    const dto = await clientReportsService.clientCapacity();
 
-    expect(dto.clientCapacity).toMatchObject([{ clientId: "c1", placed: 0, pct: 0 }]);
-  });
-
-  it("numerator is an ALL-TIME count — client ids only, no date-range filter", async () => {
-    h.listClients.mockResolvedValue([{ id: "c1", name: "Acme", capacity: 5 }]);
-    h.countStartedByClient.mockResolvedValue([{ clientId: "c1", _count: { _all: 1 } }]);
-
-    await analyticsService.overview({
-      addedFrom: new Date("2026-01-01"),
-      addedTo: new Date("2026-01-31"),
-    });
-
-    expect(h.countStartedByClient).toHaveBeenCalledWith(["c1"]);
+    expect(dto.clients).toMatchObject([{ clientId: "c1", placed: 0, pct: 0 }]);
   });
 });

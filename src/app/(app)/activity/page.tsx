@@ -33,7 +33,7 @@ export default async function ActivityPage({
 
   if (!hasCapability(user.role, "viewAudit")) {
     return (
-      <div className="mx-auto flex max-w-6xl flex-col gap-5 p-6">
+      <div className="flex flex-col gap-6 px-8 py-6">
         <header>
           <h1 className="text-2xl font-bold text-navy">Activity log</h1>
         </header>
@@ -75,7 +75,7 @@ export default async function ActivityPage({
   const listKey = [action, entity, actor, one(sp.from), one(sp.to)].join("|");
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-5 p-6">
+    <div className="flex flex-col gap-6 px-8 py-6">
       <header>
         <h1 className="text-2xl font-bold text-navy">Activity log</h1>
         <p className="text-sm text-gray">Who did what, across the system.</p>

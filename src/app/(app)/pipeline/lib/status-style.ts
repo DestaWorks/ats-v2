@@ -22,6 +22,27 @@ export const STATUS_BG: Record<CandidateStatus, string> = {
   FUTURE_PIPELINE: "bg-status-future",
 };
 
+/**
+ * Same 13 keys as `STATUS_BG`, as real hex values (1:1 copy of globals.css's `--color-status-*`
+ * custom properties) — Recharts sets actual SVG `fill` values, not Tailwind classes, so it can't
+ * consume `STATUS_BG` directly.
+ */
+export const STATUS_HEX: Record<CandidateStatus, string> = {
+  NEW_CANDIDATE: "#42a5f5",
+  QUALIFIED_PRESCREEN: "#29b6f6",
+  INITIAL_SCREENING: "#ab47bc",
+  DESTA_REVIEW: "#ffa726",
+  SUBMITTED_TO_CLIENT: "#26a69a",
+  CLIENT_INTERVIEW: "#5c6bc0",
+  OFFER_NEGOTIATION: "#ff7043",
+  OFFER_ACCEPTED: "#66bb6a",
+  STARTED_DAY1: "#2e7d32",
+  NOT_QUALIFIED: "#e53935",
+  NO_RESPONSE: "#bdbdbd",
+  CLIENT_REJECTED: "#f44336",
+  FUTURE_PIPELINE: "#78909c",
+};
+
 /** Short track badge label + tinted classes (18%-ish bg over the brand token). */
 export const TRACK_BADGE: Record<Track, { label: string; className: string }> = {
   Clinical: { label: "CLIN", className: "bg-teal/15 text-teal" },

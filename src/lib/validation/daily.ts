@@ -52,8 +52,19 @@ export interface DailyOverviewDTO {
   actualSubmitted: boolean;
   /** Viewer may set targets (leadership) — drives the banner button + modal. */
   canSetTargets: boolean;
-  /** Target-setting options (present only when `canSetTargets`). */
-  teammates?: { id: string; name: string }[];
+  /**
+   * Target-setting roster (present only when `canSetTargets`) — design pass 2026-08-04, legacy
+   * `vw="brief"`'s "MANAGER · SET TODAY'S TARGETS" card grid (name + pending/set status + WTD
+   * summary) that the new app was missing; previously just `{id, name}` for a plain picker.
+   */
+  teammates?: {
+    id: string;
+    name: string;
+    hasTargetToday: boolean;
+    weekSourced: number;
+    weekOutreach: number;
+    daysLoggedThisWeek: number;
+  }[];
   clients?: { id: string; name: string }[];
 }
 

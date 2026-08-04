@@ -28,6 +28,7 @@ const PACE_COLOR = { hit: "text-green", "on pace": "text-navy", behind: "text-or
 export function DailyStrip() {
   const [data, setData] = useState<DailyOverviewDTO | null>(null);
   const [open, setOpen] = useState<"eos" | "targets" | null>(null);
+  const [targetUserId, setTargetUserId] = useState<string | null>(null);
   const today = dateKey();
   const tz = new Date().getTimezoneOffset();
 
@@ -71,13 +72,20 @@ export function DailyStrip() {
             </p>
           </div>
           {canSetTargets ? (
-            <Button type="button" size="sm" onClick={() => setOpen("targets")}>
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => {
+                setTargetUserId(null);
+                setOpen("targets");
+              }}
+            >
               Set targets →
             </Button>
           ) : null}
         </section>
       ) : (
-        <section className="flex flex-col gap-3 rounded-xl border border-black/5 bg-white p-4">
+        <section className="flex flex-col gap-3 rounded-xl border border-black/5 bg-white p-4 shadow-card">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-[11px] font-bold tracking-[0.08em] text-gray uppercase">
               Today&apos;s targets ·{" "}
@@ -90,7 +98,15 @@ export function DailyStrip() {
             </p>
             <div className="flex items-center gap-2">
               {canSetTargets ? (
-                <Button type="button" size="xs" variant="ghost" onClick={() => setOpen("targets")}>
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="ghost"
+                  onClick={() => {
+                    setTargetUserId(null);
+                    setOpen("targets");
+                  }}
+                >
                   Edit targets
                 </Button>
               ) : null}
@@ -134,6 +150,16 @@ export function DailyStrip() {
         </section>
       )}
 
+      {canSetTargets && data.teammates && data.teammates.length > 0 ? (
+        <TargetRosterSection
+          teammates={data.teammates}
+          onPick={(id) => {
+            setTargetUserId(id);
+            setOpen("targets");
+          }}
+        />
+      ) : null}
+
       {open === "eos" ? (
         <EndOfShiftModal
           today={today}
@@ -149,6 +175,7 @@ export function DailyStrip() {
         <SetTargetsModal
           today={today}
           data={data}
+          initialUserId={targetUserId}
           onClose={() => setOpen(null)}
           onSaved={() => {
             setOpen(null);
@@ -319,14 +346,71 @@ function EndOfShiftModal({
   );
 }
 
+/**
+ * "MANAGER · SET TODAY'S TARGETS" roster (design pass 2026-08-04, legacy `vw="brief"`'s
+ * associate card grid — the new app previously only had a plain `<Select>` inside the modal with
+ * no glanceable pending/set status or week-to-date summary). Each card opens `SetTargetsModal`
+ * pre-selected to that teammate.
+ */
+function TargetRosterSection({
+  teammates,
+  onPick,
+}: {
+  teammates: NonNullable<DailyOverviewDTO["teammates"]>;
+  onPick: (userId: string) => void;
+}) {
+  return (
+    <section className="flex flex-col gap-3 rounded-xl border border-black/5 bg-white p-4 shadow-card">
+      <div>
+        <p className="text-[11px] font-bold tracking-[0.08em] text-gray uppercase">
+          Manager · Set today&apos;s targets
+        </p>
+        <p className="text-xs text-gray">Click any associate to set or edit their targets.</p>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {teammates.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => onPick(t.id)}
+            className="flex flex-col gap-1 rounded-lg border border-black/10 p-3 text-left transition hover:border-navy/30 hover:bg-navy/[0.02] focus-visible:ring-2 focus-visible:ring-navy focus-visible:outline-none"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-sm font-semibold text-charcoal">{t.name}</span>
+              <span
+                className={cn(
+                  "rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide uppercase",
+                  t.hasTargetToday ? "bg-green/10 text-green" : "bg-orange/10 text-orange",
+                )}
+              >
+                {t.hasTargetToday ? "Set" : "Pending"}
+              </span>
+            </div>
+            <p className="text-xs text-gray">
+              {t.hasTargetToday ? "Target set for today" : "No target set yet"}
+            </p>
+            <p className="text-[11px] text-gray tabular-nums">
+              WTD: {t.weekSourced}s · {t.weekOutreach}o · {t.daysLoggedThisWeek}d logged
+            </p>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function SetTargetsModal({
   today,
   data,
+  initialUserId,
   onClose,
   onSaved,
 }: {
   today: string;
   data: DailyOverviewDTO;
+  /** Pre-selected from a `TargetRosterSection` card click — locks the Associate field (legacy's
+   *  per-person modal, no picker) instead of the generic dropdown-fallback flow. */
+  initialUserId: string | null;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -334,7 +418,7 @@ function SetTargetsModal({
   const clients = data.clients ?? [];
   // Legacy AI-suggest fallback defaults: 25 / 25 / 5 / 0 / 0.
   const [form, setForm] = useState<Record<string, string>>({
-    userId: teammates[0]?.id ?? "",
+    userId: initialUserId ?? teammates[0]?.id ?? "",
     sourcing: "25",
     outreach: "25",
     atsCleanup: "5",
@@ -399,18 +483,32 @@ function SetTargetsModal({
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
       setForm((f) => ({ ...f, [key]: e.target.value }));
 
+  const lockedName = initialUserId
+    ? (teammates.find((t) => t.id === initialUserId)?.name ?? null)
+    : null;
+
   return (
-    <Modal open onClose={onClose} title={`Set targets · ${today}`}>
+    <Modal
+      open
+      onClose={onClose}
+      title={lockedName ? `Set targets · ${lockedName}` : `Set targets · ${today}`}
+    >
       <div className="flex flex-col gap-4">
-        <Field label="Associate" htmlFor="tg-user" required>
-          <Select id="tg-user" value={form.userId} onChange={set("userId")}>
-            {teammates.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.name}
-              </option>
-            ))}
-          </Select>
-        </Field>
+        {lockedName ? (
+          <p className="text-xs text-gray">
+            For <span className="font-semibold text-charcoal">{lockedName}</span> · {today}
+          </p>
+        ) : (
+          <Field label="Associate" htmlFor="tg-user" required>
+            <Select id="tg-user" value={form.userId} onChange={set("userId")}>
+              {teammates.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        )}
         <div className="flex items-center justify-between">
           <p className="text-[11px] font-semibold tracking-wide text-gray uppercase">Targets</p>
           <Button

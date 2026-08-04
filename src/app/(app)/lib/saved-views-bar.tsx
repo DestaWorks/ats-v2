@@ -72,14 +72,24 @@ export function SavedViewsBar({
   return (
     <div className="flex flex-wrap items-center gap-2">
       {views.length > 0 ? (
-        <span className="text-xs font-semibold tracking-wide text-gray uppercase">Views</span>
+        <span
+          className="text-xs font-semibold tracking-wide text-gray uppercase"
+          title="Saved filter shortcuts — click a name to re-apply that search/filter combination instantly."
+        >
+          Views
+        </span>
       ) : null}
       {views.map((v) => (
         <span
           key={v.id}
           className="inline-flex items-center gap-1 rounded-full border border-black/15 py-1 pr-1 pl-3 text-sm"
         >
-          <button type="button" onClick={() => applyView(v)} className="hover:underline">
+          <button
+            type="button"
+            onClick={() => applyView(v)}
+            className="hover:underline"
+            title={`Apply the "${v.name}" saved search/filters`}
+          >
             {v.name}
           </button>
           <button
@@ -98,6 +108,7 @@ export function SavedViewsBar({
         size="sm"
         className="rounded-full border border-dashed border-black/20"
         onClick={() => setOpen(true)}
+        title="Save your current search + filters as a one-click shortcut you can reapply later"
       >
         + Save view
       </Button>
