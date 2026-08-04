@@ -10,9 +10,12 @@ import { Card } from "@/components/ui/card";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { Modal } from "@/components/ui/modal";
+import { DetailTabs, type TabDef } from "@/components/ui/tabs";
 import { Table, Td } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils/cn";
+import { TeamBriefSection } from "./team-brief-section";
 
 const FIELDS = [
   ["sourced", "Profiles Sourced"],
@@ -134,14 +137,13 @@ function WeekTrendBars({ today, history }: { today: string; history: DailyLogVie
 }
 
 /**
- * Admin/leadership team breakdown + manager-feedback composer (Wave 3.1 backlog, legacy
- * `isAdmin`-only Daily Log table). Attempts the fetch on mount and renders nothing on a 403 —
- * the route double-gates server-side (`viewReports`), so a non-leadership viewer simply never
- * sees this section, no client-side capability plumbing needed.
+ * Leadership team breakdown + manager-feedback composer (Wave 3.1 backlog, legacy `isAdmin`-only
+ * Daily Log table). Only ever mounted inside the "Team" tab, which `DailyLogView` only includes
+ * when the server-computed `canViewTeam` prop is true — no client-side capability plumbing here;
+ * the API route still double-gates (`viewReports`) as the real, server-authoritative check.
  */
 function TeamBreakdownSection({ weekStart }: { weekStart: string }) {
   const [data, setData] = useState<TeamBreakdownDTO | null>(null);
-  const [visible, setVisible] = useState(true);
   const [targetUserId, setTargetUserId] = useState("");
   const [feedbackBody, setFeedbackBody] = useState("");
   const [pending, setPending] = useState(false);
@@ -154,7 +156,6 @@ function TeamBreakdownSection({ weekStart }: { weekStart: string }) {
       );
       if (cancelled) return;
       if (res.ok) setData(res.data);
-      else setVisible(false);
     })();
     return () => {
       cancelled = true;
@@ -177,7 +178,7 @@ function TeamBreakdownSection({ weekStart }: { weekStart: string }) {
     }
   }
 
-  if (!visible || !data) return null;
+  if (!data) return null;
 
   return (
     <Card as="section" className="p-5">
@@ -289,8 +290,16 @@ const TILE_META: Record<TileLabel, { icon: string; bar: string; badge: string; t
  * banner + 🔥 streak, live auto-capture tiles, the once-a-day self-report (sourced pre-filled
  * from the ATS count), log history, and the journal (weekly goals with REAL toggles + daily
  * notes). Loads `GET /api/daily/log?date&tz` (user-local day) and refetches after each write.
+ *
+ * Design pass 2026-08-04: the standalone `/daily-brief` page was folded in here — legacy itself
+ * never merged `dailylog`/`journal`/`brief` onto one continuous page (they were 3 separate view
+ * switches, not a scroll), and stacking all of it vertically here read as an overwhelming wall of
+ * unrelated sections, not an improvement. Fixed by using `DetailTabs` (same primitive as
+ * Candidate Detail/Reports) instead of a flat stack: "My Log" (everyone) vs. "Team" (leadership
+ * only — `canViewTeam` is computed server-side in `page.tsx` from the real session role, so the
+ * tab doesn't exist at all for a non-leadership viewer, not just hidden after a failed fetch).
  */
-export function DailyLogView() {
+export function DailyLogView({ canViewTeam }: { canViewTeam: boolean }) {
   const [view, setView] = useState<DailyLogViewDTO | null>(null);
   const [form, setForm] = useState<Record<string, string>>({
     sourced: "",
@@ -306,6 +315,7 @@ export function DailyLogView() {
   const [entryText, setEntryText] = useState("");
   const [perClient, setPerClient] = useState<Record<string, string>>({});
   const [pending, setPending] = useState(false);
+  const [logModalOpen, setLogModalOpen] = useState(false);
   const today = dateKey();
   const tz = new Date().getTimezoneOffset();
 
@@ -355,6 +365,7 @@ export function DailyLogView() {
     setPending(false);
     if (res.ok) {
       toast.success("Daily log submitted");
+      setLogModalOpen(false);
       void refresh();
     } else toast.error(messageForFailure(res.failure));
   }
@@ -397,7 +408,7 @@ export function DailyLogView() {
   ];
   const goalsDone = goals.filter((g) => g.done).length;
 
-  return (
+  const myLogPanel = (
     <div className="flex flex-col gap-5">
       {/* Ramp journey — the signature: a 3-segment track showing the real onboarding arc, not a
           decorative bar (Training → Ramp → Full Production, per `lib/daily.ts` rampFor). */}
@@ -497,7 +508,11 @@ export function DailyLogView() {
         })}
       </section>
 
-      {/* Self-report — once per day (submitted state is read-only, legacy parity). */}
+      {/* Self-report — once per day (submitted state is read-only, legacy parity). Design pass
+          2026-08-04: the form used to render inline and permanently occupy this whole card even
+          before submission — now it's a compact prompt + button, form itself lives in a Modal,
+          matching the "big one-time form shouldn't be permanent page furniture" idiom already
+          used elsewhere (Add Candidate, resume upload, etc.). */}
       <Card as="section" className="p-5">
         <h2 className="mb-3 text-sm font-bold tracking-wide text-navy uppercase">
           Today&apos;s log
@@ -519,118 +534,132 @@ export function DailyLogView() {
             ) : null}
           </div>
         ) : (
-          <div className="flex flex-col gap-4">
-            {/* Density mirrors legacy's `repeat(5,1fr)` KPI grid — at full page width, MORE narrow
-                columns keep each number input compact instead of a few columns stretching wide. */}
-            <div className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3 lg:grid-cols-6">
-              {FIELDS.map(([key, label]) => {
-                const autoFilled = key === "sourced" && auto.added > 0;
-                return (
-                  <Field
-                    key={key}
-                    label={
-                      autoFilled ? (
-                        <span className="inline-flex items-center gap-1.5">
-                          {label}
-                          <span className="rounded-full bg-label px-1.5 py-0.5 text-[9px] font-bold tracking-wide text-navy uppercase">
-                            Auto
-                          </span>
-                        </span>
-                      ) : (
-                        label
-                      )
-                    }
-                    htmlFor={`dl-${key}`}
-                    hint={autoFilled ? `Auto: ${auto.added} from ATS` : undefined}
-                  >
-                    <Input
-                      id={`dl-${key}`}
-                      type="number"
-                      min={0}
-                      max={999}
-                      placeholder={autoFilled ? String(auto.added) : "0"}
-                      value={form[key]}
-                      onChange={(e) => setForm({ ...form, [key]: e.target.value })}
-                      className={autoFilled ? "bg-label/40" : undefined}
-                    />
-                  </Field>
-                );
-              })}
-              <Field label="Blocker (optional)" htmlFor="dl-blocker">
-                <Select
-                  id="dl-blocker"
-                  value={form.blocker}
-                  onChange={(e) => setForm({ ...form, blocker: e.target.value })}
-                >
-                  <option value="">None</option>
-                  {BLOCKERS.map((b) => (
-                    <option key={b} value={b}>
-                      {b}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-            </div>
-            {clients.length > 0 ? (
-              <div>
-                <p className="mb-2 text-[11px] font-semibold tracking-wide text-gray uppercase">
-                  Sourced by client{" "}
-                  <span className="text-[10px] font-normal normal-case text-gray/70">
-                    (optional — tracks where effort is going)
-                  </span>
-                </p>
-                <div className="flex flex-wrap gap-3">
-                  {clients.map((c) => (
-                    <label key={c.id} className="flex items-center gap-1.5 text-xs text-gray">
-                      {c.name.split(" ")[0]}
-                      <Input
-                        id={`dl-pc-${c.id}`}
-                        aria-label={`Sourced for ${c.name}`}
-                        type="number"
-                        min={0}
-                        max={999}
-                        value={perClient[c.id] ?? ""}
-                        onChange={(e) => setPerClient({ ...perClient, [c.id]: e.target.value })}
-                        className="w-16 py-1 text-center text-xs"
-                      />
-                    </label>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-            <Field label="Notes (optional)" htmlFor="dl-notes">
-              <textarea
-                id="dl-notes"
-                rows={2}
-                value={form.notes}
-                onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                className="w-full resize-y rounded-md border border-black/15 px-2.5 py-1.5 text-sm focus:ring-2 focus:ring-navy focus:outline-none"
-              />
-            </Field>
-            <Field
-              label="Shift handoff (optional)"
-              htmlFor="dl-handoff"
-              hint="Visible to the next shift"
-            >
-              <Input
-                id="dl-handoff"
-                value={form.shiftHandoff}
-                onChange={(e) => setForm({ ...form, shiftHandoff: e.target.value })}
-              />
-            </Field>
-            <div className="flex justify-end border-t border-black/5 pt-4">
-              <Button
-                type="button"
-                variant="success"
-                loading={pending}
-                onClick={() => void submitLog()}
-              >
-                Submit Daily Log
-              </Button>
-            </div>
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed border-black/10 bg-black/[0.02] p-4">
+            <p className="text-sm text-gray">You haven&apos;t logged today&apos;s numbers yet.</p>
+            <Button type="button" variant="success" onClick={() => setLogModalOpen(true)}>
+              Log Today&apos;s Numbers
+            </Button>
           </div>
         )}
       </Card>
+
+      <Modal
+        open={logModalOpen}
+        onClose={() => setLogModalOpen(false)}
+        title="Today's Log"
+        className="w-[min(56rem,calc(100vw-2rem))]"
+      >
+        <div className="flex flex-col gap-4">
+          {/* Density mirrors legacy's `repeat(5,1fr)` KPI grid — at full page width, MORE narrow
+              columns keep each number input compact instead of a few columns stretching wide. */}
+          <div className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3 lg:grid-cols-6">
+            {FIELDS.map(([key, label]) => {
+              const autoFilled = key === "sourced" && auto.added > 0;
+              return (
+                <Field
+                  key={key}
+                  label={
+                    autoFilled ? (
+                      <span className="inline-flex items-center gap-1.5">
+                        {label}
+                        <span className="rounded-full bg-label px-1.5 py-0.5 text-[9px] font-bold tracking-wide text-navy uppercase">
+                          Auto
+                        </span>
+                      </span>
+                    ) : (
+                      label
+                    )
+                  }
+                  htmlFor={`dl-${key}`}
+                  hint={autoFilled ? `Auto: ${auto.added} from ATS` : undefined}
+                >
+                  <Input
+                    id={`dl-${key}`}
+                    type="number"
+                    min={0}
+                    max={999}
+                    placeholder={autoFilled ? String(auto.added) : "0"}
+                    value={form[key]}
+                    onChange={(e) => setForm({ ...form, [key]: e.target.value })}
+                    className={autoFilled ? "bg-label/40" : undefined}
+                  />
+                </Field>
+              );
+            })}
+            <Field label="Blocker (optional)" htmlFor="dl-blocker">
+              <Select
+                id="dl-blocker"
+                value={form.blocker}
+                onChange={(e) => setForm({ ...form, blocker: e.target.value })}
+              >
+                <option value="">None</option>
+                {BLOCKERS.map((b) => (
+                  <option key={b} value={b}>
+                    {b}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          </div>
+          {clients.length > 0 ? (
+            <div>
+              <p className="mb-2 text-[11px] font-semibold tracking-wide text-gray uppercase">
+                Sourced by client{" "}
+                <span className="text-[10px] font-normal normal-case text-gray/70">
+                  (optional — tracks where effort is going)
+                </span>
+              </p>
+              <div className="flex flex-wrap gap-3">
+                {clients.map((c) => (
+                  <label key={c.id} className="flex items-center gap-1.5 text-xs text-gray">
+                    {c.name.split(" ")[0]}
+                    <Input
+                      id={`dl-pc-${c.id}`}
+                      aria-label={`Sourced for ${c.name}`}
+                      type="number"
+                      min={0}
+                      max={999}
+                      value={perClient[c.id] ?? ""}
+                      onChange={(e) => setPerClient({ ...perClient, [c.id]: e.target.value })}
+                      className="w-16 py-1 text-center text-xs"
+                    />
+                  </label>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          <Field label="Notes (optional)" htmlFor="dl-notes">
+            <textarea
+              id="dl-notes"
+              rows={2}
+              value={form.notes}
+              onChange={(e) => setForm({ ...form, notes: e.target.value })}
+              className="w-full resize-y rounded-md border border-black/15 px-2.5 py-1.5 text-sm focus:ring-2 focus:ring-navy focus:outline-none"
+            />
+          </Field>
+          <Field
+            label="Shift handoff (optional)"
+            htmlFor="dl-handoff"
+            hint="Visible to the next shift"
+          >
+            <Input
+              id="dl-handoff"
+              value={form.shiftHandoff}
+              onChange={(e) => setForm({ ...form, shiftHandoff: e.target.value })}
+            />
+          </Field>
+          <div className="flex justify-end border-t border-black/5 pt-4">
+            <Button
+              type="button"
+              variant="success"
+              loading={pending}
+              onClick={() => void submitLog()}
+            >
+              Submit Daily Log
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Journal — weekly goals (real toggles) + daily notes. */}
       <div className="grid gap-4 sm:grid-cols-2">
@@ -709,8 +738,6 @@ export function DailyLogView() {
         </Card>
       </div>
 
-      <TeamBreakdownSection weekStart={mondayOf(today)} />
-
       {/* Log history (last 10). */}
       <Card as="section" className="p-5">
         <h2 className="mb-3 text-sm font-bold tracking-wide text-navy uppercase">Log history</h2>
@@ -739,4 +766,21 @@ export function DailyLogView() {
       </Card>
     </div>
   );
+
+  const tabs: TabDef[] = [{ key: "log", label: "My Log", panel: myLogPanel }];
+  if (canViewTeam) {
+    tabs.push({
+      key: "team",
+      label: "Team",
+      panel: (
+        <div className="flex flex-col gap-5">
+          {/* AI team brief, then the raw weekly breakdown table (summary → detail). */}
+          <TeamBriefSection />
+          <TeamBreakdownSection weekStart={mondayOf(today)} />
+        </div>
+      ),
+    });
+  }
+
+  return <DetailTabs tabs={tabs} ariaLabel="Daily Log" />;
 }

@@ -1,8 +1,9 @@
 /**
  * Pure, isomorphic report math (Wave 5.2). No server imports — safe to unit-test directly and to
  * share between report services that must NOT disagree (legacy had Time-to-Fill and Source-of-Hire
- * computed twice, slightly differently, once in Reports and once in the KPI view — this module is
- * the single source both `time-reports.service.ts` and `analytics.service.ts` call).
+ * computed twice, slightly differently, once in Reports and once in the standalone KPI view —
+ * `time-reports.service.ts` is now the single source; the KPI view was folded into Reports as the
+ * Client Capacity tab 2026-08-03 and never needed these two metrics).
  */
 
 export function average(values: number[]): number | null {

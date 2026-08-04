@@ -8,7 +8,13 @@ import {
   type CandidateStatus,
 } from "@/lib/constants";
 import { getDaysInStage } from "@/lib/rules/stage-timing";
-import type { ClientFunnelDTO, ClientPortfolioDTO, ReportFilters } from "@/lib/validation/reports";
+import type {
+  ClientCapacityDTO,
+  ClientFunnelDTO,
+  ClientPortfolioDTO,
+  ReportFilters,
+} from "@/lib/validation/reports";
+import { candidateRepository } from "@/server/repositories/candidate.repository";
 import { clientRepository } from "@/server/repositories/client.repository";
 import { openRoleRepository } from "@/server/repositories/open-role.repository";
 import { stageHistoryRepository } from "@/server/repositories/stage-history.repository";
@@ -17,6 +23,10 @@ import { activeOrderAsOf } from "@/lib/reports/stage-progress";
 import { average } from "@/lib/reports/metrics";
 
 const MS_PER_WEEK = 7 * 86_400_000;
+
+/** Client Capacity alert thresholds (legacy `index.html:2911-2913`, preserved). */
+const CAPACITY_RED = 80;
+const CAPACITY_ORANGE = 60;
 
 export const clientReportsService = {
   /**
@@ -126,6 +136,42 @@ export const clientReportsService = {
         };
       });
 
+    return { clients: clients_ };
+  },
+
+  /**
+   * Client Capacity (originally the standalone `/analytics` KPI view — folded in here 2026-08-03,
+   * `docs/MODULE-BREAKDOWN.md` §25). Numerator is **all-time cumulative placements**, never
+   * period-filtered (confirmed with Biruh — legacy's period-filtered numerator barely ever fired
+   * outside "All Time"), so — unlike every other tab on this page — this method takes no filters
+   * and doesn't load a cohort at all. No hardcoded per-client capacity map like legacy's three
+   * separate ones; reads the real `Client.capacity` column.
+   */
+  async clientCapacity(): Promise<ClientCapacityDTO> {
+    const clients = await clientRepository.list();
+    const capacityClients = clients.filter((c) => c.capacity !== null && c.capacity > 0);
+    const placedGroups = await candidateRepository.countStartedByClient(
+      capacityClients.map((c) => c.id),
+    );
+    const placedByClient = new Map<string, number>();
+    for (const g of placedGroups) {
+      if (g.clientId) placedByClient.set(g.clientId, g._count._all);
+    }
+    const clients_ = capacityClients.map((c) => {
+      const placed = placedByClient.get(c.id) ?? 0;
+      const capacity = c.capacity as number;
+      const pct = Math.round((placed / capacity) * 100);
+      const tone = pct >= CAPACITY_RED ? "red" : pct >= CAPACITY_ORANGE ? "orange" : "green";
+      return {
+        clientId: c.id,
+        clientName: c.name,
+        capacity,
+        placed,
+        pct,
+        tone: tone as "red" | "orange" | "green",
+        approachingCapacity: pct >= CAPACITY_RED,
+      };
+    });
     return { clients: clients_ };
   },
 };

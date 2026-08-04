@@ -1,12 +1,20 @@
 "use client";
 
+import {
+  BuildingOffice2Icon,
+  CheckCircleIcon,
+  ClockIcon,
+  FlagIcon,
+  MagnifyingGlassIcon,
+  UserGroupIcon,
+} from "@heroicons/react/24/outline";
 import type { ExecutiveSummaryDTO } from "@/lib/validation/reports";
 import { Card } from "@/components/ui/card";
-import { Table, Td } from "@/components/ui/table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { StatCard } from "../dashboard/stat-card";
 import { Bar, ReportTabShell } from "./lib/report-tab-shell";
 import { buildReportQuery, useReportFetch, type ReportFilterState } from "./lib/use-report-fetch";
+import { TopCandidatesChart } from "./top-candidates-chart";
 
 export function ExecutiveTab({ filters }: { filters: ReportFilterState }) {
   const data = useReportFetch<ExecutiveSummaryDTO>(
@@ -19,12 +27,12 @@ export function ExecutiveTab({ filters }: { filters: ReportFilterState }) {
       {(d) => (
         <div className="flex flex-col gap-5">
           <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-            <StatCard label="Total" value={d.total} />
-            <StatCard label="Placed" value={d.placed} tone="green" />
-            <StatCard label="In Review" value={d.inReview} />
-            <StatCard label="At Client" value={d.atClient} tone="teal" />
-            <StatCard label="Overdue" value={d.overdue} tone="orange" />
-            <StatCard label="Flagged" value={d.flagged} tone="red" />
+            <StatCard label="Total" value={d.total} icon={UserGroupIcon} />
+            <StatCard label="Placed" value={d.placed} tone="green" icon={CheckCircleIcon} />
+            <StatCard label="In Review" value={d.inReview} icon={MagnifyingGlassIcon} />
+            <StatCard label="At Client" value={d.atClient} tone="teal" icon={BuildingOffice2Icon} />
+            <StatCard label="Overdue" value={d.overdue} tone="orange" icon={ClockIcon} />
+            <StatCard label="Flagged" value={d.flagged} tone="red" icon={FlagIcon} />
           </section>
 
           <Card as="section" className="flex flex-col gap-3 p-5">
@@ -44,8 +52,8 @@ export function ExecutiveTab({ filters }: { filters: ReportFilterState }) {
             </div>
           </Card>
 
-          <section>
-            <h3 className="mb-2 text-sm font-bold tracking-wide text-navy uppercase">
+          <Card as="section" className="flex flex-col gap-3 p-5">
+            <h3 className="text-sm font-bold tracking-wide text-navy uppercase">
               Top Candidates by Fit
             </h3>
             {d.topCandidates.length === 0 ? (
@@ -54,17 +62,9 @@ export function ExecutiveTab({ filters }: { filters: ReportFilterState }) {
                 description="No candidate has a client fit score yet."
               />
             ) : (
-              <Table caption="Top candidates by fit score" columns={["Name", "Client", "Score"]}>
-                {d.topCandidates.map((c) => (
-                  <tr key={c.id}>
-                    <Td className="font-medium">{c.name}</Td>
-                    <Td>{c.clientName ?? "—"}</Td>
-                    <Td className="tabular-nums">{Math.round(c.scorePct)}%</Td>
-                  </tr>
-                ))}
-              </Table>
+              <TopCandidatesChart candidates={d.topCandidates} />
             )}
-          </section>
+          </Card>
         </div>
       )}
     </ReportTabShell>

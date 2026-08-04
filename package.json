@@ -49,6 +49,7 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-hook-form": "^7.80.0",
+    "recharts": "^3.10.1",
     "server-only": "^0.0.1",
     "sonner": "^1.7.4",
     "zod": "^4.4.3"

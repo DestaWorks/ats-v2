@@ -55,14 +55,16 @@ export function Table({
           >
             {caption}
           </caption>
-          {/* Legacy-parity header: filled navy band with white labels. */}
+          {/* Design pass 2026-08-03: was a filled navy band (legacy parity) — replaced with the
+              lighter gray-label header every reference dashboard uses, matching the uppercase
+              micro-label idiom already used elsewhere (stat-card labels, sidebar group headers). */}
           <thead>
-            <tr className="bg-navy">
+            <tr className="border-b border-black/5 bg-black/[0.02]">
               {columns.map((col, i) => (
                 <th
                   key={i}
                   scope="col"
-                  className="px-3 py-2.5 text-[13px] font-semibold text-white"
+                  className="px-3 py-2.5 text-[11px] font-semibold tracking-wide text-gray uppercase"
                 >
                   {col}
                 </th>

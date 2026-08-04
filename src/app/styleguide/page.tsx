@@ -26,8 +26,12 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { FlagIcon, UserGroupIcon } from "@heroicons/react/24/outline";
 
 import { Skeleton } from "@/components/ui/skeleton";
+import { TrendChip } from "@/components/ui/trend-chip";
+import { SegmentedControl } from "@/components/ui/segmented-control";
+import { StatCard } from "../(app)/dashboard/stat-card";
 import { Spinner } from "@/components/ui/spinner";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
@@ -87,6 +91,9 @@ export default function StyleguidePage() {
 
   // --- Modal (native <dialog>) ---
   const [modalOpen, setModalOpen] = useState(false);
+
+  // --- Segmented control ---
+  const [range, setRange] = useState<"week" | "month" | "year">("month");
 
   // --- dnd-kit sortable ---
   const [items, setItems] = useState([
@@ -190,6 +197,48 @@ export default function StyleguidePage() {
             <code>as</code> (section / aside) and padding/layout come from <code>className</code>.
           </p>
         </Card>
+      </Section>
+
+      <Section title="Stat cards (design pass 2026-08-03)">
+        <p className="text-xs text-gray">
+          <code>icon</code> and <code>trend</code> are both optional — bare (existing call sites),
+          with an icon badge, or with an icon + a real delta chip.
+        </p>
+        <div className="grid grid-cols-3 gap-3">
+          <StatCard label="Total" value={128} />
+          <StatCard label="Active" value={54} tone="teal" icon={UserGroupIcon} />
+          <StatCard
+            label="Started"
+            value={12}
+            tone="green"
+            icon={FlagIcon}
+            trend={{ direction: "up", label: "+3 this week" }}
+          />
+        </div>
+      </Section>
+
+      <Section title="Trend chip">
+        <div className="flex flex-wrap items-center gap-2">
+          <TrendChip direction="up" label="+12%" />
+          <TrendChip direction="down" label="-5% vs last month" />
+        </div>
+      </Section>
+
+      <Section title="Segmented control">
+        <p className="text-xs text-gray">
+          Pill-group filter for a small mutually-exclusive set (date-range presets, category
+          toggles) — same visual language as the tab pills, for a lighter-weight in-page filter.
+        </p>
+        <SegmentedControl
+          ariaLabel="Example range"
+          value={range}
+          onChange={setRange}
+          options={[
+            { value: "week", label: "This week" },
+            { value: "month", label: "This month" },
+            { value: "year", label: "This year" },
+          ]}
+        />
       </Section>
 
       <Section title="Table">

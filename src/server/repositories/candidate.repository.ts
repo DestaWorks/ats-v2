@@ -356,8 +356,9 @@ export const candidateRepository = {
 
   /**
    * STARTED_DAY1 counts grouped by client, for a given set of client ids — the Client Capacity
-   * KPI's per-client "placed" figure (analytics.service.ts). Perf audit 2026-08-03: was one
-   * `count()` per client run via `Promise.all`; this does the same aggregation in ONE query.
+   * report's per-client "placed" figure (`client-reports.service.ts`'s `clientCapacity`). Perf
+   * audit 2026-08-03: was one `count()` per client run via `Promise.all`; this does the same
+   * aggregation in ONE query.
    */
   countStartedByClient(clientIds: string[], tx?: Prisma.TransactionClient) {
     if (clientIds.length === 0) return Promise.resolve([]);

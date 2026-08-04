@@ -653,6 +653,11 @@ format (blocks 1.3/1.4). *Trash auto-purge sign-off resolved 2026-07-14 — see 
       **all-time cumulative placements** at that client vs. the real `Client.capacity` column
       (confirmed with Biruh — legacy's period-filtered numerator barely ever fired outside "All
       Time"); no hardcoded per-client capacity map like legacy's three separate ones.
+      *(Update 2026-08-03: actually folded into Reports now, per MODULE-BREAKDOWN §25's original
+      intent — By-Status/Client/Source, Time-to-Fill, and Source-of-Hire all duplicated existing
+      Reports tabs; Client Capacity is now a Reports tab, `GET /api/reports/client-capacity`, and
+      the standalone `/analytics` page/route/service are deleted. `viewAnalytics` stays live —
+      still gates Template Performance — just lost its own nav item.)*
 - [x] CSV export (`GET /api/reports/export`) — a genuinely new route; legacy's export was 100%
       client-side (blob-URL trick, no backend call at all).
 - [x] **Trends** ✅ *(done 2026-07-24, the "heaviest reports" flex item from D5/5.4 — legacy's

@@ -32,7 +32,10 @@ export function LearnView({
 
   return (
     <>
-      <div className="rounded-xl border-none bg-gradient-to-br from-navy to-brand p-6 text-white">
+      {/* Design pass 2026-08-04: was `to-brand`, a navy→tan gradient that read as muddy/unintentional
+          — legacy's tutorial banner is navy-only (`linear-gradient(135deg,#1E4A8A,#3A6BB8)`,
+          `index.html:5216`), matched here exactly. */}
+      <div className="rounded-xl border-none bg-gradient-to-br from-navy to-[#3A6BB8] p-6 text-white">
         <p className="mb-1.5 text-[11px] font-bold tracking-[0.12em] text-white/85 uppercase">
           Operator Tutorial
         </p>

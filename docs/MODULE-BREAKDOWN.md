@@ -404,6 +404,15 @@ feature (per-client capacity limits + "approaching capacity → open a new req" 
 (`activity`):** standalone filterable/sortable feed over the whole activity log (by action-type,
 user, sort) with per-action totals. **Complexity — Logic 2 / Impl 2.** In the rebuild, Analytics
 folds into Reports and Activity Log into Cross-cutting — but **Client Capacity** must be preserved.
+*(Update 2026-08-03: Wave 5.2 initially shipped Analytics as its own standalone `/analytics` page
+instead of actually folding it in — By-Status/Client/Source, Time-to-Fill, and Source-of-Hire all
+turned out to duplicate existing Reports tabs (Executive/Client Portfolio, Time Analysis, Source
+ROI respectively). Folded for real: Client Capacity is now a Reports tab
+(`clientReportsService.clientCapacity`, `GET /api/reports/client-capacity`); the standalone page,
+route, and `analytics.service.ts` were deleted. `viewAnalytics` stays a live capability — it also
+gates the unrelated Template Performance modal (Module 23) — but no longer has its own nav item;
+`viewReports`/`viewAnalytics` were already granted to the identical role set, so this drops no
+access.)*
 
 ## 23. Misc — Floating Sticky Note (8696), Journey modal (8714), Template Performance modal
 (8784), Verification Presets modal (8857, `verification_preset_save/delete`), Mention Picker

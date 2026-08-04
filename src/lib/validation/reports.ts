@@ -1,8 +1,10 @@
 /**
- * Reports + Analytics contract (Wave 5.2). Pure (NO server imports) — shared by every report
- * route and the `/reports`/`/analytics` clients. Filters mirror legacy's universal filter bar
- * (client/associate/source/credential/date-range) — one shape reused by all 9 reports + CSV
- * export, matching legacy's single filtered cohort feeding every report.
+ * Reports contract (Wave 5.2). Pure (NO server imports) — shared by every report route and the
+ * `/reports` client. Filters mirror legacy's universal filter bar (client/associate/source/
+ * credential/date-range) — one shape reused by every filtered report + CSV export, matching
+ * legacy's single filtered cohort feeding every report. Client Capacity (originally the
+ * standalone `/analytics` KPI view, legacy `vw="kpi"`) is unfiltered/all-time by design — see
+ * `ClientCapacityDTO` below — so it takes no filters at all, same as Trends.
  */
 import { z } from "zod";
 import type { CandidateStatus } from "@/lib/constants";
@@ -17,29 +19,13 @@ export const reportFiltersSchema = z.object({
 });
 export type ReportFilters = z.infer<typeof reportFiltersSchema>;
 
-/** `/api/analytics`'s simpler filter bar (legacy KPI view: period preset + single associate). */
-export const analyticsFiltersSchema = z.object({
-  createdById: z.string().min(1).optional(),
-  addedFrom: z.coerce.date().optional(),
-  addedTo: z.coerce.date().optional(),
-});
-export type AnalyticsFilters = z.infer<typeof analyticsFiltersSchema>;
-
-/** Shared query-param → filters parsing, reused by all `/api/reports/*` + `/api/analytics` routes. */
+/** Shared query-param → filters parsing, reused by every `/api/reports/*` route. */
 export function reportFiltersFromParams(params: URLSearchParams): ReportFilters {
   return reportFiltersSchema.parse({
     clientId: params.get("clientId") ?? undefined,
     createdById: params.get("createdById") ?? undefined,
     source: params.get("source") ?? undefined,
     credential: params.get("credential") ?? undefined,
-    addedFrom: params.get("addedFrom") ?? undefined,
-    addedTo: params.get("addedTo") ?? undefined,
-  });
-}
-
-export function analyticsFiltersFromParams(params: URLSearchParams): AnalyticsFilters {
-  return analyticsFiltersSchema.parse({
-    createdById: params.get("createdById") ?? undefined,
     addedFrom: params.get("addedFrom") ?? undefined,
     addedTo: params.get("addedTo") ?? undefined,
   });
@@ -148,6 +134,28 @@ export interface ClientPortfolioDTO {
   clients: ClientPortfolioCardDTO[];
 }
 
+/**
+ * Client Capacity (legacy `vw="kpi"`, `index.html:2827-2916` — originally a standalone Analytics
+ * page; folded into Reports as its own tab, since By-Status/Client/Source, Time-to-Fill, and
+ * Source-of-Hire all duplicated existing report tabs and this was the only genuinely unique
+ * piece; see `docs/MODULE-BREAKDOWN.md` §25). Per-client capacity limits + an "approaching
+ * capacity" alert — the numerator is ALL-TIME cumulative placements at that client (never
+ * period-filtered, confirmed with Biruh — legacy's period-filtered numerator barely ever fired
+ * outside "All Time"), so this DTO takes no filters at all.
+ */
+export interface ClientCapacityCardDTO {
+  clientId: string;
+  clientName: string;
+  capacity: number;
+  placed: number;
+  pct: number;
+  tone: "red" | "orange" | "green";
+  approachingCapacity: boolean;
+}
+export interface ClientCapacityDTO {
+  clients: ClientCapacityCardDTO[];
+}
+
 export interface TimeAnalysisDTO {
   timeInStage: {
     status: CandidateStatus;
@@ -207,22 +215,4 @@ export interface TrendsDTO {
   metrics: TrendsMetricDTO[];
   anomalies: TrendsAnomalyDTO[];
   funnel: TrendsFunnelStageDTO[];
-}
-
-export interface AnalyticsDTO {
-  total: number;
-  byStatus: { status: CandidateStatus; label: string; count: number; pct: number }[];
-  byClient: { clientName: string; count: number; pct: number }[];
-  bySource: { source: string; count: number; pct: number }[];
-  timeToFill: { avgDays: number | null; medianDays: number | null; count: number };
-  sourceOfHire: { source: string; total: number; placed: number; conversionPct: number | null }[];
-  clientCapacity: {
-    clientId: string;
-    clientName: string;
-    capacity: number;
-    placed: number;
-    pct: number;
-    tone: "red" | "orange" | "green";
-    approachingCapacity: boolean;
-  }[];
 }

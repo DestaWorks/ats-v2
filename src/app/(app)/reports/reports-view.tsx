@@ -4,6 +4,7 @@ import { useState } from "react";
 import { DetailTabs, type TabDef } from "@/components/ui/tabs";
 import type { ReportFilterOptionsDTO } from "@/server/services/reports/filter-options.service";
 import { PrintButton } from "../credentials/print-button";
+import { ClientCapacityTab } from "./client-capacity-tab";
 import { ClientFunnelTab } from "./client-funnel-tab";
 import { ClientPortfolioTab } from "./client-portfolio-tab";
 import { ComplianceTab } from "./compliance-tab";
@@ -18,9 +19,10 @@ import { TimeAnalysisTab } from "./time-analysis-tab";
 import { TrendsTab } from "./trends-tab";
 
 /**
- * Reports (Wave 5.2, legacy `vw="reports"`) — universal filter bar + 9 server-computed reports as
- * tabs. Only the active tab's panel mounts (`DetailTabs`), so each report fetches lazily and
- * refetches on tab switch/filter change — fine for read-only report GETs.
+ * Reports (Wave 5.2, legacy `vw="reports"`) — universal filter bar + 10 server-computed reports
+ * as tabs (Client Capacity folded in from the standalone Analytics page 2026-08-03). Only the
+ * active tab's panel mounts (`DetailTabs`), so each report fetches lazily and refetches on tab
+ * switch/filter change — fine for read-only report GETs.
  */
 export function ReportsView({ options }: { options: ReportFilterOptionsDTO }) {
   const [filters, setFilters] = useState(EMPTY_FILTERS);
@@ -48,6 +50,11 @@ export function ReportsView({ options }: { options: ReportFilterOptionsDTO }) {
       key: "client-portfolio",
       label: "Client Portfolio",
       panel: <ClientPortfolioTab filters={filters} />,
+    },
+    {
+      key: "client-capacity",
+      label: "Client Capacity",
+      panel: <ClientCapacityTab />,
     },
     { key: "time-analysis", label: "Time Analysis", panel: <TimeAnalysisTab filters={filters} /> },
     { key: "compliance", label: "Compliance", panel: <ComplianceTab filters={filters} /> },

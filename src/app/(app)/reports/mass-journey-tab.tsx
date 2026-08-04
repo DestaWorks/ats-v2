@@ -1,5 +1,6 @@
 "use client";
 
+import { ChartBarIcon, ClockIcon, EyeIcon, UserGroupIcon } from "@heroicons/react/24/outline";
 import type { MassJourneyDTO } from "@/lib/validation/reports";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -39,10 +40,18 @@ export function MassJourneyTab({ filters }: { filters: ReportFilterState }) {
         return (
           <div className="flex flex-col gap-5">
             <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <StatCard label="Candidates" value={d.totalCandidates} />
-              <StatCard label="Median Days to Place" value={d.medianDaysToPlace ?? 0} />
-              <StatCard label="P90 Days to Place" value={d.p90DaysToPlace ?? 0} />
-              <StatCard label="Shown" value={d.shownCount} />
+              <StatCard label="Candidates" value={d.totalCandidates} icon={UserGroupIcon} />
+              <StatCard
+                label="Median Days to Place"
+                value={d.medianDaysToPlace ?? 0}
+                icon={ClockIcon}
+              />
+              <StatCard
+                label="P90 Days to Place"
+                value={d.p90DaysToPlace ?? 0}
+                icon={ChartBarIcon}
+              />
+              <StatCard label="Shown" value={d.shownCount} icon={EyeIcon} />
             </section>
 
             {d.bottleneckStages.length > 0 ? (

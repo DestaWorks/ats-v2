@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { BoltIcon, FlagIcon, UserGroupIcon } from "@heroicons/react/24/outline";
 import { getCurrentUser } from "@/server/auth/guards";
 import { candidateService } from "@/server/services/candidate.service";
 import type { CandidateCardDTO } from "@/lib/validation/pipeline";
@@ -10,6 +11,7 @@ import { STATUS_BG } from "../pipeline/lib/status-style";
 import { StatCard } from "./stat-card";
 import { DailyStrip } from "./daily-strip";
 import { SinceYouClosed } from "./since-you-closed";
+import { PipelineDistributionChart } from "./pipeline-distribution-chart";
 
 /**
  * Overview (RSC, legacy-parity). Reads a lightweight summary (`candidateService.dashboardStats`)
@@ -58,9 +60,9 @@ export default async function DashboardPage() {
       <div className="grid items-start gap-6 lg:grid-cols-3">
         <div className="flex flex-col gap-6 lg:col-span-2">
           <section className="grid grid-cols-3 gap-3">
-            <StatCard label="Total" value={stats.total} />
-            <StatCard label="Active" value={stats.active} />
-            <StatCard label="Terminal" value={stats.terminal} />
+            <StatCard label="Total" value={stats.total} icon={UserGroupIcon} />
+            <StatCard label="Active" value={stats.active} tone="teal" icon={BoltIcon} />
+            <StatCard label="Terminal" value={stats.terminal} tone="orange" icon={FlagIcon} />
           </section>
 
           <Card as="section" className="p-5">
@@ -84,26 +86,13 @@ export default async function DashboardPage() {
               />
             ) : (
               <div className="flex flex-col gap-3">
-                {/* The stacked bar — one proportional segment per non-empty stage (legacy Overview). */}
                 <div
                   role="img"
                   aria-label={`Pipeline distribution: ${filled
                     .map((c) => `${c.label} ${c.count}`)
                     .join(", ")}`}
-                  className="flex h-8 w-full gap-0.5 overflow-hidden rounded-md"
                 >
-                  {filled.map((col) => (
-                    <div
-                      key={col.status}
-                      className={cn(
-                        "flex min-w-6 items-center justify-center text-xs font-semibold text-white",
-                        STATUS_BG[col.status],
-                      )}
-                      style={{ flexGrow: col.count }}
-                    >
-                      {col.count / distributionTotal >= 0.08 ? col.count : null}
-                    </div>
-                  ))}
+                  <PipelineDistributionChart columns={filled} total={distributionTotal} />
                 </div>
                 <div className="flex flex-wrap gap-x-4 gap-y-1.5">
                   {filled.map((col) => (
