@@ -1,12 +1,17 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { CalendarIcon, CheckBadgeIcon, ClockIcon } from "@heroicons/react/24/outline";
 import type { TimeAnalysisDTO } from "@/lib/validation/reports";
 import { Card } from "@/components/ui/card";
 import { StatCard } from "../dashboard/stat-card";
 import { ReportTabShell } from "./lib/report-tab-shell";
 import { buildReportQuery, useReportFetch, type ReportFilterState } from "./lib/use-report-fetch";
-import { TimeInStageChart } from "./time-in-stage-chart";
+
+// recharts is heavy — load it only once this tab actually renders (perf audit 2026-08-05).
+const TimeInStageChart = dynamic(() =>
+  import("./time-in-stage-chart").then((m) => m.TimeInStageChart),
+);
 
 export function TimeAnalysisTab({ filters }: { filters: ReportFilterState }) {
   const data = useReportFetch<TimeAnalysisDTO>(

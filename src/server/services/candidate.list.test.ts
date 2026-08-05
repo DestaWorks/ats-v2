@@ -178,10 +178,24 @@ describe("candidateService.listCandidates — DB path (newest/oldest)", () => {
     h.candidateRepo.list.mockResolvedValue([row()]);
     h.candidateRepo.count.mockResolvedValue(10); // 1 page at pageSize 25
     const list = await candidateService.listCandidates({ page: 5 }, associate);
-    const [args] = h.candidateRepo.list.mock.calls[0]!;
-    expect(args.skip).toBe(0);
+    // The optimistic (unclamped, skip=100) read races `count` in the same round trip; once
+    // `count` reveals page 5 doesn't exist, ONE corrective re-fetch runs at the real skip.
+    expect(h.candidateRepo.list).toHaveBeenCalledTimes(2);
+    const correctiveArgs = h.candidateRepo.list.mock.calls[1]![0];
+    expect(correctiveArgs.skip).toBe(0);
     expect(list.page).toBe(1);
     expect(list.hasNext).toBe(false);
+  });
+
+  it("caps the optimistic skip for an absurd/attacker-controlled page — never sends a raw huge OFFSET to the DB", async () => {
+    h.candidateRepo.list.mockResolvedValue([]);
+    h.candidateRepo.count.mockResolvedValue(10); // 1 page at pageSize 25
+    const list = await candidateService.listCandidates({ page: 999_999_999 }, associate);
+    // The FIRST (optimistic) call must be bounded by the defensive cap, not
+    // (999_999_999 - 1) * 25 — regardless of what `count` later reveals.
+    const optimisticArgs = h.candidateRepo.list.mock.calls[0]![0];
+    expect(optimisticArgs.skip).toBeLessThanOrEqual(10_000 * PAGE_SIZE);
+    expect(list.page).toBe(1); // still correctly clamps to the real last page
   });
 
   it("maps sort=oldest → createdAt_asc", async () => {

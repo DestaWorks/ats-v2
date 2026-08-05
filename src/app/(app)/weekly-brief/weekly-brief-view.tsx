@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { dateKey, mondayOf } from "@/lib/daily";
+import { useTzCookieSync } from "@/lib/use-tz-cookie-sync";
 import type { WeeklyBriefDTO, WeeklyPatternsAiOutput } from "@/lib/validation/briefs";
 import { getJson, messageForFailure, postJson } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
@@ -17,16 +18,33 @@ type Draft = Omit<WeeklyBriefDTO, "savedByName" | "savedAt">;
  * KPI ribbon + scorecards + accountability + decisions + AI Patterns + branded print. The legacy
  * rolling-window Anomalies/Funnel/Trends block is deliberately NOT ported here — it belongs to
  * Wave 5.2 (Reports + Analytics), which owns real time-analysis reporting.
+ *
+ * `initial`/`initialWeekStart`/`initialTz` (perf audit 2026-08-05): `page.tsx` seeds these from
+ * an `app-tz` cookie this component writes below (shared with `/daily-log`). If the browser's
+ * LIVE tz offset matches what the server used to compute `initial`, the first client fetch is
+ * skipped entirely — otherwise (no cookie yet, DST shift, travel) it falls back to the original
+ * fetch-on-mount behavior.
  */
-export function WeeklyBriefView() {
-  const [weekStart, setWeekStart] = useState(mondayOf(dateKey()));
-  const [saved, setSaved] = useState<WeeklyBriefDTO | null | undefined>(undefined);
-  const [draft, setDraft] = useState<Draft | null>(null);
+export function WeeklyBriefView({
+  initial,
+  initialWeekStart,
+  initialTz,
+}: {
+  initial?: WeeklyBriefDTO | null;
+  initialWeekStart?: string;
+  initialTz?: number;
+}) {
+  const [weekStart, setWeekStart] = useState(initialWeekStart ?? mondayOf(dateKey()));
+  const [saved, setSaved] = useState<WeeklyBriefDTO | null | undefined>(
+    initialWeekStart !== undefined ? (initial ?? null) : undefined,
+  );
+  const [draft, setDraft] = useState<Draft | null>(initial ? { ...initial } : null);
   const [patterns, setPatterns] = useState<WeeklyPatternsAiOutput | null>(null);
   const [generating, setGenerating] = useState(false);
   const [findingPatterns, setFindingPatterns] = useState(false);
   const [savingBrief, setSavingBrief] = useState(false);
   const tz = new Date().getTimezoneOffset();
+  const skipNextRefresh = useRef(initialWeekStart !== undefined && initialTz === tz);
 
   const refresh = useCallback(async () => {
     setSaved(undefined);
@@ -40,8 +58,14 @@ export function WeeklyBriefView() {
   }, [weekStart]);
 
   useEffect(() => {
+    if (skipNextRefresh.current) {
+      skipNextRefresh.current = false;
+      return;
+    }
     void refresh();
   }, [refresh]);
+
+  useTzCookieSync(tz);
 
   async function generate() {
     setGenerating(true);

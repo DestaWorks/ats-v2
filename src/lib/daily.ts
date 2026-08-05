@@ -15,6 +15,17 @@ export function dateKey(d: Date = new Date()): string {
   return `${y}-${m}-${day}`;
 }
 
+/**
+ * The user-local calendar-date key for a given tz offset, computed from the CURRENT instant —
+ * the server-side equivalent of `dateKey()` when the caller only has the browser's UTC offset
+ * minutes (not a real local `Date`), e.g. an RSC render seeded from a client-set tz cookie.
+ * Same sign convention as `dayWindow`/`Date.getTimezoneOffset()` (minutes BEHIND UTC).
+ */
+export function dateKeyForOffset(tzOffsetMinutes: number, now: Date = new Date()): string {
+  const local = new Date(now.getTime() - tzOffsetMinutes * 60_000);
+  return `${local.getUTCFullYear()}-${String(local.getUTCMonth() + 1).padStart(2, "0")}-${String(local.getUTCDate()).padStart(2, "0")}`;
+}
+
 /** The Monday of the week containing `key` (Monday-anchored, the ONE week definition). */
 export function mondayOf(key: string): string {
   const d = new Date(`${key}T00:00:00Z`);

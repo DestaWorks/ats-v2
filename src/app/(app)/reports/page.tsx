@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { hasCapability } from "@/lib/constants";
 import { getCurrentUser } from "@/server/auth/guards";
 import { reportFilterOptionsService } from "@/server/services/reports/filter-options.service";
+import { pipelineReportsService } from "@/server/services/reports/pipeline-reports.service";
 import { ErrorState } from "@/components/ui/error-state";
 import { ReportsView } from "./reports-view";
 
@@ -26,7 +27,14 @@ export default async function ReportsPage() {
     );
   }
 
-  const options = await reportFilterOptionsService.load();
+  // Executive is the default/first-visible tab — server-fetch it with the default (unfiltered)
+  // filters so it renders immediately instead of flashing a loading state, matching the
+  // seed-then-refetch-on-interaction pattern used across the app. The other 9 tabs still
+  // fetch client-side on first select.
+  const [options, initialExecutive] = await Promise.all([
+    reportFilterOptionsService.load(),
+    pipelineReportsService.executiveSummary({}),
+  ]);
 
   return (
     <div className="flex flex-col gap-6 px-8 py-6">
@@ -37,7 +45,7 @@ export default async function ReportsPage() {
           filterable, and exportable.
         </p>
       </header>
-      <ReportsView options={options} />
+      <ReportsView options={options} initialExecutive={initialExecutive} />
     </div>
   );
 }

@@ -2,8 +2,8 @@ import { redirect } from "next/navigation";
 import { isLeadStatus, type LeadStatus } from "@/lib/constants";
 import { getCurrentUser } from "@/server/auth/guards";
 import { leadService } from "@/server/services/lead.service";
-import { clientRepository } from "@/server/repositories/client.repository";
-import { userRepository } from "@/server/repositories/user.repository";
+import { cachedClientList } from "@/server/repositories/client.repository";
+import { cachedUserList } from "@/server/repositories/user.repository";
 import { LeadFilters } from "./lead-filters";
 import { LeadsInventory } from "./leads-inventory";
 
@@ -48,8 +48,8 @@ export default async function SourcingPage({
       includeDeleted: showDeleted,
       page,
     }),
-    clientRepository.list(),
-    userRepository.list(), // filter + bulk "Assign owner…" options (id + display name only)
+    cachedClientList(),
+    cachedUserList(), // filter + bulk "Assign owner…" options (id + display name only)
   ]);
   const clients = clientRows.map((c) => ({ id: c.id, name: c.name }));
 

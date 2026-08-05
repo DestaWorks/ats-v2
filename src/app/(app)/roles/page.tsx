@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { ROLE_PRIORITIES, ROLE_STATUSES, isRolePriority, isRoleStatus } from "@/lib/constants";
 import { getCurrentUser } from "@/server/auth/guards";
-import { clientRepository } from "@/server/repositories/client.repository";
+import { cachedClientList } from "@/server/repositories/client.repository";
 import { openRoleService } from "@/server/services/open-role.service";
 import { AddRoleButton } from "./add-role-modal";
 import { RoleFilters } from "./role-filters";
@@ -38,7 +38,7 @@ export default async function RolesPage({
   const [list, triage, clientRows] = await Promise.all([
     openRoleService.list({ clientId, status, priority, search, page }),
     openRoleService.triage(),
-    clientRepository.list(),
+    cachedClientList(),
   ]);
   const clients = clientRows.map((c) => ({ id: c.id, name: c.name }));
   const listKey = [clientId, status, priority, search, page].join("|");
