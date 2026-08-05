@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import {
   BuildingOffice2Icon,
   CheckCircleIcon,
@@ -14,12 +15,23 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { StatCard } from "../dashboard/stat-card";
 import { Bar, ReportTabShell } from "./lib/report-tab-shell";
 import { buildReportQuery, useReportFetch, type ReportFilterState } from "./lib/use-report-fetch";
-import { TopCandidatesChart } from "./top-candidates-chart";
 
-export function ExecutiveTab({ filters }: { filters: ReportFilterState }) {
+// recharts is heavy — load it only once this tab actually renders (perf audit 2026-08-05).
+const TopCandidatesChart = dynamic(() =>
+  import("./top-candidates-chart").then((m) => m.TopCandidatesChart),
+);
+
+export function ExecutiveTab({
+  filters,
+  initial,
+}: {
+  filters: ReportFilterState;
+  initial?: ExecutiveSummaryDTO;
+}) {
   const data = useReportFetch<ExecutiveSummaryDTO>(
     "/api/reports/executive",
     buildReportQuery(filters),
+    initial,
   );
 
   return (

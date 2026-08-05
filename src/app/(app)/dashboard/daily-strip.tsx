@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { dateKey, paceStatus } from "@/lib/daily";
+import { useTzCookieSync } from "@/lib/use-tz-cookie-sync";
 import type { DailyOverviewDTO } from "@/lib/validation/daily";
 import type { TargetsSuggestAiOutput } from "@/lib/validation/briefs";
 import { getJson, postJson, messageForFailure } from "@/lib/api/client";
@@ -24,13 +25,25 @@ const PACE_COLOR = { hit: "text-green", "on pace": "text-navy", behind: "text-or
  * target: the amber banner (leadership gets the "Set targets →" button; legacy sent them to the
  * Daily Brief). With a target: five metric cards (serif actual / target + 9–5 pace status) plus
  * priority/watch lines and the End-of-Shift flow (pre-filled from live actuals).
+ *
+ * `initial`/`initialTz` (perf audit 2026-08-05): `page.tsx` seeds these from the `app-tz` cookie
+ * (shared with `/daily-log` and `/weekly-brief`). If the browser's LIVE tz offset matches what
+ * the server used to compute `initial`, the first client fetch is skipped entirely — otherwise
+ * (no cookie yet, DST shift, travel) it falls back to the original fetch-on-mount behavior.
  */
-export function DailyStrip() {
-  const [data, setData] = useState<DailyOverviewDTO | null>(null);
+export function DailyStrip({
+  initial,
+  initialTz,
+}: {
+  initial?: DailyOverviewDTO;
+  initialTz?: number;
+}) {
+  const [data, setData] = useState<DailyOverviewDTO | null>(initial ?? null);
   const [open, setOpen] = useState<"eos" | "targets" | null>(null);
   const [targetUserId, setTargetUserId] = useState<string | null>(null);
   const today = dateKey();
   const tz = new Date().getTimezoneOffset();
+  const skipNextRefresh = useRef(initial !== undefined && initialTz === tz);
 
   const refresh = useCallback(async () => {
     const res = await getJson<DailyOverviewDTO>(`/api/daily/overview?date=${today}&tz=${tz}`);
@@ -38,8 +51,14 @@ export function DailyStrip() {
   }, [today, tz]);
 
   useEffect(() => {
+    if (skipNextRefresh.current) {
+      skipNextRefresh.current = false;
+      return;
+    }
     void refresh();
   }, [refresh]);
+
+  useTzCookieSync(tz);
 
   if (!data) return null;
   const { target, live, actualSubmitted, canSetTargets } = data;

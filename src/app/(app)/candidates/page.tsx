@@ -11,8 +11,8 @@ import {
 import type { ListSort } from "@/lib/validation/pipeline";
 import { getCurrentUser } from "@/server/auth/guards";
 import { candidateService } from "@/server/services/candidate.service";
-import { clientRepository } from "@/server/repositories/client.repository";
-import { userRepository } from "@/server/repositories/user.repository";
+import { cachedClientList } from "@/server/repositories/client.repository";
+import { cachedUserList } from "@/server/repositories/user.repository";
 import { savedViewService } from "@/server/services/saved-view.service";
 import { SavedViewsBar } from "../lib/saved-views-bar";
 import { AddCandidateButton } from "../add-candidate-modal";
@@ -89,8 +89,8 @@ export default async function CandidatesPage({
       },
       user,
     ),
-    clientRepository.list(),
-    userRepository.list(),
+    cachedClientList(),
+    cachedUserList(),
     savedViewService.list("candidates", user),
   ]);
   const clients = clientRows.map((c) => ({ id: c.id, name: c.name }));

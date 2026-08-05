@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/server/auth/guards";
 import { hasCapability } from "@/lib/constants";
-import { clientRepository } from "@/server/repositories/client.repository";
+import { cachedClientList } from "@/server/repositories/client.repository";
 import { userPreferencesService } from "@/server/services/user-preferences.service";
 import { TemplatesWorkspace } from "./templates-workspace";
 
@@ -18,7 +18,7 @@ export default async function TemplatesPage() {
   if (!user) redirect("/sign-in");
 
   const [clientRows, preferences] = await Promise.all([
-    clientRepository.list(),
+    cachedClientList(),
     userPreferencesService.getMine(user),
   ]);
   const clients = clientRows.map((c) => ({ id: c.id, name: c.name }));

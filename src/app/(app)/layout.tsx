@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/server/auth/guards";
 import { hasCapability } from "@/lib/constants";
-import { clientRepository } from "@/server/repositories/client.repository";
+import { cachedClientList } from "@/server/repositories/client.repository";
 import { StickyNote } from "@/components/sticky-note";
 import { AppHeader } from "./app-header";
 import { AppNav } from "./app-nav";
@@ -55,7 +55,7 @@ export default async function AppLayout({
     items.push({ href: "/admin", label: "Admin", icon: "settings" });
   }
 
-  const clientRows = await clientRepository.list();
+  const clientRows = await cachedClientList();
   const clients = clientRows.map((c) => ({ id: c.id, name: c.name }));
 
   return (

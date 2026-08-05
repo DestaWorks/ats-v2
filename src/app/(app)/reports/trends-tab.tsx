@@ -1,12 +1,15 @@
 "use client";
 
 import { Fragment } from "react";
+import dynamic from "next/dynamic";
 import type { TrendsDTO } from "@/lib/validation/reports";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils/cn";
 import { ReportTabShell } from "./lib/report-tab-shell";
 import { useReportFetch } from "./lib/use-report-fetch";
-import { TrendsChart } from "./trends-chart";
+
+// recharts is heavy — load it only once this tab actually renders (perf audit 2026-08-05).
+const TrendsChart = dynamic(() => import("./trends-chart").then((m) => m.TrendsChart));
 
 const HORIZONS = [
   { key: "Week", curr: "thisWeek", prev: "lastWeek" },

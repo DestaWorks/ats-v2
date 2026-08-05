@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { DetailTabs, type TabDef } from "@/components/ui/tabs";
+import type { ExecutiveSummaryDTO } from "@/lib/validation/reports";
 import type { ReportFilterOptionsDTO } from "@/server/services/reports/filter-options.service";
 import { PrintButton } from "../credentials/print-button";
 import { ClientCapacityTab } from "./client-capacity-tab";
@@ -24,11 +25,21 @@ import { TrendsTab } from "./trends-tab";
  * active tab's panel mounts (`DetailTabs`), so each report fetches lazily and refetches on tab
  * switch/filter change — fine for read-only report GETs.
  */
-export function ReportsView({ options }: { options: ReportFilterOptionsDTO }) {
+export function ReportsView({
+  options,
+  initialExecutive,
+}: {
+  options: ReportFilterOptionsDTO;
+  initialExecutive?: ExecutiveSummaryDTO;
+}) {
   const [filters, setFilters] = useState(EMPTY_FILTERS);
 
   const tabs: TabDef[] = [
-    { key: "executive", label: "Executive", panel: <ExecutiveTab filters={filters} /> },
+    {
+      key: "executive",
+      label: "Executive",
+      panel: <ExecutiveTab filters={filters} initial={initialExecutive} />,
+    },
     {
       key: "pipeline-funnel",
       label: "Pipeline Funnel",

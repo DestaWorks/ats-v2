@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { scoreScreening, type ScreeningClientRules } from "@/lib/rules/screening";
 import type { SaveScreeningInput, ScreeningCandidateDTO } from "@/lib/validation/screening";
@@ -56,8 +56,16 @@ export function ScreeningView({
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [pending, startTransition] = useTransition();
 
-  // Re-search on debounce (mirrors the other pages' 300ms debounce convention).
+  // Re-search on debounce (mirrors the other pages' 300ms debounce convention). Skips the first
+  // effect run — `search` always starts as "" (perf audit 2026-08-05), which is exactly what
+  // `initialCandidates` already is, so that first run would just redundantly re-fetch the same
+  // list `screening-view` was already seeded with.
+  const skipFirstSearch = useRef(true);
   useEffect(() => {
+    if (skipFirstSearch.current) {
+      skipFirstSearch.current = false;
+      return;
+    }
     const handle = setTimeout(() => {
       void searchScreeningCandidates(search).then((res) => {
         if (res.ok) setCandidates(res.data.candidates);

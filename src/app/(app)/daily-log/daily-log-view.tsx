@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { dateKey, daysBefore, mondayOf } from "@/lib/daily";
+import { useTzCookieSync } from "@/lib/use-tz-cookie-sync";
 import { BLOCKERS, type DailyLogViewDTO, type TeamBreakdownDTO } from "@/lib/validation/daily";
 import { getJson, postJson, patchJson, messageForFailure } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
@@ -298,9 +299,25 @@ const TILE_META: Record<TileLabel, { icon: string; bar: string; badge: string; t
  * Candidate Detail/Reports) instead of a flat stack: "My Log" (everyone) vs. "Team" (leadership
  * only — `canViewTeam` is computed server-side in `page.tsx` from the real session role, so the
  * tab doesn't exist at all for a non-leadership viewer, not just hidden after a failed fetch).
+ *
+ * `initial`/`initialTz` (perf audit 2026-08-05): `page.tsx` seeds these from an `app-tz` cookie
+ * this component writes below (shared with `/weekly-brief` — same underlying signal). If the
+ * browser's LIVE tz offset (computed fresh on every render,
+ * same as it always has been) matches what the server used to compute `initial`, the first
+ * client fetch is skipped entirely — otherwise (no cookie yet, DST shift, travel) it falls back
+ * to the original fetch-on-mount behavior, so correctness never depends on the cookie being
+ * fresh.
  */
-export function DailyLogView({ canViewTeam }: { canViewTeam: boolean }) {
-  const [view, setView] = useState<DailyLogViewDTO | null>(null);
+export function DailyLogView({
+  canViewTeam,
+  initial,
+  initialTz,
+}: {
+  canViewTeam: boolean;
+  initial?: DailyLogViewDTO;
+  initialTz?: number;
+}) {
+  const [view, setView] = useState<DailyLogViewDTO | null>(initial ?? null);
   const [form, setForm] = useState<Record<string, string>>({
     sourced: "",
     outreach: "",
@@ -318,6 +335,7 @@ export function DailyLogView({ canViewTeam }: { canViewTeam: boolean }) {
   const [logModalOpen, setLogModalOpen] = useState(false);
   const today = dateKey();
   const tz = new Date().getTimezoneOffset();
+  const skipNextRefresh = useRef(initial !== undefined && initialTz === tz);
 
   const refresh = useCallback(async () => {
     const res = await getJson<DailyLogViewDTO>(`/api/daily/log?date=${today}&tz=${tz}`);
@@ -325,8 +343,14 @@ export function DailyLogView({ canViewTeam }: { canViewTeam: boolean }) {
   }, [today, tz]);
 
   useEffect(() => {
+    if (skipNextRefresh.current) {
+      skipNextRefresh.current = false;
+      return;
+    }
     void refresh();
   }, [refresh]);
+
+  useTzCookieSync(tz);
 
   if (!view) return <p className="text-sm text-gray">Loading…</p>;
   const {

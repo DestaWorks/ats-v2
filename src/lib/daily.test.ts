@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   businessDaysLeft,
+  dateKeyForOffset,
   dayWindow,
   daysBefore,
   mondayOf,
@@ -11,6 +12,27 @@ import {
   weeklyPacing,
   weekWindow,
 } from "./daily";
+
+describe("dateKeyForOffset (perf audit 2026-08-05 — the app-tz cookie's seed calculation)", () => {
+  it("matches the instant's UTC date when tz=0", () => {
+    expect(dateKeyForOffset(0, new Date("2026-07-13T12:00:00.000Z"))).toBe("2026-07-13");
+  });
+
+  it("UTC+3 (Addis, tz=-180): local time already past midnight → next day's key", () => {
+    // 21:30 UTC + 3h = 00:30 local the NEXT day.
+    expect(dateKeyForOffset(-180, new Date("2026-07-13T21:30:00.000Z"))).toBe("2026-07-14");
+  });
+
+  it("UTC+3 (Addis, tz=-180): local time still before midnight → same day's key", () => {
+    // 20:30 UTC + 3h = 23:30 local, still the SAME UTC day.
+    expect(dateKeyForOffset(-180, new Date("2026-07-13T20:30:00.000Z"))).toBe("2026-07-13");
+  });
+
+  it("US Eastern-shaped offset (tz=+300, UTC-5): local time still the PREVIOUS day", () => {
+    // 02:00 UTC - 5h = 21:00 the previous day, local.
+    expect(dateKeyForOffset(300, new Date("2026-07-13T02:00:00.000Z"))).toBe("2026-07-12");
+  });
+});
 
 describe("mondayOf (the ONE week anchor)", () => {
   it("maps every day of a week to its Monday — including Sunday (legacy's split anchor)", () => {
