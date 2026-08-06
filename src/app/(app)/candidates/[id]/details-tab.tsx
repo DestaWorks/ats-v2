@@ -137,7 +137,7 @@ export function DetailsTab({
   const selectedTags = form.watch("tags") ?? [];
 
   return (
-    <form onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
+    <form method="post" onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Name" htmlFor="cd-name" error={fieldError(form, "name")} required>
           <Input id="cd-name" {...form.register("name")} />

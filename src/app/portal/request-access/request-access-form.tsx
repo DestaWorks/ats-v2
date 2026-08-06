@@ -60,7 +60,12 @@ export function RequestAccessForm() {
           {ERROR_MESSAGES[linkError]}
         </p>
       ) : null}
-      <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-3" noValidate>
+      <form
+        method="post"
+        onSubmit={handleSubmit(onSubmit)}
+        className="flex flex-col gap-3"
+        noValidate
+      >
         <Field label="Name" htmlFor="name" required error={errors.name?.message}>
           <input id="name" {...register("name")} className={inputClass} />
         </Field>

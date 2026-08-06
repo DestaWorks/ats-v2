@@ -145,7 +145,12 @@ export function DealDetailModal({
 
   return (
     <div className="flex flex-col gap-5">
-      <form onSubmit={form.handleSubmit(onSubmit)} noValidate className="flex flex-col gap-4">
+      <form
+        method="post"
+        onSubmit={form.handleSubmit(onSubmit)}
+        noValidate
+        className="flex flex-col gap-4"
+      >
         <Field label="Name" htmlFor="dd-name" error={fieldError(form, "name")} required>
           <Input id="dd-name" {...form.register("name")} />
         </Field>

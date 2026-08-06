@@ -126,7 +126,7 @@ export function SignInForm({ googleEnabled }: { googleEnabled: boolean }) {
         </>
       ) : null}
 
-      <form onSubmit={handleSubmit(onSubmit)} noValidate>
+      <form method="post" onSubmit={handleSubmit(onSubmit)} noValidate>
         <div className="mb-3.5">
           <AuthLabel htmlFor={emailId}>Email</AuthLabel>
           <input

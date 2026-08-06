@@ -191,7 +191,7 @@ function TaskForm({
   });
 
   return (
-    <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
+    <form method="post" onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
       {serverError ? <ErrorState message={serverError} /> : null}
       <Field label="Title" htmlFor="ct-title" error={fieldError(form, "title")} required>
         <Input id="ct-title" autoFocus {...form.register("title")} />

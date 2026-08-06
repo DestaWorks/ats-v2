@@ -82,7 +82,7 @@ export function ResetPasswordForm() {
         Choose a new password for your DestaHealth ATS account.
       </p>
 
-      <form onSubmit={handleSubmit(onSubmit)} noValidate>
+      <form method="post" onSubmit={handleSubmit(onSubmit)} noValidate>
         <div className="mb-3.5">
           <AuthLabel htmlFor={newPasswordId}>New password</AuthLabel>
           <div className="relative">

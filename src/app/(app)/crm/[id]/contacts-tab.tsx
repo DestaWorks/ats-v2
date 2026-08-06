@@ -238,7 +238,7 @@ function ContactForm({
   });
 
   return (
-    <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
+    <form method="post" onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
       {serverError ? <ErrorState message={serverError} /> : null}
       <div className="grid gap-4 sm:grid-cols-2">
         <Field

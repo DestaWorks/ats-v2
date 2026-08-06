@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
-/** GET /api/briefs/weekly?weekStart= — guarded: unauth → 401. */
+/** GET /api/briefs/weekly?weekStart= — guarded: unauth → 401, non-leadership → 403 (`viewReports`). */
 
 const h = vi.hoisted(() => ({
   session: null as { user: { id: string; email: string; name: string; role?: string } } | null,
@@ -17,7 +17,7 @@ import { GET } from "./route";
 const getReq = () => new Request("http://localhost/api/briefs/weekly?weekStart=2026-07-20");
 
 beforeEach(() => {
-  h.session = { user: { id: "u1", email: "u@desta.works", name: "U", role: "Associate" } };
+  h.session = { user: { id: "u1", email: "u@desta.works", name: "U", role: "Owner" } };
   h.getWeekly.mockReset();
 });
 
@@ -26,6 +26,13 @@ describe("GET /api/briefs/weekly", () => {
     h.session = null;
     const res = await GET(getReq(), undefined);
     expect(res.status).toBe(401);
+    expect(h.getWeekly).not.toHaveBeenCalled();
+  });
+
+  it("403 for a non-leadership role (no service call)", async () => {
+    h.session = { user: { id: "u1", email: "a@desta.works", name: "A", role: "Associate" } };
+    const res = await GET(getReq(), undefined);
+    expect(res.status).toBe(403);
     expect(h.getWeekly).not.toHaveBeenCalled();
   });
 

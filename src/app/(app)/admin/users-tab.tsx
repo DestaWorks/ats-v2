@@ -264,7 +264,7 @@ function AddUserForm({
   });
 
   return (
-    <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
+    <form method="post" onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
       {serverError ? <ErrorState message={serverError} /> : null}
       <Field label="Name" htmlFor="au-name" error={fieldError(form, "name")} required>
         <Input id="au-name" autoFocus {...form.register("name")} />
@@ -322,7 +322,7 @@ function BanForm({
   });
 
   return (
-    <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
+    <form method="post" onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
       {serverError ? <ErrorState message={serverError} /> : null}
       <p className="text-sm text-gray">
         Blocking <span className="font-semibold text-charcoal">{user.name}</span> immediately
