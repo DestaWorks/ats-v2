@@ -1,12 +1,11 @@
 "use client";
 
 import { useId, useState } from "react";
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { resetPassword } from "@/lib/auth-client";
 import { useZodForm } from "@/lib/forms/use-zod-form";
 import { resetPasswordSchema, type ResetPasswordInput } from "@/lib/validation/auth";
-import { authInputClass, AuthLabel, PasswordToggleButton } from "../auth-field";
+import { authInputClass, AuthLabel, BackToSignInLink, PasswordToggleButton } from "../auth-field";
 
 export function ResetPasswordForm() {
   const router = useRouter();
@@ -42,12 +41,7 @@ export function ResetPasswordForm() {
         <p className="mb-4 text-[13px] leading-relaxed text-ivory/40">
           This reset link is invalid or has expired. Request a new one from the sign-in screen.
         </p>
-        <Link
-          href="/sign-in"
-          className="block w-full rounded-lg bg-brand py-3.5 text-center text-[15px] font-semibold text-ivory transition hover:opacity-90"
-        >
-          Back to sign in
-        </Link>
+        <BackToSignInLink />
       </div>
     );
   }
