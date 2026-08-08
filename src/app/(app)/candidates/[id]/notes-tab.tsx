@@ -124,6 +124,7 @@ export function NotesTab({
   return (
     <div className="flex flex-col gap-5">
       <form
+        method="post"
         onSubmit={onSubmit}
         noValidate
         className="flex flex-col gap-3 rounded-xl border border-black/5 bg-white p-4"

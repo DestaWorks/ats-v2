@@ -44,19 +44,18 @@ export interface NavItem {
 
 /**
  * The base nav (in display order). The capability-gated items (**Import**, **Activity**,
- * **Credentials**, **CRM**, **Reports**, **Admin**) are appended by the layout only for viewers
- * with the matching capability — intentionally NOT here, so an ungated render can never surface
- * them. Each carries a `group` so `groupNavItems` buckets it under the right section
- * regardless of where in the array it lands (see `layout.tsx`). **Trash is deliberately NOT a nav
- * item** (2026-07-28) — the page/feature (soft-delete list + restore + capability-gated purge)
- * still exists at `/trash` and is fully functional, it's just not linked from the sidebar; reachable
- * via direct URL or a future in-context "restore" link.
+ * **Credentials**, **CRM**, **Reports**, **Weekly Brief**, **Admin**) are appended by the layout
+ * only for viewers with the matching capability — intentionally NOT here, so an ungated render
+ * can never surface them. Each carries a `group` so `groupNavItems` buckets it under the right
+ * section regardless of where in the array it lands (see `layout.tsx`). **Trash is deliberately
+ * NOT a nav item** (2026-07-28) — the page/feature (soft-delete list + restore + capability-gated
+ * purge) still exists at `/trash` and is fully functional, it's just not linked from the sidebar;
+ * reachable via direct URL or a future in-context "restore" link.
  */
 export const BASE_NAV_ITEMS: readonly NavItem[] = [
   { href: "/dashboard", label: "Overview", icon: "home" },
 
   { href: "/daily-log", label: "Daily Log", group: "Home", icon: "clipboard" },
-  { href: "/weekly-brief", label: "Weekly Brief", group: "Home", icon: "calendar" },
 
   { href: "/sourcing", label: "Sourcing", group: "Recruiting", icon: "search" },
   { href: "/discover", label: "Discover", group: "Recruiting", icon: "sparkles" },

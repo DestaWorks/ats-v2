@@ -93,7 +93,7 @@ function AddLeadForm({
   });
 
   return (
-    <form onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
+    <form method="post" onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
       {serverError ? <ErrorState message={serverError} /> : null}
 
       <div className="grid gap-4 sm:grid-cols-2">

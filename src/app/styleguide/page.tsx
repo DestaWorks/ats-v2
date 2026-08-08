@@ -283,7 +283,12 @@ export default function StyleguidePage() {
       </Section>
 
       <Section title="Form (react-hook-form + Zod)">
-        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-3" noValidate>
+        <form
+          method="post"
+          onSubmit={handleSubmit(onSubmit)}
+          className="flex flex-col gap-3"
+          noValidate
+        >
           <Field label="Email" htmlFor="sg-email" required error={errors.email?.message}>
             <input
               id="sg-email"

@@ -100,7 +100,7 @@ function AddRoleForm({ clients, onCancel }: { clients: ClientOption[]; onCancel:
   }
 
   return (
-    <form onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
+    <form method="post" onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
       {serverError ? <ErrorState message={serverError} /> : null}
 
       <div className="flex flex-col gap-2 rounded-md border border-black/10 bg-black/[0.02] p-3">

@@ -151,7 +151,7 @@ function ApproveForm({
   });
 
   return (
-    <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
+    <form method="post" onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
       {serverError ? <ErrorState message={serverError} /> : null}
       <p className="text-sm text-gray">
         Creates an account for <span className="font-semibold text-charcoal">{request.email}</span>{" "}

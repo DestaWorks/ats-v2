@@ -63,6 +63,7 @@ export function OutreachTab({
   return (
     <div className="flex flex-col gap-5">
       <form
+        method="post"
         onSubmit={(e) => {
           e.preventDefault();
           submit();

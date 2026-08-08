@@ -55,6 +55,7 @@ export function ProfileForm<T extends FieldValues>({
   const [confirmed, setConfirmed] = useState(() => defaultConfirmed(match));
   return (
     <form
+      method="post"
       noValidate
       onSubmit={form.handleSubmit((values) =>
         onSave(values as unknown as ResumeData, attachIdFor(match, confirmed)),

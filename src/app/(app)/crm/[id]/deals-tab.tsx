@@ -184,7 +184,7 @@ function AddDealForm({
   });
 
   return (
-    <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
+    <form method="post" onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
       {serverError ? <ErrorState message={serverError} /> : null}
       <Field label="Name" htmlFor="cd-name" error={fieldError(form, "name")} required>
         <Input id="cd-name" autoFocus {...form.register("name")} />

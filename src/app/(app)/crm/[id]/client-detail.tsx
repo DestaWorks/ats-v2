@@ -291,6 +291,7 @@ function EditClientForm({
 
   return (
     <form
+      method="post"
       onSubmit={onSubmit}
       noValidate
       className="flex flex-col gap-4 rounded-lg border border-black/10 bg-white p-4"
