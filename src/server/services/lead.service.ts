@@ -584,6 +584,11 @@ export const leadService = {
    * resolves to a client id case-insensitively (unknown names → no client). Every kept row
    * starts with `createdById = importer` and its (already-validated) status, default "Sourced".
    * One `bulk_import` audit row records the counts.
+   *
+   * Rows carrying `priorOutreachNotes` (legacy "Outreach - <Rep>" columns) backfill outreach-
+   * attempt rows too — inserted individually (not via `createMany`, which can't return per-row
+   * ids to attach attempts to) with the resulting count/timestamp already denormalized onto the
+   * lead, so this never diverges from what `syncOutreachDenorm` would compute.
    */
   async importLeads(
     input: ImportLeadsInput,
@@ -611,27 +616,60 @@ export const leadService = {
       return !existingNames.has(row.name.trim().toLowerCase());
     });
 
+    function toCreateInput(row: (typeof kept)[number]) {
+      return {
+        name: row.name,
+        email: row.email ?? null,
+        phone: row.phone ?? null,
+        linkedinUrl: row.linkedinUrl ?? null,
+        credential: row.credential ?? null,
+        state: row.state ?? null,
+        source: row.source ?? null,
+        tags: row.tags ?? [],
+        notes: row.notes ?? null,
+        clientId: row.clientName
+          ? (clientByName.get(row.clientName.trim().toLowerCase()) ?? null)
+          : null,
+        status: normalizeLeadStatus(row.status ?? "Sourced"),
+        createdById: user.id,
+      };
+    }
+
+    const withNotes = kept.filter((r) => r.priorOutreachNotes && r.priorOutreachNotes.length > 0);
+    const withoutNotes = kept.filter(
+      (r) => !r.priorOutreachNotes || r.priorOutreachNotes.length === 0,
+    );
+
     await withTransaction(async (tx) => {
-      await leadRepository.createMany(
-        kept.map((row) => ({
-          name: row.name,
-          email: row.email ?? null,
-          phone: row.phone ?? null,
-          linkedinUrl: row.linkedinUrl ?? null,
-          credential: row.credential ?? null,
-          state: row.state ?? null,
-          source: row.source ?? null,
-          tags: row.tags ?? [],
-          notes: row.notes ?? null,
-          clientId: row.clientName
-            ? (clientByName.get(row.clientName.trim().toLowerCase()) ?? null)
-            : null,
-          status: normalizeLeadStatus(row.status ?? "Sourced"),
-          outreachCount: 0,
-          createdById: user.id,
-        })),
-        tx,
-      );
+      if (withoutNotes.length > 0) {
+        await leadRepository.createMany(
+          withoutNotes.map((row) => ({ ...toCreateInput(row), outreachCount: 0 })),
+          tx,
+        );
+      }
+      for (const row of withNotes) {
+        const notes = row.priorOutreachNotes!;
+        const at = new Date();
+        const lead = await leadRepository.create(
+          {
+            ...toCreateInput(row),
+            outreachCount: notes.length,
+            lastOutreachAt: at,
+            lastOutreachChannel: "linkedin", // legacy hardcoded this channel for folded columns too
+          },
+          tx,
+        );
+        await leadRepository.createManyOutreachAttempts(
+          notes.map((note) => ({
+            leadId: lead.id,
+            channel: "linkedin",
+            note,
+            at,
+            actorId: user.id,
+          })),
+          tx,
+        );
+      }
       await writeAudit(tx, {
         entity: "source_lead",
         entityId: "bulk",

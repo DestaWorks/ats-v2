@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils/cn";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
-import { mapCsvToLeadRows, parseCsv } from "./lib/lead-import";
+import { mapCsvToLeadRows, parseCsv, parseXlsx } from "./lib/lead-import";
 import { postImportChunk } from "./lib/lead-fetch";
 
 /** Server chunk size (`source_lead_bulk_import` parity — legacy sent 200-row chunks). */
@@ -32,11 +32,10 @@ const EXPECTED_COLUMNS = [
 const PREVIEW_ROWS = 5;
 
 /**
- * Lead CSV import ("Bulk Import" parity). A drag-and-drop zone (or click to browse) → parse
+ * Lead CSV/XLSX import ("Bulk Import" parity). A drag-and-drop zone (or click to browse) → parse
  * client-side (quoted-cell-safe, legacy alias headers, name-required) → a parsed-file summary
  * with a capped preview → import in sequential 200-row chunks. Dedup is SERVER-side (email,
- * else name); the final toast reports `added · skipped` like the legacy alert. XLSX is not
- * supported — export the sheet as CSV.
+ * else name); the final toast reports `added · skipped` like the legacy alert.
  */
 export function ImportLeadsButton({ onImported }: { onImported: () => void }) {
   const [open, setOpen] = useState(false);
@@ -63,12 +62,21 @@ export function ImportLeadsButton({ onImported }: { onImported: () => void }) {
 
   async function onFile(file: File | undefined) {
     if (!file) return;
-    if (!/\.csv$/i.test(file.name) && file.type !== "text/csv") {
-      toast.error("That's not a CSV — export the sheet as CSV first.");
+    const isXlsx = /\.xlsx?$/i.test(file.name);
+    const isCsv = /\.csv$/i.test(file.name) || file.type === "text/csv";
+    if (!isXlsx && !isCsv) {
+      toast.error("That's not a CSV or Excel file.");
       return;
     }
-    const text = await file.text();
-    const parsed = mapCsvToLeadRows(parseCsv(text));
+    let parsed: ReturnType<typeof mapCsvToLeadRows>;
+    try {
+      parsed = isXlsx
+        ? mapCsvToLeadRows(parseXlsx(await file.arrayBuffer()))
+        : mapCsvToLeadRows(parseCsv(await file.text()));
+    } catch {
+      toast.error("Couldn't read that file — is it a valid CSV/Excel export?");
+      return;
+    }
     setRows(parsed.rows);
     setDropped(parsed.dropped);
     setFileName(file.name);
@@ -115,15 +123,15 @@ export function ImportLeadsButton({ onImported }: { onImported: () => void }) {
       <Button type="button" size="sm" variant="secondary" onClick={() => setOpen(true)}>
         Bulk Import
       </Button>
-      <Modal open={open} onClose={close} title="Import leads from CSV">
+      <Modal open={open} onClose={close} title="Import leads">
         <div className="flex flex-col gap-4">
           <input
             ref={fileRef}
             type="file"
-            accept=".csv,text/csv"
+            accept=".csv,.xlsx,.xls,text/csv"
             onChange={(e) => void onFile(e.target.files?.[0])}
             className="sr-only"
-            aria-label="CSV file"
+            aria-label="CSV or Excel file"
           />
 
           {!fileName ? (
@@ -163,11 +171,9 @@ export function ImportLeadsButton({ onImported }: { onImported: () => void }) {
                   </svg>
                 </span>
                 <span className="text-sm font-semibold text-charcoal">
-                  {dragging ? "Drop the CSV here" : "Choose a CSV file or drag it here"}
+                  {dragging ? "Drop the file here" : "Choose a CSV or Excel file or drag it here"}
                 </span>
-                <span className="text-xs text-gray">
-                  Export XLSX sheets as CSV first · duplicates are skipped automatically
-                </span>
+                <span className="text-xs text-gray">Duplicates are skipped automatically</span>
               </button>
 
               {/* Understood columns — Name is the only required one. */}

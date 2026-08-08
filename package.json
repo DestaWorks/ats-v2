@@ -52,6 +52,7 @@
     "recharts": "^3.10.1",
     "server-only": "^0.0.1",
     "sonner": "^1.7.4",
+    "xlsx": "^0.18.5",
     "zod": "^4.4.3"
   },
   "devDependencies": {

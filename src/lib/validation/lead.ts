@@ -215,12 +215,16 @@ export const importLeadRowSchema = z
     notes: z.string().trim().max(5000).nullish(),
     clientName: z.string().trim().max(200).nullish(),
     status: z.enum(LEAD_STATUSES).optional(),
+    // Legacy parity ("Outreach - <Rep>" columns, e.g. "Outreach - Mike") — one entry per non-empty
+    // outreach column on the row, `"<Rep>: <cell text>"`. Backfilled as outreach-attempt rows on
+    // import (see `leadService.importLeads`) so prior outreach context isn't silently dropped.
+    priorOutreachNotes: z.array(z.string().trim().min(1).max(2000)).max(20).optional(),
   })
   .strict();
 export type ImportLeadRow = z.infer<typeof importLeadRowSchema>;
 
 /** Body for `POST /api/leads/import` — ONE chunk (the client sends ≤200-row chunks sequentially,
- * `source_lead_bulk_import` parity). Dedup is SERVER-side: lowercased email, else name+phone. */
+ * `source_lead_bulk_import` parity). Dedup is SERVER-side: lowercased email, else name. */
 export const importLeadsSchema = z
   .object({
     rows: z.array(importLeadRowSchema).min(1).max(200),

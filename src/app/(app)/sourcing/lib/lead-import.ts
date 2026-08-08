@@ -1,11 +1,12 @@
 /**
- * Lead CSV import — pure parsing/mapping (unit-tested; NO fetch/DOM). Fixes the legacy importer's
- * naive `split(",")` (which broke on quoted commas) with an RFC-4180-ish parser; keeps the legacy
- * alias-tolerant header mapping ("Candidate Name"/"Name", "Job Title"/"Credential", …) and its
- * one rule: NAME IS REQUIRED, everything else optional. Free-form cells are sanitized to the
- * server contract (bad emails/URLs → null, status fuzzy-normalized) so a junk cell drops the
+ * Lead CSV/XLSX import — pure parsing/mapping (unit-tested; NO fetch/DOM). Fixes the legacy
+ * importer's naive `split(",")` (which broke on quoted commas) with an RFC-4180-ish parser; keeps
+ * the legacy alias-tolerant header mapping ("Candidate Name"/"Name", "Job Title"/"Credential", …)
+ * and its one rule: NAME IS REQUIRED, everything else optional. Free-form cells are sanitized to
+ * the server contract (bad emails/URLs → null, status fuzzy-normalized) so a junk cell drops the
  * value, never the whole request. Dedup is SERVER-side.
  */
+import { read as readWorkbook, utils as xlsxUtils } from "xlsx";
 import { LEAD_STATUSES, type LeadStatus } from "@/lib/constants";
 import type { ImportLeadRow } from "@/lib/validation/lead";
 
@@ -51,6 +52,19 @@ export function parseCsv(text: string): string[][] {
   return rows.filter((r) => r.some((c) => c.trim() !== ""));
 }
 
+/** Parse an XLSX/XLS workbook's first sheet into the same `string[][]` shape `parseCsv` produces
+ *  (legacy accepted `.xlsx,.csv` — `handleImportFile`'s SheetJS branch), so `mapCsvToLeadRows`
+ *  works unchanged for either source. */
+export function parseXlsx(buffer: ArrayBuffer): string[][] {
+  const workbook = readWorkbook(buffer, { type: "array" });
+  const sheet = workbook.Sheets[workbook.SheetNames[0]!];
+  if (!sheet) return [];
+  const rows = xlsxUtils.sheet_to_json<unknown[]>(sheet, { header: 1, raw: false });
+  return rows
+    .map((row) => row.map((cell) => (cell == null ? "" : String(cell))))
+    .filter((r) => r.some((c) => c.trim() !== ""));
+}
+
 /** Legacy header aliases, lowercased → canonical field. */
 const HEADER_ALIASES: Record<string, keyof ImportLeadRow> = {
   "candidate name": "name",
@@ -77,32 +91,50 @@ const HEADER_ALIASES: Record<string, keyof ImportLeadRow> = {
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-/** Fuzzy status normalization (legacy `normalizeStatus` parity). Unknown → "Sourced". */
+/** Fuzzy status normalization (legacy `normalizeStatus` parity — same substring rules, same
+ *  order: `legacy/index.html`'s minified `normalizeStatus`). Unknown → "Sourced". */
 export function normalizeImportStatus(raw: string): LeadStatus {
   const v = raw.trim().toLowerCase();
-  if (!v || v === "new" || v.includes("sourc")) return "Sourced";
-  const outreach = /outreach\s*([1-3])/.exec(v);
-  // The third step's canonical label carries the "(Final)" suffix — a bare "Outreach 3" would
-  // fail the server's LEAD_STATUSES enum and reject the whole chunk.
-  if (outreach) {
-    return outreach[1] === "3" ? "Outreach 3 (Final)" : (`Outreach ${outreach[1]}` as LeadStatus);
+  if (!v || v === "new" || v === "new candidate" || v.includes("sourc")) return "Sourced";
+  if (v.includes("outreach")) {
+    // The third step's canonical label carries the "(Final)" suffix — a bare "Outreach 3" would
+    // fail the server's LEAD_STATUSES enum and reject the whole chunk.
+    if (v.includes("3") || v.includes("final")) return "Outreach 3 (Final)";
+    if (v.includes("2")) return "Outreach 2";
+    return "Outreach 1";
   }
-  if (v.includes("respond")) return v.includes("cold") ? "Responded — Cold" : "Responded — Hot";
+  if (v.includes("respond")) {
+    return v.includes("cold") || v.includes("not interested")
+      ? "Responded — Cold"
+      : "Responded — Hot";
+  }
   if (v.includes("hot")) return "Responded — Hot";
   if (v.includes("cold")) return "Responded — Cold";
+  if (v.includes("no resp")) return "No Response";
+  if (v.includes("bad") || v.includes("not a fit")) return "Bad Fit";
+  if (v.includes("future")) return "Future Collaboration";
   if (v.includes("promot") || v.includes("hire") || v.includes("placed")) return "Promoted";
   const exact = (LEAD_STATUSES as readonly string[]).find((s) => s.toLowerCase() === v);
   return (exact as LeadStatus) ?? "Sourced";
 }
 
+/** Matches legacy's hardcoded "Outreach - Mike"/"Outreach - Farhaz" columns, generalized to any
+ *  rep name — the rep is read from the header itself rather than hardcoded, so a future/renamed
+ *  rep column still folds in without a code change. */
+const OUTREACH_COLUMN_RE = /^outreach\s*-\s*(.+)$/i;
+
 /**
- * Map parsed CSV rows (header row first) to server-contract `ImportLeadRow`s. Rows without a
+ * Map parsed CSV/XLSX rows (header row first) to server-contract `ImportLeadRow`s. Rows without a
  * name are DROPPED (legacy parity — the only per-row requirement); returns the kept rows plus
  * the dropped count so the preview can report honestly.
  */
 export function mapCsvToLeadRows(rows: string[][]): { rows: ImportLeadRow[]; dropped: number } {
   if (rows.length < 2) return { rows: [], dropped: 0 };
-  const headers = rows[0]!.map((h) => HEADER_ALIASES[h.trim().toLowerCase()] ?? null);
+  const headerRow = rows[0]!;
+  const headers = headerRow.map((h) => HEADER_ALIASES[h.trim().toLowerCase()] ?? null);
+  const outreachColumns = headerRow
+    .map((h, i) => ({ i, rep: OUTREACH_COLUMN_RE.exec(h.trim())?.[1] }))
+    .filter((c): c is { i: number; rep: string } => !!c.rep);
   let dropped = 0;
   const out: ImportLeadRow[] = [];
   for (const cells of rows.slice(1)) {
@@ -118,6 +150,10 @@ export function mapCsvToLeadRows(rows: string[][]): { rows: ImportLeadRow[]; dro
       continue;
     }
     const email = raw.email?.split(/[;,\s]+/)[0]; // "Emails" column may hold several — first wins
+    const priorOutreachNotes = outreachColumns
+      .map(({ i, rep }) => ({ rep, value: (cells[i] ?? "").trim() }))
+      .filter(({ value }) => value)
+      .map(({ rep, value }) => `${rep}: ${value}`.slice(0, 2000));
     out.push({
       name: raw.name.slice(0, 200),
       email: email && EMAIL_RE.test(email) ? email.slice(0, 200) : null,
@@ -132,6 +168,8 @@ export function mapCsvToLeadRows(rows: string[][]): { rows: ImportLeadRow[]; dro
       notes: raw.notes ? raw.notes.slice(0, 5000) : null,
       clientName: raw.clientName ? raw.clientName.slice(0, 200) : null,
       status: raw.status ? normalizeImportStatus(raw.status) : undefined,
+      priorOutreachNotes:
+        priorOutreachNotes.length > 0 ? priorOutreachNotes.slice(0, 20) : undefined,
     });
   }
   return { rows: out, dropped };
