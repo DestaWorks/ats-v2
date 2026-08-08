@@ -16,11 +16,17 @@ const TIMEOUT_MS = 8000;
 export const NPPES_RESULT_LIMIT = 50;
 
 export interface NppesQuery {
+  /** NPI-1 = individual providers (default, existing Discover/similarity behavior unchanged).
+   *  NPI-2 = organizations (Client Discovery's practice search). */
+  enumerationType?: "NPI-1" | "NPI-2";
   taxonomyDescription?: string;
   state?: string;
   city?: string;
+  zip?: string;
   firstName?: string;
   lastName?: string;
+  /** NPI-2 only — the practice/organization name to search for. */
+  organizationName?: string;
 }
 
 export interface NppesAddress {
@@ -41,7 +47,15 @@ export interface NppesTaxonomy {
 
 export interface NppesRawResult {
   number: string;
-  basic: { first_name?: string; last_name?: string; credential?: string };
+  basic: {
+    first_name?: string;
+    last_name?: string;
+    credential?: string;
+    // NPI-2 (organization) results carry these instead of first_name/last_name.
+    organization_name?: string;
+    authorized_official_first_name?: string;
+    authorized_official_last_name?: string;
+  };
   addresses: NppesAddress[];
   taxonomies: NppesTaxonomy[];
 }
@@ -55,13 +69,15 @@ function buildParams(query: NppesQuery): URLSearchParams {
   const params = new URLSearchParams({
     version: "2.1",
     limit: String(NPPES_RESULT_LIMIT),
-    enumeration_type: "NPI-1",
+    enumeration_type: query.enumerationType ?? "NPI-1",
   });
   if (query.taxonomyDescription) params.set("taxonomy_description", query.taxonomyDescription);
   if (query.state) params.set("state", query.state);
   if (query.city) params.set("city", query.city);
+  if (query.zip) params.set("postal_code", query.zip);
   if (query.firstName) params.set("first_name", query.firstName);
   if (query.lastName) params.set("last_name", query.lastName);
+  if (query.organizationName) params.set("organization_name", query.organizationName);
   return params;
 }
 

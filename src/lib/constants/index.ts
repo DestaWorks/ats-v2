@@ -11,6 +11,8 @@ export * from "./clients";
 export * from "./documents";
 export * from "./states";
 export * from "./lead-status";
+export * from "./prospect-status";
+export * from "./client-discovery-specialty";
 export * from "./notes";
 export * from "./audit";
 export * from "./open-role";

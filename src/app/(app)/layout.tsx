@@ -48,6 +48,14 @@ export default async function AppLayout({
   if (hasCapability(user.role, "viewCrm")) {
     items.push({ href: "/crm", label: "CRM", group: "Client", icon: "building" });
   }
+  if (hasCapability(user.role, "viewClientDiscovery")) {
+    items.push({
+      href: "/client-discovery",
+      label: "Client Discovery",
+      group: "Client",
+      icon: "trending",
+    });
+  }
   if (hasCapability(user.role, "viewReports")) {
     items.push({ href: "/weekly-brief", label: "Weekly Brief", group: "Home", icon: "calendar" });
     items.push({ href: "/reports", label: "Reports", group: "Insights", icon: "chart" });

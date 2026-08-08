@@ -60,9 +60,12 @@ function jsonRequestInit(method: string, body: unknown): RequestInit {
   return { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
 }
 
-/** GET `url` as JSON, returning the parsed response `T` on success or an `ApiFailure`. */
-export function getJson<T>(url: string): Promise<ApiResult<T>> {
-  return request<T>(url, {});
+/** GET `url` as JSON, returning the parsed response `T` on success or an `ApiFailure`. `signal`
+ *  is optional — pass an `AbortController`'s signal from an effect's cleanup to make the fetch
+ *  StrictMode-safe (dev double-invokes every effect; aborting the first call's fetch avoids
+ *  firing the request twice, matching React's own recommended pattern for this). */
+export function getJson<T>(url: string, signal?: AbortSignal): Promise<ApiResult<T>> {
+  return request<T>(url, signal ? { signal } : {});
 }
 
 /** POST `body` as JSON to `url`, returning the parsed response `T` on success or an `ApiFailure`. */
