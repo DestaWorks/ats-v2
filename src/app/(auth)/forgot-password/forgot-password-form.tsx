@@ -5,10 +5,11 @@ import Link from "next/link";
 import { requestPasswordReset } from "@/lib/auth-client";
 import { useZodForm } from "@/lib/forms/use-zod-form";
 import { requestPasswordResetSchema, type RequestPasswordResetInput } from "@/lib/validation/auth";
-import { authInputClass, AuthLabel } from "../auth-field";
+import { authInputClass, AuthLabel, BackToSignInLink } from "../auth-field";
 
 export function ForgotPasswordForm() {
   const [sent, setSent] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
   const emailId = useId();
   const {
     register,
@@ -17,13 +18,18 @@ export function ForgotPasswordForm() {
   } = useZodForm(requestPasswordResetSchema);
 
   async function onSubmit(values: RequestPasswordResetInput) {
-    // Better Auth always reports success here regardless of whether the email exists (a
-    // timing-attack mitigation against account enumeration) — the UI can't and shouldn't
-    // distinguish the two cases either.
-    await requestPasswordReset({
+    setServerError(null);
+    const { error } = await requestPasswordReset({
       email: values.email,
       redirectTo: `${window.location.origin}/reset-password`,
     });
+    // A "no such account" error is deliberately indistinguishable from success (Better Auth's
+    // own timing-attack mitigation against account enumeration) — only a REAL transport/server
+    // failure (SMTP misconfigured, rate limited, network error) surfaces here.
+    if (error) {
+      setServerError(error.message ?? "Could not send the reset email — please try again");
+      return;
+    }
     setSent(true);
   }
 
@@ -37,12 +43,7 @@ export function ForgotPasswordForm() {
         <p className="mb-4 text-[13px] text-ivory/40">
           If an account exists for that address, a reset link is on its way.
         </p>
-        <Link
-          href="/sign-in"
-          className="block w-full rounded-lg bg-brand py-3.5 text-center text-[15px] font-semibold text-ivory transition hover:opacity-90"
-        >
-          Back to sign in
-        </Link>
+        <BackToSignInLink />
       </div>
     );
   }
@@ -69,6 +70,12 @@ export function ForgotPasswordForm() {
             <p className="mt-1 text-xs text-[#EF9A9A]">{errors.email.message}</p>
           ) : null}
         </div>
+
+        {serverError ? (
+          <div className="mb-3.5 rounded-lg border border-red/25 bg-red/[0.12] px-3 py-2.5 text-[13px] text-[#EF9A9A]">
+            {serverError}
+          </div>
+        ) : null}
 
         <button
           type="submit"

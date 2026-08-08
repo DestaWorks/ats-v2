@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { EyeIcon, EyeSlashIcon } from "@heroicons/react/24/outline";
 
 /** Dark-glass input, matching the legacy auth screen's field treatment (translucent white on the
@@ -22,6 +23,19 @@ export function AuthLabel({ htmlFor, children }: { htmlFor: string; children: Re
  * "SHOW"/"HIDE" text label, matching the icon-first idiom the rest of the app uses. Shared by
  * sign-in and reset-password, positioned absolutely inside the input's wrapper (`relative`).
  */
+/** Primary-styled "return to sign in" CTA, shared by the reset-password (invalid-token) and
+ *  forgot-password (sent) confirmation states — same href/label/treatment in both. */
+export function BackToSignInLink() {
+  return (
+    <Link
+      href="/sign-in"
+      className="block w-full rounded-lg bg-brand py-3.5 text-center text-[15px] font-semibold text-ivory transition hover:opacity-90"
+    >
+      Back to sign in
+    </Link>
+  );
+}
+
 export function PasswordToggleButton({
   visible,
   onToggle,

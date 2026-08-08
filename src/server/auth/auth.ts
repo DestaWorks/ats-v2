@@ -68,6 +68,10 @@ export const auth = betterAuth({
   // is the top brute-force surface so we tighten it here. Better Auth activates rate limiting in
   // production by default; `enabled: true` also turns it on for staging. The email/password sign-in
   // path (`/sign-in/email`) gets a strict custom rule; other endpoints use the sane global default.
+  // `/request-password-reset` (2026-08-08) gets the same strict rule as sign-in — it's an equally
+  // sensitive unauthenticated endpoint, and now that `/forgot-password` is a dedicated, directly
+  // navigable route (rather than buried behind the sign-in form), it needs the same abuse ceiling
+  // or it's reachable at 20x the volume for email-bombing / account-existence probing.
   rateLimit: {
     enabled: true,
     window: 60, // seconds
@@ -75,6 +79,7 @@ export const auth = betterAuth({
     customRules: {
       "/sign-in/email": { window: 60, max: 5 },
       "/sign-in/social": { window: 60, max: 10 },
+      "/request-password-reset": { window: 60, max: 5 },
     },
   },
   // Dev only: trust localhost on whatever port `next dev` picks. A wildcard port, not a fixed
