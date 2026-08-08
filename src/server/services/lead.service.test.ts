@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { Prisma } from "@/generated/prisma/client";
 import type { AuthUser } from "@/server/auth/guards";
 
 /**
@@ -606,8 +607,9 @@ describe("leadService.importLeads", () => {
     );
 
     expect(out).toEqual({ added: 2, skipped: 3 });
-    const rows = h.leadRepo.createMany.mock.calls[0]![0];
+    const [rows, , opts] = h.leadRepo.createMany.mock.calls[0]!;
     expect(rows).toHaveLength(2);
+    expect(opts).toEqual({ skipDuplicates: true });
     expect(rows[0]).toMatchObject({
       name: "B",
       email: "new@x.com",
@@ -645,6 +647,7 @@ describe("leadService.importLeads", () => {
     expect(h.leadRepo.createMany).toHaveBeenCalledWith(
       [expect.objectContaining({ name: "No History" })],
       h.fakeTx,
+      { skipDuplicates: true },
     );
     // The row with notes is created individually, with the denorm fields set to match.
     expect(h.leadRepo.create).toHaveBeenCalledWith(
@@ -673,5 +676,42 @@ describe("leadService.importLeads", () => {
       ],
       h.fakeTx,
     );
+  });
+
+  it("counts a row as skipped (not a thrown error) when a concurrent request wins the DB-level unique-email race", async () => {
+    h.leadRepo.findManyByEmails.mockResolvedValue([]);
+    h.leadRepo.findManyByNames.mockResolvedValue([]);
+    h.leadRepo.create.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError(
+        "Unique constraint failed on the fields: (`email`)",
+        {
+          code: "P2002",
+          clientVersion: "test",
+        },
+      ),
+    );
+
+    const out = await leadService.importLeads(
+      {
+        rows: [{ name: "Raced Out", email: "raced@x.com", priorOutreachNotes: ["Mike: hi"] }],
+      },
+      h.user as AuthUser,
+    );
+
+    expect(out).toEqual({ added: 0, skipped: 1 });
+    expect(h.leadRepo.createManyOutreachAttempts).not.toHaveBeenCalled();
+  });
+
+  it("re-throws a non-P2002 error from the individual-insert path instead of silently skipping", async () => {
+    h.leadRepo.findManyByEmails.mockResolvedValue([]);
+    h.leadRepo.findManyByNames.mockResolvedValue([]);
+    h.leadRepo.create.mockRejectedValue(new Error("connection reset"));
+
+    await expect(
+      leadService.importLeads(
+        { rows: [{ name: "X", priorOutreachNotes: ["Mike: hi"] }] },
+        h.user as AuthUser,
+      ),
+    ).rejects.toThrow("connection reset");
   });
 });

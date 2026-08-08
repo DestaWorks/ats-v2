@@ -1,4 +1,5 @@
 import "server-only";
+import { Prisma } from "@/generated/prisma/client";
 import { normalizeLeadStatus } from "@/lib/rules/normalize-lead-status";
 import {
   advanceOnOutreach,
@@ -589,6 +590,12 @@ export const leadService = {
    * attempt rows too — inserted individually (not via `createMany`, which can't return per-row
    * ids to attach attempts to) with the resulting count/timestamp already denormalized onto the
    * lead, so this never diverges from what `syncOutreachDenorm` would compute.
+   *
+   * The pre-check above is defense-in-depth, not the sole guard: `source_leads` has a DB-level
+   * case-insensitive unique index on live emails (2026-08-08), so a genuine race — two concurrent
+   * imports, or an import racing a manual add, on the same email — can't insert a real duplicate.
+   * `createMany` passes `skipDuplicates` for the fast path; the individual-insert path (rows with
+   * notes) catches the resulting P2002 and counts that row as skipped instead of throwing.
    */
   async importLeads(
     input: ImportLeadsInput,
@@ -640,25 +647,37 @@ export const leadService = {
       (r) => !r.priorOutreachNotes || r.priorOutreachNotes.length === 0,
     );
 
-    await withTransaction(async (tx) => {
+    const added = await withTransaction(async (tx) => {
+      let insertedCount = 0;
       if (withoutNotes.length > 0) {
-        await leadRepository.createMany(
+        const result = await leadRepository.createMany(
           withoutNotes.map((row) => ({ ...toCreateInput(row), outreachCount: 0 })),
           tx,
+          { skipDuplicates: true },
         );
+        insertedCount += result.count;
       }
       for (const row of withNotes) {
         const notes = row.priorOutreachNotes!;
         const at = new Date();
-        const lead = await leadRepository.create(
-          {
-            ...toCreateInput(row),
-            outreachCount: notes.length,
-            lastOutreachAt: at,
-            lastOutreachChannel: "linkedin", // legacy hardcoded this channel for folded columns too
-          },
-          tx,
-        );
+        let lead: { id: string };
+        try {
+          lead = await leadRepository.create(
+            {
+              ...toCreateInput(row),
+              outreachCount: notes.length,
+              lastOutreachAt: at,
+              lastOutreachChannel: "linkedin", // legacy hardcoded this channel for folded columns too
+            },
+            tx,
+          );
+        } catch (err) {
+          // A concurrent request won the race on this row's email since the pre-check above —
+          // the unique index rejects it; count it as skipped rather than failing the whole chunk.
+          if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") continue;
+          throw err;
+        }
+        insertedCount++;
         await leadRepository.createManyOutreachAttempts(
           notes.map((note) => ({
             leadId: lead.id,
@@ -675,10 +694,11 @@ export const leadService = {
         entityId: "bulk",
         actor: user.id,
         action: "bulk_import",
-        after: { added: kept.length, skipped: input.rows.length - kept.length },
+        after: { added: insertedCount, skipped: input.rows.length - insertedCount },
       });
+      return insertedCount;
     });
 
-    return { added: kept.length, skipped: input.rows.length - kept.length };
+    return { added, skipped: input.rows.length - added };
   },
 };
