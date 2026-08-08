@@ -6,6 +6,7 @@ import { admin as adminPlugin } from "better-auth/plugins/admin";
 import { adminAc, userAc } from "better-auth/plugins/admin/access";
 import { prisma } from "@/server/db/prisma";
 import { sendEmail } from "@/server/email/provider";
+import { resetPasswordEmail } from "@/server/email/templates/reset-password";
 
 const googleClientId = process.env.GOOGLE_CLIENT_ID;
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
@@ -37,12 +38,8 @@ export const auth = betterAuth({
     // no-user-enumeration timing-safe response — this hook is only responsible for actually
     // sending the email, via our provider-agnostic `sendEmail` (server/email/provider.ts).
     sendResetPassword: async ({ user, url }) => {
-      await sendEmail({
-        to: user.email,
-        subject: "Reset your DestaHealth ATS password",
-        html: `<p>Someone requested a password reset for your DestaHealth ATS account.</p><p><a href="${url}">Reset your password</a></p><p>If you didn't request this, you can safely ignore this email.</p>`,
-        text: `Reset your DestaHealth ATS password: ${url}\n\nIf you didn't request this, you can safely ignore this email.`,
-      });
+      const { subject, html, text } = resetPasswordEmail({ name: user.name, url });
+      await sendEmail({ to: user.email, subject, html, text });
     },
   },
   ...(googleEnabled
