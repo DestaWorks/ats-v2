@@ -2,6 +2,8 @@ import "server-only";
 import { accessRequestRepository } from "@/server/repositories/access-request.repository";
 import { adminUserService } from "@/server/services/admin-user.service";
 import { AppError } from "@/server/http/app-error";
+import { sendEmail } from "@/server/email/provider";
+import { accessApprovedEmail } from "@/server/email/templates/access-approved";
 import { toIso } from "@/lib/utils/iso";
 import type { AccessRequestInput } from "@/lib/validation/auth";
 import type { AccessRequestDTO, GeneratedPasswordDTO } from "@/lib/validation/admin";
@@ -63,6 +65,23 @@ export const accessRequestService = {
       role,
     });
     await accessRequestRepository.updateStatus(id, "approved");
+    // Best-effort: the account is already created and the request already resolved by this
+    // point, so a failed/unconfigured send shouldn't turn into a false "approval failed" error
+    // for the admin (who'd then retry into a CONFLICT on an already-approved request). The
+    // generated password still surfaces in the admin UI as a fallback if the email never lands.
+    if (created.generatedPassword) {
+      const signInUrl = new URL(
+        "/sign-in",
+        process.env.BETTER_AUTH_URL ?? "http://localhost:3000",
+      ).toString();
+      const { subject, html, text } = accessApprovedEmail({
+        name: request.name,
+        email: request.email,
+        temporaryPassword: created.generatedPassword,
+        signInUrl,
+      });
+      await sendEmail({ to: request.email, subject, html, text }).catch(() => undefined);
+    }
     return created;
   },
 
