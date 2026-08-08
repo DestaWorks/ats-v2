@@ -27,6 +27,15 @@ describe("roles & capabilities", () => {
     expect(hasCapability("Manager", "deleteOpenRole")).toBe(false);
   });
 
+  it("grants viewClientDiscovery to leadership (Owner/Admin/Director/Manager), not Screener/Associate", () => {
+    expect(hasCapability("Owner", "viewClientDiscovery")).toBe(true);
+    expect(hasCapability("Admin", "viewClientDiscovery")).toBe(true);
+    expect(hasCapability("Director", "viewClientDiscovery")).toBe(true);
+    expect(hasCapability("Manager", "viewClientDiscovery")).toBe(true);
+    expect(hasCapability("Screener", "viewClientDiscovery")).toBe(false);
+    expect(hasCapability("Associate", "viewClientDiscovery")).toBe(false);
+  });
+
   it("grants no privileged capabilities to Screener/Associate", () => {
     expect(ROLE_CAPABILITIES.Screener).toHaveLength(0);
     expect(ROLE_CAPABILITIES.Associate).toHaveLength(0);

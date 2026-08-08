@@ -176,6 +176,56 @@ tags-string hack.
 
 ---
 
+### Prospect (Client Discovery) — new domain, core slice only
+B2B prospecting record: a medical practice found via NPPES search (or added manually) and tracked
+through a BD pipeline toward becoming a `Client`. Same shape as `SourceLead` (external entity →
+status pipeline → soft delete), scoped to the new `viewClientDiscovery` capability
+(Owner/Director/Manager/Admin — see Roles & capabilities above). AI lookalike scoring, AI-drafted
+outreach, and the "Fresh Leads" auto-discovery inbox are deferred past this slice.
+
+| Field | Notes |
+|-------|-------|
+| `id` | Primary key |
+| `practiceName` | |
+| `npi` | Org NPI from NPPES, unique — the dedupe key |
+| `taxonomy`, `city`, `state`, `zip`, `phone`, `website` | From NPPES search results |
+| `status` | Label string (zod-validated, not a DB enum): `Fresh Lead / Researched / Contacted / Qualified / Client / Not a Fit` |
+| `ownerId` | Assigned user (leadership working this prospect) |
+| `notes` | |
+| `source` | `NPPES Search \| Manual` |
+| `icpId` | Nullable FK → `SavedIcp` — which saved search produced it, when applicable |
+| `createdById`, `createdAt`, `updatedAt` | |
+| Soft-delete | `deletedAt` / `deletedById` pair, same reversible-trash pattern as `SourceLead` |
+
+### ProspectContact
+A person found at a `Prospect` practice, via enrichment or manual entry.
+
+| Field | Notes |
+|-------|-------|
+| `id` | Primary key |
+| `prospectId` | FK → Prospect, cascade delete |
+| `fullName`, `title`, `email`, `phone`, `linkedinUrl`, `seniority` | |
+| `source` | `Apollo \| Hunter \| Manual` |
+| `notes` | |
+| `createdAt` | |
+
+### SavedIcp
+A reusable, structured NPPES search — **not** the generic `saved_views` mechanism (that table
+stores an opaque raw querystring for re-applying a page filter; an ICP needs to be safely
+re-executed server-side later, e.g. by a future auto-discovery job, so its filter fields are
+stored as real validated columns instead).
+
+| Field | Notes |
+|-------|-------|
+| `id` | Primary key |
+| `userId` | Owner |
+| `name` | Unique per user |
+| `taxonomy`, `state`, `city`, `zip` | The saved NPPES search filter |
+| `isPrivate` | Team-shared by default, like `SavedView` |
+| `createdAt` | |
+
+---
+
 ### Deal (CRM)
 Client/business deal record — update/close/delete (`deal_*`). Fields TBD from backend.
 

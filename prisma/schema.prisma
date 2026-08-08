@@ -52,6 +52,7 @@ model User {
   journalEntries   JournalEntry[]    @relation("journalEntries")
   journalGoals     JournalGoal[]     @relation("journalGoals")
   savedViews       SavedView[]       @relation("savedViews")
+  savedIcps        SavedIcp[]        @relation("savedIcps")
   receivedFeedback ManagerFeedback[] @relation("managerFeedback")
 
   @@map("user")
@@ -1053,4 +1054,93 @@ model WeeklyBrief {
   updatedAt DateTime  @updatedAt
 
   @@map("weekly_briefs")
+}
+
+// --- Client Discovery (new domain, core slice — perf/security audit branch predates this;
+// see docs/DATA-MODEL.md "Prospect (Client Discovery)") ---
+// B2B prospecting: search NPPES for practices, track them through a BD pipeline toward becoming
+// a real Client. Same shape as SourceLead (external entity -> status pipeline -> soft delete).
+// `ownerId`/`createdById` are free `User.id` strings, NOT FK-enforced — matches every other
+// actor-tracking column in this schema (OpenRole.assignedToId, SourceLead.createdById); the
+// record should survive if that user account is later removed.
+model Prospect {
+  id String @id @default(cuid())
+
+  practiceName String
+  npi          String? @unique // org NPI from NPPES — dedupe key
+  taxonomy     String?
+  city         String?
+  state        String?
+  zip          String?
+  phone        String?
+  website      String?
+
+  status  String  @default("Fresh Lead") // a ProspectStatus LABEL, validated in zod
+  ownerId String? // free id, not FK-enforced (matches OpenRole.assignedToId)
+  notes   String?
+  source  String  @default("NPPES Search") // "NPPES Search" | "Manual"
+
+  icpId String?
+  icp   SavedIcp? @relation(fields: [icpId], references: [id], onDelete: SetNull)
+
+  createdById String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  deletedById String?
+
+  contacts ProspectContact[]
+
+  @@index([status])
+  @@index([deletedAt])
+  @@index([ownerId])
+  @@index([deletedAt, createdAt, id]) // keyset list (createdAt_desc, id tiebreak)
+  @@map("prospects")
+}
+
+model ProspectContact {
+  id String @id @default(cuid())
+
+  prospectId String
+  prospect   Prospect @relation(fields: [prospectId], references: [id], onDelete: Cascade)
+
+  fullName    String
+  title       String?
+  email       String?
+  phone       String?
+  linkedinUrl String?
+  seniority   String?
+  source      String  @default("Manual") // "Apollo" | "Hunter" | "Manual"
+  notes       String?
+
+  createdAt DateTime  @default(now())
+  deletedAt DateTime?
+
+  @@index([prospectId])
+  @@map("prospect_contacts")
+}
+
+// A reusable, structured NPPES search — deliberately NOT the generic SavedView mechanism, whose
+// `query` column stores an opaque raw querystring re-applied client-side only. An ICP's filter
+// fields are stored as real columns so it can be safely re-executed server-side later (e.g. a
+// future auto-discovery job), matching SavedView's per-user ownership/cascade shape otherwise.
+model SavedIcp {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation("savedIcps", fields: [userId], references: [id], onDelete: Cascade)
+
+  name      String
+  taxonomy  String?
+  state     String?
+  city      String?
+  zip       String?
+  isPrivate Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  prospects Prospect[]
+
+  @@unique([userId, name])
+  @@index([userId])
+  @@map("saved_icps")
 }

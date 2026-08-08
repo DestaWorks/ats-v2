@@ -24,6 +24,7 @@ export const CAPABILITIES = [
   "bulkImport",
   "viewCredentials",
   "viewCrm",
+  "viewClientDiscovery", // Client Discovery (B2B prospecting) — new domain, 2026-08-07
   // Admin capabilities (legacy: Admin Panel + portal config)
   "viewAllNoteTypes", // non-internal candidate notes (legacy: literal `admin` role only)
   "manageUsers",
@@ -42,6 +43,7 @@ const LEADERSHIP_CAPABILITIES: readonly Capability[] = [
   "bulkImport",
   "viewCredentials",
   "viewCrm",
+  "viewClientDiscovery",
 ];
 
 const ADMIN_CAPABILITIES: readonly Capability[] = [
