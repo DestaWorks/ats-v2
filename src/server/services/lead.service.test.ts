@@ -31,6 +31,7 @@ const h = vi.hoisted(() => ({
     findManyByEmails: vi.fn(),
     findManyByNames: vi.fn(),
     createMany: vi.fn(),
+    createManyOutreachAttempts: vi.fn(),
   },
   clientRepo: {
     list: vi.fn(),
@@ -618,5 +619,59 @@ describe("leadService.importLeads", () => {
       action: "bulk_import",
       after: { added: 2, skipped: 3 },
     });
+  });
+
+  it("backfills outreach-attempt rows for rows carrying priorOutreachNotes, denormalized onto the lead at insert", async () => {
+    h.leadRepo.findManyByEmails.mockResolvedValue([]);
+    h.leadRepo.findManyByNames.mockResolvedValue([]);
+    h.leadRepo.createMany.mockResolvedValue({ count: 1 });
+    h.leadRepo.create.mockResolvedValue(lead({ id: "new-lead-1", name: "Jane Doe" }));
+
+    const out = await leadService.importLeads(
+      {
+        rows: [
+          { name: "No History" }, // fast path: bulk createMany
+          {
+            name: "Jane Doe",
+            priorOutreachNotes: ["Mike: no response yet", "Priya: replied, interested"],
+          },
+        ],
+      },
+      h.user as AuthUser,
+    );
+
+    expect(out).toEqual({ added: 2, skipped: 0 });
+    // Fast path unaffected — only the note-less row goes through createMany.
+    expect(h.leadRepo.createMany).toHaveBeenCalledWith(
+      [expect.objectContaining({ name: "No History" })],
+      h.fakeTx,
+    );
+    // The row with notes is created individually, with the denorm fields set to match.
+    expect(h.leadRepo.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "Jane Doe",
+        outreachCount: 2,
+        lastOutreachChannel: "linkedin",
+        lastOutreachAt: expect.any(Date),
+      }),
+      h.fakeTx,
+    );
+    expect(h.leadRepo.createManyOutreachAttempts).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({
+          leadId: "new-lead-1",
+          channel: "linkedin",
+          note: "Mike: no response yet",
+          actorId: "u1",
+        }),
+        expect.objectContaining({
+          leadId: "new-lead-1",
+          channel: "linkedin",
+          note: "Priya: replied, interested",
+          actorId: "u1",
+        }),
+      ],
+      h.fakeTx,
+    );
   });
 });
