@@ -1,4 +1,5 @@
 import "server-only";
+import { Prisma } from "@/generated/prisma/client";
 import { normalizeLeadStatus } from "@/lib/rules/normalize-lead-status";
 import {
   advanceOnOutreach,
@@ -584,6 +585,17 @@ export const leadService = {
    * resolves to a client id case-insensitively (unknown names → no client). Every kept row
    * starts with `createdById = importer` and its (already-validated) status, default "Sourced".
    * One `bulk_import` audit row records the counts.
+   *
+   * Rows carrying `priorOutreachNotes` (legacy "Outreach - <Rep>" columns) backfill outreach-
+   * attempt rows too — inserted individually (not via `createMany`, which can't return per-row
+   * ids to attach attempts to) with the resulting count/timestamp already denormalized onto the
+   * lead, so this never diverges from what `syncOutreachDenorm` would compute.
+   *
+   * The pre-check above is defense-in-depth, not the sole guard: `source_leads` has a DB-level
+   * case-insensitive unique index on live emails (2026-08-08), so a genuine race — two concurrent
+   * imports, or an import racing a manual add, on the same email — can't insert a real duplicate.
+   * `createMany` passes `skipDuplicates` for the fast path; the individual-insert path (rows with
+   * notes) catches the resulting P2002 and counts that row as skipped instead of throwing.
    */
   async importLeads(
     input: ImportLeadsInput,
@@ -611,36 +623,82 @@ export const leadService = {
       return !existingNames.has(row.name.trim().toLowerCase());
     });
 
-    await withTransaction(async (tx) => {
-      await leadRepository.createMany(
-        kept.map((row) => ({
-          name: row.name,
-          email: row.email ?? null,
-          phone: row.phone ?? null,
-          linkedinUrl: row.linkedinUrl ?? null,
-          credential: row.credential ?? null,
-          state: row.state ?? null,
-          source: row.source ?? null,
-          tags: row.tags ?? [],
-          notes: row.notes ?? null,
-          clientId: row.clientName
-            ? (clientByName.get(row.clientName.trim().toLowerCase()) ?? null)
-            : null,
-          status: normalizeLeadStatus(row.status ?? "Sourced"),
-          outreachCount: 0,
-          createdById: user.id,
-        })),
-        tx,
-      );
+    function toCreateInput(row: (typeof kept)[number]) {
+      return {
+        name: row.name,
+        email: row.email ?? null,
+        phone: row.phone ?? null,
+        linkedinUrl: row.linkedinUrl ?? null,
+        credential: row.credential ?? null,
+        state: row.state ?? null,
+        source: row.source ?? null,
+        tags: row.tags ?? [],
+        notes: row.notes ?? null,
+        clientId: row.clientName
+          ? (clientByName.get(row.clientName.trim().toLowerCase()) ?? null)
+          : null,
+        status: normalizeLeadStatus(row.status ?? "Sourced"),
+        createdById: user.id,
+      };
+    }
+
+    const withNotes = kept.filter((r) => r.priorOutreachNotes && r.priorOutreachNotes.length > 0);
+    const withoutNotes = kept.filter(
+      (r) => !r.priorOutreachNotes || r.priorOutreachNotes.length === 0,
+    );
+
+    const added = await withTransaction(async (tx) => {
+      let insertedCount = 0;
+      if (withoutNotes.length > 0) {
+        const result = await leadRepository.createMany(
+          withoutNotes.map((row) => ({ ...toCreateInput(row), outreachCount: 0 })),
+          tx,
+          { skipDuplicates: true },
+        );
+        insertedCount += result.count;
+      }
+      for (const row of withNotes) {
+        const notes = row.priorOutreachNotes!;
+        const at = new Date();
+        let lead: { id: string };
+        try {
+          lead = await leadRepository.create(
+            {
+              ...toCreateInput(row),
+              outreachCount: notes.length,
+              lastOutreachAt: at,
+              lastOutreachChannel: "linkedin", // legacy hardcoded this channel for folded columns too
+            },
+            tx,
+          );
+        } catch (err) {
+          // A concurrent request won the race on this row's email since the pre-check above —
+          // the unique index rejects it; count it as skipped rather than failing the whole chunk.
+          if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") continue;
+          throw err;
+        }
+        insertedCount++;
+        await leadRepository.createManyOutreachAttempts(
+          notes.map((note) => ({
+            leadId: lead.id,
+            channel: "linkedin",
+            note,
+            at,
+            actorId: user.id,
+          })),
+          tx,
+        );
+      }
       await writeAudit(tx, {
         entity: "source_lead",
         entityId: "bulk",
         actor: user.id,
         action: "bulk_import",
-        after: { added: kept.length, skipped: input.rows.length - kept.length },
+        after: { added: insertedCount, skipped: input.rows.length - insertedCount },
       });
+      return insertedCount;
     });
 
-    return { added: kept.length, skipped: input.rows.length - kept.length };
+    return { added, skipped: input.rows.length - added };
   },
 };

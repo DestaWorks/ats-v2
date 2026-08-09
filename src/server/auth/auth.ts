@@ -6,6 +6,7 @@ import { admin as adminPlugin } from "better-auth/plugins/admin";
 import { adminAc, userAc } from "better-auth/plugins/admin/access";
 import { prisma } from "@/server/db/prisma";
 import { sendEmail } from "@/server/email/provider";
+import { resetPasswordEmail } from "@/server/email/templates/reset-password";
 
 const googleClientId = process.env.GOOGLE_CLIENT_ID;
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
@@ -37,12 +38,8 @@ export const auth = betterAuth({
     // no-user-enumeration timing-safe response — this hook is only responsible for actually
     // sending the email, via our provider-agnostic `sendEmail` (server/email/provider.ts).
     sendResetPassword: async ({ user, url }) => {
-      await sendEmail({
-        to: user.email,
-        subject: "Reset your DestaHealth ATS password",
-        html: `<p>Someone requested a password reset for your DestaHealth ATS account.</p><p><a href="${url}">Reset your password</a></p><p>If you didn't request this, you can safely ignore this email.</p>`,
-        text: `Reset your DestaHealth ATS password: ${url}\n\nIf you didn't request this, you can safely ignore this email.`,
-      });
+      const { subject, html, text } = resetPasswordEmail({ name: user.name, url });
+      await sendEmail({ to: user.email, subject, html, text });
     },
   },
   ...(googleEnabled
@@ -68,6 +65,10 @@ export const auth = betterAuth({
   // is the top brute-force surface so we tighten it here. Better Auth activates rate limiting in
   // production by default; `enabled: true` also turns it on for staging. The email/password sign-in
   // path (`/sign-in/email`) gets a strict custom rule; other endpoints use the sane global default.
+  // `/request-password-reset` (2026-08-08) gets the same strict rule as sign-in — it's an equally
+  // sensitive unauthenticated endpoint, and now that `/forgot-password` is a dedicated, directly
+  // navigable route (rather than buried behind the sign-in form), it needs the same abuse ceiling
+  // or it's reachable at 20x the volume for email-bombing / account-existence probing.
   rateLimit: {
     enabled: true,
     window: 60, // seconds
@@ -75,6 +76,7 @@ export const auth = betterAuth({
     customRules: {
       "/sign-in/email": { window: 60, max: 5 },
       "/sign-in/social": { window: 60, max: 10 },
+      "/request-password-reset": { window: 60, max: 5 },
     },
   },
   // Dev only: trust localhost on whatever port `next dev` picks. A wildcard port, not a fixed

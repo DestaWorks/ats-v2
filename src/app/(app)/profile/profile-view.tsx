@@ -145,7 +145,7 @@ export function ProfileView({
             </div>
           </div>
 
-          <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
+          <form method="post" onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
             {serverError ? <ErrorState message={serverError} /> : null}
             <Field label="Bio" htmlFor="pf-bio" error={fieldError(form, "bio")}>
               <Textarea

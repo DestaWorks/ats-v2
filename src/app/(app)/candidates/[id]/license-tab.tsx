@@ -131,6 +131,7 @@ export function LicenseTab({
 
       {open ? (
         <form
+          method="post"
           onSubmit={onSubmit}
           noValidate
           className="flex flex-col gap-4 rounded-xl border border-black/5 bg-white p-5"

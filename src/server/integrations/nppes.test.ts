@@ -81,4 +81,18 @@ describe("searchNppes", () => {
       code: "UPSTREAM_ERROR",
     });
   });
+
+  it("Client Discovery: NPI-2 org search sends enumeration_type=NPI-2 + organization_name/zip", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ result_count: 0, results: [] }));
+    await searchNppes({
+      enumerationType: "NPI-2",
+      organizationName: "Sterling Institute",
+      zip: "06510",
+    });
+    const [url] = fetchMock.mock.calls[0]!;
+    const params = new URL(url as string).searchParams;
+    expect(params.get("enumeration_type")).toBe("NPI-2");
+    expect(params.get("organization_name")).toBe("Sterling Institute");
+    expect(params.get("postal_code")).toBe("06510");
+  });
 });

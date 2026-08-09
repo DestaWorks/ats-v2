@@ -135,7 +135,7 @@ function MeetingForm({
   });
 
   return (
-    <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
+    <form method="post" onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
       {serverError ? <ErrorState message={serverError} /> : null}
       <Field label="Type" htmlFor="cm-type" error={fieldError(form, "type")} required>
         <Select id="cm-type" {...form.register("type")}>

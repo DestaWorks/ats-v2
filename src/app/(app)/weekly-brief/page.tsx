@@ -1,12 +1,16 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { hasCapability } from "@/lib/constants";
 import { dateKeyForOffset, mondayOf } from "@/lib/daily";
 import { getCurrentUser } from "@/server/auth/guards";
 import { briefService } from "@/server/services/brief.service";
+import { ErrorState } from "@/components/ui/error-state";
 import { WeeklyBriefView } from "./weekly-brief-view";
 
 /**
- * Weekly Brief (Wave 5.1, legacy `vw="weekly"`). "This week" is the USER-LOCAL calendar week,
+ * Weekly Brief (Wave 5.1, legacy `vw="weekly"`). LEADERSHIP-gated (`viewReports`, matching Daily
+ * Brief's 2026-08-04 gate — this page was an oversight the same pass missed: a team-wide AI
+ * report was reachable by any signed-in role). "This week" is the USER-LOCAL calendar week,
  * which an RSC render can't know on a cold visit — so the composite still loads client-side on
  * first-ever load. From the second visit on (perf audit 2026-08-05), this reads the `app-tz`
  * cookie (shared with `/daily-log` — same "browser's local day" signal) and, when present,
@@ -16,6 +20,17 @@ import { WeeklyBriefView } from "./weekly-brief-view";
 export default async function WeeklyBriefPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/sign-in");
+
+  if (!hasCapability(user.role, "viewReports")) {
+    return (
+      <div className="mx-auto flex max-w-4xl flex-col gap-6 p-6 sm:p-8">
+        <ErrorState
+          title="You don't have access"
+          message="Weekly Brief is limited to leadership roles. Ask an Owner, Director, Manager, or Admin for access."
+        />
+      </div>
+    );
+  }
 
   const cookieStore = await cookies();
   const rawTz = cookieStore.get("app-tz")?.value;

@@ -12,6 +12,7 @@ const h = vi.hoisted(() => ({
   findById: vi.fn(),
   updateStatus: vi.fn(),
   adminCreate: vi.fn(),
+  sendEmail: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
@@ -26,6 +27,7 @@ vi.mock("@/server/repositories/access-request.repository", () => ({
 vi.mock("@/server/services/admin-user.service", () => ({
   adminUserService: { create: h.adminCreate },
 }));
+vi.mock("@/server/email/provider", () => ({ sendEmail: h.sendEmail }));
 
 import { accessRequestService } from "./access-request.service";
 
@@ -68,6 +70,7 @@ describe("accessRequestService.approve", () => {
       user: { id: "u1", email: "jane@example.com" },
       generatedPassword: "abc123",
     });
+    h.sendEmail.mockResolvedValue({ previewUrl: null });
     const result = await accessRequestService.approve("r1", "Associate");
     expect(h.adminCreate).toHaveBeenCalledWith({
       name: "Jane Doe",
@@ -80,6 +83,36 @@ describe("accessRequestService.approve", () => {
     const statusOrder = h.updateStatus.mock.invocationCallOrder[0] ?? -1;
     expect(createOrder).toBeLessThan(statusOrder);
     expect(result.generatedPassword).toBe("abc123");
+  });
+
+  it("emails the requester their temporary password and a sign-in link", async () => {
+    h.findById.mockResolvedValue(pendingRequest);
+    h.adminCreate.mockResolvedValue({
+      user: { id: "u1", email: "jane@example.com" },
+      generatedPassword: "abc123",
+    });
+    h.sendEmail.mockResolvedValue({ previewUrl: null });
+    await accessRequestService.approve("r1", "Associate");
+    expect(h.sendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: "jane@example.com",
+        subject: expect.stringContaining("approved"),
+        html: expect.stringContaining("abc123"),
+        text: expect.stringContaining("abc123"),
+      }),
+    );
+  });
+
+  it("still resolves the approval even if the notification email fails to send", async () => {
+    h.findById.mockResolvedValue(pendingRequest);
+    h.adminCreate.mockResolvedValue({
+      user: { id: "u1", email: "jane@example.com" },
+      generatedPassword: "abc123",
+    });
+    h.sendEmail.mockRejectedValue(new Error("SMTP down"));
+    const result = await accessRequestService.approve("r1", "Associate");
+    expect(result.generatedPassword).toBe("abc123");
+    expect(h.updateStatus).toHaveBeenCalledWith("r1", "approved");
   });
 
   it("404s when the request doesn't exist", async () => {

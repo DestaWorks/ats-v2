@@ -75,7 +75,7 @@ export function AddCandidateForm({
   const selectedTags = form.watch("tags") ?? [];
 
   return (
-    <form onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
+    <form method="post" onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
       {serverError ? <ErrorState message={serverError} /> : null}
 
       {/* Field labels + order follow the LEGACY Add New Candidate modal. Deliberate deltas:

@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { Prisma } from "@/generated/prisma/client";
 import type { AuthUser } from "@/server/auth/guards";
 
 /**
@@ -31,6 +32,7 @@ const h = vi.hoisted(() => ({
     findManyByEmails: vi.fn(),
     findManyByNames: vi.fn(),
     createMany: vi.fn(),
+    createManyOutreachAttempts: vi.fn(),
   },
   clientRepo: {
     list: vi.fn(),
@@ -605,8 +607,9 @@ describe("leadService.importLeads", () => {
     );
 
     expect(out).toEqual({ added: 2, skipped: 3 });
-    const rows = h.leadRepo.createMany.mock.calls[0]![0];
+    const [rows, , opts] = h.leadRepo.createMany.mock.calls[0]!;
     expect(rows).toHaveLength(2);
+    expect(opts).toEqual({ skipDuplicates: true });
     expect(rows[0]).toMatchObject({
       name: "B",
       email: "new@x.com",
@@ -618,5 +621,97 @@ describe("leadService.importLeads", () => {
       action: "bulk_import",
       after: { added: 2, skipped: 3 },
     });
+  });
+
+  it("backfills outreach-attempt rows for rows carrying priorOutreachNotes, denormalized onto the lead at insert", async () => {
+    h.leadRepo.findManyByEmails.mockResolvedValue([]);
+    h.leadRepo.findManyByNames.mockResolvedValue([]);
+    h.leadRepo.createMany.mockResolvedValue({ count: 1 });
+    h.leadRepo.create.mockResolvedValue(lead({ id: "new-lead-1", name: "Jane Doe" }));
+
+    const out = await leadService.importLeads(
+      {
+        rows: [
+          { name: "No History" }, // fast path: bulk createMany
+          {
+            name: "Jane Doe",
+            priorOutreachNotes: ["Mike: no response yet", "Priya: replied, interested"],
+          },
+        ],
+      },
+      h.user as AuthUser,
+    );
+
+    expect(out).toEqual({ added: 2, skipped: 0 });
+    // Fast path unaffected — only the note-less row goes through createMany.
+    expect(h.leadRepo.createMany).toHaveBeenCalledWith(
+      [expect.objectContaining({ name: "No History" })],
+      h.fakeTx,
+      { skipDuplicates: true },
+    );
+    // The row with notes is created individually, with the denorm fields set to match.
+    expect(h.leadRepo.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "Jane Doe",
+        outreachCount: 2,
+        lastOutreachChannel: "linkedin",
+        lastOutreachAt: expect.any(Date),
+      }),
+      h.fakeTx,
+    );
+    expect(h.leadRepo.createManyOutreachAttempts).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({
+          leadId: "new-lead-1",
+          channel: "linkedin",
+          note: "Mike: no response yet",
+          actorId: "u1",
+        }),
+        expect.objectContaining({
+          leadId: "new-lead-1",
+          channel: "linkedin",
+          note: "Priya: replied, interested",
+          actorId: "u1",
+        }),
+      ],
+      h.fakeTx,
+    );
+  });
+
+  it("counts a row as skipped (not a thrown error) when a concurrent request wins the DB-level unique-email race", async () => {
+    h.leadRepo.findManyByEmails.mockResolvedValue([]);
+    h.leadRepo.findManyByNames.mockResolvedValue([]);
+    h.leadRepo.create.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError(
+        "Unique constraint failed on the fields: (`email`)",
+        {
+          code: "P2002",
+          clientVersion: "test",
+        },
+      ),
+    );
+
+    const out = await leadService.importLeads(
+      {
+        rows: [{ name: "Raced Out", email: "raced@x.com", priorOutreachNotes: ["Mike: hi"] }],
+      },
+      h.user as AuthUser,
+    );
+
+    expect(out).toEqual({ added: 0, skipped: 1 });
+    expect(h.leadRepo.createManyOutreachAttempts).not.toHaveBeenCalled();
+  });
+
+  it("re-throws a non-P2002 error from the individual-insert path instead of silently skipping", async () => {
+    h.leadRepo.findManyByEmails.mockResolvedValue([]);
+    h.leadRepo.findManyByNames.mockResolvedValue([]);
+    h.leadRepo.create.mockRejectedValue(new Error("connection reset"));
+
+    await expect(
+      leadService.importLeads(
+        { rows: [{ name: "X", priorOutreachNotes: ["Mike: hi"] }] },
+        h.user as AuthUser,
+      ),
+    ).rejects.toThrow("connection reset");
   });
 });

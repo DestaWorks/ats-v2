@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useId, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { signIn, requestPasswordReset } from "@/lib/auth-client";
+import { signIn } from "@/lib/auth-client";
 import { useZodForm } from "@/lib/forms/use-zod-form";
 import { signInSchema, type SignInInput } from "@/lib/validation/auth";
 import { authInputClass, AuthLabel, PasswordToggleButton } from "../auth-field";
@@ -26,14 +27,11 @@ export function SignInForm({ googleEnabled }: { googleEnabled: boolean }) {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [serverError, setServerError] = useState<string | null>(null);
-  const [resetSending, setResetSending] = useState(false);
-  const [resetSent, setResetSent] = useState(false);
   const emailId = useId();
   const passwordId = useId();
   const {
     register,
     handleSubmit,
-    getValues,
     formState: { errors, isSubmitting },
   } = useZodForm(signInSchema);
 
@@ -66,26 +64,6 @@ export function SignInForm({ googleEnabled }: { googleEnabled: boolean }) {
       callbackURL: "/dashboard",
       errorCallbackURL: "/sign-in",
     });
-  }
-
-  async function onForgotPassword() {
-    if (resetSent || resetSending) return;
-    const email = getValues("email");
-    if (!email || !email.includes("@")) {
-      setServerError("Enter your email above first, then click “Forgot password?”");
-      return;
-    }
-    setServerError(null);
-    setResetSending(true);
-    // Better Auth always reports success here regardless of whether the email exists (a
-    // timing-attack mitigation against account enumeration) — the UI can't and shouldn't
-    // distinguish the two cases either.
-    await requestPasswordReset({
-      email,
-      redirectTo: `${window.location.origin}/reset-password`,
-    });
-    setResetSending(false);
-    setResetSent(true);
   }
 
   return (
@@ -126,7 +104,7 @@ export function SignInForm({ googleEnabled }: { googleEnabled: boolean }) {
         </>
       ) : null}
 
-      <form onSubmit={handleSubmit(onSubmit)} noValidate>
+      <form method="post" onSubmit={handleSubmit(onSubmit)} noValidate>
         <div className="mb-3.5">
           <AuthLabel htmlFor={emailId}>Email</AuthLabel>
           <input
@@ -182,14 +160,9 @@ export function SignInForm({ googleEnabled }: { googleEnabled: boolean }) {
             </span>
             <span className="text-xs text-ivory/40">Remember me</span>
           </label>
-          <button
-            type="button"
-            onClick={() => void onForgotPassword()}
-            disabled={resetSending}
-            className="text-xs text-brand hover:underline disabled:no-underline disabled:opacity-60"
-          >
-            {resetSent ? "Check your email ✓" : resetSending ? "Sending…" : "Forgot password?"}
-          </button>
+          <Link href="/forgot-password" className="text-xs text-brand hover:underline">
+            Forgot password?
+          </Link>
         </div>
 
         {serverError ? (

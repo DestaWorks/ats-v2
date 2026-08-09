@@ -319,6 +319,16 @@ export const leadRepository = {
     return db(tx).sourceLead.createMany({ data: rows, skipDuplicates: opts?.skipDuplicates });
   },
 
+  /** Bulk-backfill outreach-attempt history (import only — live logging goes through
+   *  `logOutreach`, which also advances the lead's status; import rows already carry their own
+   *  explicit status from the CSV and must not have it overridden). */
+  createManyOutreachAttempts(
+    rows: Prisma.OutreachAttemptCreateManyInput[],
+    tx?: Prisma.TransactionClient,
+  ) {
+    return db(tx).outreachAttempt.createMany({ data: rows });
+  },
+
   /**
    * ETL-ONLY, delete-agnostic: returns a soft-deleted row too, so the one-shot migration re-upserts
    * an existing (even trashed) lead instead of duplicating. UI/read paths use `findById`/`list`.
