@@ -597,17 +597,19 @@ export const candidateService = {
    * viewer holds `viewCredentials`; note visibility is `visibleNotes` (server-side, §3.2).
    */
   async getCandidateDetail(id: string, viewer: AuthUser): Promise<CandidateDetailDTO> {
-    const candidate = await candidateRepository.findById(id);
+    // `findById` doesn't gate the other 6 reads — none of them depend on its result, only on the
+    // already-known `id` — so all 7 fire in one round trip instead of findById-then-the-rest.
+    const [candidate, documents, notes, history, clientNames, rulesRows, outreachRows] =
+      await Promise.all([
+        candidateRepository.findById(id),
+        documentRepository.listByCandidate(id),
+        noteRepository.listByCandidate(id),
+        stageHistoryRepository.listByCandidate(id),
+        clientRepository.nameMap(),
+        clientRulesRepository.list(),
+        outreachRepository.listForCandidate(id),
+      ]);
     if (!candidate) throw new AppError("NOT_FOUND", "Candidate not found");
-
-    const [documents, notes, history, clientNames, rulesRows, outreachRows] = await Promise.all([
-      documentRepository.listByCandidate(id),
-      noteRepository.listByCandidate(id),
-      stageHistoryRepository.listByCandidate(id),
-      clientRepository.nameMap(),
-      clientRulesRepository.list(),
-      outreachRepository.listForCandidate(id),
-    ]);
     // Attempt actors → display names in ONE batched read (mirrors the lead detail; no N+1).
     const outreachActors = await userRepository.namesByIds(outreachRows.map((a) => a.actorId));
     const outreach = outreachRows.map((a) => toOutreachDTO(a, outreachActors));
