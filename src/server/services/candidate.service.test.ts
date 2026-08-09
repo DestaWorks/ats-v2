@@ -608,6 +608,16 @@ describe("candidateService.getCandidateDetail", () => {
     expect(JSON.stringify(detail)).not.toContain("LIC-SECRET-123");
   });
 
+  it("throws NOT_FOUND when the candidate is missing, even though the other reads run in parallel", async () => {
+    h.candidateRepo.findById.mockResolvedValue(null);
+    h.docRepo.listByCandidate.mockResolvedValue([]);
+    h.noteRepo.listByCandidate.mockResolvedValue([]);
+    h.stageRepo.listByCandidate.mockResolvedValue([]);
+    await expect(
+      candidateService.getCandidateDetail("missing", h.owner as AuthUser),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
   it("caps stage history at the 10 most recent", async () => {
     h.candidateRepo.findById.mockResolvedValue(fullCandidate());
     h.stageRepo.listByCandidate.mockResolvedValue(
