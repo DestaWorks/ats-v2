@@ -846,23 +846,47 @@ export const candidateService = {
     const baseOrder = listSortToOrderBy(sort);
     const repoFilters = { ...toRepoFilters(filters, viewer), status: filters.status };
 
-    const [clientNames, rulesRows] = await Promise.all([
-      clientRepository.nameMap(),
-      clientRulesRepository.list(),
-    ]);
-    const rulesByClient = buildRulesMap(clientNames, rulesRows);
+    const namesAndRules = Promise.all([clientRepository.nameMap(), clientRulesRepository.list()]);
 
-    // DB path — sort is DB-native and Hot is off, so paginate in SQL.
+    // DB path — sort is DB-native and Hot is off, so paginate in SQL. `count`, the page read, and
+    // the name/rules lookup are all independent of each other (perf audit 2026-08-05 — these used
+    // to run as 2 sequential round trips), so fire all three in ONE round trip. The page read is
+    // OPTIMISTIC — it uses the unclamped `requestedPage` — because `skip` only needs `total` in
+    // the rare case the requested page is actually out of range; that case gets one corrective
+    // re-fetch rather than paying a second round trip on every request.
     if (sort !== "fit" && !hot) {
-      const total = await candidateRepository.count({ ...repoFilters, now });
+      // `requestedPage` is user-controlled (a URL query param) and only lower-bounded — the OLD
+      // code was safe because it always clamped against the DB-verified `total` BEFORE querying.
+      // The optimistic query below can't wait for `total`, so it needs its OWN defensive ceiling
+      // (security audit 2026-08-05): otherwise `?page=999999999` sends an enormous, attacker-
+      // controlled OFFSET straight to Postgres. This cap never affects the real result — `meta`
+      // still clamps to the true last page from `total` below, and an over-cap request simply
+      // falls into the existing corrective-refetch path, exactly like any other out-of-range page.
+      const MAX_OPTIMISTIC_PAGE = 10_000;
+      const optimisticSkip = (Math.min(requestedPage, MAX_OPTIMISTIC_PAGE) - 1) * LIST_PAGE;
+      const [[clientNames, rulesRows], total, optimisticRows] = await Promise.all([
+        namesAndRules,
+        candidateRepository.count({ ...repoFilters, now }),
+        candidateRepository.list({
+          ...repoFilters,
+          orderBy: baseOrder,
+          skip: optimisticSkip,
+          take: LIST_PAGE,
+          now,
+        }),
+      ]);
+      const rulesByClient = buildRulesMap(clientNames, rulesRows);
       const meta = pageMeta(total, requestedPage, LIST_PAGE);
-      const rows = await candidateRepository.list({
-        ...repoFilters,
-        orderBy: baseOrder,
-        skip: (meta.page - 1) * LIST_PAGE,
-        take: LIST_PAGE,
-        now,
-      });
+      const rows =
+        meta.page === requestedPage
+          ? optimisticRows
+          : await candidateRepository.list({
+              ...repoFilters,
+              orderBy: baseOrder,
+              skip: (meta.page - 1) * LIST_PAGE,
+              take: LIST_PAGE,
+              now,
+            });
       const candidates = rows.map((row) =>
         toListItem(
           row,
@@ -876,8 +900,13 @@ export const candidateService = {
       return { candidates, ...meta };
     }
 
-    // Score path — Hot and/or fit need the computed score across the WHOLE filtered set.
-    const allRows = await candidateRepository.list({ ...repoFilters, orderBy: baseOrder, now });
+    // Score path — Hot and/or fit need the computed score across the WHOLE filtered set. The
+    // name/rules lookup doesn't depend on the rows either, so it runs alongside them too.
+    const [[clientNames, rulesRows], allRows] = await Promise.all([
+      namesAndRules,
+      candidateRepository.list({ ...repoFilters, orderBy: baseOrder, now }),
+    ]);
+    const rulesByClient = buildRulesMap(clientNames, rulesRows);
     let scored = allRows.map((row) => ({ row, score: scoreFor(row, rulesByClient) }));
     if (hot) scored = scored.filter((s) => s.score !== null && s.score >= HOT_SCORE);
     if (sort === "fit") scored = sortByFit(scored);

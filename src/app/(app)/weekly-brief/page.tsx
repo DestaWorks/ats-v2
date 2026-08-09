@@ -1,13 +1,21 @@
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { hasCapability } from "@/lib/constants";
+import { dateKeyForOffset, mondayOf } from "@/lib/daily";
 import { getCurrentUser } from "@/server/auth/guards";
+import { briefService } from "@/server/services/brief.service";
 import { ErrorState } from "@/components/ui/error-state";
 import { WeeklyBriefView } from "./weekly-brief-view";
 
 /**
- * Weekly Brief (Wave 5.1, legacy `vw="weekly"`). Thin auth shell — client loads the composite.
- * LEADERSHIP-gated (`viewReports`, matching Daily Brief's 2026-08-04 gate — this page was an
- * oversight the same pass missed: a team-wide AI report was reachable by any signed-in role).
+ * Weekly Brief (Wave 5.1, legacy `vw="weekly"`). LEADERSHIP-gated (`viewReports`, matching Daily
+ * Brief's 2026-08-04 gate — this page was an oversight the same pass missed: a team-wide AI
+ * report was reachable by any signed-in role). "This week" is the USER-LOCAL calendar week,
+ * which an RSC render can't know on a cold visit — so the composite still loads client-side on
+ * first-ever load. From the second visit on (perf audit 2026-08-05), this reads the `app-tz`
+ * cookie (shared with `/daily-log` — same "browser's local day" signal) and, when present,
+ * server-fetches the saved brief for that week directly, seeding `WeeklyBriefView` so it skips
+ * its redundant first client fetch.
  */
 export default async function WeeklyBriefPage() {
   const user = await getCurrentUser();
@@ -24,6 +32,17 @@ export default async function WeeklyBriefPage() {
     );
   }
 
+  const cookieStore = await cookies();
+  const rawTz = cookieStore.get("app-tz")?.value;
+  const parsedTz = rawTz !== undefined ? Number(rawTz) : NaN;
+  const initialTz =
+    Number.isInteger(parsedTz) && parsedTz >= -840 && parsedTz <= 840 ? parsedTz : undefined;
+
+  const initialWeekStart =
+    initialTz !== undefined ? mondayOf(dateKeyForOffset(initialTz)) : undefined;
+  const initial =
+    initialWeekStart !== undefined ? await briefService.getWeekly(initialWeekStart) : undefined;
+
   return (
     <div className="flex flex-col gap-6 px-8 py-6 print:px-0 print:py-0">
       <header className="print:hidden">
@@ -32,7 +51,11 @@ export default async function WeeklyBriefPage() {
           KPI deltas, per-client and per-associate rollups, accountability, and patterns.
         </p>
       </header>
-      <WeeklyBriefView />
+      <WeeklyBriefView
+        initial={initial}
+        initialWeekStart={initialWeekStart}
+        initialTz={initialTz}
+      />
     </div>
   );
 }

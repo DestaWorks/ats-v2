@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { hasCapability } from "@/lib/constants";
 import { getCurrentUser } from "@/server/auth/guards";
-import { clientRepository } from "@/server/repositories/client.repository";
+import { cachedClientList } from "@/server/repositories/client.repository";
 import { AddCandidateForm } from "./add-candidate-form";
 
 /**
@@ -16,7 +16,7 @@ export default async function AddCandidatePage() {
   const user = await getCurrentUser();
   if (!user) redirect("/sign-in");
 
-  const clientRows = await clientRepository.list();
+  const clientRows = await cachedClientList();
   const clients = clientRows.map((c) => ({ id: c.id, name: c.name }));
   const canEditCredential = hasCapability(user.role, "viewCredentials");
 

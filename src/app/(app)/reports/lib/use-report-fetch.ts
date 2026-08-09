@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getJson } from "@/lib/api/client";
 
 export interface ReportFilterState {
@@ -38,11 +38,25 @@ export function buildReportQuery(f: ReportFilterState): string {
  * wrapper around this — the tab mounts only when selected (`DetailTabs` renders just the active
  * panel), so this naturally fetches lazily and refetches on tab switch, which is fine for
  * read-only report GETs.
+ *
+ * `initialData` (perf audit 2026-08-05): when the page already server-fetched this exact
+ * `path`+`query` (currently only the Executive tab's default/unfiltered load, seeded in
+ * `reports/page.tsx`), pass it here to skip the redundant client fetch on first mount — the
+ * effect below still fires on every later `query` change (filters applied), same as before.
  */
-export function useReportFetch<T>(path: string, query: string): T | null | undefined {
-  const [data, setData] = useState<T | null | undefined>(undefined);
+export function useReportFetch<T>(
+  path: string,
+  query: string,
+  initialData?: T,
+): T | null | undefined {
+  const [data, setData] = useState<T | null | undefined>(initialData);
+  const skipNextFetch = useRef(initialData !== undefined);
 
   useEffect(() => {
+    if (skipNextFetch.current) {
+      skipNextFetch.current = false;
+      return;
+    }
     let cancelled = false;
     setData(undefined);
     void getJson<T>(`${path}?${query}`).then((res) => {

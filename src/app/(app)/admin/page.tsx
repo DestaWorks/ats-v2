@@ -4,7 +4,7 @@ import { getCurrentUser } from "@/server/auth/guards";
 import { adminUserService } from "@/server/services/admin-user.service";
 import { accessRequestService } from "@/server/services/access-request.service";
 import { portalAccessRequestService } from "@/server/services/portal-access-request.service";
-import { clientRepository } from "@/server/repositories/client.repository";
+import { cachedClientList } from "@/server/repositories/client.repository";
 import { ErrorState } from "@/components/ui/error-state";
 import { AdminDashboard } from "./admin-dashboard";
 
@@ -35,7 +35,7 @@ export default async function AdminPage() {
     adminUserService.list(),
     accessRequestService.list(),
     canConfigurePortal ? portalAccessRequestService.list() : Promise.resolve([]),
-    canConfigurePortal ? clientRepository.list() : Promise.resolve([]),
+    canConfigurePortal ? cachedClientList() : Promise.resolve([]),
   ]);
   const clients = clientRows.map((c) => ({ id: c.id, name: c.name }));
 

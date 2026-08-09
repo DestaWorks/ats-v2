@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { discoverSearchQuerySchema } from "@/lib/validation/discover";
 import { getCurrentUser } from "@/server/auth/guards";
 import { discoverService } from "@/server/services/discover.service";
-import { clientRepository } from "@/server/repositories/client.repository";
+import { cachedClientList } from "@/server/repositories/client.repository";
 import { DiscoverSearchForm } from "./discover-search-form";
 import { DiscoverResultsTable } from "./discover-results-table";
 import { CoverageGaps } from "./coverage-gaps";
@@ -35,7 +35,7 @@ export default async function DiscoverPage({
 
   const [result, clientRows, coverageGaps] = await Promise.all([
     parsed.success ? discoverService.search(parsed.data, user) : Promise.resolve(null),
-    clientRepository.list(),
+    cachedClientList(),
     discoverService.coverageGaps(),
   ]);
   const clients = clientRows.map((c) => ({ id: c.id, name: c.name }));

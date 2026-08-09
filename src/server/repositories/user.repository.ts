@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import type { Prisma } from "@/generated/prisma/client";
 import { db } from "@/server/db/prisma";
 
@@ -105,3 +106,11 @@ export const userRepository = {
     return row.learnProgress as Record<string, string>;
   },
 };
+
+/**
+ * Request-memoized `userRepository.list()` — same reasoning as `cachedClientList` in
+ * `client.repository.ts` (perf audit 2026-08-04). Only for `page.tsx`/`layout.tsx` render-path
+ * reads (e.g. @mention target lists) that never mutate within the same request; every
+ * mutation-adjacent caller keeps using the raw, uncached `userRepository.list()`.
+ */
+export const cachedUserList = cache(() => userRepository.list());

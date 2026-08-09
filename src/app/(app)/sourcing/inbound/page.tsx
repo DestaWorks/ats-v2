@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/server/auth/guards";
-import { clientRepository } from "@/server/repositories/client.repository";
+import { cachedClientList } from "@/server/repositories/client.repository";
 import { InboundTriage } from "./inbound-triage";
 
 /**
@@ -13,7 +13,7 @@ export default async function InboundTriagePage() {
   const user = await getCurrentUser();
   if (!user) redirect("/sign-in");
 
-  const clientRows = await clientRepository.list();
+  const clientRows = await cachedClientList();
   const clients = clientRows.map((c) => ({ id: c.id, name: c.name }));
 
   return (

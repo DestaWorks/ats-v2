@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { headers } from "next/headers";
 import { auth } from "./auth";
 import { AppError } from "@/server/http/app-error";
@@ -12,8 +13,19 @@ export interface AuthUser {
   role: Role;
 }
 
-/** Read the current session (or null). Never trusts the client for role — reads it from the DB. */
-export async function getCurrentUser(): Promise<AuthUser | null> {
+/**
+ * Read the current session (or null). Never trusts the client for role — reads it from the DB.
+ *
+ * `cache()`-wrapped (perf audit 2026-08-04): every page calls this at least twice per request
+ * (once in the root layout, again in the page itself, by design — "an additional guard, not a
+ * replacement"), and every gated API route calls it via `requireUser`/`requireCapability`. None
+ * of that was memoized, so each of those was a full, separate session-lookup DB round trip.
+ * `cache()` de-dupes by request (Next.js's own documented pattern for exactly this function
+ * shape — no args, and "who's signed in" can't legitimately change mid-request), scoped
+ * automatically per-request by Next.js's request context — never leaks across different users'
+ * requests.
+ */
+export const getCurrentUser = cache(async (): Promise<AuthUser | null> => {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) return null;
   const rawRole = (session.user as { role?: string }).role ?? "Associate";
@@ -24,7 +36,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
     name: session.user.name,
     role,
   };
-}
+});
 
 /** Require a signed-in user (401 otherwise). */
 export async function requireUser(): Promise<AuthUser> {

@@ -1,8 +1,12 @@
 import Link from "next/link";
+import dynamic from "next/dynamic";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { BoltIcon, FlagIcon, UserGroupIcon } from "@heroicons/react/24/outline";
 import { getCurrentUser } from "@/server/auth/guards";
 import { candidateService } from "@/server/services/candidate.service";
+import { dailyService } from "@/server/services/daily.service";
+import { dateKeyForOffset } from "@/lib/daily";
 import type { CandidateCardDTO } from "@/lib/validation/pipeline";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Card } from "@/components/ui/card";
@@ -11,7 +15,12 @@ import { STATUS_BG } from "../pipeline/lib/status-style";
 import { StatCard } from "./stat-card";
 import { DailyStrip } from "./daily-strip";
 import { SinceYouClosed } from "./since-you-closed";
-import { PipelineDistributionChart } from "./pipeline-distribution-chart";
+
+// recharts is heavy — load it only once the distribution card actually renders (perf audit
+// 2026-08-05), matching the `next/dynamic` pattern used for Candidate/Client Detail tabs.
+const PipelineDistributionChart = dynamic(() =>
+  import("./pipeline-distribution-chart").then((m) => m.PipelineDistributionChart),
+);
 
 /**
  * Overview (RSC, legacy-parity). Reads a lightweight summary (`candidateService.dashboardStats`)
@@ -24,7 +33,21 @@ export default async function DashboardPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/sign-in");
 
-  const stats = await candidateService.dashboardStats(user);
+  // Daily strip's "today" is the USER-LOCAL date (`app-tz` cookie, shared with `/daily-log` and
+  // `/weekly-brief` — see those pages' comments) — seed it server-side when the cookie is
+  // present so it renders immediately instead of a blank gap while it fetches on mount.
+  const cookieStore = await cookies();
+  const rawTz = cookieStore.get("app-tz")?.value;
+  const parsedTz = rawTz !== undefined ? Number(rawTz) : NaN;
+  const initialTz =
+    Number.isInteger(parsedTz) && parsedTz >= -840 && parsedTz <= 840 ? parsedTz : undefined;
+
+  const [stats, initialDailyOverview] = await Promise.all([
+    candidateService.dashboardStats(user),
+    initialTz !== undefined
+      ? dailyService.overview(user, dateKeyForOffset(initialTz), initialTz)
+      : Promise.resolve(undefined),
+  ]);
   const attention: CandidateCardDTO[] = stats.attention;
 
   // Legacy Overview greeting: time-of-day + first name + "N candidates in pipeline · date".
@@ -52,7 +75,7 @@ export default async function DashboardPage() {
       </header>
 
       {/* Daily accountability loop (Wave 3.1): targets/pace + End of Shift, then the recap. */}
-      <DailyStrip />
+      <DailyStrip initial={initialDailyOverview} initialTz={initialTz} />
       <SinceYouClosed userId={user.id} />
 
       {/* Main (stats + distribution) + a sidebar (needs attention) — fills the width on wide
