@@ -28,3 +28,11 @@ export const updatePreferencesSchema = z
     message: "Provide at least one field to update",
   });
 export type UpdatePreferencesInput = z.infer<typeof updatePreferencesSchema>;
+
+/** Body for `POST /api/me/avatar` (Wave 6) — a client-side-resized image as a data URI, uploaded
+ *  to Storage server-side instead of being persisted as-is. Capped generously above a 160×160
+ *  JPEG at reasonable quality (typically a few KB, well under this ceiling). */
+export const uploadAvatarSchema = z.object({
+  dataUrl: z.string().min(1).max(300_000),
+});
+export type UploadAvatarInput = z.infer<typeof uploadAvatarSchema>;

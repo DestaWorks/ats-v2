@@ -6,6 +6,7 @@ import type { JourneyDTO, JourneyEventDTO } from "@/lib/validation/journey";
 import { getJson, messageForFailure } from "@/lib/api/client";
 import { cn } from "@/lib/utils/cn";
 import { Button } from "@/components/ui/button";
+import { ErrorState } from "@/components/ui/error-state";
 import { Modal } from "@/components/ui/modal";
 import { noteTypeLabel } from "./lib/notes-format";
 
@@ -176,13 +177,20 @@ function JourneyTimeline({
   subtitle?: string;
 }) {
   const [journey, setJourney] = useState<JourneyDTO | null>(null);
+  const [loadError, setLoadError] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
+    setJourney(null);
+    setLoadError(false);
     void getJson<JourneyDTO>(`/api/candidates/${candidateId}/journey`).then((res) => {
       if (res.ok) setJourney(res.data);
-      else toast.error(messageForFailure(res.failure));
+      else {
+        setLoadError(true);
+        toast.error(messageForFailure(res.failure));
+      }
     });
-  }, [candidateId]);
+  }, [candidateId, reloadKey]);
 
   return (
     <div className="flex max-h-[70vh] flex-col gap-5 overflow-y-auto pr-1">
@@ -197,7 +205,13 @@ function JourneyTimeline({
         ) : null}
       </div>
 
-      {!journey ? (
+      {loadError ? (
+        <ErrorState
+          title="Couldn't load this journey"
+          message="Please try again."
+          onRetry={() => setReloadKey((k) => k + 1)}
+        />
+      ) : !journey ? (
         <p className="text-sm text-gray">Loading…</p>
       ) : journey.events.length === 0 ? (
         <p className="text-sm text-gray">No events yet.</p>

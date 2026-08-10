@@ -156,20 +156,20 @@ share a database.** *(`zyx.com` below is a placeholder for the real domain.)*
 - [x] **Merge policy: keep-newest + flag** conflicting records for manual review (no silent overwrite) — colliding rows sorted by `updatedAt`→`createdAt`→legacyId, tagged `Needs Review` + `email-duplicate`; nothing dropped.
 - [x] Load candidates (idempotent upsert on `legacy_id`) + added/skipped/errored/flagged report — `candidateRepository.upsertByLegacyId` + `buildReport` (6 count buckets); re-run asserted to create zero duplicates.
 - [x] `POST /api/migration/prepare` (preview) route — zero DB writes, test-verified.
-- [x] `POST /api/migration/commit` route. *(The "résumé→profile match confidence threshold" phrase in the original plan line doesn't apply to this flow — bulk import attaches résumés deterministically by `legacyId`/`ResumeFileID`, since it already has an authoritative identity key; the confidence-gated fuzzy matcher is Wave 1.2's separate interactive upload flow. Formally closed as design-doc E-5, not a gap.)*
+- [x] `POST /api/migration/commit` route. *(The "resume→profile match confidence threshold" phrase in the original plan line doesn't apply to this flow — bulk import attaches resumes deterministically by `legacyId`/`ResumeFileID`, since it already has an authoritative identity key; the confidence-gated fuzzy matcher is Wave 1.2's separate interactive upload flow. Formally closed as design-doc E-5, not a gap.)*
 - [x] Port the 3-step wizard UI 1:1 (upload → preview → commit) — `migration-wizard.tsx` (`Stepper`, in-browser file read + sha256 checksum).
 - [x] Test: re-running import doesn't duplicate (upsert by `legacy_id`); email-dupes collapse; conflicts are flagged not silently merged — `migration.service.test.ts` (46 tests total across the module, all passing).
-- [x] **Indrasur bulk-résumé flow** ✅ *(done 2026-07-29 — a later, separate addition; see
-      `docs/design/wave-1.3-etl.md` §5.1)* — an optional résumé ZIP alongside the CSV/JSON,
+- [x] **Indrasur bulk-resume flow** ✅ *(done 2026-07-29 — a later, separate addition; see
+      `docs/design/wave-1.3-etl.md` §5.1)* — an optional resume ZIP alongside the CSV/JSON,
       matched to rows by name (client-side unzip + pdf.js text extraction, same as the Wave 1.2
-      single-résumé flow — no binary ever reaches the server), and an opt-in AI-extraction step
+      single-resume flow — no binary ever reaches the server), and an opt-in AI-extraction step
       reusing Wave 1.2's real `parseResume` schema. Fixes 3 confirmed legacy bugs rather than
       porting them: filename collisions are surfaced as `"ambiguous"` (never a silent overwrite);
-      a row with no matched résumé still imports (never hard-blocked, unlike legacy's
+      a row with no matched resume still imports (never hard-blocked, unlike legacy's
       `matchedFile`-required commit filter); AI failures mark the row `"ai-extraction-failed"`
       instead of silently succeeding with blank fields (legacy's own field-harvesting read schema
       keys its Gemini call never produced, swallowed by a triple-nested try/catch). Unmatched
-      résumé files are always listed in the report, never silently dropped.
+      resume files are always listed in the report, never silently dropped.
 - **Done-when:** ✅ importer built, tested, reviewed — **not yet run against the real historical export** (needs the actual Sheet file from Biruh; that one-time production run is Wave 1.4, still open below).
 
 ### 1.4 Parity check + Sheet freeze
@@ -309,7 +309,7 @@ declared-deferred leftovers that still belong to the shipped surface.
 3. **Lead restore** — soft-deleted leads have no restore route/UI (legacy: 30s undo + "Show deleted" + Restore).
 4. **Auto-DQ visibility** — `getAutoDisqualify` shows only on the detail scoring card; legacy flagged cards (red border + first reason) and a ⚠-count table column.
 5. **Candidates-list filters** — legacy table filtered by Source, FROM/TO added-date, and view-as owner; new list has none of the three.
-6. **Branded résumé output** — legacy Parse Résumé rendered a client-facing branded résumé (3 layouts, verification-line presets) with Print + Email; new flow extracts/reviews/saves only.
+6. **Branded resume output** — legacy Parse Resume rendered a client-facing branded resume (3 layouts, verification-line presets) with Print + Email; new flow extracts/reviews/saves only.
 
 **P1** — Alerts panel (2.5) · @mentions + 5 note types w/ server-side role visibility (2.2) ·
 sourcing bulk/snooze/outreach-edit/lead-CSV-import (2.6) · candidate outreach log surfacing
@@ -384,7 +384,7 @@ format (blocks 1.3/1.4). *Trash auto-purge sign-off resolved 2026-07-14 — see 
 - [x] Schema/gates/status-edit were **already shipped** from earlier waves: `Candidate.licenseState/licenseNumber/licenseStatus/licenseExpiry/licenseVerifiedAt/licenseVerifiedById`, `LICENSE_STATUSES`, `POST /api/candidates/:id/verify-license` + `candidateService.verifyLicense()`, the `LicenseTab` UI, and `checkStageGate`/`STAGE_REQUIRED` already gating INITIAL_SCREENING/SUBMITTED_TO_CLIENT on `licenseStatus`. No migration was needed for this wave.
 - [x] `licenseVerifyService.dashboard()` derives the **Verification Queue** (`licenseStatus: "Not Verified"`) + **License Expiry Timeline** (`Active` + `licenseExpiry` set, soonest-first, `daysLeft`/color bucket) — ported from `legacy/index.html:3001-3037`, verbatim filter/sort logic. New `/license-verify` page (read-only RSC — legacy's own queue has no inline verify form either; it launches into the same detail-page verify flow this app already has).
 - [x] **One-click state-board links**: widened `STATE_BOARDS` from 4 to 13 states (added NY/PA/CA/TX/OH/VA/MD/GA/NC, ported from legacy's `BOARD_LINKS` map) — shared with the existing `LicenseTab`.
-- [x] **Deviation from spec, by explicit choice:** dropped the `verification_presets` bullet — legacy's actual `Client_Verification_Presets` feature is per-client canned text for the branded résumé's "Verification Line" (Module 7, unrelated to license-status verification at all). Deferred to whenever branded résumé output is scoped.
+- [x] **Deviation from spec, by explicit choice:** dropped the `verification_presets` bullet — legacy's actual `Client_Verification_Presets` feature is per-client canned text for the branded resume's "Verification Line" (Module 7, unrelated to license-status verification at all). Deferred to whenever branded resume output is scoped.
 - **Done-when:** a recruiter can work a verification queue: open the right state board in one click, set status, see expiry — status drives gates. ✅
 
 > **Fast-follow (clearly out of v1 scope):** real **per-state automated verification** (spike +
@@ -774,10 +774,70 @@ format (blocks 1.3/1.4). *Trash auto-purge sign-off resolved 2026-07-14 — see 
 
 # WAVE 6 — Cutover & Decommission (Month 3)
 
-- [ ] Full QA pass + fix integration bugs.
-- [ ] Move rÃ©sumÃ© files AND profile avatars to object storage (signed, expiring URLs) — D8:
-      no file/image bytes stay in the DB after this (avatars currently persist a base64 `data:`
-      URI in `User.image`; a known, tracked exception until this lands, not a pattern to repeat).
+- [ ] Full QA pass + fix integration bugs 🟡 *(first pass done 2026-08-10)* — a 3-way code-level
+      audit (core recruiting loop; CRM/Reports/Admin/Portal; Templates/Resume/Briefs/Migration
+      wizard) found and fixed 6 real bugs: Sourcing's outreach/promote/snooze modals discarded a
+      recruiter's typed note/date on any failure (`close()` fired in the failure branch too, not
+      just success); a lost promote/respond/log race (409 CONFLICT — someone else acted on the
+      lead first) was treated as a delete, silently corrupting the pager's total count (now
+      re-syncs from the server instead); CRM's Portal tab got stuck on "Loading…" forever on a
+      fetch failure with no retry; its "Regenerate" link action had no confirmation despite being
+      exactly as destructive as "Revoke" (which does confirm — revoking a contact's live link);
+      the new resume Download button opened its tab via `window.open` *after* an `await`, which
+      Safari/Chrome silently popup-block since the async gap breaks the "direct result of a click"
+      requirement (now opens the tab synchronously, navigates it once the signed URL resolves);
+      and that same button was shown to viewers without `viewCredentials` even though the download
+      endpoint is gated on it, guaranteeing a 403 (now hidden for them, matching the DTO gate).
+      The migration wizard itself — the tool the real Sheet cutover will run through — was
+      independently re-verified against its actual code (not just its UI copy) and confirmed
+      correctly idempotent, stage-preserving on re-import, and per-row transactional.
+      **Second pass (same day)** covered the areas the first pass left unreviewed — Add-Candidate
+      form, Journey tab, Inbound Triage, Daily Log/Briefs, Credentials Intelligence, CRM's
+      remaining tabs (Contacts/Tasks/Meetings/Timeline), Client Compare — and found + fixed 6 more:
+      **Inbound Triage's "Attach to this lead" trusted a stale, once-computed dedupe match with no
+      server-side re-verification** — a reviewer editing the extracted name/email after the match
+      ran could attach the reply to the WRONG lead with no guard catching it (the same
+      wrong-person-merge risk the résumé-match flow was deliberately built to prevent); fixed by
+      having `attach()` re-run the dedupe match against the submitted (possibly-edited) identity
+      server-side and refuse (409) unless it independently resolves to the same lead. The Journey
+      modal had the identical "stuck on Loading… forever on fetch failure" defect already fixed
+      once this session in CRM's Portal tab, just not yet here — same fix applied. CRM Contacts'
+      "Mark departed" had no loading/disabled state, risking a double-submit race, unlike every
+      sibling action in the same file. Daily Log's self-report submit never re-synced the view on
+      a FAILED submit, so a 409 from a raced double-submit (already logged) left the UI stuck
+      showing "haven't logged today" even though it had been — now always refreshes. That same
+      race had a second, deeper bug: the pre-check-then-insert isn't atomic, so a TRUE concurrent
+      double-submit could still slip past the pre-check and hit the DB's real `@@unique([userId,
+      date])` constraint, which surfaced as a raw 500 instead of the same clean 409 the normal path
+      gives — now caught and mapped. Lastly, the shared `Modal` primitive's ESC/backdrop/× always
+      dismissed regardless of an in-flight submit — closing the Add Candidate dialog mid-request
+      didn't cancel the request, so the candidate still got created and the modal still navigated a
+      moment later, after the user believed they'd cancelled; `Modal` gained an opt-in
+      `dismissBlocked` prop (fully backward-compatible, every other modal unaffected) and it's wired
+      into Add Candidate. Verified clean this pass: the legacy "Tasks mark-done duplicates a row"
+      bug is genuinely fixed (confirmed against the actual repository code, not just the doc
+      comment); Client Compare (pure read-only, no mutation surface); Credentials Intelligence
+      (same, print button aside); Weekly/Team Brief generation; all `lib/daily.ts` week/date
+      boundary math (Monday-anchor, tenure-ramp, pacing) re-derived by hand at the boundaries and
+      found correct. Coverage is now broad but still not exhaustive — no browser-automation tool
+      exists in this environment, so this remains a code-level audit, not a click-through; a manual
+      pass before go-live is still recommended.
+- [x] Move resume files AND profile avatars to object storage ✅ *(done 2026-08-10, D8)* — no
+      file/image bytes stay in the DB. Built on the **S3 protocol** (`@aws-sdk/client-s3`,
+      `server/integrations/storage.ts`), not a vendor SDK, so swapping providers later (Supabase
+      Storage's own S3-compatible endpoint today → real AWS S3 / Cloudflare R2 / Backblaze B2 /
+      self-hosted MinIO) is a credentials change only. Avatars: `POST /api/me/avatar` uploads to a
+      public bucket, `User.image` now holds a stable URL instead of a base64 blob — also wired into
+      the nav header and Admin's role-member avatar stack, which previously always showed initials.
+      Resumes: `POST /api/resume/upload-url` gives the browser a signed URL to PUT the original
+      file straight to a private bucket (never through our own server — avoids Vercel's body-size
+      limit), persisting `Document.storageKey`; downloads go through `GET /api/documents/:id/
+      download-url` (gated `viewCredentials`, same tier as the extracted text), which mints a
+      fresh 5-minute signed URL per click rather than persisting one that would go stale. **Ships
+      dormant** — mirrors `aiEnabled`/`apolloEnabled`'s "activate-by-key" convention
+      (`storageEnabled`): no environment has `S3_*` credentials yet, so every path above still
+      returns a clear "not configured" error until Biruh sets them and runs `pnpm setup:storage`
+      once (creates the `avatars`/`resumes` buckets).
 - [ ] Add error tracking + structured logs; finalize audit log.
 - [ ] Compliance checklist (HIPAA + Ethiopian Proclamation 1321/2024).
 - [ ] Retire Apps Script + Sheet; rotate exposed credentials.

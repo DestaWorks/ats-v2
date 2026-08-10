@@ -3,7 +3,7 @@ import type { AuthUser } from "@/server/auth/guards";
 import type { ClinicalResume } from "@/lib/validation/resume";
 
 /**
- * Résumé service tests (§8) WITHOUT a DB or real Claude: `extract` returns data + the server match;
+ * Resume service tests (§8) WITHOUT a DB or real Claude: `extract` returns data + the server match;
  * `save` recomputes the match server-side and, in ONE transaction, attaches (auto/confirm) or
  * creates, persists the document, and audits. The pure match + mapper run for real; repositories,
  * `parseResume`, `writeAudit`, and `withTransaction` are mocked. Also asserts no PII is logged.
@@ -19,8 +19,10 @@ const h = vi.hoisted(() => ({
     update: vi.fn(),
     create: vi.fn(),
   },
-  documentRepo: { create: vi.fn() },
+  documentRepo: { create: vi.fn(), findById: vi.fn() },
   writeAudit: vi.fn(),
+  createSignedUploadUrl: vi.fn(),
+  getSignedDownloadUrl: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
@@ -35,10 +37,15 @@ vi.mock("@/server/db/audit", () => ({ writeAudit: h.writeAudit }));
 vi.mock("@/server/db/with-transaction", () => ({
   withTransaction: (fn: (tx: unknown) => unknown) => fn(h.fakeTx),
 }));
+vi.mock("@/server/integrations/storage", () => ({
+  RESUME_BUCKET: "resumes",
+  createSignedUploadUrl: h.createSignedUploadUrl,
+  getSignedDownloadUrl: h.getSignedDownloadUrl,
+}));
 
 import { resumeService } from "./resume.service";
 
-/** A complete, schema-valid clinical résumé (save re-validates `data`). */
+/** A complete, schema-valid clinical resume (save re-validates `data`). */
 function clinicalData(overrides: Partial<ClinicalResume> = {}): ClinicalResume {
   return {
     name: "Jane Doe",
@@ -84,7 +91,7 @@ function saveInput(overrides: Record<string, unknown> = {}) {
     data: clinicalData() as unknown as Record<string, unknown>,
     originalFilename: "jane.pdf",
     mimeType: "application/pdf",
-    extractedText: "raw résumé text with LPC-SECRET-99",
+    extractedText: "raw resume text with LPC-SECRET-99",
     ...overrides,
   };
 }
@@ -99,7 +106,10 @@ beforeEach(() => {
   h.candidateRepo.update.mockReset();
   h.candidateRepo.create.mockReset();
   h.documentRepo.create.mockReset();
+  h.documentRepo.findById.mockReset();
   h.writeAudit.mockReset();
+  h.createSignedUploadUrl.mockReset();
+  h.getSignedDownloadUrl.mockReset();
   h.documentRepo.create.mockResolvedValue({ id: "d1", candidateId: "x", type: "resume" });
   errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
   logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
@@ -214,7 +224,7 @@ describe("resumeService.save", () => {
   });
 
   it("REFUSES a confirmedCandidateId the server does not re-match → creates new instead", async () => {
-    // Client echoes c9, but that candidate doesn't match the résumé (wrong name, wrong email).
+    // Client echoes c9, but that candidate doesn't match the resume (wrong name, wrong email).
     h.candidateRepo.list.mockResolvedValue([
       { id: "c9", name: "Completely Unrelated", email: "nope@x.com" },
     ]);
@@ -227,5 +237,69 @@ describe("resumeService.save", () => {
     expect(h.candidateRepo.findById).not.toHaveBeenCalled();
     expect(h.candidateRepo.update).not.toHaveBeenCalled();
     expect(h.writeAudit.mock.calls[0]![1]).toMatchObject({ action: "create" });
+  });
+
+  it("threads storageKey through to the document when present (Wave 6)", async () => {
+    h.candidateRepo.list.mockResolvedValue([]);
+    h.candidateRepo.create.mockResolvedValue({ id: "new3", name: "Jane Doe" });
+    h.documentRepo.create.mockResolvedValue({ id: "d5", candidateId: "new3", type: "resume" });
+
+    await resumeService.save(saveInput({ storageKey: "abc-jane.pdf" }), h.user as AuthUser);
+
+    const [docData] = h.documentRepo.create.mock.calls[0]!;
+    expect(docData).toMatchObject({ storageKey: "abc-jane.pdf" });
+  });
+
+  it("stores storageKey as null when absent (storage not configured — unchanged behavior)", async () => {
+    h.candidateRepo.list.mockResolvedValue([]);
+    h.candidateRepo.create.mockResolvedValue({ id: "new4", name: "Jane Doe" });
+    h.documentRepo.create.mockResolvedValue({ id: "d6", candidateId: "new4", type: "resume" });
+
+    await resumeService.save(saveInput(), h.user as AuthUser);
+
+    const [docData] = h.documentRepo.create.mock.calls[0]!;
+    expect(docData).toMatchObject({ storageKey: null });
+  });
+});
+
+describe("resumeService.requestUploadUrl", () => {
+  it("builds a sanitized, unique storage key and returns the signed upload URL", async () => {
+    h.createSignedUploadUrl.mockResolvedValue({ signedUrl: "https://x/upload", token: "tok" });
+
+    const result = await resumeService.requestUploadUrl({
+      filename: "Jane Doe's Resume (final)!!.pdf",
+      mimeType: "application/pdf",
+    });
+
+    expect(result.signedUrl).toBe("https://x/upload");
+    expect(result.storageKey).toMatch(/^[0-9a-f-]{36}-.+\.pdf$/);
+    expect(result.storageKey).not.toMatch(/[()'!]/);
+    const [bucket] = h.createSignedUploadUrl.mock.calls[0]!;
+    expect(bucket).toBe("resumes");
+  });
+});
+
+describe("resumeService.getDownloadUrl", () => {
+  it("returns a fresh signed URL when the document has a storageKey", async () => {
+    h.documentRepo.findById.mockResolvedValue({ id: "d1", storageKey: "abc-jane.pdf" });
+    h.getSignedDownloadUrl.mockResolvedValue("https://x/download?sig=1");
+
+    const result = await resumeService.getDownloadUrl("d1");
+
+    expect(result).toEqual({ url: "https://x/download?sig=1" });
+    expect(h.getSignedDownloadUrl).toHaveBeenCalledWith("resumes", "abc-jane.pdf", 300);
+  });
+
+  it("throws NOT_FOUND when the document has no storageKey", async () => {
+    h.documentRepo.findById.mockResolvedValue({ id: "d1", storageKey: null });
+    await expect(resumeService.getDownloadUrl("d1")).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(h.getSignedDownloadUrl).not.toHaveBeenCalled();
+  });
+
+  it("throws NOT_FOUND when the document doesn't exist", async () => {
+    h.documentRepo.findById.mockResolvedValue(null);
+    await expect(resumeService.getDownloadUrl("missing")).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
   });
 });

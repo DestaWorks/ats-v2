@@ -21,6 +21,7 @@ interface BetterAuthUser {
   id: string;
   name: string;
   email: string;
+  image?: string | null;
   role?: string | string[] | null;
   banned?: boolean | null;
   banReason?: string | null;
@@ -33,6 +34,7 @@ function toDTO(user: BetterAuthUser): AdminUserDTO {
     id: user.id,
     name: user.name,
     email: user.email,
+    image: user.image ?? null,
     role: Array.isArray(user.role) ? (user.role[0] ?? "Associate") : (user.role ?? "Associate"),
     banned: user.banned ?? false,
     banReason: user.banReason ?? null,

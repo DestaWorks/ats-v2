@@ -1,5 +1,5 @@
 /**
- * Résumé extraction contract (Wave 1.2) — the shared interface between the Claude extraction
+ * Resume extraction contract (Wave 1.2) — the shared interface between the Claude extraction
  * (`server/ai/parse-resume`), the API routes, and the client review form. Isomorphic (zod, no
  * server imports). Ported from the legacy Gemini `ROLE_SCHEMAS_` (Code.gs ~3125–3260).
  *
@@ -96,7 +96,7 @@ export const OperationsResumeSchema = ResumeCommon.extend({
 export type ClinicalResume = z.infer<typeof ClinicalResumeSchema>;
 export type PrescriberResume = z.infer<typeof PrescriberResumeSchema>;
 export type OperationsResume = z.infer<typeof OperationsResumeSchema>;
-/** Any extracted résumé (union across the three variants). */
+/** Any extracted resume (union across the three variants). */
 export type ResumeData = ClinicalResume | PrescriberResume | OperationsResume;
 
 /** The structured-output / validation schema for a given variant. */
@@ -113,19 +113,19 @@ export function resumeSchemaFor(variant: ResumeVariant) {
 
 // --- API request/response contracts ---
 
-/** Upper bound on résumé text we accept/store (matches the model-side char cap). */
+/** Upper bound on resume text we accept/store (matches the model-side char cap). */
 export const MAX_RESUME_TEXT = 100_000;
 
 /** POST /api/resume/extract — request. `text` is the client-side pdf.js extraction. */
 export const parseResumeInputSchema = z.object({
   variant: z.enum(RESUME_VARIANTS),
-  text: z.string().min(50, "Résumé text is too short to extract").max(MAX_RESUME_TEXT),
+  text: z.string().min(50, "Resume text is too short to extract").max(MAX_RESUME_TEXT),
   // (vision fallback with a base64 PDF is a deferred fast-follow — re-added with a size guard then)
 });
 export type ParseResumeInput = z.infer<typeof parseResumeInputSchema>;
 
 /**
- * Résumé → existing-candidate match. Enforces the no-silent-wrong-person-merge invariant:
+ * Resume → existing-candidate match. Enforces the no-silent-wrong-person-merge invariant:
  * `auto` (email-exact) pre-selects but the user still accepts; `confirm` (name-fuzzy) requires an
  * explicit toggle; `none` creates a new candidate. Recomputed server-side on save — never trusted
  * from the client.
@@ -154,7 +154,9 @@ export interface ExtractResumeResponse {
   match: ResumeMatch;
 }
 
-/** POST /api/resume/save — request. `confirmedCandidateId` is re-validated server-side. */
+/** POST /api/resume/save — request. `confirmedCandidateId` is re-validated server-side.
+ *  `storageKey` (Wave 6) is optional — absent when object storage isn't configured, in which case
+ *  save behaves exactly as before (text-only, no bytes persisted). */
 export const saveResumeInputSchema = z.object({
   variant: z.enum(RESUME_VARIANTS),
   data: z.record(z.string(), z.unknown()), // re-validated against resumeSchemaFor(variant) server-side
@@ -162,5 +164,19 @@ export const saveResumeInputSchema = z.object({
   mimeType: z.string().max(120),
   extractedText: z.string().max(MAX_RESUME_TEXT),
   confirmedCandidateId: z.string().optional(),
+  storageKey: z.string().max(500).optional(),
 });
 export type SaveResumeInput = z.infer<typeof saveResumeInputSchema>;
+
+/** POST /api/resume/upload-url (Wave 6) — request: the file's name/type, to build a scoped
+ *  storage path. Response: a short-lived URL the browser PUTs the raw bytes to directly. */
+export const requestResumeUploadUrlSchema = z.object({
+  filename: z.string().min(1).max(255),
+  mimeType: z.string().min(1).max(120),
+});
+export type RequestResumeUploadUrlInput = z.infer<typeof requestResumeUploadUrlSchema>;
+
+export interface ResumeUploadUrlDTO {
+  signedUrl: string;
+  storageKey: string;
+}

@@ -96,10 +96,20 @@ export function InboundTriage({ clients }: { clients: { id: string; name: string
   }
 
   function handleAttach(leadId: string) {
+    if (!extracted?.name) {
+      setSaveError("A name is required to attach this reply.");
+      return;
+    }
     setSaveError(null);
     startSave(async () => {
+      // Send the CURRENT (possibly reviewer-edited) name/email, not just the id — the server
+      // re-runs its own dedupe match against them and refuses to attach if the edited identity no
+      // longer points at this lead, since the "Attach to this lead" match ran once, before any
+      // edits, and could otherwise silently log the reply to the wrong person.
       const res = await postJson<{ lead: LeadDetailDTO }>("/api/inbound/attach", {
         leadId,
+        name: extracted.name,
+        email: extracted.email,
         message: messageText,
       });
       if (res.ok) {

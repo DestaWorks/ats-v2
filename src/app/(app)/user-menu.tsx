@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { UserCircleIcon, ArrowRightStartOnRectangleIcon } from "@heroicons/react/24/outline";
-import { signOut } from "@/lib/auth-client";
+import { signOut, useSession } from "@/lib/auth-client";
 import { cn } from "@/lib/utils/cn";
 
 /**
@@ -23,6 +23,36 @@ import { cn } from "@/lib/utils/cn";
  * close isn't needed here since choosing either menu item navigates/signs out, but Escape and
  * click-outside both close it without acting.
  */
+/** Circular avatar — the real uploaded photo (Wave 6) when present, falling back to an initial. */
+function AvatarCircle({
+  image,
+  initial,
+  size,
+}: {
+  image: string | null;
+  initial: string;
+  size: "sm" | "md";
+}) {
+  const dims = size === "sm" ? "h-8 w-8 text-sm" : "h-10 w-10 text-base";
+  if (image) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element -- a user-uploaded Storage URL, not a static asset
+      <img src={image} alt="" className={cn("shrink-0 rounded-full object-cover", dims)} />
+    );
+  }
+  return (
+    <span
+      aria-hidden="true"
+      className={cn(
+        "flex shrink-0 items-center justify-center rounded-full bg-navy/10 font-bold text-navy",
+        dims,
+      )}
+    >
+      {initial}
+    </span>
+  );
+}
+
 export function UserMenu({
   userName,
   userEmail,
@@ -36,6 +66,8 @@ export function UserMenu({
   const [signingOut, setSigningOut] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+  const { data: session } = useSession();
+  const image = session?.user?.image ?? null;
   const initial = (userName.trim()[0] ?? "?").toUpperCase();
 
   useEffect(() => {
@@ -70,12 +102,7 @@ export function UserMenu({
         aria-expanded={open}
         className="flex items-center gap-2 rounded-lg px-1.5 py-1 transition hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-navy focus-visible:outline-none"
       >
-        <span
-          aria-hidden="true"
-          className="flex h-8 w-8 items-center justify-center rounded-full bg-navy/10 text-sm font-bold text-navy"
-        >
-          {initial}
-        </span>
+        <AvatarCircle image={image} initial={initial} size="sm" />
         <span className="hidden flex-col items-start leading-tight sm:flex">
           <span className="text-sm font-bold text-charcoal">{userName}</span>
           <span className="text-xs text-gray">{userRole}</span>
@@ -101,12 +128,7 @@ export function UserMenu({
           className="absolute top-full right-0 z-50 mt-2 w-64 overflow-hidden rounded-xl border border-black/10 bg-white shadow-xl"
         >
           <div className="flex items-center gap-3 px-4 py-3.5">
-            <span
-              aria-hidden="true"
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-navy/10 text-base font-bold text-navy"
-            >
-              {initial}
-            </span>
+            <AvatarCircle image={image} initial={initial} size="md" />
             <div className="min-w-0">
               <p className="truncate text-sm font-bold text-charcoal">{userName}</p>
               <p className="truncate text-xs text-gray">{userEmail}</p>

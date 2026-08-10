@@ -38,24 +38,32 @@ function messageForError(body: ApiErrorBody, fallback: string): string {
   }
 }
 
-/** Client orchestrator for the parse-résumé flow: pick → upload → extract → review → saved. */
+/** Client orchestrator for the parse-resume flow: pick → upload → extract → review → saved. */
 export function ResumeFlow({
   recruiterName,
   resumeExtractionEnabled,
+  resumeStorageEnabled,
 }: {
   recruiterName: string;
   resumeExtractionEnabled: boolean;
+  /** Wave 6 — when true, the original file bytes are uploaded to Supabase Storage on save (in
+   *  addition to the always-persisted extracted text); when false, save behaves exactly as
+   *  before (text-only, no bytes). */
+  resumeStorageEnabled: boolean;
 }) {
   const [step, setStep] = useState<Step>("pick");
   const [variant, setVariant] = useState<ResumeVariant | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
+  // The raw file, kept alive through extracting/review/save purely for the (optional) Storage
+  // upload — pdf.js only ever needed the text, so nothing else in this flow reads it.
+  const [file, setFile] = useState<File | null>(null);
   const [reading, setReading] = useState(false);
   const [fileText, setFileText] = useState("");
   const [extractedText, setExtractedText] = useState("");
   const [result, setResult] = useState<ExtractResumeResponse | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [savedName, setSavedName] = useState<string | null>(null);
-  // The reviewed data as saved — feeds the branded résumé render on the saved step.
+  // The reviewed data as saved — feeds the branded resume render on the saved step.
   const [savedData, setSavedData] = useState<ResumeData | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -63,6 +71,7 @@ export function ResumeFlow({
     setStep("pick");
     setVariant(null);
     setFileName(null);
+    setFile(null);
     setFileText("");
     setExtractedText("");
     setResult(null);
@@ -77,18 +86,20 @@ export function ResumeFlow({
     setStep("upload");
   }
 
-  async function handleFile(file: File) {
+  async function handleFile(picked: File) {
     setError(null);
-    setFileName(file.name);
+    setFileName(picked.name);
+    setFile(picked);
     setReading(true);
     setFileText("");
     try {
-      const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name);
-      const text = isPdf ? await extractPdfText(file) : capResumeText(await file.text());
+      const isPdf = picked.type === "application/pdf" || /\.pdf$/i.test(picked.name);
+      const text = isPdf ? await extractPdfText(picked) : capResumeText(await picked.text());
       setFileText(text);
     } catch {
       setError("Could not read that file. Try a different PDF, or paste the text instead.");
       setFileName(null);
+      setFile(null);
     } finally {
       setReading(false);
     }
@@ -125,17 +136,48 @@ export function ResumeFlow({
     }
   }
 
+  /** Best-effort: uploads the raw file straight to Storage and returns its key, or `undefined` on
+   *  any failure/when disabled — a Storage hiccup must never block saving the candidate, since the
+   *  extracted text is always the source of truth. */
+  async function tryUploadToStorage(originalFilename: string, mimeType: string) {
+    if (!resumeStorageEnabled || !file) return undefined;
+    try {
+      const res = await fetch("/api/resume/upload-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filename: originalFilename, mimeType }),
+      });
+      if (!res.ok) return undefined;
+      const { signedUrl, storageKey } = (await res.json()) as {
+        signedUrl: string;
+        storageKey: string;
+      };
+      const upload = await fetch(signedUrl, {
+        method: "PUT",
+        headers: { "Content-Type": mimeType },
+        body: file,
+      });
+      return upload.ok ? storageKey : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
   async function handleSave(data: ResumeData, confirmedCandidateId: string | undefined) {
     if (!variant) return;
     setSubmitting(true);
     setError(null);
+    const originalFilename = fileName ?? "resume.txt";
+    const mimeType = fileName?.toLowerCase().endsWith(".pdf") ? "application/pdf" : "text/plain";
+    const storageKey = await tryUploadToStorage(originalFilename, mimeType);
     const payload: SaveResumeInput = {
       variant,
       data: data as unknown as Record<string, unknown>,
-      originalFilename: fileName ?? "resume.txt",
-      mimeType: fileName?.toLowerCase().endsWith(".pdf") ? "application/pdf" : "text/plain",
+      originalFilename,
+      mimeType,
       extractedText,
       confirmedCandidateId,
+      storageKey,
     };
     try {
       const res = await fetch("/api/resume/save", {

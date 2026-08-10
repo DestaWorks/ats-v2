@@ -94,10 +94,16 @@ export const saveInboundLeadSchema = z
   .strict();
 export type SaveInboundLeadInput = z.infer<typeof saveInboundLeadSchema>;
 
-/** `POST /api/inbound/attach` — the reply belongs to an EXISTING lead: log it + mark Hot. */
+/** `POST /api/inbound/attach` — the reply belongs to an EXISTING lead: log it + mark Hot.
+ *  `name`/`email` are the reviewer-confirmed (possibly edited) identity shown on the "Attach to
+ *  this lead" banner at click time — the server re-runs its own dedupe match against them and
+ *  refuses to attach if it no longer resolves to `leadId`, since the reviewer's edits (or simply
+ *  a stale banner) could otherwise attach the reply to the wrong person. */
 export const attachInboundSchema = z
   .object({
     leadId: z.string().min(1),
+    name: z.string().trim().min(1).max(200),
+    email: z.string().trim().email().max(200).nullish(),
     message: z.string().trim().min(1).max(8000),
   })
   .strict();

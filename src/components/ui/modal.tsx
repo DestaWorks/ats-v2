@@ -16,12 +16,19 @@ export function Modal({
   title,
   children,
   className,
+  dismissBlocked = false,
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
   children: ReactNode;
   className?: string;
+  /** When true, ESC / backdrop click / the × button are all ignored — for a modal with an
+   *  in-flight submit that shouldn't be dismissable mid-request (dismissing wouldn't cancel the
+   *  request, just hide its result — e.g. a create that still lands, then still navigates, after
+   *  the user believed they'd cancelled it). Doesn't affect the parent programmatically closing
+   *  via the `open` prop (e.g. on success). */
+  dismissBlocked?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
@@ -49,9 +56,16 @@ export function Modal({
       ref={ref}
       aria-labelledby={titleId}
       onClose={onClose}
-      onCancel={onClose}
+      onCancel={(e) => {
+        if (dismissBlocked) {
+          e.preventDefault();
+          return;
+        }
+        onClose();
+      }}
       // A modal `<dialog>` receives clicks on its own box (the backdrop area) — dismiss on those.
       onClick={(e) => {
+        if (dismissBlocked) return;
         if (e.target === ref.current) onClose();
       }}
       className={cn(
@@ -65,9 +79,12 @@ export function Modal({
         </h2>
         <button
           type="button"
-          onClick={onClose}
+          onClick={() => {
+            if (!dismissBlocked) onClose();
+          }}
+          disabled={dismissBlocked}
           aria-label="Close"
-          className="-mr-1 rounded-md p-1.5 text-gray transition hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-navy focus-visible:outline-none"
+          className="-mr-1 rounded-md p-1.5 text-gray transition hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-navy focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-40"
         >
           <svg
             aria-hidden="true"

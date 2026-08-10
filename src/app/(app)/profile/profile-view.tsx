@@ -7,7 +7,7 @@ import { updateUser, changePassword, useSession } from "@/lib/auth-client";
 import type { UserPreferencesDTO } from "@/lib/validation/user-preferences";
 import { useApiForm } from "@/lib/forms/use-api-form";
 import { emptyToNull } from "@/lib/forms/empty-to-null";
-import { patchJson } from "@/lib/api/client";
+import { messageForFailure, patchJson, postJson } from "@/lib/api/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -78,7 +78,14 @@ export function ProfileView({
     setUploading(true);
     try {
       const dataUrl = await resizeToDataUrl(file);
-      const { error } = await updateUser({ image: dataUrl });
+      // Wave 6 (D8): upload to object storage server-side instead of persisting the base64 data
+      // URI itself — User.image ends up holding a small stable URL, not the image bytes.
+      const uploadResult = await postJson<{ url: string }>("/api/me/avatar", { dataUrl });
+      if (!uploadResult.ok) {
+        toast.error(messageForFailure(uploadResult.failure));
+        return;
+      }
+      const { error } = await updateUser({ image: uploadResult.data.url });
       if (error) toast.error(error.message ?? "Couldn't update your avatar");
       else toast.success("Avatar updated");
     } catch {

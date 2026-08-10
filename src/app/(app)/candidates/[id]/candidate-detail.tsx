@@ -162,8 +162,8 @@ export function CandidateDetail({
     },
     {
       key: "resume",
-      label: "Résumé",
-      panel: <ResumeTab documents={initial.documents} />,
+      label: "Resume",
+      panel: <ResumeTab documents={initial.documents} canDownload={canEditCredential} />,
     },
     {
       key: "notes",

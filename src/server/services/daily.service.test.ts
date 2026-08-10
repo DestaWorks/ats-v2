@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { Prisma } from "@/generated/prisma/client";
 import type { AuthUser } from "@/server/auth/guards";
 
 /**
@@ -181,6 +182,21 @@ describe("dailyService.submitLog", () => {
       code: "CONFLICT",
     });
     expect(h.repo.createLog).not.toHaveBeenCalled();
+  });
+
+  it("a TRUE concurrent double-submit (both pass the pre-check) still surfaces a clean CONFLICT, not a raw 500", async () => {
+    // logFor (the pre-check) sees no existing log — a second request raced in and committed first,
+    // so the DB's own unique constraint (@@unique([userId, date])) is what actually catches it.
+    h.repo.logFor.mockResolvedValue(null);
+    h.repo.createLog.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError(
+        "Unique constraint failed on the fields: (`userId`,`date`)",
+        { code: "P2002", clientVersion: "test" },
+      ),
+    );
+    await expect(dailyService.submitLog(input, h.user as AuthUser)).rejects.toMatchObject({
+      code: "CONFLICT",
+    });
   });
 });
 

@@ -69,14 +69,26 @@ standard rules: `CONVENTIONS.md` §5.
 Confirmed 2026-07-31 (My Profile avatar-upload review): avatars currently persist a resized
 JPEG as a base64 `data:` URI directly in `User.image` (a Postgres text column) via Better Auth's
 `updateUser`. This is functional ONLY because the image is deliberately tiny (160×160, resized
-client-side before upload) — it is not a pattern to extend. Résumés already avoid this correctly
+client-side before upload) — it is not a pattern to extend. Resumes already avoid this correctly
 (`Document.storageKey` is a Wave-6 placeholder; only extracted TEXT persists server-side, the
 original PDF bytes are discarded after client-side `pdf.js` extraction). This decision
 generalizes that constraint explicitly: no feature, present or future, may persist file/image
-bytes — or a base64 encoding of them — as a database column. Wave 6's "move résumé files to
+bytes — or a base64 encoding of them — as a database column. Wave 6's "move resume files to
 object storage" checklist item is amended to cover **avatars too**; until then, the avatar
 upload is a **known, tracked exception** (small, bounded, functional), not a precedent for new
 work.
+
+**Resolved 2026-08-10** — both sides shipped (`server/integrations/storage.ts`): avatars upload
+to Storage via `POST /api/me/avatar` and `User.image` now holds a stable public URL, not a base64
+blob; resumes now optionally upload their original bytes via a client-to-Storage signed URL
+(`POST /api/resume/upload-url`) and persist `Document.storageKey`, with downloads served through a
+fresh, short-lived signed URL (`GET /api/documents/:id/download-url`, gated `viewCredentials`) —
+never a persisted signed URL, which would silently go stale. Built against the **S3 protocol**
+(`@aws-sdk/client-s3`), not a vendor SDK, so swapping providers later (Supabase Storage today → AWS
+S3 / Cloudflare R2 / Backblaze B2 / self-hosted MinIO) is a credentials/endpoint change only — same
+"swap the provider, not the code" posture as `AI_MODEL`. **Ships dormant**: no `S3_*` credentials
+exist in any environment yet (`storageEnabled` gates every code path, mirroring `aiEnabled`/
+`apolloEnabled`) — activates the moment Biruh sets them and runs `pnpm setup:storage` once.
 
 ---
 
@@ -92,7 +104,7 @@ work.
   Sourcing wave, notes → notes slice, clients/contacts/deals → CRM wave, historical activity →
   where reconstructed). Each carries a `legacy_id` column (idempotent upsert), **email-primary
   dedupe** with name as secondary/manual-review, a defined **merge policy** (keep-newest + flag),
-  and a Sheet read-only freeze at final backfill. **Résumé→profile matching needs a confidence
+  and a Sheet read-only freeze at final backfill. **Resume→profile matching needs a confidence
   threshold + manual-confirm** (no silent wrong-person matches on PII).
 - **Add missing tables to DATA-MODEL:** `stage_history` (+ denormalized `stage_entered_at`,
   `placed_at` on candidate), `LicenseExpiry` on candidate, `role_notes`, `deal_blockers`,

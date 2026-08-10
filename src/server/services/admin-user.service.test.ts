@@ -62,6 +62,7 @@ describe("adminUserService.list", () => {
           id: "u1",
           name: "Ann Owner",
           email: "ann@desta.works",
+          image: null,
           role: "Owner",
           banned: false,
           banReason: null,
