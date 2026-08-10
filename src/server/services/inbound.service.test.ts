@@ -189,11 +189,15 @@ describe("inboundService.saveAsLead", () => {
 });
 
 describe("inboundService.attach", () => {
-  it("logs the message on the existing lead, then marks it Hot", async () => {
+  it("logs the message on the existing lead, then marks it Hot, when the re-match confirms it", async () => {
+    h.leadRepo.findManyByEmails.mockResolvedValue([{ id: "l1", name: "Jane Doe" }]);
     h.leadService.logOutreach.mockResolvedValue({ id: "l1", status: "Sourced" });
     h.leadService.respond.mockResolvedValue({ id: "l1", status: "Responded — Hot" });
 
-    const result = await inboundService.attach({ leadId: "l1", message: "Still interested" }, user);
+    const result = await inboundService.attach(
+      { leadId: "l1", name: "Jane Doe", email: "jane@example.com", message: "Still interested" },
+      user,
+    );
 
     expect(h.leadService.logOutreach).toHaveBeenCalledWith(
       "l1",
@@ -205,5 +209,42 @@ describe("inboundService.attach", () => {
     );
     expect(h.leadService.respond).toHaveBeenCalledWith("l1", "hot", user);
     expect(result.status).toBe("Responded — Hot");
+  });
+
+  it("refuses (CONFLICT) when the re-match resolves to a DIFFERENT lead than claimed — no silent wrong-person attach", async () => {
+    // The client claims leadId "l1", but re-running the dedupe match on the (possibly edited)
+    // name/email now resolves to a different lead entirely.
+    h.leadRepo.findManyByEmails.mockResolvedValue([{ id: "l2", name: "Someone Else" }]);
+
+    await expect(
+      inboundService.attach(
+        { leadId: "l1", name: "Someone Else", email: "someone@example.com", message: "Hi" },
+        user,
+      ),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+    expect(h.leadService.logOutreach).not.toHaveBeenCalled();
+    expect(h.leadService.respond).not.toHaveBeenCalled();
+  });
+
+  it("refuses (CONFLICT) when the re-match resolves to a candidate instead of a lead", async () => {
+    h.candidateRepo.findManyByEmails.mockResolvedValue([{ id: "c1", name: "Jane Doe" }]);
+
+    await expect(
+      inboundService.attach(
+        { leadId: "l1", name: "Jane Doe", email: "jane@example.com", message: "Hi" },
+        user,
+      ),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+    expect(h.leadService.logOutreach).not.toHaveBeenCalled();
+  });
+
+  it("refuses (CONFLICT) when the re-match finds nothing at all", async () => {
+    await expect(
+      inboundService.attach(
+        { leadId: "l1", name: "Nobody Matches", email: null, message: "Hi" },
+        user,
+      ),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+    expect(h.leadService.logOutreach).not.toHaveBeenCalled();
   });
 });

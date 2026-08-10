@@ -20,6 +20,7 @@ import {
   toClientRules,
 } from "@/server/repositories/client-rules.repository";
 import { leadRepository } from "@/server/repositories/lead.repository";
+import { AppError } from "@/server/http/app-error";
 import { leadService } from "./lead.service";
 
 /** Top-N client matches surfaced to the reviewer (legacy showed the top 5 open roles). */
@@ -37,7 +38,9 @@ function truncateMessage(message: string): string {
  * further along the pipeline), falling back to a case-insensitive name match against leads only.
  * Returns null when nothing matches — the reviewer proceeds as a fresh Hot lead.
  */
-async function findExisting(extracted: InboundExtractedDTO): Promise<InboundExistingDTO | null> {
+async function findExisting(
+  extracted: Pick<InboundExtractedDTO, "email" | "name">,
+): Promise<InboundExistingDTO | null> {
   if (extracted.email) {
     const [candidates, leads] = await Promise.all([
       candidateRepository.findManyByEmails([extracted.email]),
@@ -170,8 +173,24 @@ export const inboundService = {
     return leadService.respond(created.id, "hot", user);
   },
 
-  /** The reply belongs to an EXISTING lead (dedupe match, reviewer-confirmed): log it, mark Hot. */
+  /**
+   * The reply belongs to an EXISTING lead (dedupe match, reviewer-confirmed): log it, mark Hot.
+   *
+   * Server-authoritative re-check: `triage()`'s match ran once, off the RAW extraction, before
+   * the reviewer could edit any field — a corrected name/email could point at a completely
+   * different person than the lead id the (now-stale) "Attach to this lead" banner still
+   * references. Re-run the same dedupe lookup against what the reviewer actually confirmed and
+   * refuse to attach unless it independently resolves to the SAME lead — never trust `leadId`
+   * alone (same posture as the résumé-match flow's server-side re-classification).
+   */
   async attach(input: AttachInboundInput, user: AuthUser): Promise<LeadDetailDTO> {
+    const reMatch = await findExisting({ name: input.name, email: input.email ?? null });
+    if (reMatch?.kind !== "lead" || reMatch.id !== input.leadId) {
+      throw new AppError(
+        "CONFLICT",
+        "This reply no longer matches that lead — re-check the details and try again.",
+      );
+    }
     await leadService.logOutreach(
       input.leadId,
       { channel: "other", note: `Inbound reply: "${truncateMessage(input.message)}"` },
