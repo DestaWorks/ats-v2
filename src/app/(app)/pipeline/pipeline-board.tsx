@@ -245,7 +245,6 @@ export function PipelineBoard({
                 column={column}
                 onMove={onMove}
                 busy={pending}
-                isDragActive={activeCard !== null}
                 hotOnly={hotOnly}
                 onLoadMore={onLoadMoreColumn}
                 loadingMore={loadingColumn[column.status] ?? false}

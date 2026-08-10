@@ -13,7 +13,6 @@ export function BoardColumn({
   column,
   onMove,
   busy,
-  isDragActive,
   hotOnly = false,
   onLoadMore,
   loadingMore = false,
@@ -21,7 +20,6 @@ export function BoardColumn({
   column: BoardColumnData;
   onMove: (card: CandidateCardDTO, toStatus: CandidateStatus) => void;
   busy?: boolean;
-  isDragActive?: boolean;
   /** Page-local "Hot" lens — filters only the RENDERED cards (footer counts stay honest). */
   hotOnly?: boolean;
   /** Load the next per-column keyset page (present only when this column `hasMore`). */
@@ -45,9 +43,11 @@ export function BoardColumn({
       role="group"
       aria-label={`${column.label} — ${column.count} candidates`}
       className={cn(
-        "flex w-72 shrink-0 flex-col rounded-xl border bg-surface/60 transition-colors",
-        isOver ? "border-navy/40 bg-navy/5" : "border-black/5",
-        isDragActive && !isOver && "border-dashed",
+        // Legacy parity (2026-08-10): the column itself is invisible by default — no border, no
+        // background tint — only picking up a dashed navy highlight while a card is dragged over
+        // it. Previously always showed a bordered/tinted "panel", which legacy never did.
+        "flex w-72 shrink-0 flex-col rounded-xl border-2 border-dashed transition-colors",
+        isOver ? "border-navy/40 bg-navy/5" : "border-transparent bg-transparent",
       )}
     >
       {/* Legacy-parity header: colored stage dot + tracked uppercase label + big SERIF count. */}
