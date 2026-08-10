@@ -26,7 +26,7 @@ export function FilterChip({
       variant={pressed ? "primary" : "secondary"}
       aria-pressed={pressed}
       onClick={onToggle}
-      className="rounded-full"
+      className="!rounded-full"
     >
       {children}
     </Button>

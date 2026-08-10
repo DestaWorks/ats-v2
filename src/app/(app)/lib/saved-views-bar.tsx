@@ -106,7 +106,7 @@ export function SavedViewsBar({
         type="button"
         variant="ghost"
         size="sm"
-        className="rounded-full border border-dashed border-black/20"
+        className="!rounded-full border border-dashed border-black/20"
         onClick={() => setOpen(true)}
         title="Save your current search + filters as a one-click shortcut you can reapply later"
       >
