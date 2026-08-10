@@ -38,7 +38,11 @@ export function Table({
   footer?: ReactNode;
 }) {
   return (
-    <div className="overflow-hidden rounded-xl border border-black/5 bg-white">
+    // `shadow-card` (2026-08-10): the "premium design pass" commit (dd1f6b0) added this elevation
+    // to `Card` and its own commit message claims "shadow-card elevation on Card/Table" — but the
+    // diff never actually touched this wrapper, so every table in the app has sat flat/flush next
+    // to every Card-based panel around it ever since. Bringing it in line now.
+    <div className="overflow-hidden rounded-xl border border-black/5 bg-white shadow-card">
       {toolbar ? (
         <div className="flex flex-wrap items-center gap-2 border-b border-black/5 px-3 py-2">
           {toolbar}
@@ -55,16 +59,13 @@ export function Table({
           >
             {caption}
           </caption>
-          {/* Design pass 2026-08-03: was a filled navy band (legacy parity) — replaced with the
-              lighter gray-label header every reference dashboard uses, matching the uppercase
-              micro-label idiom already used elsewhere (stat-card labels, sidebar group headers). */}
           <thead>
-            <tr className="border-b border-black/5 bg-black/[0.02]">
+            <tr className="bg-navy">
               {columns.map((col, i) => (
                 <th
                   key={i}
                   scope="col"
-                  className="px-3 py-2.5 text-[11px] font-semibold tracking-wide text-gray uppercase"
+                  className="px-3 py-2.5 text-[13px] font-semibold text-white"
                 >
                   {col}
                 </th>

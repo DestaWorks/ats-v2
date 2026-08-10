@@ -166,7 +166,7 @@ export function ClientDetail({
           onCancel={() => setEditing(false)}
         />
       ) : (
-        <div className="grid gap-3 rounded-lg border border-black/10 bg-white p-4 sm:grid-cols-3">
+        <div className="grid gap-3 rounded-lg border border-black/10 bg-white shadow-card p-4 sm:grid-cols-3">
           <SummaryField label="Primary contact" value={client.contact} />
           <SummaryField label="Cadence" value={client.cadence} />
           <SummaryField label="Schedule" value={client.schedule} />
@@ -218,7 +218,7 @@ function PipelineSnapshotCard({
     ["Verified", snapshot.verified],
   ];
   return (
-    <div className="rounded-lg border border-black/10 bg-white p-4">
+    <div className="rounded-lg border border-black/10 bg-white shadow-card p-4">
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-sm font-bold text-charcoal">Pipeline Snapshot</h2>
         <Link
@@ -294,7 +294,7 @@ function EditClientForm({
       method="post"
       onSubmit={onSubmit}
       noValidate
-      className="flex flex-col gap-4 rounded-lg border border-black/10 bg-white p-4"
+      className="flex flex-col gap-4 rounded-lg border border-black/10 bg-white shadow-card p-4"
     >
       {serverError ? <ErrorState message={serverError} /> : null}
       <div className="grid gap-4 sm:grid-cols-3">

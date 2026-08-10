@@ -84,7 +84,7 @@ export function AiWorkspaceTab({ clientId }: { clientId: string }) {
       {pending ? <p className="text-sm text-gray">Generating…</p> : null}
 
       {result ? (
-        <div className="flex flex-col gap-3 rounded-lg border border-black/10 bg-white p-4">
+        <div className="flex flex-col gap-3 rounded-lg border border-black/10 bg-white shadow-card p-4">
           <p className="text-sm whitespace-pre-wrap text-charcoal">{result}</p>
           <div className="flex justify-end border-t border-black/5 pt-3">
             <Button

@@ -115,7 +115,7 @@ export function PortalView({ initial }: { initial: PortalDataDTO }) {
 
 function RoleCard({ role }: { role: PortalRoleDTO }) {
   return (
-    <li className="rounded-lg border border-black/5 bg-white p-3">
+    <li className="rounded-lg border border-black/5 bg-white shadow-card p-3">
       <div className="flex items-center justify-between gap-3">
         <span className="text-sm font-semibold text-charcoal">{role.title}</span>
         <Badge tone="neutral" size="sm">

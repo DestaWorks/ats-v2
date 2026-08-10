@@ -127,7 +127,7 @@ export function NotesTab({
         method="post"
         onSubmit={onSubmit}
         noValidate
-        className="flex flex-col gap-3 rounded-xl border border-black/5 bg-white p-4"
+        className="flex flex-col gap-3 rounded-xl border border-black/5 bg-white shadow-card p-4"
       >
         <fieldset className="flex flex-wrap items-center gap-2">
           <legend className="sr-only">Note type</legend>
@@ -218,7 +218,7 @@ export function NotesTab({
       ) : (
         <ul className="flex flex-col gap-3">
           {notes.map((note) => (
-            <li key={note.id} className="rounded-xl border border-black/5 bg-white p-4">
+            <li key={note.id} className="rounded-xl border border-black/5 bg-white shadow-card p-4">
               <div className="mb-1.5 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-semibold text-charcoal">
