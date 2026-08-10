@@ -52,11 +52,12 @@ function daysAgo(iso: string): string {
 type OpenModal = "outreach" | "promote" | "delete" | "snooze" | null;
 
 /**
- * One `/sourcing` inventory row (legacy parity): compact actions — Log (navy) · 💤 snooze ·
- * Promote (purple), and on a Promoted lead the `→ C…` link into the candidate (which the
- * intercepting route opens as the detail MODAL). Clicking the row expands an inline panel
- * (legacy expanded row): CONTACT + OUTREACH HISTORY (N) with per-attempt ✎ edit / × delete +
- * "+ Log Outreach", plus the responded/restore/delete controls.
+ * One `/sourcing` inventory row: compact actions — Log (navy) · 💤 snooze · Promote (purple),
+ * and on a Promoted lead the `→ C…` link into the candidate (which the intercepting route opens
+ * as the detail MODAL). Clicking the row expands an inline panel: CONTACT + OUTREACH HISTORY (N)
+ * with per-attempt ✎ edit / × delete, plus the responded/restore/delete controls. Legacy had a
+ * SECOND "+ Log Outreach" button inside this panel, redundant with the row's own "Log" button
+ * (both opened the identical modal) — dropped 2026-08-10, "Log" is the one entry point now.
  */
 export function LeadRow({
   lead,
@@ -148,6 +149,7 @@ export function LeadRow({
       const result = await postPromote(lead.id);
       if (result.ok) {
         toast.success(`${lead.name} promoted to a candidate`);
+        close();
         router.push(`/candidates/${result.data.candidateId}`);
       } else {
         toast.error(messageForFailure(result.failure));
@@ -539,16 +541,6 @@ export function LeadRow({
                       <li className="text-sm text-gray">No outreach logged yet.</li>
                     ) : null}
                   </ul>
-                  {!lead.deletedAt && canLogOutreach ? (
-                    <Button
-                      type="button"
-                      size="xs"
-                      className="mt-2"
-                      onClick={() => setOpen("outreach")}
-                    >
-                      + Log Outreach
-                    </Button>
-                  ) : null}
                 </div>
               </div>
             )}
