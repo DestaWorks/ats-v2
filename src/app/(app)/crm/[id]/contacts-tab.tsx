@@ -38,6 +38,7 @@ export function ContactsTab({
 }) {
   const [modal, setModal] = useState<ContactModalState>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [markingLeftId, setMarkingLeftId] = useState<string | null>(null);
   const active = contacts.filter((c) => c.status === "active");
   const departed = contacts.filter((c) => c.status !== "active");
 
@@ -62,10 +63,12 @@ export function ContactsTab({
   }
 
   async function handleMarkLeft(contact: ClientContactDTO) {
+    setMarkingLeftId(contact.id);
     const res = await patchJson<{ contact: ClientContactDTO }>(
       `/api/crm/clients/${clientId}/contacts/${contact.id}`,
       { status: "left" },
     );
+    setMarkingLeftId(null);
     if (res.ok) {
       toast.success(`${contact.fullName} marked as departed`);
       upsertContact(res.data.contact);
@@ -98,6 +101,7 @@ export function ContactsTab({
               key={c.id}
               contact={c}
               deleting={deletingId === c.id}
+              markingLeft={markingLeftId === c.id}
               onEdit={() => setModal({ mode: "edit", contact: c })}
               onMarkLeft={() => void handleMarkLeft(c)}
               onDelete={() => void handleDelete(c)}
@@ -117,6 +121,7 @@ export function ContactsTab({
                 key={c.id}
                 contact={c}
                 deleting={deletingId === c.id}
+                markingLeft={markingLeftId === c.id}
                 onEdit={() => setModal({ mode: "edit", contact: c })}
                 onMarkLeft={() => void handleMarkLeft(c)}
                 onDelete={() => void handleDelete(c)}
@@ -150,12 +155,14 @@ export function ContactsTab({
 function ContactRow({
   contact,
   deleting,
+  markingLeft,
   onEdit,
   onMarkLeft,
   onDelete,
 }: {
   contact: ClientContactDTO;
   deleting: boolean;
+  markingLeft: boolean;
   onEdit: () => void;
   onMarkLeft: () => void;
   onDelete: () => void;
@@ -179,15 +186,28 @@ function ContactRow({
         </p>
       </div>
       <div className="flex gap-1.5">
-        <Button type="button" variant="secondary" size="xs" onClick={onEdit}>
+        <Button type="button" variant="secondary" size="xs" disabled={deleting} onClick={onEdit}>
           Edit
         </Button>
         {contact.status === "active" ? (
-          <Button type="button" variant="secondary" size="xs" onClick={onMarkLeft}>
+          <Button
+            type="button"
+            variant="secondary"
+            size="xs"
+            loading={markingLeft}
+            onClick={onMarkLeft}
+          >
             Mark departed
           </Button>
         ) : null}
-        <Button type="button" variant="danger" size="xs" loading={deleting} onClick={onDelete}>
+        <Button
+          type="button"
+          variant="danger"
+          size="xs"
+          loading={deleting}
+          disabled={markingLeft}
+          onClick={onDelete}
+        >
           Delete
         </Button>
       </div>
