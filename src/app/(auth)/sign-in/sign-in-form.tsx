@@ -27,6 +27,7 @@ export function SignInForm({ googleEnabled }: { googleEnabled: boolean }) {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [serverError, setServerError] = useState<string | null>(null);
+  const [googlePending, setGooglePending] = useState(false);
   const emailId = useId();
   const passwordId = useId();
   const {
@@ -59,11 +60,21 @@ export function SignInForm({ googleEnabled }: { googleEnabled: boolean }) {
   }
 
   async function onGoogle() {
-    await signIn.social({
-      provider: "google",
-      callbackURL: "/dashboard",
-      errorCallbackURL: "/sign-in",
-    });
+    if (googlePending) return;
+    setGooglePending(true);
+    try {
+      // Redirects the browser to Google on success — `googlePending` only matters for the brief
+      // window before that navigation (or if it fails before redirecting at all); Better Auth
+      // sends real failures back to this page via `?error=<code>`, handled by the effect above,
+      // which is a fresh mount anyway so there's no stuck-disabled state to worry about.
+      await signIn.social({
+        provider: "google",
+        callbackURL: "/dashboard",
+        errorCallbackURL: "/sign-in",
+      });
+    } finally {
+      setGooglePending(false);
+    }
   }
 
   return (
@@ -73,7 +84,8 @@ export function SignInForm({ googleEnabled }: { googleEnabled: boolean }) {
           <button
             type="button"
             onClick={() => void onGoogle()}
-            className="mb-4 flex w-full items-center justify-center gap-2.5 rounded-lg border border-white/15 bg-white/[0.06] px-3.5 py-3 text-sm font-medium text-ivory transition hover:bg-white/10"
+            disabled={googlePending}
+            className="mb-4 flex w-full items-center justify-center gap-2.5 rounded-lg border border-white/15 bg-white/[0.06] px-3.5 py-3 text-sm font-medium text-ivory transition hover:bg-white/10 disabled:opacity-50"
           >
             <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
               <path
@@ -93,7 +105,7 @@ export function SignInForm({ googleEnabled }: { googleEnabled: boolean }) {
                 d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"
               />
             </svg>
-            Sign in with Google
+            {googlePending ? "Signing in…" : "Sign in with Google"}
           </button>
 
           <div className="mb-4 flex items-center gap-3">

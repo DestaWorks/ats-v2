@@ -330,6 +330,8 @@ export function DailyLogView({
   });
   const [goalText, setGoalText] = useState("");
   const [entryText, setEntryText] = useState("");
+  const [goalPending, setGoalPending] = useState(false);
+  const [entryPending, setEntryPending] = useState(false);
   const [perClient, setPerClient] = useState<Record<string, string>>({});
   const [pending, setPending] = useState(false);
   const [logModalOpen, setLogModalOpen] = useState(false);
@@ -395,11 +397,13 @@ export function DailyLogView({
   }
 
   async function addGoal() {
-    if (!goalText.trim()) return;
+    if (!goalText.trim() || goalPending) return;
+    setGoalPending(true);
     const res = await postJson("/api/daily/journal/goals", {
       weekStart: mondayOf(today),
       text: goalText.trim(),
     });
+    setGoalPending(false);
     if (res.ok) {
       setGoalText("");
       void refresh();
@@ -413,11 +417,13 @@ export function DailyLogView({
   }
 
   async function addEntry() {
-    if (!entryText.trim()) return;
+    if (!entryText.trim() || entryPending) return;
+    setEntryPending(true);
     const res = await postJson("/api/daily/journal/entries", {
       date: today,
       text: entryText.trim(),
     });
+    setEntryPending(false);
     if (res.ok) {
       setEntryText("");
       void refresh();
@@ -721,13 +727,14 @@ export function DailyLogView({
               aria-label="New goal"
               placeholder="Add a goal for this week…"
               value={goalText}
+              disabled={goalPending}
               onChange={(e) => setGoalText(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") void addGoal();
               }}
             />
-            <Button type="button" size="sm" onClick={() => void addGoal()}>
-              Add
+            <Button type="button" size="sm" loading={goalPending} onClick={() => void addGoal()}>
+              {goalPending ? "Adding…" : "Add"}
             </Button>
           </div>
         </Card>
@@ -739,13 +746,14 @@ export function DailyLogView({
               aria-label="Journal note"
               placeholder="What happened today…"
               value={entryText}
+              disabled={entryPending}
               onChange={(e) => setEntryText(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") void addEntry();
               }}
             />
-            <Button type="button" size="sm" onClick={() => void addEntry()}>
-              Save
+            <Button type="button" size="sm" loading={entryPending} onClick={() => void addEntry()}>
+              {entryPending ? "Saving…" : "Save"}
             </Button>
           </div>
           <ul className="mt-3 flex flex-col gap-1.5">

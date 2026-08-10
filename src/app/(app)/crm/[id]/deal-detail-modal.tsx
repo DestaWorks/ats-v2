@@ -39,6 +39,7 @@ export function DealDetailModal({
   const [closeReason, setCloseReason] = useState(deal.closeReason ?? "");
   const [postMortem, setPostMortem] = useState(deal.postMortem ?? "");
   const [blockerText, setBlockerText] = useState("");
+  const [blockerPending, setBlockerPending] = useState(false);
   const isClosed = CLOSED_DEAL_STAGES.includes(deal.stage as (typeof CLOSED_DEAL_STAGES)[number]);
 
   const form = useZodForm(updateDealSchema, {
@@ -104,11 +105,13 @@ export function DealDetailModal({
   }
 
   async function handleAddBlocker() {
-    if (!blockerText.trim()) return;
+    if (!blockerText.trim() || blockerPending) return;
+    setBlockerPending(true);
     const res = await postJson<{ blocker: DealBlockerDTO }>(
       `/api/crm/clients/${clientId}/deals/${deal.id}/blockers`,
       { text: blockerText.trim() } satisfies AddBlockerInput,
     );
+    setBlockerPending(false);
     if (res.ok) {
       onChanged({ ...deal, blockers: [...deal.blockers, res.data.blocker] });
       setBlockerText("");
@@ -283,6 +286,7 @@ export function DealDetailModal({
           <div className="flex gap-2">
             <Input
               value={blockerText}
+              disabled={blockerPending}
               onChange={(e) => setBlockerText(e.target.value)}
               placeholder="Add a blocker…"
               onKeyDown={(e) => {
@@ -296,9 +300,10 @@ export function DealDetailModal({
               type="button"
               variant="secondary"
               size="sm"
+              loading={blockerPending}
               onClick={() => void handleAddBlocker()}
             >
-              Add
+              {blockerPending ? "Adding…" : "Add"}
             </Button>
           </div>
         </div>
