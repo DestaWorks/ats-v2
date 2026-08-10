@@ -88,7 +88,7 @@ export function PortalRequestsTab({
           {pending.map((r) => (
             <li
               key={r.id}
-              className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-black/5 bg-white p-3"
+              className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-black/5 bg-white shadow-card p-3"
             >
               <div>
                 <p className="text-sm font-semibold text-charcoal">
@@ -119,7 +119,7 @@ export function PortalRequestsTab({
       )}
 
       {resolved.length > 0 ? (
-        <details className="rounded-lg border border-black/10 bg-white p-3">
+        <details className="rounded-lg border border-black/10 bg-white shadow-card p-3">
           <summary className="cursor-pointer text-sm font-semibold text-gray">
             {resolved.length} resolved request{resolved.length === 1 ? "" : "s"}
           </summary>

@@ -1,13 +1,50 @@
 "use client";
 
 import { useState } from "react";
+import { ROLES } from "@/lib/constants";
 import type { AccessRequestDTO, AdminUserDTO } from "@/lib/validation/admin";
 import type { PortalAccessRequestDTO } from "@/lib/validation/portal";
+import { cn } from "@/lib/utils/cn";
 import { DetailTabs, type TabDef } from "@/components/ui/tabs";
 import { GeneratedPasswordBanner, UsersTab } from "./users-tab";
 import { AccessRequestsTab } from "./access-requests-tab";
 import { RolesTab } from "./roles-tab";
 import { GeneratedPortalLinkBanner, PortalRequestsTab } from "./portal-requests-tab";
+
+/** One clickable summary tile — legacy `AdminView`'s stat-card row parity. Colored only when its
+ *  count is worth calling out (Pending/Blocked > 0); a zero count reads as neutral gray. */
+function StatCard({
+  count,
+  label,
+  tone,
+  onClick,
+}: {
+  count: number;
+  label: string;
+  tone: "navy" | "orange" | "red" | "purple" | "neutral";
+  onClick: () => void;
+}) {
+  const TONE = {
+    navy: "bg-navy/10 text-navy",
+    orange: "bg-orange/10 text-orange",
+    red: "bg-red/10 text-red",
+    purple: "bg-purple/10 text-purple",
+    neutral: "bg-black/[0.03] text-gray",
+  } as const;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "flex flex-col items-center gap-0.5 rounded-lg px-3 py-2.5 transition hover:opacity-80",
+        TONE[tone],
+      )}
+    >
+      <span className="font-serif text-xl font-bold">{count}</span>
+      <span className="text-[10px] font-semibold tracking-wide uppercase opacity-70">{label}</span>
+    </button>
+  );
+}
 
 export function AdminDashboard({
   initialUsers,
@@ -31,6 +68,9 @@ export function AdminDashboard({
   const [generatedLink, setGeneratedLink] = useState<{ fullName: string; token: string } | null>(
     null,
   );
+  // Which tab a stat card should jump to on click. `DetailTabs` only supports an `initialKey`
+  // (uncontrolled after mount), so remounting it with a changed `key` is how the jump works.
+  const [jumpTo, setJumpTo] = useState<string | undefined>(undefined);
 
   function upsertUser(user: AdminUserDTO) {
     const exists = users.some((u) => u.id === user.id);
@@ -73,7 +113,7 @@ export function AdminDashboard({
         />
       ),
     },
-    { key: "roles", label: "Roles", panel: <RolesTab /> },
+    { key: "roles", label: "Roles", panel: <RolesTab users={users} /> },
     {
       key: "blocked",
       label: `Blocked (${blocked.length})`,
@@ -116,6 +156,33 @@ export function AdminDashboard({
         <p className="text-sm text-gray">Manage accounts, access requests, and role permissions.</p>
       </header>
 
+      <div className="grid grid-cols-4 gap-2">
+        <StatCard
+          count={users.length}
+          label="Total Users"
+          tone="navy"
+          onClick={() => setJumpTo("users")}
+        />
+        <StatCard
+          count={pendingRequests.length}
+          label="Pending"
+          tone={pendingRequests.length > 0 ? "orange" : "neutral"}
+          onClick={() => setJumpTo("requests")}
+        />
+        <StatCard
+          count={blocked.length}
+          label="Blocked"
+          tone={blocked.length > 0 ? "red" : "neutral"}
+          onClick={() => setJumpTo("blocked")}
+        />
+        <StatCard
+          count={ROLES.length}
+          label="Roles"
+          tone="purple"
+          onClick={() => setJumpTo("roles")}
+        />
+      </div>
+
       {generated ? (
         <GeneratedPasswordBanner
           email={generated.email}
@@ -131,7 +198,7 @@ export function AdminDashboard({
         />
       ) : null}
 
-      <DetailTabs tabs={tabs} ariaLabel="Admin" />
+      <DetailTabs key={jumpTo} tabs={tabs} initialKey={jumpTo} ariaLabel="Admin" />
     </div>
   );
 }
