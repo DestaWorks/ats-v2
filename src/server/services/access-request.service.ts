@@ -1,5 +1,6 @@
 import "server-only";
 import { accessRequestRepository } from "@/server/repositories/access-request.repository";
+import { userRepository } from "@/server/repositories/user.repository";
 import { adminUserService } from "@/server/services/admin-user.service";
 import { AppError } from "@/server/http/app-error";
 import { sendEmail } from "@/server/email/provider";
@@ -52,12 +53,21 @@ export const accessRequestService = {
    * Creates the account (via `adminUserService.create`, so the SAME hashed-password path as
    * every other new user) THEN flips the request's status — fixing legacy's confirmed bug where
    * `approve_request` has no backend handler at all and status never actually changes.
+   *
+   * Confirmed live 2026-08-10: a request whose email already has an account (e.g. a stale
+   * pending row left behind after an earlier successful approval, or two overlapping requests
+   * for the same person) made `adminUserService.create` → Better Auth's `createUser` throw an
+   * unmapped `APIError` — not one of our own `AppError`s, so it fell through to the generic
+   * catch-all as an opaque 500 instead of a clear message. Pre-check and reject with CONFLICT.
    */
   async approve(id: string, role: Role): Promise<GeneratedPasswordDTO> {
     const request = await accessRequestRepository.findById(id);
     if (!request) throw new AppError("NOT_FOUND", "Access request not found");
     if (request.status !== "pending") {
       throw new AppError("CONFLICT", "This request has already been resolved");
+    }
+    if (await userRepository.findByEmail(request.email)) {
+      throw new AppError("CONFLICT", "An account with this email already exists");
     }
     const created = await adminUserService.create({
       name: request.name,
