@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -43,11 +43,16 @@ export function AddCandidateForm({
   clients,
   canEditCredential,
   onCancel,
+  onPendingChange,
 }: {
   clients: ClientOption[];
   canEditCredential: boolean;
   /** How Cancel behaves: provided (modal) → close the dialog; omitted (standalone page) → go to /pipeline. */
   onCancel?: () => void;
+  /** Reports the in-flight submit state up to a modal wrapper, so it can block ESC/backdrop/×
+   *  dismissal while a create request is in flight (dismissing wouldn't cancel it — the candidate
+   *  still gets created, and still navigates, right after the user believed they'd cancelled). */
+  onPendingChange?: (pending: boolean) => void;
 }) {
   const router = useRouter();
   const [serverError, setServerError] = useState<string | null>(null);
@@ -70,6 +75,10 @@ export function AddCandidateForm({
     },
     onFailure: setServerError,
   });
+
+  useEffect(() => {
+    onPendingChange?.(pending);
+  }, [pending, onPendingChange]);
 
   const track = (form.watch("track") ?? "Clinical") as Track;
   const { showCredential, showLicenseState, showLicenseNumber } = trackFieldVisibility(

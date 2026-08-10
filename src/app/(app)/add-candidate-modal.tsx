@@ -12,7 +12,9 @@ import { AddCandidateForm, type ClientOption } from "./candidates/new/add-candid
  * `onCancel` (closing this dialog) THEN `router.push`es to the new candidate's detail page —
  * `/candidates/[id]` is an intercepted route (opens as a modal over the current view, which stays
  * mounted underneath), so the navigation alone does NOT close this modal (fixed 2026-08-10, same
- * bug class as the Sourcing "Promote lead" dialog). ESC / backdrop / × close it otherwise.
+ * bug class as the Sourcing "Promote lead" dialog). ESC / backdrop / × close it otherwise — except
+ * while a create request is in flight (`dismissBlocked`), since dismissing wouldn't cancel it, the
+ * candidate still gets created and the modal still navigates a moment later either way.
  *
  * `clients` + `canEditCredential` are resolved by the parent RSC (layout / list page) and passed in
  * so this client component never imports `src/server/**`. The form is only mounted while the modal
@@ -31,17 +33,24 @@ export function AddCandidateButton({
   label?: ReactNode;
 } & Omit<ButtonProps, "children" | "onClick">) {
   const [open, setOpen] = useState(false);
+  const [pending, setPending] = useState(false);
   return (
     <>
       <Button type="button" onClick={() => setOpen(true)} {...buttonProps}>
         {label}
       </Button>
-      <Modal open={open} onClose={() => setOpen(false)} title="Add candidate">
+      <Modal
+        open={open}
+        onClose={() => setOpen(false)}
+        title="Add candidate"
+        dismissBlocked={pending}
+      >
         {open ? (
           <AddCandidateForm
             clients={clients}
             canEditCredential={canEditCredential}
             onCancel={() => setOpen(false)}
+            onPendingChange={setPending}
           />
         ) : null}
       </Modal>
