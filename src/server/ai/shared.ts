@@ -1,4 +1,5 @@
 import "server-only";
+import { randomUUID } from "node:crypto";
 import { APICallError } from "ai";
 import type { ZodType } from "zod";
 import { AppError } from "@/server/http/app-error";
@@ -31,6 +32,16 @@ export async function generateAi<T>(
         throw new AppError("RATE_LIMITED", `${featureLabel} is busy, please retry shortly`);
       }
     }
-    throw new AppError("EXTRACTION_FAILED", `${featureLabel} could not be generated`);
+    // Unlike apiHandler's own catch-all, this one was previously silent — every AI failure that
+    // isn't a clean 401/403/429 vanished with zero trace. Log just enough to diagnose (name,
+    // status code, a correlation ref) — never the prompt/response, which can carry candidate PII.
+    const ref = randomUUID();
+    const name = err instanceof Error ? err.name : "UnknownError";
+    const statusCode = APICallError.isInstance(err) ? err.statusCode : undefined;
+    console.error(
+      `AI generation failed [ref=${ref}] feature="${featureLabel}" name=${name}` +
+        (statusCode ? ` statusCode=${statusCode}` : ""),
+    );
+    throw new AppError("EXTRACTION_FAILED", `${featureLabel} could not be generated (ref: ${ref})`);
   }
 }
