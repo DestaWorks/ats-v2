@@ -81,7 +81,7 @@ export function DealsTab({
               <li
                 key={d.id}
                 onClick={() => setSelected(d)}
-                className="cursor-pointer rounded-lg border border-black/5 bg-white p-3 hover:bg-black/[0.02]"
+                className="cursor-pointer rounded-lg border border-black/5 bg-white shadow-card p-3 hover:bg-black/[0.02]"
               >
                 <div className="flex items-center gap-2">
                   <Badge tone={d.stage === "Signed" ? "success" : "danger"} size="sm">

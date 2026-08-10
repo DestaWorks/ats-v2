@@ -61,7 +61,7 @@ export default async function CredentialsPage() {
       </section>
 
       {stats.unverified > 0 || stats.expiringSoon > 0 ? (
-        <section className="flex flex-col gap-1 rounded-xl border border-black/5 bg-white p-4 text-sm">
+        <section className="flex flex-col gap-1 rounded-xl border border-black/5 bg-white shadow-card p-4 text-sm">
           {stats.unverified > 0 ? (
             <p className="text-charcoal">
               <span className="font-semibold text-orange">{stats.unverified}</span> candidate

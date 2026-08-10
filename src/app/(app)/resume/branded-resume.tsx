@@ -10,7 +10,8 @@ import type {
 /**
  * The client-facing BRANDED résumé render (parity audit P0 #6 — legacy's core output). Read-only:
  * a polished, printable document built from the reviewed extraction, in the new app's design
- * language (serif identity, hairline structure, brand wordmark) rather than the legacy 1:1 look.
+ * language (hairline structure, brand wordmark) rather than the legacy 1:1 look — same
+ * app-wide sans-serif font throughout (2026-08-10: dropped the earlier serif identity treatment).
  * Empty strings/arrays (the extractor's "unknown") hide their row/section, so the page never
  * prints blank labels. Pure presentation — the flow owns Print/Email actions. Print CSS relies on
  * the global baseline: app chrome is `no-print`, this card flattens to borderless white.
@@ -164,7 +165,7 @@ export function BrandedResume({ variant, data }: { variant: ResumeVariant; data:
     <article className="rounded-xl border border-black/10 bg-white p-8 shadow-sm sm:p-10 print:border-0 print:p-0 print:shadow-none">
       {/* Brand wordmark — the document's letterhead. */}
       <header className="flex items-baseline justify-between border-b-2 border-brand pb-3">
-        <p className="font-serif text-lg tracking-[0.18em] text-brand">
+        <p className="text-lg tracking-[0.18em] text-brand">
           DESTA<span className="mx-1.5 text-brand/40">|</span>WORKS
         </p>
         <p className="text-[10px] font-semibold tracking-[0.14em] text-gray uppercase">
@@ -172,9 +173,9 @@ export function BrandedResume({ variant, data }: { variant: ResumeVariant; data:
         </p>
       </header>
 
-      {/* Identity block — serif name (a person), sans data. */}
+      {/* Identity block. */}
       <div className="mt-6">
-        <h2 className="font-serif text-3xl font-semibold text-navy">{data.name || "—"}</h2>
+        <h2 className="text-3xl font-semibold text-navy">{data.name || "—"}</h2>
         {data.headerRole ? (
           <p className="mt-0.5 text-sm font-medium text-charcoal">{data.headerRole}</p>
         ) : null}
@@ -191,7 +192,7 @@ export function BrandedResume({ variant, data }: { variant: ResumeVariant; data:
       </div>
 
       {data.snapshot.trim() ? (
-        <p className="mt-5 font-serif text-[15px] leading-relaxed text-charcoal">{data.snapshot}</p>
+        <p className="mt-5 text-[15px] leading-relaxed text-charcoal">{data.snapshot}</p>
       ) : null}
 
       {/* Credentials — licensure + identifiers (clinical/prescriber only). */}

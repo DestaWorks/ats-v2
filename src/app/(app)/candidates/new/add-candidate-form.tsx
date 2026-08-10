@@ -61,6 +61,10 @@ export function AddCandidateForm({
     submit: (values) => postCandidate(values),
     onSuccess: (data) => {
       toast.success("Candidate created");
+      // `/candidates/[id]` is an intercepted route (opens as a modal OVER the current view) — the
+      // page this form is mounted on (list/dashboard/etc.) stays mounted underneath, so without
+      // this the "Add candidate" dialog stays open behind the new candidate's detail modal.
+      onCancel?.();
       router.push(`/candidates/${data.id}`);
       router.refresh();
     },

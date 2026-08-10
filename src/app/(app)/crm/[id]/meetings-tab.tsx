@@ -63,7 +63,7 @@ export function MeetingsTab({
       ) : (
         <ul className="flex flex-col gap-2">
           {meetings.map((m) => (
-            <li key={m.id} className="rounded-lg border border-black/5 bg-white p-3">
+            <li key={m.id} className="rounded-lg border border-black/5 bg-white shadow-card p-3">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <div className="flex items-center gap-2">

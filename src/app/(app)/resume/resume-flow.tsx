@@ -180,7 +180,7 @@ export function ResumeFlow({
       ) : null}
 
       {step === "extracting" && variant ? (
-        <div className="flex flex-col items-center gap-3 rounded-xl border border-black/10 bg-white p-12 text-center">
+        <div className="flex flex-col items-center gap-3 rounded-xl border border-black/10 bg-white shadow-card p-12 text-center">
           <Spinner className="h-8 w-8" />
           <p className="text-sm font-semibold text-charcoal">
             Building the {RESUME_VARIANT_LABELS[variant].toLowerCase()} profile…

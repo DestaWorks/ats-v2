@@ -44,7 +44,7 @@ export function SearchForm() {
     <form
       method="post"
       onSubmit={handleSubmit}
-      className="flex flex-col gap-4 rounded-xl border border-black/5 bg-white p-4"
+      className="flex flex-col gap-4 rounded-xl border border-black/5 bg-white shadow-card p-4"
     >
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Field label="Specialty" htmlFor="cd-taxonomy">

@@ -9,6 +9,7 @@ import type {
   ImportResume,
 } from "@/lib/validation/migration";
 import { MAX_IMPORT_RESUMES } from "@/lib/validation/migration";
+import { messageForFailure, postJson } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ErrorState } from "@/components/ui/error-state";
@@ -30,10 +31,6 @@ const STEPS: { id: Step; label: string }[] = [
   { id: "commit", label: "Results" },
 ];
 
-interface ApiErrorBody {
-  error?: { code?: string; message?: string };
-}
-
 interface LoadedFile {
   name: string;
   content: string;
@@ -48,13 +45,6 @@ async function sha256Hex(text: string): Promise<string> {
   return Array.from(new Uint8Array(digest))
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
-}
-
-/** Turn an API error envelope into a user-safe message (no PII). */
-function messageForError(status: number, body: ApiErrorBody, fallback: string): string {
-  if (status === 403) return "You need the bulk-import permission to run a migration.";
-  if (status === 401) return "Your session expired — sign in again.";
-  return body.error?.message ?? fallback;
 }
 
 /** Drag-and-drop file picker — legacy parity (`legacy/index.html` ~line 1509-1511, 1517-1521):
@@ -321,17 +311,12 @@ export function MigrationWizard() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(bodyFor(f)),
-      });
-      if (!res.ok) {
-        const b = (await res.json().catch(() => ({}))) as ApiErrorBody;
-        setError(messageForError(res.status, b, "The import request failed. Please try again."));
+      const result = await postJson<ImportReport>(url, bodyFor(f));
+      if (!result.ok) {
+        setError(messageForFailure(result.failure));
         return null;
       }
-      return (await res.json()) as ImportReport;
+      return result.data;
     } catch {
       setError("Network error contacting the import service. Please try again.");
       return null;

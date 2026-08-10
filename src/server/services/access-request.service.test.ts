@@ -13,6 +13,7 @@ const h = vi.hoisted(() => ({
   updateStatus: vi.fn(),
   adminCreate: vi.fn(),
   sendEmail: vi.fn(),
+  findUserByEmail: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
@@ -23,6 +24,9 @@ vi.mock("@/server/repositories/access-request.repository", () => ({
     findById: h.findById,
     updateStatus: h.updateStatus,
   },
+}));
+vi.mock("@/server/repositories/user.repository", () => ({
+  userRepository: { findByEmail: h.findUserByEmail },
 }));
 vi.mock("@/server/services/admin-user.service", () => ({
   adminUserService: { create: h.adminCreate },
@@ -129,6 +133,20 @@ describe("accessRequestService.approve", () => {
       code: "CONFLICT",
     });
     expect(h.adminCreate).not.toHaveBeenCalled();
+  });
+
+  // Confirmed live 2026-08-10: a stale pending request whose email already has an account made
+  // Better Auth's createUser throw an unmapped error, surfacing as an opaque 500 instead of a
+  // clear message. Pre-check and reject with CONFLICT before ever calling adminUserService.create.
+  it("409s with a clear message when an account for this email already exists", async () => {
+    h.findById.mockResolvedValue(pendingRequest);
+    h.findUserByEmail.mockResolvedValue({ id: "existing-user-1" });
+    await expect(accessRequestService.approve("r1", "Associate")).rejects.toMatchObject({
+      code: "CONFLICT",
+      message: expect.stringContaining("already exists"),
+    });
+    expect(h.adminCreate).not.toHaveBeenCalled();
+    expect(h.updateStatus).not.toHaveBeenCalled();
   });
 });
 

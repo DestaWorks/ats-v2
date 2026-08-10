@@ -88,7 +88,7 @@ export function TasksTab({
       )}
 
       {done.length > 0 ? (
-        <details className="rounded-lg border border-black/10 bg-white p-3">
+        <details className="rounded-lg border border-black/10 bg-white shadow-card p-3">
           <summary className="cursor-pointer text-sm font-semibold text-gray">
             {done.length} completed task{done.length === 1 ? "" : "s"}
           </summary>
@@ -135,7 +135,7 @@ function TaskRow({
 }) {
   const done = task.status === "done";
   return (
-    <li className="flex items-center justify-between gap-3 rounded-lg border border-black/5 bg-white p-3">
+    <li className="flex items-center justify-between gap-3 rounded-lg border border-black/5 bg-white shadow-card p-3">
       <div className="flex items-center gap-3">
         <button
           type="button"

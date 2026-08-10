@@ -61,7 +61,7 @@ export function LicenseTab({
 
   if (candidate.track === "Operations") {
     return (
-      <Card className="border-green/30 bg-green/5 p-6">
+      <Card className="border-green/30 !bg-green/5 p-6">
         <p className="text-sm font-semibold text-green">✓ No license required</p>
         <p className="mt-1 text-sm text-charcoal">
           This is an Operations candidate — the pipeline gates only require contact information.
@@ -134,7 +134,7 @@ export function LicenseTab({
           method="post"
           onSubmit={onSubmit}
           noValidate
-          className="flex flex-col gap-4 rounded-xl border border-black/5 bg-white p-5"
+          className="flex flex-col gap-4 rounded-xl border border-black/5 bg-white shadow-card p-5"
         >
           <div className="grid gap-4 sm:grid-cols-2">
             <Field

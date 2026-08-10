@@ -109,7 +109,7 @@ export function SavedIcpBar({
         type="button"
         variant="ghost"
         size="sm"
-        className="rounded-full border border-dashed border-black/20"
+        className="!rounded-full border border-dashed border-black/20"
         disabled={!currentFilters}
         onClick={() => setOpen(true)}
         title={

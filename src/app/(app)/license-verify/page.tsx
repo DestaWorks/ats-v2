@@ -114,7 +114,7 @@ export default async function LicenseVerifyPage() {
             description="Active-status candidates with a known expiry will appear here, soonest first."
           />
         ) : (
-          <div className="flex flex-col gap-2 rounded-xl border border-black/5 bg-white p-4">
+          <div className="flex flex-col gap-2 rounded-xl border border-black/5 bg-white shadow-card p-4">
             {timeline.map((c) => {
               const pct = Math.min(Math.max((c.daysLeft / 365) * 100, 2), 100);
               const color = expiryDaysColor(c.daysLeft);

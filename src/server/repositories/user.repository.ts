@@ -36,6 +36,15 @@ export const userRepository = {
     });
   },
 
+  /** Case-insensitive email lookup — `id` only, for existence checks (e.g. access-request
+   *  approval must not try to create a second account for an already-registered email). */
+  findByEmail(email: string, tx?: Prisma.TransactionClient) {
+    return db(tx).user.findFirst({
+      where: { email: { equals: email, mode: "insensitive" } },
+      select: { id: true },
+    });
+  },
+
   /** Wave 4.1 (Templates) + Wave 5.4 (My Profile) — one user's self-service profile fields. */
   findPreferences(userId: string, tx?: Prisma.TransactionClient) {
     return db(tx).user.findUnique({

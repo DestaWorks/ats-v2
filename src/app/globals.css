@@ -25,8 +25,14 @@
   /* Card elevation (design pass 2026-08-03) — soft shadow so panels feel lifted, not just
      bordered. Auto-generates `shadow-card`/`shadow-card-hover` Tailwind utilities (v4 `--shadow-*`
      theme keys). */
-  --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.04), 0 1px 3px 0 rgb(0 0 0 / 0.06);
-  --shadow-card-hover: 0 4px 12px 0 rgb(0 0 0 / 0.08);
+  --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.03);
+  --shadow-card-hover: 0 2px 6px 0 rgb(0 0 0 / 0.05);
+
+  /* Modal elevation (design-token audit 2026-08-10) — legacy `.modal` parity
+     (legacy/index.html:37: `box-shadow:0 20px 60px rgba(0,0,0,.15)`), a deliberately more
+     dramatic "floating panel" shadow than the card tokens above; Tailwind's default `shadow-xl`
+     was noticeably flatter/tighter. Auto-generates `shadow-modal`. */
+  --shadow-modal: 0 20px 60px 0 rgb(0 0 0 / 0.15);
 
   /* Pipeline status colors (legacy `SC`), keyed by stage code */
   --color-status-new: #42a5f5; /* 0 New Candidate */

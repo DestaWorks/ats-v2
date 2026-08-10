@@ -107,7 +107,7 @@ export function ContactsTab({
       )}
 
       {departed.length > 0 ? (
-        <details className="rounded-lg border border-black/10 bg-white p-3">
+        <details className="rounded-lg border border-black/10 bg-white shadow-card p-3">
           <summary className="cursor-pointer text-sm font-semibold text-gray">
             {departed.length} departed contact{departed.length === 1 ? "" : "s"}
           </summary>
@@ -161,7 +161,7 @@ function ContactRow({
   onDelete: () => void;
 }) {
   return (
-    <li className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-black/5 bg-white p-3">
+    <li className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-black/5 bg-white shadow-card p-3">
       <div>
         <div className="flex items-center gap-2">
           <span className="text-sm font-semibold text-charcoal">{contact.fullName}</span>

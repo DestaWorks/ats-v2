@@ -68,7 +68,7 @@ export function OutreachTab({
           e.preventDefault();
           submit();
         }}
-        className="flex flex-col gap-3 rounded-xl border border-black/5 bg-white p-4"
+        className="flex flex-col gap-3 rounded-xl border border-black/5 bg-white shadow-card p-4"
       >
         <div className="flex flex-wrap items-end gap-3">
           <Field label="Channel" htmlFor="outreach-channel" className="w-40">
@@ -110,7 +110,10 @@ export function OutreachTab({
       ) : (
         <ul className="flex flex-col gap-3">
           {attempts.map((attempt) => (
-            <li key={attempt.id} className="rounded-xl border border-black/5 bg-white p-4">
+            <li
+              key={attempt.id}
+              className="rounded-xl border border-black/5 bg-white shadow-card p-4"
+            >
               <div className="mb-1.5 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <Badge tone="navy" size="sm">

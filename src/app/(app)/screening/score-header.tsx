@@ -30,7 +30,7 @@ export function ScoreHeader({ result }: { result: ScreeningResult }) {
           <p className="text-xs font-semibold tracking-wide text-gray uppercase">Overall Score</p>
           <p className="text-3xl font-bold text-charcoal">{result.totalPct}%</p>
         </div>
-        <Badge tone={DECISION_TONE[result.decision]} className="px-3 py-1 text-sm">
+        <Badge tone={DECISION_TONE[result.decision]} className="px-3 py-1 !text-sm">
           {result.decision}
         </Badge>
       </div>

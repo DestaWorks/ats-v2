@@ -7,27 +7,27 @@ import { useDraggable } from "@dnd-kit/core";
 import { ALL_STATUS_CODES, statusLabel, type CandidateStatus } from "@/lib/constants";
 import type { CandidateCardDTO } from "@/lib/validation/pipeline";
 import { cn } from "@/lib/utils/cn";
-import { Badge } from "@/components/ui/badge";
 import { ScoreBadge } from "@/components/ui/score-badge";
 import { TRACK_BADGE, licenseDotClass } from "./lib/status-style";
 
-/** Timing badge — overdue (red) / stuck (orange) / plain days-in-stage (gray). */
+/** Timing indicator — overdue (red) / stuck (orange) / plain days-in-stage (gray). Legacy parity
+ *  (2026-08-10): plain colored text, no badge chrome (was a tinted `Badge` pill). */
 function TimingBadge({ card }: { card: CandidateCardDTO }) {
   if (card.isOverdue) {
     return (
-      <Badge tone="danger" size="sm" pill={false}>
+      <span className="text-[9px] font-bold tracking-wide text-red tabular-nums">
         overdue · {card.daysInStage}d
-      </Badge>
+      </span>
     );
   }
   if (card.isStuck) {
     return (
-      <Badge tone="amber" size="sm" pill={false}>
+      <span className="text-[9px] font-semibold text-orange tabular-nums">
         stuck · {card.daysInStage}d
-      </Badge>
+      </span>
     );
   }
-  return <span className="text-[11px] font-medium text-gray">{card.daysInStage}d in stage</span>;
+  return <span className="text-[9px] text-gray tabular-nums">{card.daysInStage}d in stage</span>;
 }
 
 /**
@@ -161,7 +161,11 @@ export function CandidateCard({
   return (
     <li
       className={cn(
-        "rounded-lg border border-black/5 border-l-4 bg-white shadow-sm transition",
+        // Legacy parity (2026-08-10): flat by default (no shadow, 3px accent — was 4px), only
+        // picking up a shadow/border-tint/shift on hover — was permanently elevated (`shadow-sm`)
+        // with no hover interaction at all.
+        "rounded-lg border border-black/5 border-l-[3px] bg-white transition",
+        "hover:border-black/10 hover:shadow-[0_2px_8px_rgba(30,74,138,0.06)] hover:translate-x-0.5",
         accent,
         isDragging && "opacity-40",
       )}

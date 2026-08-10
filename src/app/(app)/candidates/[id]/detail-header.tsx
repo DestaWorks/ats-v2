@@ -44,7 +44,7 @@ export function DetailHeader({
   );
 
   return (
-    <header className="flex flex-col gap-4 rounded-xl border border-black/5 bg-white p-6">
+    <header className="flex flex-col gap-4 rounded-xl border border-black/5 bg-white shadow-card p-6">
       {!inModal ? (
         <div>
           <Link href="/pipeline" className="text-sm font-semibold text-navy hover:underline">

@@ -47,7 +47,8 @@ export function CoverageGaps({ rows }: { rows: CoverageGapRowDTO[] }) {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center justify-between text-left text-sm font-bold text-navy"
+        aria-expanded={open}
+        className="flex items-center justify-between rounded text-left text-sm font-bold text-navy hover:underline focus-visible:ring-2 focus-visible:ring-navy focus-visible:outline-none"
       >
         <span>Coverage Gaps ({rows.length} combos with open demand)</span>
         <span className="text-gray">{open ? "▲ Hide" : "▼ Show"}</span>
@@ -101,7 +102,7 @@ export function CoverageGaps({ rows }: { rows: CoverageGapRowDTO[] }) {
                   {taxonomyOpt ? (
                     <Link
                       href={`/discover?taxonomy=${encodeURIComponent(taxonomyOpt.value)}&state=${encodeURIComponent(row.state)}`}
-                      className="text-sm font-semibold text-brand hover:underline"
+                      className="text-sm font-semibold text-navy hover:underline"
                     >
                       Search NPPES →
                     </Link>

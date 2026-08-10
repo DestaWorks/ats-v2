@@ -46,7 +46,7 @@ export function HealthTab({ clientId }: { clientId: string }) {
 
   return (
     <div className="flex flex-col gap-5">
-      <section className="rounded-lg border border-black/10 bg-white p-4">
+      <section className="rounded-lg border border-black/10 bg-white shadow-card p-4">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-sm font-bold text-charcoal">Health Score</h2>
           <div className="flex items-center gap-2">
@@ -66,7 +66,7 @@ export function HealthTab({ clientId }: { clientId: string }) {
         </p>
       </section>
 
-      <section className="rounded-lg border border-black/10 bg-white p-4">
+      <section className="rounded-lg border border-black/10 bg-white shadow-card p-4">
         <h2 className="mb-3 text-sm font-bold text-charcoal">Revenue &amp; Profitability</h2>
         {revenue.monthlyRate === null && revenue.avgPlacementFee === null ? (
           <p className="text-sm text-gray italic">

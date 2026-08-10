@@ -78,7 +78,7 @@ export function TimelineTab({
           {entries.map((e, i) => (
             <li
               key={i}
-              className="flex items-center gap-3 rounded-lg border border-black/5 bg-white p-3"
+              className="flex items-center gap-3 rounded-lg border border-black/5 bg-white shadow-card p-3"
             >
               <span className="text-lg" aria-hidden>
                 {TIMELINE_ICON[e.kind]}

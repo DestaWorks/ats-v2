@@ -23,7 +23,7 @@ export function ReportFilterBar({
       onChange({ ...filters, [key]: value });
 
   return (
-    <div className="grid grid-cols-2 gap-3 rounded-xl border border-black/5 bg-white p-4 sm:grid-cols-3 lg:grid-cols-6 print:hidden">
+    <div className="grid grid-cols-2 gap-3 rounded-xl border border-black/5 bg-white shadow-card p-4 sm:grid-cols-3 lg:grid-cols-6 print:hidden">
       <Field label="Client" htmlFor="rf-client">
         <Select
           id="rf-client"

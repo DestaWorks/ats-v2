@@ -60,6 +60,10 @@ export function RoleDetail({
   const [role, setRole] = useState(initial);
   const [editing, setEditing] = useState(false);
   const [deleting, startDelete] = useTransition();
+  const daysOpen = Math.max(
+    0,
+    Math.floor((Date.now() - new Date(role.openedAt).getTime()) / 86_400_000),
+  );
 
   function handleDelete() {
     if (!window.confirm(`Permanently delete "${role.title}"? This cannot be undone.`)) return;
@@ -114,28 +118,49 @@ export function RoleDetail({
         ← Back to Open Roles
       </Link>
 
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-2">
-            <Badge tone={STATUS_TONE[role.status]}>{role.status}</Badge>
-            <Badge tone={PRIORITY_TONE[role.priority]}>{role.priority}</Badge>
+      <header className="flex flex-col gap-4 rounded-xl border border-black/5 bg-white shadow-card p-6">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2">
+              <Badge tone={STATUS_TONE[role.status]}>{role.status}</Badge>
+              <Badge tone={PRIORITY_TONE[role.priority]}>{role.priority}</Badge>
+            </div>
+            <h1 className="font-serif text-2xl font-bold text-charcoal">{role.title}</h1>
+            <Link
+              href={`/crm/${role.clientId}`}
+              className="text-sm font-semibold text-navy hover:underline"
+            >
+              {role.clientName}
+            </Link>
           </div>
-          <h1 className="font-serif text-2xl font-bold text-charcoal">{role.title}</h1>
-          <p className="text-sm text-gray">{role.clientName}</p>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => setEditing((e) => !e)}
+            >
+              {editing ? "Cancel edit" : "Edit"}
+            </Button>
+            <Button
+              type="button"
+              variant="danger"
+              size="sm"
+              loading={deleting}
+              onClick={handleDelete}
+            >
+              Delete
+            </Button>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <Button type="button" variant="secondary" size="sm" onClick={() => setEditing((e) => !e)}>
-            {editing ? "Cancel edit" : "Edit"}
-          </Button>
-          <Button
-            type="button"
-            variant="danger"
-            size="sm"
-            loading={deleting}
-            onClick={handleDelete}
-          >
-            Delete
-          </Button>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="rounded-lg bg-black/[0.04] px-3 py-1.5 text-sm text-charcoal">
+            {role.assignedToName ? `Assigned to ${role.assignedToName}` : "Unassigned"}
+          </span>
+          <span className="rounded-lg bg-black/[0.04] px-3 py-1.5 text-sm text-charcoal">
+            {daysOpen} day{daysOpen === 1 ? "" : "s"} open
+          </span>
         </div>
       </header>
 
@@ -150,7 +175,7 @@ export function RoleDetail({
           onCancel={() => setEditing(false)}
         />
       ) : (
-        <div className="grid gap-3 rounded-lg border border-black/10 bg-white p-4 sm:grid-cols-3">
+        <div className="grid gap-3 rounded-lg border border-black/10 bg-white shadow-card p-4 sm:grid-cols-3">
           <SummaryField label="Credential" value={role.credential} />
           <SummaryField label="State" value={role.state} />
           <SummaryField label="City" value={role.city} />
@@ -218,7 +243,7 @@ function EditRoleForm({
       method="post"
       onSubmit={onSubmit}
       noValidate
-      className="flex flex-col gap-4 rounded-lg border border-black/10 bg-white p-4"
+      className="flex flex-col gap-4 rounded-lg border border-black/10 bg-white shadow-card p-4"
     >
       {serverError ? <ErrorState message={serverError} /> : null}
       <div className="grid gap-4 sm:grid-cols-3">
@@ -524,13 +549,18 @@ function NotesPanel({
           {...form.register("body")}
         />
         <div className="flex items-center gap-2">
-          <Select className="w-44" {...form.register("category")}>
-            {ROLE_NOTE_CATEGORIES.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </Select>
+          {/* `Select`'s own `w-full` beats a `className="w-44"` override under this app's plain
+              (non-merging) `cn()` helper — see cn.ts's doc comment — so the width is constrained
+              via a wrapper instead of fighting the cascade. */}
+          <div className="w-44 shrink-0">
+            <Select {...form.register("category")}>
+              {ROLE_NOTE_CATEGORIES.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </Select>
+          </div>
           <Button type="submit" size="sm" loading={pending} className="ml-auto">
             Add note
           </Button>
