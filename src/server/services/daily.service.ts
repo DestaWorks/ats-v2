@@ -1,5 +1,5 @@
 import "server-only";
-import type { Prisma } from "@/generated/prisma/client";
+import { Prisma } from "@/generated/prisma/client";
 import { hasCapability } from "@/lib/constants";
 import {
   businessDaysLeft,
@@ -324,35 +324,48 @@ export const dailyService = {
       dailyRepository.countAuditAction(user.id, "move", w),
       dailyRepository.countAuditAction(user.id, "add_note", w),
     ]);
-    const row = await withTransaction(async (tx) => {
-      const created = await dailyRepository.createLog(
-        {
-          userId: user.id,
-          date: input.date,
-          sourced: input.sourced,
-          outreach: input.outreach,
-          responses: input.responses,
-          screenings: input.screenings,
-          submitted: input.submitted,
-          blocker: input.blocker ?? null,
-          notes: input.notes ?? null,
-          shiftHandoff: input.shiftHandoff ?? null,
-          perClient: (input.perClient ?? {}) as Prisma.InputJsonValue,
-          autoAdded: added,
-          autoMoved: moved,
-          autoNotes: notes,
-        },
-        tx,
-      );
-      await writeAudit(tx, {
-        entity: "daily_log",
-        entityId: created.id,
-        actor: user.id,
-        action: "submit_log",
-        after: { date: input.date, sourced: input.sourced },
+    let row;
+    try {
+      row = await withTransaction(async (tx) => {
+        const created = await dailyRepository.createLog(
+          {
+            userId: user.id,
+            date: input.date,
+            sourced: input.sourced,
+            outreach: input.outreach,
+            responses: input.responses,
+            screenings: input.screenings,
+            submitted: input.submitted,
+            blocker: input.blocker ?? null,
+            notes: input.notes ?? null,
+            shiftHandoff: input.shiftHandoff ?? null,
+            perClient: (input.perClient ?? {}) as Prisma.InputJsonValue,
+            autoAdded: added,
+            autoMoved: moved,
+            autoNotes: notes,
+          },
+          tx,
+        );
+        await writeAudit(tx, {
+          entity: "daily_log",
+          entityId: created.id,
+          actor: user.id,
+          action: "submit_log",
+          after: { date: input.date, sourced: input.sourced },
+        });
+        return created;
       });
-      return created;
-    });
+    } catch (err) {
+      // TOCTOU: the pre-check above and this insert aren't atomic, so two truly concurrent
+      // submits can both pass the check before either commits — the DB's own unique constraint
+      // (@@unique([userId, date])) is what actually prevents the duplicate. Map that race to the
+      // same friendly CONFLICT the pre-check gives, instead of letting it fall through to a raw
+      // 500 "Internal server error".
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+        throw new AppError("CONFLICT", "Today's log is already submitted");
+      }
+      throw err;
+    }
     return toLogDTO(row);
   },
 

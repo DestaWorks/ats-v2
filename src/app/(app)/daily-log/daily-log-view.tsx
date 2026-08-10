@@ -393,7 +393,13 @@ export function DailyLogView({
       toast.success("Daily log submitted");
       setLogModalOpen(false);
       void refresh();
-    } else toast.error(messageForFailure(res.failure));
+    } else {
+      toast.error(messageForFailure(res.failure));
+      // Re-sync even on failure — a 409 (already submitted, e.g. from another tab or a raced
+      // double-submit) means a log now genuinely exists server-side; without this the view stays
+      // stuck showing "haven't logged today" even though it actually has been.
+      void refresh();
+    }
   }
 
   async function addGoal() {
