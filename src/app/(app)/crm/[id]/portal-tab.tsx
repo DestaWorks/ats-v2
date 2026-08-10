@@ -7,6 +7,7 @@ import { getJson, messageForFailure, postJson } from "@/lib/api/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/error-state";
 import { Table, Td } from "@/components/ui/table";
 
 // --- Portal access tab (Wave 4.3) -------------------------------------------
@@ -39,26 +40,43 @@ function GeneratedPortalLinkBanner({
 
 export function PortalAccessTab({ clientId }: { clientId: string }) {
   const [contacts, setContacts] = useState<AdminPortalContactDTO[] | null>(null);
+  const [loadError, setLoadError] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [generated, setGenerated] = useState<{ fullName: string; token: string } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
+    setContacts(null);
+    setLoadError(false);
     void getJson<{ contacts: AdminPortalContactDTO[] }>(
       `/api/crm/clients/${clientId}/portal/contacts`,
     ).then((res) => {
-      if (!cancelled && res.ok) setContacts(res.data.contacts);
+      if (cancelled) return;
+      if (res.ok) setContacts(res.data.contacts);
+      else setLoadError(true);
     });
     return () => {
       cancelled = true;
     };
-  }, [clientId]);
+  }, [clientId, reloadKey]);
 
   function upsertContact(contact: AdminPortalContactDTO) {
     setContacts((prev) => (prev ?? []).map((c) => (c.id === contact.id ? contact : c)));
   }
 
   async function handleGenerate(contact: AdminPortalContactDTO) {
+    // Regenerating (contact already has an active link) silently revokes it the instant the new
+    // one is minted (server enforces one live link per contact) — just as destructive as Revoke,
+    // which already confirms, so this must too. A first-time Generate has nothing to lose.
+    if (
+      contact.activeToken &&
+      !window.confirm(
+        `Regenerate ${contact.fullName}'s portal link? Their current link stops working immediately.`,
+      )
+    ) {
+      return;
+    }
     setBusyId(contact.id);
     const res = await postJson<GeneratedPortalLinkDTO>(
       `/api/crm/clients/${clientId}/portal/contacts/${contact.id}/tokens`,
@@ -93,6 +111,16 @@ export function PortalAccessTab({ clientId }: { clientId: string }) {
     } else {
       toast.error("Could not revoke this link");
     }
+  }
+
+  if (loadError) {
+    return (
+      <ErrorState
+        title="Couldn't load portal contacts"
+        message="Please try again."
+        onRetry={() => setReloadKey((k) => k + 1)}
+      />
+    );
   }
 
   if (contacts === null) {

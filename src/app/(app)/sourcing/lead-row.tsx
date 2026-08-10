@@ -65,6 +65,7 @@ export function LeadRow({
   onToggleSelect,
   onUpdated,
   onRemoved,
+  onConflict,
   clients,
 }: {
   lead: LeadListItemDTO;
@@ -72,6 +73,10 @@ export function LeadRow({
   onToggleSelect: () => void;
   onUpdated: (lead: LeadListItemDTO) => void;
   onRemoved: (id: string) => void;
+  /** A 409 CONFLICT means someone else raced this action (e.g. already-promoted) — the lead still
+   *  exists, just changed, so re-sync from the server instead of treating it as a removal (that
+   *  would silently corrupt the pager's total count). */
+  onConflict: () => void;
   clients: ClientOption[];
 }) {
   const router = useRouter();
@@ -125,8 +130,9 @@ export function LeadRow({
         close();
       } else {
         toast.error(messageForFailure(result.failure));
-        if (result.failure.code === "CONFLICT") onRemoved(lead.id);
-        close();
+        if (result.failure.code === "CONFLICT") onConflict();
+        // Leave the modal open on failure — closing it would silently discard whatever note the
+        // recruiter typed, forcing a retype on a transient error.
       }
     });
   }
@@ -139,7 +145,7 @@ export function LeadRow({
         applyDetail(result.data.lead);
       } else {
         toast.error(messageForFailure(result.failure));
-        if (result.failure.code === "CONFLICT") onRemoved(lead.id);
+        if (result.failure.code === "CONFLICT") onConflict();
       }
     });
   }
@@ -153,7 +159,7 @@ export function LeadRow({
         router.push(`/candidates/${result.data.candidateId}`);
       } else {
         toast.error(messageForFailure(result.failure));
-        if (result.failure.code === "CONFLICT") onRemoved(lead.id);
+        if (result.failure.code === "CONFLICT") onConflict();
         close();
       }
     });
@@ -194,7 +200,8 @@ export function LeadRow({
         close();
       } else {
         toast.error(messageForFailure(result.failure));
-        close();
+        // Leave the modal open on failure, same reasoning as logOutreach — don't discard the
+        // recruiter's chosen date on a transient error.
       }
     });
   }
