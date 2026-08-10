@@ -95,19 +95,23 @@ export function TemplatesWorkspace({
     : `\n\nBest regards,\n${recruiterName}\nHealthcare Recruiting Associate\nDestaHealth Recruiting`;
   const filledBody = fillTemplate(selTpl.body, ctx) + sigBlock;
 
-  // Candidate search — debounced, scoped to the selected client (matches legacy).
+  // Candidate search — debounced, GLOBAL by name (2026-08-10: previously scoped to the selected
+  // CLIENT dropdown via `clientId`, which made most candidates unreachable here — the CLIENT field
+  // only fills in the template's company info, it isn't who you're allowed to email, and plenty of
+  // real candidates (freshly sourced, not yet matched to a client) have no `clientId` at all. Now
+  // matches the Sourced Lead search below, which was already global.
   useEffect(() => {
     if (recipientType !== "candidate" || candSearch.trim().length < 2 || candidate) {
       setCandResults([]);
       return;
     }
     const handle = setTimeout(async () => {
-      const params = new URLSearchParams({ search: candSearch, clientId, page: "1" });
+      const params = new URLSearchParams({ search: candSearch, page: "1" });
       const res = await getJson<CandidateListDTO>(`/api/candidates/list?${params}`);
       if (res.ok) setCandResults(res.data.candidates);
     }, 300);
     return () => clearTimeout(handle);
-  }, [recipientType, candSearch, clientId, candidate]);
+  }, [recipientType, candSearch, candidate]);
 
   // Lead search — debounced; excludes Promoted/Bad Fit/deleted (matches legacy).
   useEffect(() => {
@@ -263,7 +267,7 @@ export function TemplatesWorkspace({
       </div>
 
       {/* Controls */}
-      <div className="grid grid-cols-2 gap-3 rounded-xl border border-black/5 bg-white p-4">
+      <div className="grid grid-cols-2 gap-3 rounded-xl border border-black/5 bg-white shadow-card p-4">
         <div>
           <div className="mb-1 text-[11px] text-gray">CLIENT</div>
           <Select
@@ -394,7 +398,7 @@ export function TemplatesWorkspace({
       </div>
 
       {/* Preview */}
-      <div className="rounded-xl border border-black/5 bg-white p-4">
+      <div className="rounded-xl border border-black/5 bg-white shadow-card p-4">
         <div className="mb-3.5 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="text-sm font-bold">Preview</span>
