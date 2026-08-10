@@ -25,10 +25,11 @@ const TONE: Record<BadgeTone, string> = {
   purple: "bg-purple text-white", // legacy Promoted pill — FILLED, not tinted
 };
 
-/** Padding per size (both share the [11px] text used by the current badges). */
+/** Padding per size (both share the [10px] text — legacy `.badge{font-size:10px}` parity,
+ *  design-token audit 2026-08-10). */
 const SIZE: Record<BadgeSize, string> = {
-  sm: "px-1.5 py-0.5 text-[11px]",
-  md: "px-2 py-0.5 text-[11px]",
+  sm: "px-1.5 py-0.5 text-[10px]",
+  md: "px-2 py-0.5 text-[10px]",
 };
 
 export function Badge({
