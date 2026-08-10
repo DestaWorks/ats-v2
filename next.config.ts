@@ -15,6 +15,23 @@ import type { NextConfig } from "next";
  * `onSubmit` never runs, so clicking Submit falls back to a native browser GET). Production never
  * uses eval-based HMR, so prod stays strict with no `'unsafe-eval'`.
  */
+
+/** The object-storage public origin (Wave 6), if configured — added to `img-src` so avatar/resume
+ *  images actually render instead of being silently CSP-blocked. Derived from `S3_PUBLIC_URL_BASE`
+ *  itself (never a hardcoded provider domain) so this stays correct across S3-compatible providers
+ *  with zero code change, same posture as `server/integrations/storage.ts`. */
+function storageOrigin(): string | null {
+  const base = process.env.S3_PUBLIC_URL_BASE;
+  if (!base) return null;
+  try {
+    return new URL(base).origin;
+  } catch {
+    return null;
+  }
+}
+
+const IMG_SRC = ["'self'", "data:", storageOrigin()].filter(Boolean).join(" ");
+
 const SECURITY_HEADERS = [
   { key: "X-Frame-Options", value: "DENY" },
   { key: "X-Content-Type-Options", value: "nosniff" },
@@ -26,7 +43,7 @@ const SECURITY_HEADERS = [
       "default-src 'self'",
       `script-src 'self' 'unsafe-inline'${process.env.NODE_ENV !== "production" ? " 'unsafe-eval'" : ""}`,
       "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data:",
+      `img-src ${IMG_SRC}`,
       "font-src 'self'",
       "connect-src 'self'",
       "frame-ancestors 'none'",
