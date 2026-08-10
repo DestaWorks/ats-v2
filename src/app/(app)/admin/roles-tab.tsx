@@ -29,9 +29,21 @@ const ROLE_DESCRIPTION: Record<Role, string> = {
   Associate: "Core recruiting access to the pipeline and daily tools. No leadership capabilities.",
 };
 
-/** Small circular initial, matching the header avatar's treatment (`user-menu.tsx`). */
-function Avatar({ name }: { name: string }) {
+/** Small circular avatar — the real uploaded photo when present (Wave 6), matching the header
+ *  avatar's treatment (`user-menu.tsx`), falling back to an initial otherwise. */
+function Avatar({ name, image }: { name: string; image: string | null }) {
   const initial = (name.trim()[0] ?? "?").toUpperCase();
+  if (image) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element -- a user-uploaded Storage URL, not a static asset
+      <img
+        src={image}
+        alt=""
+        title={name}
+        className="h-6 w-6 shrink-0 rounded-full object-cover ring-2 ring-white"
+      />
+    );
+  }
   return (
     <span
       title={name}
@@ -68,7 +80,7 @@ function RoleCard({ role, members }: { role: Role; members: AdminUserDTO[] }) {
       {members.length > 0 ? (
         <div className="flex -space-x-1.5">
           {members.slice(0, MAX_AVATARS).map((m) => (
-            <Avatar key={m.id} name={m.name || m.email} />
+            <Avatar key={m.id} name={m.name || m.email} image={m.image} />
           ))}
           {members.length > MAX_AVATARS ? (
             <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-black/5 text-[10px] font-semibold text-gray ring-2 ring-white">

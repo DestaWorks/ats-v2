@@ -1,9 +1,12 @@
 import "server-only";
+import { randomUUID } from "node:crypto";
 import { statusOrder } from "@/lib/constants";
 import {
   resumeSchemaFor,
   type ExtractResumeResponse,
   type ParseResumeInput,
+  type RequestResumeUploadUrlInput,
+  type ResumeUploadUrlDTO,
   type SaveResumeInput,
 } from "@/lib/validation/resume";
 import { parseResume } from "@/server/ai/parse-resume";
@@ -13,14 +16,24 @@ import { withTransaction } from "@/server/db/with-transaction";
 import { candidateRepository } from "@/server/repositories/candidate.repository";
 import { documentRepository } from "@/server/repositories/document.repository";
 import { AppError } from "@/server/http/app-error";
+import {
+  createSignedUploadUrl,
+  getSignedDownloadUrl,
+  RESUME_BUCKET,
+} from "@/server/integrations/storage";
 import { toCandidateDTO } from "./candidate.dto";
 import { toDocumentDTO } from "./document.dto";
 import { toCandidateCreateInput } from "./resume.mapper";
 import { classifyMatch, matchResumeToCandidate } from "./resume.match";
 
+/** A storage-safe filename fragment — strips anything but alnum/dot/dash/underscore. */
+function sanitizeFilename(filename: string): string {
+  return filename.replace(/[^a-zA-Z0-9.\-_]/g, "_").slice(-100);
+}
+
 /**
- * Résumé extraction + attach/create (Wave 1.2, Module 8). Orchestrates the Claude extraction,
- * the server-authoritative résumé→candidate match, the lossy field mapper, and the atomic
+ * Resume extraction + attach/create (Wave 1.2, Module 8). Orchestrates the Claude extraction,
+ * the server-authoritative resume→candidate match, the lossy field mapper, and the atomic
  * attach-or-create + document persist + audit. AuthZ is the same posture as the candidate
  * pipeline — any signed-in user (the route calls `requireUser()`); no special capability.
  *
@@ -29,7 +42,7 @@ import { classifyMatch, matchResumeToCandidate } from "./resume.match";
  */
 
 /** Only fill candidate fields that are currently EMPTY (OQ-2: attach never overwrites human data).
- *  Exported for reuse by `migration.service.ts`'s bulk résumé-attach path — same conservative
+ *  Exported for reuse by `migration.service.ts`'s bulk resume-attach path — same conservative
  *  merge, one definition. */
 export function fillEmptyFields(
   existing: Record<string, unknown>,
@@ -51,7 +64,7 @@ export function fillEmptyFields(
 
 export const resumeService = {
   /**
-   * Extract a résumé and compute the match against the current candidate list. Writes NOTHING —
+   * Extract a resume and compute the match against the current candidate list. Writes NOTHING —
    * returns the validated structured data + the match so the UI can render the review/confirm step.
    */
   async extract(input: ParseResumeInput): Promise<ExtractResumeResponse> {
@@ -62,7 +75,7 @@ export const resumeService = {
   },
 
   /**
-   * Persist the reviewed résumé: attach to an existing candidate or create a new one, store the
+   * Persist the reviewed resume: attach to an existing candidate or create a new one, store the
    * document (structured data + text), and write the audit — all in ONE transaction.
    *
    * Server-authoritative invariant (§5): `candidateId` is set ONLY when the recomputed match is
@@ -130,6 +143,7 @@ export const resumeService = {
           mimeType: input.mimeType,
           extractedText: input.extractedText,
           extractedData: data,
+          storageKey: input.storageKey ?? null,
           uploadedById: user.id,
         },
         tx,
@@ -147,5 +161,28 @@ export const resumeService = {
         document: toDocumentDTO(document, user),
       };
     });
+  },
+
+  /**
+   * A short-lived URL the browser PUTs the raw resume bytes to directly (Wave 6) — the file never
+   * passes through our own server. Writes nothing; `save()` persists the resulting `storageKey`
+   * once the upload succeeds and the user confirms.
+   */
+  async requestUploadUrl(input: RequestResumeUploadUrlInput): Promise<ResumeUploadUrlDTO> {
+    const storageKey = `${randomUUID()}-${sanitizeFilename(input.filename)}`;
+    const { signedUrl } = await createSignedUploadUrl(RESUME_BUCKET, storageKey);
+    return { signedUrl, storageKey };
+  },
+
+  /**
+   * A fresh, short-lived download URL for a document's stored resume bytes (Wave 6) — generated
+   * on demand, never persisted. Callers gate this on `viewCredentials` (same PII/PHI tier as
+   * `extractedText`/`extractedData`) before calling.
+   */
+  async getDownloadUrl(documentId: string): Promise<{ url: string }> {
+    const doc = await documentRepository.findById(documentId);
+    if (!doc?.storageKey) throw new AppError("NOT_FOUND", "No stored file for this document");
+    const url = await getSignedDownloadUrl(RESUME_BUCKET, doc.storageKey, 300);
+    return { url };
   },
 };

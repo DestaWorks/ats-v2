@@ -12,6 +12,7 @@ export interface AdminUserDTO {
   id: string;
   name: string;
   email: string;
+  image: string | null;
   role: string;
   banned: boolean;
   banReason: string | null;

@@ -10,16 +10,22 @@ import type { AuthUser } from "@/server/auth/guards";
 const h = vi.hoisted(() => ({
   user: { id: "u1", email: "u@desta.works", name: "Test User", role: "Associate" as const },
   userRepo: { findPreferences: vi.fn(), updatePreferences: vi.fn() },
+  uploadPublic: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/server/repositories/user.repository", () => ({ userRepository: h.userRepo }));
+vi.mock("@/server/integrations/storage", () => ({
+  AVATAR_BUCKET: "avatars",
+  uploadPublic: h.uploadPublic,
+}));
 
 import { userPreferencesService } from "./user-preferences.service";
 
 beforeEach(() => {
   h.userRepo.findPreferences.mockReset();
   h.userRepo.updatePreferences.mockReset();
+  h.uploadPublic.mockReset();
 });
 
 describe("userPreferencesService.getMine", () => {
@@ -54,5 +60,31 @@ describe("userPreferencesService.updateMine", () => {
       stickyNote: "Call Jane back",
     });
     expect(out.stickyNote).toBe("Call Jane back");
+  });
+});
+
+describe("userPreferencesService.uploadAvatar", () => {
+  it("decodes the data URI and uploads to a per-user key in the avatars bucket", async () => {
+    h.uploadPublic.mockResolvedValue("https://cdn.example.com/avatars/u1.jpg");
+    const tinyJpegBase64 = Buffer.from("fake-jpeg-bytes").toString("base64");
+
+    const out = await userPreferencesService.uploadAvatar(h.user as AuthUser, {
+      dataUrl: `data:image/jpeg;base64,${tinyJpegBase64}`,
+    });
+
+    expect(out).toEqual({ url: "https://cdn.example.com/avatars/u1.jpg" });
+    const [bucket, key, bytes, contentType] = h.uploadPublic.mock.calls[0]!;
+    expect(bucket).toBe("avatars");
+    expect(key).toBe("u1.jpg");
+    expect(Buffer.isBuffer(bytes)).toBe(true);
+    expect(bytes.toString()).toBe("fake-jpeg-bytes");
+    expect(contentType).toBe("image/jpeg");
+  });
+
+  it("throws BAD_REQUEST for a non-data-URI string", async () => {
+    await expect(
+      userPreferencesService.uploadAvatar(h.user as AuthUser, { dataUrl: "not-a-data-url" }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(h.uploadPublic).not.toHaveBeenCalled();
   });
 });
