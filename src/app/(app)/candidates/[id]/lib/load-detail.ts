@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/server/auth/guards";
 import { candidateService } from "@/server/services/candidate.service";
 import { cachedClientList } from "@/server/repositories/client.repository";
 import { cachedUserList } from "@/server/repositories/user.repository";
+import { storageEnabled } from "@/server/integrations/storage";
 import { AppError } from "@/server/http/app-error";
 
 /**
@@ -40,5 +41,5 @@ export async function loadCandidateDetail(id: string) {
   const [clientRows, taggable] = await Promise.all([clientsPromise, taggablePromise]);
   const clients = clientRows.map((c) => ({ id: c.id, name: c.name }));
 
-  return { detail, clients, taggable };
+  return { detail, clients, taggable, storageEnabled };
 }

@@ -33,7 +33,7 @@ export function resetPasswordEmail(opts: { name: string; url: string }): EmailCo
         Or copy and paste this link into your browser:
       </p>
       <p style="margin:0 0 24px;font-size:13px;word-break:break-all;">
-        <a href="${opts.url}" target="_blank" rel="noopener" style="color:#1e4a8a;">${opts.url}</a>
+        <a href="${opts.url}" target="_blank" rel="noopener" style="color:#8b7355;">${opts.url}</a>
       </p>
       <p style="margin:0;color:#6b6b6b;font-size:13px;">
         This link expires in 1 hour. If you didn't request a password reset, you can safely

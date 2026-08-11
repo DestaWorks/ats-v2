@@ -9,8 +9,10 @@
 import type { CandidateStatus } from "@/lib/constants";
 import type {
   AddNoteInput,
+  DocumentSummaryDTO,
   NoteDTO,
   UpdateCandidateInput,
+  UploadCandidateResumeInput,
   VerifyLicenseInput,
 } from "@/lib/validation/candidate";
 import type { LogOutreachInput, OutreachAttemptDTO } from "@/lib/validation/lead";
@@ -66,6 +68,19 @@ export async function postVerifyLicense(
 export async function postNote(id: string, input: AddNoteInput): Promise<ApiResult<NoteDTO>> {
   const res = await postJson<{ note: NoteDTO }>(`/api/candidates/${id}/notes`, input);
   return res.ok ? { ok: true, data: res.data.note } : res;
+}
+
+/** POST a résumé attach (candidate detail's own Resume tab — no AI/matching involved). Returns
+ *  the created `DocumentSummaryDTO`. */
+export async function postResumeUpload(
+  id: string,
+  input: UploadCandidateResumeInput,
+): Promise<ApiResult<DocumentSummaryDTO>> {
+  const res = await postJson<{ document: DocumentSummaryDTO }>(
+    `/api/candidates/${id}/resume`,
+    input,
+  );
+  return res.ok ? { ok: true, data: res.data.document } : res;
 }
 
 /** POST an outreach attempt (candidate_log_outreach). Returns the created attempt DTO. */

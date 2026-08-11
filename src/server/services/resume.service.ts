@@ -1,6 +1,7 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
 import { statusOrder } from "@/lib/constants";
+import type { UploadCandidateResumeInput } from "@/lib/validation/candidate";
 import {
   resumeSchemaFor,
   type ExtractResumeResponse,
@@ -160,6 +161,39 @@ export const resumeService = {
         candidate: toCandidateDTO(candidate, user),
         document: toDocumentDTO(document, user),
       };
+    });
+  },
+
+  /**
+   * Attach a résumé directly to an ALREADY-KNOWN candidate (the candidate detail page's own
+   * Resume tab) — unlike `save()`, there's no candidate to match/create and no AI field
+   * extraction; this just persists whatever text/storage key the browser already produced
+   * (pdf.js text extraction + an optional Storage PUT) as a new `Document`.
+   */
+  async attachToCandidate(candidateId: string, input: UploadCandidateResumeInput, user: AuthUser) {
+    const candidate = await candidateRepository.findById(candidateId);
+    if (!candidate) throw new AppError("NOT_FOUND", "Candidate not found");
+
+    return withTransaction(async (tx) => {
+      const document = await documentRepository.create(
+        {
+          candidateId,
+          type: "resume",
+          originalFilename: input.originalFilename,
+          mimeType: input.mimeType,
+          extractedText: input.extractedText ?? null,
+          storageKey: input.storageKey ?? null,
+          uploadedById: user.id,
+        },
+        tx,
+      );
+      await writeAudit(tx, {
+        entity: "document",
+        entityId: document.id,
+        actor: user.id,
+        action: "upload",
+      });
+      return toDocumentDTO(document, user);
     });
   },
 

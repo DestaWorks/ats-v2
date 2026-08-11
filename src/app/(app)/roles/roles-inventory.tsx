@@ -65,7 +65,7 @@ export function RolesInventory({ initial }: { initial: OpenRoleListDTO }) {
           <Td>
             <Link
               href={`/roles/${role.id}`}
-              className="font-serif text-[15px] font-semibold text-navy hover:underline focus-visible:ring-2 focus-visible:ring-navy focus-visible:outline-none"
+              className="font-semibold text-navy hover:underline focus-visible:ring-2 focus-visible:ring-navy focus-visible:outline-none"
             >
               {role.title}
             </Link>

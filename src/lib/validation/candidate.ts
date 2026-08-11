@@ -284,3 +284,19 @@ export const addNoteSchema = z
   })
   .strict();
 export type AddNoteInput = z.infer<typeof addNoteSchema>;
+
+/**
+ * Body for `POST /api/candidates/:id/resume` — attach a résumé directly to an ALREADY-KNOWN
+ * candidate (no AI extraction, no candidate matching — unlike `saveResumeInputSchema`, which is
+ * the standalone Parse Resume flow's attach-or-create). `extractedText` is optional since a plain
+ * (non-PDF) upload or a client-side extraction failure shouldn't block attaching the file itself.
+ */
+export const uploadCandidateResumeSchema = z
+  .object({
+    originalFilename: z.string().trim().min(1).max(255),
+    mimeType: z.string().trim().min(1).max(120),
+    extractedText: z.string().max(100_000).optional(),
+    storageKey: z.string().max(500).optional(),
+  })
+  .strict();
+export type UploadCandidateResumeInput = z.infer<typeof uploadCandidateResumeSchema>;

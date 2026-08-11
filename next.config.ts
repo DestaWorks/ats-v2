@@ -16,21 +16,32 @@ import type { NextConfig } from "next";
  * uses eval-based HMR, so prod stays strict with no `'unsafe-eval'`.
  */
 
-/** The object-storage public origin (Wave 6), if configured — added to `img-src` so avatar/resume
- *  images actually render instead of being silently CSP-blocked. Derived from `S3_PUBLIC_URL_BASE`
- *  itself (never a hardcoded provider domain) so this stays correct across S3-compatible providers
- *  with zero code change, same posture as `server/integrations/storage.ts`. */
-function storageOrigin(): string | null {
-  const base = process.env.S3_PUBLIC_URL_BASE;
-  if (!base) return null;
+/** Derives an allowed CSP origin from an env var holding a URL — never a hardcoded provider
+ *  domain, so this stays correct across S3-compatible providers with zero code change (same
+ *  posture as `server/integrations/storage.ts`). */
+function originFromEnvUrl(envVar: string | undefined): string | null {
+  if (!envVar) return null;
   try {
-    return new URL(base).origin;
+    return new URL(envVar).origin;
   } catch {
     return null;
   }
 }
 
-const IMG_SRC = ["'self'", "data:", storageOrigin()].filter(Boolean).join(" ");
+/** The object-storage PUBLIC origin (Wave 6) — permanent avatar URLs read straight from here. */
+const STORAGE_PUBLIC_ORIGIN = originFromEnvUrl(process.env.S3_PUBLIC_URL_BASE);
+/** The object-storage S3-PROTOCOL origin (Wave 6) — signed upload/download URLs (résumés) live on
+ *  a DIFFERENT subdomain than the public origin above (e.g. Supabase splits `storage.supabase.co`
+ *  from `supabase.co`), so both need to be allowed independently. */
+const STORAGE_S3_ORIGIN = originFromEnvUrl(process.env.S3_ENDPOINT);
+
+const IMG_SRC = ["'self'", "data:", STORAGE_PUBLIC_ORIGIN].filter(Boolean).join(" ");
+// connect-src: the browser PUTs résumé bytes directly to the signed S3 URL (never through our own
+// server) — without this, `fetch()` to that origin is blocked outright, silently, before the
+// request is even sent (indistinguishable from a network error in a bare try/catch).
+const CONNECT_SRC = ["'self'", STORAGE_S3_ORIGIN].filter(Boolean).join(" ");
+// frame-src: the résumé Preview modal embeds the signed GET URL in an <iframe>.
+const FRAME_SRC = ["'self'", STORAGE_S3_ORIGIN].filter(Boolean).join(" ");
 
 const SECURITY_HEADERS = [
   { key: "X-Frame-Options", value: "DENY" },
@@ -45,7 +56,8 @@ const SECURITY_HEADERS = [
       "style-src 'self' 'unsafe-inline'",
       `img-src ${IMG_SRC}`,
       "font-src 'self'",
-      "connect-src 'self'",
+      `connect-src ${CONNECT_SRC}`,
+      `frame-src ${FRAME_SRC}`,
       "frame-ancestors 'none'",
       "base-uri 'self'",
       "form-action 'self'",

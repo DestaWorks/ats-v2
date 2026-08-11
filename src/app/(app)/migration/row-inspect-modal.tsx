@@ -128,16 +128,20 @@ export function RowInspectModal({
                   {matchedResume.text}
                 </pre>
               </>
-            ) : row.resumeMatch === "ambiguous" ? (
-              <p className="rounded-lg bg-amber/10 p-3 text-sm text-charcoal">
-                Multiple resumes matched this candidate&apos;s name — none was attached to avoid
-                guessing wrong. Rename the files so only one matches, then re-upload.
-              </p>
             ) : (
-              <p className="rounded-lg bg-black/[0.02] p-3 text-sm text-gray">
-                No resume matched for this candidate. It still imports normally — attach one
-                manually afterward via the candidate&apos;s own resume upload.
-              </p>
+              <div className="flex flex-1 items-center justify-center">
+                {row.resumeMatch === "ambiguous" ? (
+                  <p className="rounded-lg bg-amber/10 p-3 text-sm text-charcoal">
+                    Multiple resumes matched this candidate&apos;s name — none was attached to avoid
+                    guessing wrong. Rename the files so only one matches, then re-upload.
+                  </p>
+                ) : (
+                  <p className="rounded-lg bg-black/[0.02] p-3 text-sm text-gray">
+                    No resume matched for this candidate. It still imports normally — attach one
+                    manually afterward via the candidate&apos;s own resume upload.
+                  </p>
+                )}
+              </div>
             )}
           </div>
         </div>

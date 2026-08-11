@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import Link from "next/link";
+import { toast } from "sonner";
 import type {
   ImportFormat,
   ImportInput,
@@ -182,7 +183,7 @@ function Stepper({ current }: { current: Step }) {
 }
 
 /** The 3-step bulk-import wizard: Upload → Preview → Commit. */
-export function MigrationWizard() {
+export function MigrationWizard({ storageEnabled }: { storageEnabled: boolean }) {
   const [step, setStep] = useState<Step>("upload");
   const [file, setFile] = useState<LoadedFile | null>(null);
   const [reading, setReading] = useState(false);
@@ -199,6 +200,9 @@ export function MigrationWizard() {
   const [zipError, setZipError] = useState<string | null>(null);
   const [extractWithAi, setExtractWithAi] = useState(false);
   const resumeInputRef = useRef<HTMLInputElement>(null);
+  // Raw PDF bytes, keyed by ZIP entry basename — kept in memory only long enough to PUT the
+  // matched ones to Storage right before commit (never sent through the JSON commit body itself).
+  const rawResumeBlobsRef = useRef<Map<string, Blob>>(new Map());
 
   function resetAll() {
     setStep("upload");
@@ -215,11 +219,13 @@ export function MigrationWizard() {
     setZipReading(false);
     setZipError(null);
     setExtractWithAi(false);
+    rawResumeBlobsRef.current = new Map();
     if (resumeInputRef.current) resumeInputRef.current.value = "";
   }
 
   /** Unzip client-side + pdf.js-extract each PDF entry — same client-only path as the
-   *  single-resume flow (`resume/lib/pdf-extract.ts`), never a binary upload to the server. */
+   *  single-resume flow (`resume/lib/pdf-extract.ts`); the raw bytes are kept (not just the text)
+   *  so a matched résumé can also be PUT to Storage right before commit (Wave 6). */
   async function onResumeZipFiles(files: FileList) {
     const picked = files[0];
     if (!picked) return;
@@ -228,6 +234,7 @@ export function MigrationWizard() {
     setResumeZipName(picked.name);
     setResumeZipBytes(picked.size);
     setZipReading(true);
+    rawResumeBlobsRef.current = new Map();
     try {
       const JSZip = (await import("jszip")).default;
       const zip = await JSZip.loadAsync(picked);
@@ -256,6 +263,7 @@ export function MigrationWizard() {
         }
         const basename = entry.name.split("/").pop() ?? entry.name;
         const filenamePrefix = basename.split("_")[0]!.trim().toLowerCase();
+        rawResumeBlobsRef.current.set(basename, blob);
         loaded.push({ filenamePrefix, originalFilename: basename, text });
       }
       setResumes(loaded);
@@ -296,22 +304,23 @@ export function MigrationWizard() {
     }
   }
 
-  function bodyFor(f: LoadedFile): ImportInput {
+  function bodyFor(f: LoadedFile, resumesOverride?: ImportResume[] | null): ImportInput {
+    const effectiveResumes = resumesOverride ?? resumes;
     return {
       format: f.format,
       content: f.content,
       filename: f.name,
       checksum: f.checksum,
-      resumes: resumes && resumes.length > 0 ? resumes : undefined,
-      extractWithAi: resumes && resumes.length > 0 ? extractWithAi : undefined,
+      resumes: effectiveResumes && effectiveResumes.length > 0 ? effectiveResumes : undefined,
+      extractWithAi: effectiveResumes && effectiveResumes.length > 0 ? extractWithAi : undefined,
     };
   }
 
-  async function post(url: string, f: LoadedFile): Promise<ImportReport | null> {
+  async function post(url: string, body: ImportInput): Promise<ImportReport | null> {
     setLoading(true);
     setError(null);
     try {
-      const result = await postJson<ImportReport>(url, bodyFor(f));
+      const result = await postJson<ImportReport>(url, body);
       if (!result.ok) {
         setError(messageForFailure(result.failure));
         return null;
@@ -325,9 +334,70 @@ export function MigrationWizard() {
     }
   }
 
+  /** Best-effort: PUTs each matched résumé's raw bytes straight to Storage via a short-lived
+   *  signed URL (Wave 6, same flow the single-résumé Parse Resume page already uses) and returns
+   *  `resumes` enriched with the resulting `storageKey`. A Storage hiccup never blocks commit — a
+   *  résumé that fails to upload just attaches text-only, same as when storage is off entirely. */
+  async function uploadMatchedResumesToStorage(): Promise<ImportResume[] | null> {
+    if (!storageEnabled || !extractWithAi || !resumes || resumes.length === 0 || !preview) {
+      return resumes;
+    }
+    const matchedFilenames = new Set(
+      preview.rows
+        .filter((r) => r.resumeMatch === "matched" && r.resumeFilename)
+        .map((r) => r.resumeFilename),
+    );
+    const failures: string[] = [];
+    const enriched = await Promise.all(
+      resumes.map(async (r) => {
+        if (r.storageKey || !matchedFilenames.has(r.originalFilename)) return r;
+        const blob = rawResumeBlobsRef.current.get(r.originalFilename);
+        if (!blob) return r;
+        try {
+          const res = await fetch("/api/resume/upload-url", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ filename: r.originalFilename, mimeType: "application/pdf" }),
+          });
+          if (!res.ok) {
+            failures.push(`${r.originalFilename}: upload-url ${res.status}`);
+            return r;
+          }
+          const { signedUrl, storageKey } = (await res.json()) as {
+            signedUrl: string;
+            storageKey: string;
+          };
+          const upload = await fetch(signedUrl, {
+            method: "PUT",
+            headers: { "Content-Type": "application/pdf" },
+            body: blob,
+          });
+          if (!upload.ok) {
+            failures.push(`${r.originalFilename}: PUT ${upload.status} ${upload.statusText}`);
+            return r;
+          }
+          return { ...r, storageKey };
+        } catch (err) {
+          failures.push(
+            `${r.originalFilename}: ${err instanceof Error ? err.message : "network error"}`,
+          );
+          return r;
+        }
+      }),
+    );
+    if (failures.length > 0) {
+      console.error("Résumé Storage upload failures:", failures);
+      toast.warning(`${failures.length} résumé file(s) couldn't be stored — attaching text only.`, {
+        description: failures.join(" · "),
+      });
+    }
+    setResumes(enriched);
+    return enriched;
+  }
+
   async function handlePreview() {
     if (!file) return;
-    const report = await post("/api/migration/prepare", file);
+    const report = await post("/api/migration/prepare", bodyFor(file));
     if (report) {
       setPreview(report);
       setStep("preview");
@@ -336,7 +406,9 @@ export function MigrationWizard() {
 
   async function handleCommit() {
     if (!file) return;
-    const report = await post("/api/migration/commit", file);
+    setLoading(true);
+    const enrichedResumes = await uploadMatchedResumesToStorage();
+    const report = await post("/api/migration/commit", bodyFor(file, enrichedResumes));
     if (report) {
       setCommitted(report);
       setStep("commit");
@@ -424,8 +496,17 @@ export function MigrationWizard() {
                   onChange={(e) => setExtractWithAi(e.target.checked)}
                   className="h-4 w-4 accent-navy"
                 />
-                Extract resume data with AI on commit ({resumes.length} paid LLM call
-                {resumes.length === 1 ? "" : "s"})
+                {storageEnabled ? (
+                  <>
+                    Attach matched resumes on commit — stored + AI field extraction (
+                    {resumes.length} paid LLM call{resumes.length === 1 ? "" : "s"})
+                  </>
+                ) : (
+                  <>
+                    Extract resume data with AI on commit ({resumes.length} paid LLM call
+                    {resumes.length === 1 ? "" : "s"})
+                  </>
+                )}
               </label>
             ) : null}
           </div>

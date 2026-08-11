@@ -311,10 +311,9 @@ export function CandidatesList({
               />
             </Td>
             <Td>
-              {/* Serif = a person; the rest of the row is their (sans) data. */}
               <Link
                 href={`/candidates/${c.id}`}
-                className="font-serif text-[15px] font-semibold text-navy hover:underline focus-visible:ring-2 focus-visible:ring-navy focus-visible:outline-none"
+                className="font-semibold text-navy hover:underline focus-visible:ring-2 focus-visible:ring-navy focus-visible:outline-none"
               >
                 {c.name}
               </Link>

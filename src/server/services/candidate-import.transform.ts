@@ -71,6 +71,9 @@ export interface ImportRowPlan {
   /** The matched résumé's original filename — only set when `resumeMatch === "matched"`. Surfaced
    *  in the report so a reviewer can see WHICH file matched (legacy parity), not just that one did. */
   resumeFilename?: string | null;
+  /** The matched résumé's already-uploaded Storage key (Wave 6, client-side signed-URL PUT) — only
+   *  set when `resumeMatch === "matched"` AND the browser successfully stored the file. */
+  resumeStorageKey?: string | null;
 }
 
 // --- tolerant scalar parsers (unit-tested; validated later via the prepare preview) ----------

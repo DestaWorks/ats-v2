@@ -303,3 +303,77 @@ describe("resumeService.getDownloadUrl", () => {
     });
   });
 });
+
+describe("resumeService.attachToCandidate", () => {
+  it("creates a resume Document for the given candidate — no matching, no AI", async () => {
+    h.candidateRepo.findById.mockResolvedValue({ id: "c1", name: "Jane Doe" });
+    h.documentRepo.create.mockResolvedValue({
+      id: "d1",
+      candidateId: "c1",
+      type: "resume",
+      originalFilename: "jane.pdf",
+      mimeType: "application/pdf",
+      extractedText: "some text",
+      storageKey: "k1-jane.pdf",
+      createdAt: new Date("2026-08-11T00:00:00.000Z"),
+    });
+
+    const doc = await resumeService.attachToCandidate(
+      "c1",
+      {
+        originalFilename: "jane.pdf",
+        mimeType: "application/pdf",
+        extractedText: "some text",
+        storageKey: "k1-jane.pdf",
+      },
+      h.user as AuthUser,
+    );
+
+    expect(h.documentRepo.create).toHaveBeenCalledWith(
+      {
+        candidateId: "c1",
+        type: "resume",
+        originalFilename: "jane.pdf",
+        mimeType: "application/pdf",
+        extractedText: "some text",
+        storageKey: "k1-jane.pdf",
+        uploadedById: "u1",
+      },
+      h.fakeTx,
+    );
+    expect(h.writeAudit).toHaveBeenCalledWith(
+      h.fakeTx,
+      expect.objectContaining({ entity: "document", entityId: "d1", action: "upload" }),
+    );
+    expect(doc.id).toBe("d1");
+  });
+
+  it("defaults extractedText/storageKey to null when omitted (best-effort extraction)", async () => {
+    h.candidateRepo.findById.mockResolvedValue({ id: "c1", name: "Jane Doe" });
+    h.documentRepo.create.mockResolvedValue({ id: "d2" });
+
+    await resumeService.attachToCandidate(
+      "c1",
+      { originalFilename: "scan.pdf", mimeType: "application/pdf" },
+      h.user as AuthUser,
+    );
+
+    expect(h.documentRepo.create).toHaveBeenCalledWith(
+      expect.objectContaining({ extractedText: null, storageKey: null }),
+      h.fakeTx,
+    );
+  });
+
+  it("throws NOT_FOUND and never creates a document when the candidate doesn't exist", async () => {
+    h.candidateRepo.findById.mockResolvedValue(null);
+
+    await expect(
+      resumeService.attachToCandidate(
+        "missing",
+        { originalFilename: "jane.pdf", mimeType: "application/pdf" },
+        h.user as AuthUser,
+      ),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(h.documentRepo.create).not.toHaveBeenCalled();
+  });
+});
