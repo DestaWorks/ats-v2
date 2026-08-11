@@ -10,6 +10,7 @@ const h = vi.hoisted(() => ({
   create: vi.fn(),
   list: vi.fn(),
   findById: vi.fn(),
+  findPendingByEmail: vi.fn(),
   updateStatus: vi.fn(),
   adminCreate: vi.fn(),
   sendEmail: vi.fn(),
@@ -22,6 +23,7 @@ vi.mock("@/server/repositories/access-request.repository", () => ({
     create: h.create,
     list: h.list,
     findById: h.findById,
+    findPendingByEmail: h.findPendingByEmail,
     updateStatus: h.updateStatus,
   },
 }));
@@ -47,6 +49,32 @@ const pendingRequest = {
 
 beforeEach(() => {
   Object.values(h).forEach((fn) => fn.mockReset());
+});
+
+describe("accessRequestService.submit", () => {
+  const input = {
+    name: "Jane Doe",
+    email: "jane@example.com",
+    organization: "Acme Health",
+    message: "Please add me",
+  };
+
+  it("creates the request when no pending request exists for this email", async () => {
+    h.findPendingByEmail.mockResolvedValue(null);
+    h.create.mockResolvedValue(pendingRequest);
+    await accessRequestService.submit(input);
+    expect(h.findPendingByEmail).toHaveBeenCalledWith("jane@example.com");
+    expect(h.create).toHaveBeenCalledWith(input);
+  });
+
+  it("409s without creating a second row when a pending request already exists for this email", async () => {
+    h.findPendingByEmail.mockResolvedValue(pendingRequest);
+    await expect(accessRequestService.submit(input)).rejects.toMatchObject({
+      code: "CONFLICT",
+      message: expect.stringContaining("already have a pending"),
+    });
+    expect(h.create).not.toHaveBeenCalled();
+  });
 });
 
 describe("accessRequestService.list", () => {
