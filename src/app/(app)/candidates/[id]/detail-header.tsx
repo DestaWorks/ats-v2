@@ -2,16 +2,81 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { statusLabel, type CandidateStatus } from "@/lib/constants";
-import type { CandidateDetailDTO, CandidateProfileDTO } from "@/lib/validation/candidate";
+import { useTransition } from "react";
+import { toast } from "sonner";
+import { TRACKS, statusLabel, type CandidateStatus, type Track } from "@/lib/constants";
+import type {
+  CandidateDetailDTO,
+  CandidateProfileDTO,
+  UpdateCandidateInput,
+} from "@/lib/validation/candidate";
 import { cn } from "@/lib/utils/cn";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { StageMover } from "./stage-mover";
 import { JourneyButton } from "./journey-modal";
-import type { MovedFields } from "./lib/detail-fetch";
+import { messageForFailure, patchCandidate, type MovedFields } from "./lib/detail-fetch";
 
 const MS_PER_DAY = 86_400_000;
+
+const TRACK_PILL_TONE: Record<Track, string> = {
+  Clinical: "border-teal/40 bg-teal/5 text-teal",
+  Prescriber: "border-navy/40 bg-navy/5 text-navy",
+  Operations: "border-purple/40 bg-purple/5 text-purple",
+};
+
+/** Track pill — legacy parity ("DROP 55 — Track editor pill (click to change)"): a native
+ *  `<select>` styled to look like the static badge it replaces, saving immediately on change
+ *  (no separate Save/Cancel — matches the "Move to" stage select's own immediacy). Track alone
+ *  is a valid standalone patch; stage-gate requirements are re-checked at MOVE time, not here. */
+function TrackPill({
+  candidateId,
+  track,
+  onSaved,
+  announce,
+}: {
+  candidateId: string;
+  track: Track;
+  onSaved: (input: UpdateCandidateInput) => void;
+  announce: (message: string) => void;
+}) {
+  const [pending, startTransition] = useTransition();
+
+  function change(next: Track) {
+    if (next === track) return;
+    startTransition(async () => {
+      const result = await patchCandidate(candidateId, { track: next });
+      if (result.ok) {
+        onSaved({ track: next });
+        toast.success(`Track set to ${next}`);
+        announce(`Track changed to ${next}`);
+      } else {
+        toast.error(messageForFailure(result.failure));
+        announce(`Track change failed: ${messageForFailure(result.failure)}`);
+      }
+    });
+  }
+
+  return (
+    <select
+      aria-label="Track"
+      value={track}
+      disabled={pending}
+      onChange={(e) => change(e.target.value as Track)}
+      className={cn(
+        "scheme-light appearance-none rounded-full border px-3 py-0.5 text-sm font-medium",
+        "focus-visible:ring-2 focus-visible:ring-navy focus-visible:outline-none disabled:cursor-wait disabled:opacity-60",
+        TRACK_PILL_TONE[track],
+      )}
+    >
+      {TRACKS.map((t) => (
+        <option key={t} value={t}>
+          {t} track
+        </option>
+      ))}
+    </select>
+  );
+}
 
 /**
  * Detail header (legacy modal-header parity): serif name; the chips row (license state ·
@@ -27,6 +92,7 @@ export function DetailHeader({
   clientName,
   scoring,
   onMoved,
+  onSaved,
   announce,
   inModal = false,
 }: {
@@ -34,6 +100,7 @@ export function DetailHeader({
   clientName: string | null;
   scoring: CandidateDetailDTO["scoring"];
   onMoved: (fields: MovedFields) => void;
+  onSaved: (input: UpdateCandidateInput) => void;
   announce: (message: string) => void;
   inModal?: boolean;
 }) {
@@ -84,9 +151,12 @@ export function DetailHeader({
           <span className="rounded-full bg-navy px-3 py-0.5 text-[11px] font-semibold text-white">
             {statusLabel(candidate.status as CandidateStatus)}
           </span>
-          <span className="rounded-full border border-green/40 bg-green/5 px-3 py-0.5 text-[11px] font-semibold tracking-wide text-green uppercase">
-            {candidate.track} track
-          </span>
+          <TrackPill
+            candidateId={candidate.id}
+            track={candidate.track as Track}
+            onSaved={onSaved}
+            announce={announce}
+          />
         </div>
       </div>
 

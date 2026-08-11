@@ -9,6 +9,15 @@ export const accessRequestRepository = {
     return prisma.accessRequest.create({ data });
   },
 
+  /** Case-insensitive — mirrors `userRepository.findByEmail`. Used to reject a resubmission
+   *  while an earlier request from the same email is still pending, rather than piling up
+   *  duplicate rows. */
+  findPendingByEmail(email: string) {
+    return prisma.accessRequest.findFirst({
+      where: { email: { equals: email, mode: "insensitive" }, status: "pending" },
+    });
+  },
+
   list() {
     return prisma.accessRequest.findMany({ orderBy: { createdAt: "desc" } });
   },

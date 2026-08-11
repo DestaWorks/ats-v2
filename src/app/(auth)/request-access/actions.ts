@@ -29,6 +29,13 @@ export async function submitAccessRequest(
   if (!parsed.success) {
     return { ok: false, error: "Please check the form and try again." };
   }
-  await accessRequestService.submit(parsed.data);
+  try {
+    await accessRequestService.submit(parsed.data);
+  } catch (err) {
+    if (err instanceof AppError && err.code === "CONFLICT") {
+      return { ok: false, error: err.message };
+    }
+    throw err;
+  }
   return { ok: true };
 }

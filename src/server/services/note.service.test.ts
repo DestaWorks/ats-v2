@@ -17,8 +17,9 @@ const h = vi.hoisted(() => ({
   candidateRepo: { findById: vi.fn() },
   noteRepo: { create: vi.fn(), listByCandidate: vi.fn() },
   mentionRepo: { createMany: vi.fn() },
-  userRepo: { list: vi.fn() },
+  userRepo: { list: vi.fn(), emailsByIds: vi.fn() },
   writeAudit: vi.fn(),
+  sendEmail: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
@@ -32,6 +33,7 @@ vi.mock("@/server/db/audit", () => ({ writeAudit: h.writeAudit }));
 vi.mock("@/server/db/with-transaction", () => ({
   withTransaction: (fn: (tx: unknown) => unknown) => fn(h.fakeTx),
 }));
+vi.mock("@/server/email/provider", () => ({ sendEmail: h.sendEmail }));
 
 import { noteService, visibleNotes, toNoteDTO } from "./note.service";
 
@@ -60,7 +62,11 @@ beforeEach(() => {
   h.mentionRepo.createMany.mockResolvedValue(0);
   h.userRepo.list.mockReset();
   h.userRepo.list.mockResolvedValue([]);
+  h.userRepo.emailsByIds.mockReset();
+  h.userRepo.emailsByIds.mockResolvedValue(new Map());
   h.writeAudit.mockReset();
+  h.sendEmail.mockReset();
+  h.sendEmail.mockResolvedValue({ previewUrl: null });
 });
 
 describe("noteService.add", () => {
@@ -135,6 +141,71 @@ describe("noteService.add", () => {
     expect(h.noteRepo.create).not.toHaveBeenCalled();
     expect(h.mentionRepo.createMany).not.toHaveBeenCalled();
     expect(h.writeAudit).not.toHaveBeenCalled();
+  });
+
+  it("emails a mentioned recipient with a resolvable address, in addition to the in-app mention", async () => {
+    h.candidateRepo.findById.mockResolvedValue({ id: "c1", name: "Jane Doe" });
+    h.noteRepo.create.mockResolvedValue(noteRow({ body: "@Biruh see this" }));
+    h.userRepo.list.mockResolvedValue([{ id: "u2", name: "Biruh Desta" }]);
+    h.userRepo.emailsByIds.mockResolvedValue(new Map([["u2", "biruh@desta.works"]]));
+
+    await noteService.add(
+      "c1",
+      { body: "@Biruh see this", noteType: "internal" },
+      h.user as AuthUser,
+    );
+
+    expect(h.userRepo.emailsByIds).toHaveBeenCalledWith(["u2"]);
+    expect(h.sendEmail).toHaveBeenCalledTimes(1);
+    const [args] = h.sendEmail.mock.calls[0]!;
+    expect(args.to).toBe("biruh@desta.works");
+    expect(args.subject).toContain("Jane Doe");
+    expect(args.html).toContain("see this");
+  });
+
+  it("skips a recipient with no resolvable email — never calls sendEmail for them", async () => {
+    h.candidateRepo.findById.mockResolvedValue({ id: "c1", name: "Jane Doe" });
+    h.noteRepo.create.mockResolvedValue(noteRow({ body: "@Biruh see this" }));
+    h.userRepo.list.mockResolvedValue([{ id: "u2", name: "Biruh Desta" }]);
+    h.userRepo.emailsByIds.mockResolvedValue(new Map()); // no email on file
+
+    await noteService.add(
+      "c1",
+      { body: "@Biruh see this", noteType: "internal" },
+      h.user as AuthUser,
+    );
+
+    expect(h.sendEmail).not.toHaveBeenCalled();
+  });
+
+  it("never emails/looks up when nobody is mentioned", async () => {
+    h.candidateRepo.findById.mockResolvedValue({ id: "c1", name: "Jane Doe" });
+    h.noteRepo.create.mockResolvedValue(noteRow({ body: "no mentions here" }));
+
+    await noteService.add(
+      "c1",
+      { body: "no mentions here", noteType: "internal" },
+      h.user as AuthUser,
+    );
+
+    expect(h.userRepo.emailsByIds).not.toHaveBeenCalled();
+    expect(h.sendEmail).not.toHaveBeenCalled();
+  });
+
+  it("a failed send never fails the note-add (best-effort)", async () => {
+    h.candidateRepo.findById.mockResolvedValue({ id: "c1", name: "Jane Doe" });
+    h.noteRepo.create.mockResolvedValue(noteRow({ body: "@Biruh see this" }));
+    h.userRepo.list.mockResolvedValue([{ id: "u2", name: "Biruh Desta" }]);
+    h.userRepo.emailsByIds.mockResolvedValue(new Map([["u2", "biruh@desta.works"]]));
+    h.sendEmail.mockRejectedValue(new Error("SMTP down"));
+
+    const dto = await noteService.add(
+      "c1",
+      { body: "@Biruh see this", noteType: "internal" },
+      h.user as AuthUser,
+    );
+
+    expect(dto.id).toBe("n1"); // the note itself still saved successfully
   });
 });
 

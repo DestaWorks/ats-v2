@@ -35,7 +35,21 @@ function toDTO(row: {
  * they never import Prisma directly.
  */
 export const accessRequestService = {
-  submit(input: AccessRequestInput) {
+  /**
+   * Reject a resubmission while an earlier request from this email is still pending, instead of
+   * silently piling up duplicate rows (confirmed live 2026-08-11 — the same email submitted the
+   * form 4 times, all landing as separate "pending" rows an admin then has to sort through/
+   * decline individually). Declined/approved requests don't block a fresh submission — only an
+   * unresolved one does.
+   */
+  async submit(input: AccessRequestInput) {
+    const existing = await accessRequestRepository.findPendingByEmail(input.email);
+    if (existing) {
+      throw new AppError(
+        "CONFLICT",
+        "You already have a pending access request — an admin will review it soon.",
+      );
+    }
     return accessRequestRepository.create({
       name: input.name,
       email: input.email,

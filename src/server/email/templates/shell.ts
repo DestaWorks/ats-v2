@@ -13,6 +13,10 @@ export interface EmailContent {
  * the "bulletproof email" subset rather than reusing the app's own Tailwind/webfont setup.
  * `preheader` is the hidden snippet Gmail/Outlook show in the inbox list next to the subject —
  * without one, clients fall back to showing the first visible text (here, the greeting).
+ *
+ * The header band's `background-image` gradient matches the sign-in page's own dark background
+ * (`(auth)/auth-shell.tsx`) exactly, not a hand-picked flat color — `background-color` is the
+ * solid fallback for clients (Outlook desktop) that ignore `background-image`.
  */
 export function emailShell(opts: { preheader: string; bodyHtml: string }): string {
   return `<!doctype html>
@@ -30,7 +34,7 @@ export function emailShell(opts: { preheader: string; bodyHtml: string }): strin
       <td align="center" style="padding:40px 16px;">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:520px;">
           <tr>
-            <td style="background-color:#12101c;border-radius:10px 10px 0 0;padding:28px 32px;text-align:center;">
+            <td style="background-color:#0a0a1a;background-image:linear-gradient(160deg,#0a0a1a 0%,#0f1628 40%,#151015 100%);border-radius:10px 10px 0 0;padding:28px 32px;text-align:center;">
               <p style="margin:0;font-size:12px;letter-spacing:3px;color:#8b7355;text-transform:uppercase;">Desta Works</p>
               <p style="margin:4px 0 0;font-family:Georgia,'Times New Roman',serif;font-size:20px;color:#f8f6f1;">DestaHealth ATS</p>
             </td>
