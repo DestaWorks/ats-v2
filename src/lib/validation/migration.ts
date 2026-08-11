@@ -28,6 +28,10 @@ export const importResumeSchema = z.object({
    *  report so a reviewer can see WHICH file matched, not just that one did (legacy parity). */
   originalFilename: z.string().trim().min(1).max(255),
   text: z.string().min(1).max(60_000),
+  /** Set client-side (Wave 6) once the raw PDF bytes have already been PUT directly to Storage via
+   *  a signed URL — the server never receives the binary itself, only this key. Absent when Storage
+   *  isn't configured or the upload failed; the résumé still attaches, just without a stored file. */
+  storageKey: z.string().max(500).optional(),
 });
 export type ImportResume = z.infer<typeof importResumeSchema>;
 

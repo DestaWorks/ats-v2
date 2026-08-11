@@ -461,7 +461,16 @@ describe("migrationService.commit — AI résumé extraction (Wave 1.3 backlog, 
     );
     expect(report.rows[0]!.action).toBe("add"); // candidate itself still committed
     expect(report.rows[0]!.reasons).toContain("ai-extraction-failed");
-    expect(h.documentRepo.create).not.toHaveBeenCalled();
+    // The résumé still attaches text-only — an AI failure shouldn't also lose the free part.
+    expect(h.documentRepo.create).toHaveBeenCalledTimes(1);
+    const [docData] = h.documentRepo.create.mock.calls[0]!;
+    expect(docData).toMatchObject({
+      candidateId: "db-L-1",
+      type: "resume",
+      extractedText: "resume text",
+      extractedData: undefined,
+      storageKey: null,
+    });
   });
 
   it("ambiguous/unmatched rows never trigger AI extraction even with extractWithAi=true", async () => {

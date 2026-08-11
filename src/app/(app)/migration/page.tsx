@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/server/auth/guards";
 import { hasCapability } from "@/lib/constants";
+import { storageEnabled } from "@/server/integrations/storage";
 import { ErrorState } from "@/components/ui/error-state";
 import { MigrationWizard } from "./migration-wizard";
 
@@ -34,7 +35,7 @@ export default async function MigrationPage() {
           preview, then commit — re-running is safe (matched by legacy id).
         </p>
       </header>
-      <MigrationWizard />
+      <MigrationWizard storageEnabled={storageEnabled} />
     </div>
   );
 }

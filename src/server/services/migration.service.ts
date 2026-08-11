@@ -9,6 +9,7 @@ import type {
   ImportResume,
   ImportRowReport,
 } from "@/lib/validation/migration";
+import type { ResumeData } from "@/lib/validation/resume";
 import type { AuthUser } from "@/server/auth/guards";
 import { parseResume } from "@/server/ai/parse-resume";
 import { writeAudit } from "@/server/db/audit";
@@ -81,6 +82,7 @@ function matchResumes(plans: ImportRowPlan[], resumes: ImportResume[] | undefine
         p.resumeMatch = "matched";
         p.resumeText = filesForKey[0]!.text;
         p.resumeFilename = filesForKey[0]!.originalFilename;
+        p.resumeStorageKey = filesForKey[0]!.storageKey ?? null;
       }
     }
   }
@@ -217,22 +219,26 @@ function buildReport(planned: Planned): ImportReport {
 }
 
 /**
- * AI-extract one matched résumé and attach it (Wave 1.3 backlog). Reuses Wave 1.2's REAL
- * extraction schema/prompt (`parseResume`) — never legacy's own broken field-harvesting — and
- * its conservative "fill empty fields only" merge (`fillEmptyFields`, `resume.service.ts`).
- * Rate-limited per user since a bulk commit can trigger many calls in a row. Any failure
- * (rate-limit, provider error, disabled) marks the row `"ai-extraction-failed"` and returns —
- * the candidate itself was already committed by the caller, so this never blocks the batch.
+ * Attach one matched résumé to its candidate (Wave 1.3 backlog, extended Wave 6). Always creates
+ * the `Document` with the already-extracted text and, when the browser already PUT the file to
+ * Storage, its `storageKey` — that part is free and never fails the row. On top of that, AI-parse
+ * the résumé into structured fields via Wave 1.2's REAL extraction schema/prompt (`parseResume`,
+ * never legacy's own broken field-harvesting) and merge them in via the conservative "fill empty
+ * fields only" pass (`fillEmptyFields`, `resume.service.ts`). Rate-limited per user since a bulk
+ * commit can trigger many calls in a row. An AI failure (rate-limit, provider error, disabled)
+ * marks the row `"ai-extraction-failed"` but still lets the document attach — the candidate itself
+ * was already committed by the caller, so neither half ever blocks the batch.
  */
 async function attachResumeWithAi(
   plan: ImportRowPlan,
   candidateId: string,
   user: AuthUser,
 ): Promise<void> {
+  let data: ResumeData | null = null;
   try {
     checkRateLimit(`migration-resume-ai:${user.id}`, { limit: 20, windowMs: 60_000 });
     const variant = variantForPlan(plan);
-    const data = await parseResume({ variant, text: plan.resumeText! });
+    data = await parseResume({ variant, text: plan.resumeText! });
     const mapped = toCandidateCreateInput(variant, data) as unknown as Record<string, unknown>;
 
     await withTransaction(async (tx) => {
@@ -243,29 +249,35 @@ async function attachResumeWithAi(
           await candidateRepository.update(candidateId, fills, tx);
         }
       }
-      const document = await documentRepository.create(
-        {
-          candidateId,
-          type: "resume",
-          originalFilename: `${plan.name}.pdf`,
-          mimeType: "application/pdf",
-          extractedText: plan.resumeText,
-          extractedData: data,
-          uploadedById: user.id,
-        },
-        tx,
-      );
-      await writeAudit(tx, {
-        entity: "document",
-        entityId: document.id,
-        actor: user.id,
-        action: "import-resume-ai",
-      });
     });
   } catch {
-    // Never log the row (PII). Surface the failure instead of legacy's silent swallow.
+    // Never log the row (PII). Surface the failure instead of legacy's silent swallow — the
+    // résumé file/text below still attaches even when AI field-parsing fails, since that part
+    // is free (client-side text extraction + a Storage PUT the browser already did).
     plan.errors.push("ai-extraction-failed");
   }
+
+  await withTransaction(async (tx) => {
+    const document = await documentRepository.create(
+      {
+        candidateId,
+        type: "resume",
+        originalFilename: plan.resumeFilename ?? `${plan.name}.pdf`,
+        mimeType: "application/pdf",
+        extractedText: plan.resumeText,
+        extractedData: data ?? undefined,
+        storageKey: plan.resumeStorageKey ?? null,
+        uploadedById: user.id,
+      },
+      tx,
+    );
+    await writeAudit(tx, {
+      entity: "document",
+      entityId: document.id,
+      actor: user.id,
+      action: data ? "import-resume-ai" : "import-resume",
+    });
+  });
 }
 
 export const migrationService = {
@@ -334,7 +346,9 @@ export const migrationService = {
 
       // Wave 1.3 backlog (Indrasur bulk-résumé flow) — deliberately OUTSIDE the upsert transaction
       // (a paid, slow LLM call has no business holding a DB lock). Runs only for rows with an
-      // unambiguously matched résumé, and only when the caller opted in.
+      // unambiguously matched résumé, and only when the caller opted in — this is also what
+      // attaches the Storage file (Wave 6), not just the AI-parsed fields, since both are cheap/
+      // free relative to the LLM call this same opt-in already gates.
       if (input.extractWithAi && plan.resumeMatch === "matched" && plan.resumeText && candidateId) {
         await attachResumeWithAi(plan, candidateId, user);
       }
