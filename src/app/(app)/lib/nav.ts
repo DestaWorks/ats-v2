@@ -58,8 +58,8 @@ export const BASE_NAV_ITEMS: readonly NavItem[] = [
   { href: "/daily-log", label: "Daily Log", group: "Home", icon: "clipboard" },
 
   { href: "/sourcing", label: "Sourcing", group: "Recruiting", icon: "search" },
-  { href: "/discover", label: "Discover", group: "Recruiting", icon: "sparkles" },
   { href: "/pipeline", label: "Pipeline", group: "Recruiting", icon: "board" },
+  { href: "/discover", label: "Discover", group: "Recruiting", icon: "sparkles" },
   { href: "/screening", label: "Screening", group: "Recruiting", icon: "check" },
   { href: "/license-verify", label: "License Verify", group: "Recruiting", icon: "shield" },
   { href: "/candidates", label: "Candidates", group: "Recruiting", icon: "users" },
