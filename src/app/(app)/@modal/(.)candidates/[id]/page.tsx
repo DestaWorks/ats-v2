@@ -19,7 +19,7 @@ export default async function InterceptedCandidateDetail({
 }) {
   const { id } = await params;
   const { tab } = await searchParams;
-  const { detail, clients, taggable } = await loadCandidateDetail(id);
+  const { detail, clients, taggable, storageEnabled } = await loadCandidateDetail(id);
 
   return (
     <RouteModal>
@@ -29,6 +29,7 @@ export default async function InterceptedCandidateDetail({
         taggable={taggable}
         canEditCredential={detail.canVerifyCredentials}
         initialTab={tab}
+        storageEnabled={storageEnabled}
         inModal
       />
     </RouteModal>

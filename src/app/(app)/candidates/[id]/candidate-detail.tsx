@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import type {
   CandidateDetailDTO,
   CandidateProfileDTO,
+  DocumentSummaryDTO,
   NoteDTO,
   UpdateCandidateInput,
   VerifyLicenseInput,
@@ -55,6 +56,7 @@ export function CandidateDetail({
   canEditCredential,
   initialTab,
   inModal,
+  storageEnabled,
 }: {
   initial: CandidateDetailDTO;
   clients: ClientOption[];
@@ -64,10 +66,13 @@ export function CandidateDetail({
   initialTab?: string;
   /** True in the route-intercepted dialog rendering — the header shows Close instead of the back-link. */
   inModal?: boolean;
+  /** Whether object storage (Wave 6) is configured — gates the Resume tab's upload control. */
+  storageEnabled: boolean;
 }) {
   const [candidate, setCandidate] = useState<CandidateProfileDTO>(initial.candidate);
   const [notes, setNotes] = useState<NoteDTO[]>(initial.notes);
   const [outreach, setOutreach] = useState<OutreachAttemptDTO[]>(initial.outreach);
+  const [documents, setDocuments] = useState<DocumentSummaryDTO[]>(initial.documents);
   const [announcement, setAnnouncement] = useState("");
 
   const clientNameById = useMemo(() => new Map(clients.map((c) => [c.id, c.name])), [clients]);
@@ -123,6 +128,10 @@ export function CandidateDetail({
     setCandidate((prev) => ({ ...prev, outreachAttempts: prev.outreachAttempts + 1 }));
   }
 
+  function onResumeUploaded(document: DocumentSummaryDTO) {
+    setDocuments((prev) => [document, ...prev]);
+  }
+
   const tabs: TabDef[] = [
     {
       key: "details",
@@ -163,7 +172,16 @@ export function CandidateDetail({
     {
       key: "resume",
       label: "Resume",
-      panel: <ResumeTab documents={initial.documents} canDownload={canEditCredential} />,
+      panel: (
+        <ResumeTab
+          candidateId={candidate.id}
+          documents={documents}
+          canDownload={canEditCredential}
+          storageEnabled={storageEnabled}
+          onUploaded={onResumeUploaded}
+          announce={announce}
+        />
+      ),
     },
     {
       key: "notes",
