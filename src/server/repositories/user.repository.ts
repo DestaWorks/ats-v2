@@ -45,6 +45,19 @@ export const userRepository = {
     });
   },
 
+  /** Batch-resolve a set of user ids to their emails in ONE query — mirrors `namesByIds`. Used
+   *  ONLY server-side (e.g. mention notification emails); `list()` deliberately never selects
+   *  email since its result feeds the client-side @mention picker. */
+  async emailsByIds(ids: string[], tx?: Prisma.TransactionClient): Promise<Map<string, string>> {
+    const unique = [...new Set(ids)];
+    if (unique.length === 0) return new Map();
+    const rows = await db(tx).user.findMany({
+      where: { id: { in: unique } },
+      select: { id: true, email: true },
+    });
+    return new Map(rows.map((r) => [r.id, r.email] as const));
+  },
+
   /** Wave 4.1 (Templates) + Wave 5.4 (My Profile) — one user's self-service profile fields. */
   findPreferences(userId: string, tx?: Prisma.TransactionClient) {
     return db(tx).user.findUnique({

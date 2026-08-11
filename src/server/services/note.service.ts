@@ -1,7 +1,7 @@
 import "server-only";
 import type { NoteDTO } from "@/lib/validation/candidate";
 import { hasCapability, type NoteType, type Role } from "@/lib/constants";
-import { resolveMentions } from "@/lib/mentions";
+import { resolveMentions, type MentionTarget } from "@/lib/mentions";
 import type { AuthUser } from "@/server/auth/guards";
 import { writeAudit } from "@/server/db/audit";
 import { withTransaction } from "@/server/db/with-transaction";
@@ -11,6 +11,8 @@ import { noteRepository, type NoteRow } from "@/server/repositories/note.reposit
 import { userRepository } from "@/server/repositories/user.repository";
 import { AppError } from "@/server/http/app-error";
 import { toIso } from "@/lib/utils/iso";
+import { sendEmail } from "@/server/email/provider";
+import { mentionEmail } from "@/server/email/templates/mention";
 
 /** Minimal viewer shape the note scope needs (kept structural for a future client-portal viewer). */
 export interface NoteViewer {
@@ -48,6 +50,39 @@ export function toNoteDTO(row: NoteRow): NoteDTO {
 export interface AddNoteServiceInput {
   body: string;
   noteType: NoteType;
+}
+
+/** Best-effort email notification for each mentioned recipient — the in-app mention row (already
+ *  written) is the source of truth; this is on top of it, never a blocker. A recipient with no
+ *  resolvable email (or any lookup/send failure) is silently skipped — a mentioned teammate still
+ *  sees the alert bell either way. */
+async function notifyMentioned(
+  recipients: MentionTarget[],
+  ctx: { candidateId: string; candidateName: string; body: string; authorName: string },
+): Promise<void> {
+  try {
+    const emails = await userRepository.emailsByIds(recipients.map((r) => r.id));
+    const url = new URL(
+      `/candidates/${ctx.candidateId}?tab=notes`,
+      process.env.BETTER_AUTH_URL ?? "http://localhost:3000",
+    ).toString();
+    await Promise.all(
+      recipients.map((r) => {
+        const email = emails.get(r.id);
+        if (!email) return undefined;
+        const { subject, html, text } = mentionEmail({
+          name: r.name,
+          authorName: ctx.authorName,
+          candidateName: ctx.candidateName,
+          body: ctx.body,
+          url,
+        });
+        return sendEmail({ to: email, subject, html, text }).catch(() => undefined);
+      }),
+    );
+  } catch {
+    // Never let a lookup/send failure surface as a note-add failure.
+  }
 }
 
 /**
@@ -94,6 +129,20 @@ export const noteService = {
       });
       return note;
     });
+
+    // Best-effort, AFTER the transaction commits — a mentioned teammate is already notified
+    // in-app via the mention row above regardless, so an unconfigured/failed send here (or a
+    // recipient with no resolvable email) never turns a successful note-add into an error.
+    // AWAITED (not fire-and-forget): a serverless function's process can be frozen/recycled the
+    // instant the response returns, which would silently drop an un-awaited send mid-flight.
+    if (recipients.length > 0) {
+      await notifyMentioned(recipients, {
+        candidateId,
+        candidateName: candidate.name,
+        body: input.body,
+        authorName: user.name,
+      });
+    }
 
     return toNoteDTO(created);
   },
