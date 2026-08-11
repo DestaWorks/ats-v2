@@ -221,6 +221,7 @@ export function CandidateDetail({
         clientName={clientName}
         scoring={initial.scoring}
         onMoved={onMoved}
+        onSaved={onSaved}
         announce={announce}
         inModal={inModal}
       />
