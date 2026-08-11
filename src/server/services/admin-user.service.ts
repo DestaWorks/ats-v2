@@ -58,7 +58,15 @@ export const adminUserService = {
     return { users: result.users.map((u) => toDTO(u)), total: result.total };
   },
 
-  /** Generates + returns a password once when `input.password` is omitted (never persisted in plaintext). */
+  /**
+   * Generates + returns a password once when `input.password` is omitted (never persisted in
+   * plaintext). Sets `emailVerified: true` — an admin/access-request-approval creating this
+   * account IS this app's trust boundary (invite-only, D3; there's no separate verification
+   * email flow). Without this, Better Auth's account-linking (`auth.ts`) requires the LOCAL
+   * account's email to already be verified before it will link a same-email Google sign-in —
+   * every admin-created account would otherwise permanently fail to link ("account not linked"),
+   * blocking the "sign in with either Google or password" flow entirely.
+   */
   async create(input: CreateUserInput): Promise<GeneratedPasswordDTO> {
     const generatedPassword = input.password ? null : generatePassword();
     const result = await auth.api.createUser({
@@ -68,6 +76,7 @@ export const adminUserService = {
         email: input.email,
         role: input.role,
         password: input.password ?? generatedPassword!,
+        data: { emailVerified: true },
       },
     });
     return { user: toDTO(result.user), generatedPassword };

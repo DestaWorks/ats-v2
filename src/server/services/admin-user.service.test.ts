@@ -106,6 +106,21 @@ describe("adminUserService.create", () => {
       }),
     );
   });
+
+  it("marks the new account emailVerified — required for Better Auth to later link a same-email Google sign-in", async () => {
+    h.createUser.mockResolvedValue({ user: baseUser });
+    await adminUserService.create({
+      name: "Ann Owner",
+      email: "ann@desta.works",
+      role: "Owner",
+      password: "supplied-pw-123",
+    });
+    expect(h.createUser).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: expect.objectContaining({ data: { emailVerified: true } }),
+      }),
+    );
+  });
 });
 
 describe("adminUserService.setRole", () => {
