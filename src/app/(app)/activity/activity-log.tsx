@@ -286,7 +286,7 @@ function ChangesPanel({
   }
 
   return (
-    <Table caption="Changed fields" columns={["Field", "Before", "After"]} className="text-xs">
+    <Table caption="Changed fields" columns={["Field", "Before", "After"]}>
       {changes.map((change) => (
         <tr key={change.key}>
           <Td className="font-medium text-charcoal">{change.key}</Td>
