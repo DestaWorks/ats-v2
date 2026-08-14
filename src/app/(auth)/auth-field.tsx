@@ -5,7 +5,7 @@ import { EyeIcon, EyeSlashIcon } from "@heroicons/react/24/outline";
  *  gradient card) — deliberately NOT the shared light-theme `Input`/`Field` primitives, which
  *  assume a white page background. Shared by the sign-in and request-access forms. */
 export const authInputClass =
-  "w-full rounded-lg border border-white/10 bg-white/[0.04] px-3.5 py-3 text-sm text-ivory outline-none placeholder:text-ivory/25 focus:border-white/25";
+  "auth-input w-full rounded-lg border border-white/10 bg-white/[0.04] px-3.5 py-3 text-sm text-ivory outline-none placeholder:text-ivory/25 focus:border-white/25";
 
 export function AuthLabel({ htmlFor, children }: { htmlFor: string; children: React.ReactNode }) {
   return (
