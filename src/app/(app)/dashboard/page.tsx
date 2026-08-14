@@ -145,22 +145,32 @@ export default async function DashboardPage() {
           ) : (
             <ul className="flex flex-col divide-y divide-black/5">
               {attention.map((c) => (
-                <li key={c.id} className="flex flex-col gap-1 py-2.5">
-                  <span className="flex items-center gap-2">
-                    <span aria-hidden className={cn("h-2 w-2 rounded-full", STATUS_BG[c.status])} />
-                    <span className="text-sm font-medium text-charcoal">{c.name}</span>
-                  </span>
-                  <span className="flex items-center justify-between gap-3 pl-4">
-                    <span className="text-xs text-gray">{c.clientName ?? "Unassigned"}</span>
-                    <span
-                      className={cn(
-                        "text-xs font-semibold",
-                        c.isOverdue ? "text-red" : "text-orange",
-                      )}
-                    >
-                      {c.isOverdue ? "overdue" : "stuck"} · {c.daysInStage}d
+                <li key={c.id}>
+                  <Link
+                    href={`/candidates/${c.id}`}
+                    className="flex flex-col gap-1 rounded-lg px-2 py-2.5 transition hover:bg-black/[0.03]"
+                  >
+                    <span className="flex items-center gap-2">
+                      <span
+                        aria-hidden
+                        className={cn("h-2 w-2 rounded-full", STATUS_BG[c.status])}
+                      />
+                      <span className="text-sm font-semibold text-navy hover:underline">
+                        {c.name}
+                      </span>
                     </span>
-                  </span>
+                    <span className="flex items-center justify-between gap-3 pl-4">
+                      <span className="text-xs text-gray">{c.clientName ?? "Unassigned"}</span>
+                      <span
+                        className={cn(
+                          "text-xs font-semibold",
+                          c.isOverdue ? "text-red" : "text-orange",
+                        )}
+                      >
+                        {c.isOverdue ? "overdue" : "stuck"} · {c.daysInStage}d
+                      </span>
+                    </span>
+                  </Link>
                 </li>
               ))}
             </ul>
