@@ -39,7 +39,7 @@ import { requireUser, type AuthUser } from "@/server/auth/guards";
 import { writeAudit } from "@/server/db/audit";
 import { withTransaction } from "@/server/db/with-transaction";
 import { candidateRepository, type CandidateRow } from "@/server/repositories/candidate.repository";
-import { clientRepository } from "@/server/repositories/client.repository";
+import { clientRepository, cachedClientNameMap } from "@/server/repositories/client.repository";
 import {
   outreachRepository,
   type OutreachAttemptRow,
@@ -605,7 +605,7 @@ export const candidateService = {
         documentRepository.listByCandidate(id),
         noteRepository.listByCandidate(id),
         stageHistoryRepository.listByCandidate(id),
-        clientRepository.nameMap(),
+        cachedClientNameMap(),
         clientRulesRepository.list(),
         outreachRepository.listForCandidate(id),
       ]);
@@ -846,7 +846,7 @@ export const candidateService = {
     const baseOrder = listSortToOrderBy(sort);
     const repoFilters = { ...toRepoFilters(filters, viewer), status: filters.status };
 
-    const namesAndRules = Promise.all([clientRepository.nameMap(), clientRulesRepository.list()]);
+    const namesAndRules = Promise.all([cachedClientNameMap(), clientRulesRepository.list()]);
 
     // DB path — sort is DB-native and Hot is off, so paginate in SQL. `count`, the page read, and
     // the name/rules lookup are all independent of each other (perf audit 2026-08-05 — these used
@@ -928,7 +928,7 @@ export const candidateService = {
     const [grouped, staleRows, clientNames, rulesRows] = await Promise.all([
       candidateRepository.groupByStatus(),
       candidateRepository.listStaleActive(ATTENTION_LIMIT),
-      clientRepository.nameMap(),
+      cachedClientNameMap(),
       clientRulesRepository.list(),
     ]);
 
@@ -993,7 +993,7 @@ export const candidateService = {
         candidateRepository.groupByStatusFiltered(shared),
         candidateRepository.count({ ...shared, overdue: true }),
         candidateRepository.count({ ...shared, stuck: true }),
-        clientRepository.nameMap(),
+        cachedClientNameMap(),
         clientRulesRepository.list(),
         Promise.all(
           ACTIVE_STATUS_CODES.map((status) =>

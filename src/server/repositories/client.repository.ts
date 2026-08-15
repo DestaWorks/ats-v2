@@ -74,3 +74,10 @@ export const clientRepository = {
  * caller keeps using the raw, uncached `clientRepository.list()`.
  */
 export const cachedClientList = cache(() => clientRepository.list());
+
+/** `id → name` map built from `cachedClientList()` (not a second query). Same render-path-only
+ *  caveat as `cachedClientList` — `clientRepository.nameMap()` queries raw, uncached. */
+export const cachedClientNameMap = cache(async (): Promise<Map<string, string>> => {
+  const clients = await cachedClientList();
+  return new Map(clients.map((c) => [c.id, c.name]));
+});

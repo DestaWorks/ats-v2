@@ -22,6 +22,10 @@ const h = vi.hoisted(() => ({
       return new Map(clients.map((c: { id: string; name: string }) => [c.id, c.name]));
     },
   },
+  cachedClientNameMap: async () => {
+    const clients = await h.clientRepo.list();
+    return new Map(clients.map((c: { id: string; name: string }) => [c.id, c.name]));
+  },
   clientRulesRepo: { list: vi.fn() },
 }));
 
@@ -32,6 +36,7 @@ vi.mock("@/server/repositories/candidate.repository", () => ({
 }));
 vi.mock("@/server/repositories/client.repository", () => ({
   clientRepository: h.clientRepo,
+  cachedClientNameMap: h.cachedClientNameMap,
 }));
 vi.mock("@/server/repositories/client-rules.repository", async () => {
   const actual = await vi.importActual<

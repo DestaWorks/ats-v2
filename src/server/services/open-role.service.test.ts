@@ -34,6 +34,12 @@ const h = vi.hoisted(() => ({
       return new Map(clients.map((c: { id: string; name: string }) => [c.id, c.name]));
     },
   },
+  // Same derivation as the real `cachedClientNameMap` (built from the list), mocked separately
+  // since the service now calls this instead of `clientRepository.nameMap()`.
+  cachedClientNameMap: async () => {
+    const clients = await h.clientRepo.list();
+    return new Map(clients.map((c: { id: string; name: string }) => [c.id, c.name]));
+  },
   leadRepo: { list: vi.fn(), listForMatching: vi.fn() },
   userRepo: { namesByIds: vi.fn() },
   leadService: { promote: vi.fn() },
@@ -46,7 +52,10 @@ vi.mock("@/server/repositories/open-role.repository", () => ({ openRoleRepositor
 vi.mock("@/server/repositories/client-match-profile.repository", () => ({
   clientMatchProfileRepository: h.profileRepo,
 }));
-vi.mock("@/server/repositories/client.repository", () => ({ clientRepository: h.clientRepo }));
+vi.mock("@/server/repositories/client.repository", () => ({
+  clientRepository: h.clientRepo,
+  cachedClientNameMap: h.cachedClientNameMap,
+}));
 vi.mock("@/server/repositories/lead.repository", () => ({ leadRepository: h.leadRepo }));
 vi.mock("@/server/repositories/user.repository", () => ({ userRepository: h.userRepo }));
 vi.mock("./lead.service", () => ({ leadService: h.leadService }));
