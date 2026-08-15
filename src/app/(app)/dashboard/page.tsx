@@ -1,5 +1,4 @@
 import Link from "next/link";
-import dynamic from "next/dynamic";
 import { cookies } from "next/headers";
 import { BoltIcon, FlagIcon, UserGroupIcon } from "@heroicons/react/24/outline";
 import { getVerifiedUser } from "@/server/auth/guards";
@@ -14,12 +13,7 @@ import { STATUS_BG } from "../pipeline/lib/status-style";
 import { StatCard } from "./stat-card";
 import { DailyStrip } from "./daily-strip";
 import { SinceYouClosed } from "./since-you-closed";
-
-// recharts is heavy — load it only once the distribution card actually renders (perf audit
-// 2026-08-05), matching the `next/dynamic` pattern used for Candidate/Client Detail tabs.
-const PipelineDistributionChart = dynamic(() =>
-  import("./pipeline-distribution-chart").then((m) => m.PipelineDistributionChart),
-);
+import { PipelineDistributionChart } from "./pipeline-distribution-chart-lazy";
 
 /**
  * Overview (RSC, legacy-parity). Reads a lightweight summary (`candidateService.dashboardStats`)
