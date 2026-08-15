@@ -152,7 +152,9 @@ describe("accessRequestService.approve", () => {
 
   it("404s when the request doesn't exist", async () => {
     h.findById.mockResolvedValue(null);
-    await expect(accessRequestService.approve("missing", "Associate", "actor1")).rejects.toMatchObject({
+    await expect(
+      accessRequestService.approve("missing", "Associate", "actor1"),
+    ).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
     expect(h.adminCreate).not.toHaveBeenCalled();
