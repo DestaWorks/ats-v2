@@ -15,7 +15,7 @@ export async function submitPortalAccessRequest(
   raw: unknown,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
-    checkRateLimit("portal-access-request", { limit: 20, windowMs: 60_000 });
+    await checkRateLimit("portal-access-request", { limit: 20, windowMs: 60_000 });
   } catch (err) {
     if (err instanceof AppError && err.code === "RATE_LIMITED") {
       return { ok: false, error: "Too many requests. Please wait a moment and try again." };

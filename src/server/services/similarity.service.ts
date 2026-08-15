@@ -47,7 +47,7 @@ export const similarityService = {
       throw new AppError("BAD_REQUEST", "No similarity search available for this credential yet");
     }
 
-    checkRateLimit(`similarity-search:${user.id}`, { limit: 20, windowMs: 60_000 });
+    await checkRateLimit(`similarity-search:${user.id}`, { limit: 20, windowMs: 60_000 });
 
     const { results } = await searchNppes({ taxonomyDescription: taxonomyOpt.query });
     const mapped = results

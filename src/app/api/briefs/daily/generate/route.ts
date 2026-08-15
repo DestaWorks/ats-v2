@@ -21,7 +21,7 @@ const requestSchema = generateDailyBriefSchema.extend({
  */
 export const POST = apiHandler(async (req: Request) => {
   const user = await requireCapability("viewReports");
-  checkRateLimit(`briefs-daily-generate:${user.id}`, { limit: 20, windowMs: 60_000 });
+  await checkRateLimit(`briefs-daily-generate:${user.id}`, { limit: 20, windowMs: 60_000 });
   const input = requestSchema.parse(await req.json());
   const draft = await briefService.generateDaily(
     { date: input.date, tz: input.tz },

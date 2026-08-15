@@ -15,7 +15,7 @@ import { resumeService } from "@/server/services/resume.service";
  */
 export const POST = apiHandler(async (req: Request) => {
   const user = await requireUser();
-  checkRateLimit(`resume-extract:${user.id}`, { limit: 20, windowMs: 60_000 });
+  await checkRateLimit(`resume-extract:${user.id}`, { limit: 20, windowMs: 60_000 });
   const input = parseResumeInputSchema.parse(await req.json());
   const result = await resumeService.extract(input);
   return json(result);

@@ -16,7 +16,7 @@ import { inboundService } from "@/server/services/inbound.service";
  */
 export const POST = apiHandler(async (req: Request) => {
   const user = await requireUser();
-  checkRateLimit(`inbound-triage:${user.id}`, { limit: 20, windowMs: 60_000 });
+  await checkRateLimit(`inbound-triage:${user.id}`, { limit: 20, windowMs: 60_000 });
   const input = triageSchema.parse(await req.json());
   const result = await inboundService.triage(input);
   return json(result);

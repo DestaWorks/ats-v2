@@ -14,7 +14,7 @@ import { toDocumentSummaryDTO } from "@/server/services/candidate.dto";
  */
 export const POST = apiHandler<{ params: Promise<{ id: string }> }>(async (req, ctx) => {
   const user = await requireUser();
-  checkRateLimit(`candidate-resume-upload:${user.id}`, { limit: 20, windowMs: 60_000 });
+  await checkRateLimit(`candidate-resume-upload:${user.id}`, { limit: 20, windowMs: 60_000 });
   const { id } = await ctx.params;
   const input = uploadCandidateResumeSchema.parse(await req.json());
   const document = await resumeService.attachToCandidate(id, input, user);

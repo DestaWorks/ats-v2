@@ -236,7 +236,7 @@ async function attachResumeWithAi(
 ): Promise<void> {
   let data: ResumeData | null = null;
   try {
-    checkRateLimit(`migration-resume-ai:${user.id}`, { limit: 20, windowMs: 60_000 });
+    await checkRateLimit(`migration-resume-ai:${user.id}`, { limit: 20, windowMs: 60_000 });
     const variant = variantForPlan(plan);
     data = await parseResume({ variant, text: plan.resumeText! });
     const mapped = toCandidateCreateInput(variant, data) as unknown as Record<string, unknown>;

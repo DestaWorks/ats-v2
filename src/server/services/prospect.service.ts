@@ -168,7 +168,7 @@ export const prospectService = {
    *  Lead-by-name, Candidate-by-name) for a UI status badge, a materially different problem
    *  from flagging "is this NPI already a tracked Prospect." */
   async search(query: SearchProspectsQuery, user: AuthUser): Promise<ProspectSearchResultDTO> {
-    checkRateLimit(`client-discovery-search:${user.id}`, { limit: 20, windowMs: 60_000 });
+    await checkRateLimit(`client-discovery-search:${user.id}`, { limit: 20, windowMs: 60_000 });
 
     const { resultCount, results } = await searchNppes({
       enumerationType: "NPI-2",
@@ -206,7 +206,7 @@ export const prospectService = {
     input: AddProspectsFromSearchInput,
     user: AuthUser,
   ): Promise<{ added: number; skipped: number }> {
-    checkRateLimit(`prospect-bulk-add:${user.id}`, { limit: 10, windowMs: 60_000 });
+    await checkRateLimit(`prospect-bulk-add:${user.id}`, { limit: 10, windowMs: 60_000 });
 
     const npis = input.rows.map((r) => r.npi);
     const tracked = await prospectRepository.findManyByNpis(npis);
@@ -355,7 +355,7 @@ export const prospectService = {
     if (!canManageContacts(existing.status as ProspectStatus)) {
       throw new AppError("CONFLICT", "Prospect already converted to a client");
     }
-    checkRateLimit(`client-discovery-enrich:${user.id}`, { limit: 20, windowMs: 60_000 });
+    await checkRateLimit(`client-discovery-enrich:${user.id}`, { limit: 20, windowMs: 60_000 });
 
     const found = await findApolloContacts({
       organizationName: existing.practiceName,
@@ -378,7 +378,7 @@ export const prospectService = {
         "This prospect has no website on file to search Hunter.io by",
       );
     }
-    checkRateLimit(`client-discovery-enrich:${user.id}`, { limit: 20, windowMs: 60_000 });
+    await checkRateLimit(`client-discovery-enrich:${user.id}`, { limit: 20, windowMs: 60_000 });
 
     const found = await findHunterContacts({ domain });
     await persistFoundContacts(id, found, "Hunter", "enrich_hunter", user);

@@ -89,7 +89,7 @@ export const discoverService = {
    *  per-user (unlike other RSC-read services) since this has real external-API cost/abuse
    *  surface a normal DB read doesn't. */
   async search(query: DiscoverSearchQuery, user: AuthUser): Promise<DiscoverSearchResultDTO> {
-    checkRateLimit(`discover-search:${user.id}`, { limit: 20, windowMs: 60_000 });
+    await checkRateLimit(`discover-search:${user.id}`, { limit: 20, windowMs: 60_000 });
 
     const taxonomyOpt = TAXONOMY_OPTIONS.find((t) => t.value === query.taxonomy);
     const { resultCount, results } = await searchNppes({
@@ -141,7 +141,7 @@ export const discoverService = {
     input: DiscoverAddToSourcingInput,
     user: AuthUser,
   ): Promise<{ added: number; skipped: number }> {
-    checkRateLimit(`discover-add:${user.id}`, { limit: 10, windowMs: 60_000 });
+    await checkRateLimit(`discover-add:${user.id}`, { limit: 10, windowMs: 60_000 });
 
     const npis = input.rows.map((r) => r.npi);
     const names = input.rows.map((r) => r.name.trim().toLowerCase());
@@ -237,7 +237,7 @@ export const discoverService = {
       throw new AppError("BAD_REQUEST", "No NPPES supply lookup available for this credential yet");
     }
 
-    checkRateLimit(`discover-supply:${user.id}`, { limit: 20, windowMs: 60_000 });
+    await checkRateLimit(`discover-supply:${user.id}`, { limit: 20, windowMs: 60_000 });
 
     const { results } = await searchNppes({
       taxonomyDescription: taxonomyOpt.query,
