@@ -60,6 +60,11 @@ export const auth = betterAuth({
       role: { type: "string", required: false, defaultValue: "Associate", input: false },
     },
   },
+  // Trusts a signed cookie instead of hitting Postgres on every request. Trade-off: a role change
+  // can take up to maxAge to take effect.
+  session: {
+    cookieCache: { enabled: true, maxAge: 60 },
+  },
   // Brute-force hardening: Better Auth's built-in limiter. Its default in-memory store is
   // per-instance/best-effort (production should back it with the DB/secondary storage), but sign-in
   // is the top brute-force surface so we tighten it here. Better Auth activates rate limiting in
