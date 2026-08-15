@@ -1,6 +1,4 @@
-import { redirect } from "next/navigation";
 import { isLeadStatus, type LeadStatus } from "@/lib/constants";
-import { getCurrentUser } from "@/server/auth/guards";
 import { leadService } from "@/server/services/lead.service";
 import { cachedClientList } from "@/server/repositories/client.repository";
 import { cachedUserList } from "@/server/repositories/user.repository";
@@ -21,9 +19,6 @@ export default async function SourcingPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const user = await getCurrentUser();
-  if (!user) redirect("/sign-in");
-
   const sp = await searchParams;
   const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
 

@@ -1,6 +1,4 @@
-import { redirect } from "next/navigation";
 import { ROLE_PRIORITIES, ROLE_STATUSES, isRolePriority, isRoleStatus } from "@/lib/constants";
-import { getCurrentUser } from "@/server/auth/guards";
 import { cachedClientList } from "@/server/repositories/client.repository";
 import { openRoleService } from "@/server/services/open-role.service";
 import { AddRoleButton } from "./add-role-modal";
@@ -20,9 +18,6 @@ export default async function RolesPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const user = await getCurrentUser();
-  if (!user) redirect("/sign-in");
-
   const sp = await searchParams;
   const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
 

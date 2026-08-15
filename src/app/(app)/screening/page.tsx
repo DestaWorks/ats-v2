@@ -1,5 +1,3 @@
-import { redirect } from "next/navigation";
-import { getCurrentUser } from "@/server/auth/guards";
 import { screeningService } from "@/server/services/screening.service";
 import { ScreeningView } from "./screening-view";
 
@@ -10,9 +8,6 @@ import { ScreeningView } from "./screening-view";
  * named "Screener"), SSR-renders the initial picker list.
  */
 export default async function ScreeningPage() {
-  const user = await getCurrentUser();
-  if (!user) redirect("/sign-in");
-
   const candidates = await screeningService.listEligibleCandidates(undefined);
 
   return (

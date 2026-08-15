@@ -1,4 +1,3 @@
-import { redirect } from "next/navigation";
 import {
   LICENSE_STATUSES,
   TRACKS,
@@ -9,7 +8,7 @@ import {
   type Track,
 } from "@/lib/constants";
 import type { ListSort } from "@/lib/validation/pipeline";
-import { getCurrentUser } from "@/server/auth/guards";
+import { getVerifiedUser } from "@/server/auth/guards";
 import { candidateService } from "@/server/services/candidate.service";
 import { cachedClientList } from "@/server/repositories/client.repository";
 import { cachedUserList } from "@/server/repositories/user.repository";
@@ -32,8 +31,7 @@ export default async function CandidatesPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const user = await getCurrentUser();
-  if (!user) redirect("/sign-in");
+  const user = await getVerifiedUser();
 
   const sp = await searchParams;
   const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);

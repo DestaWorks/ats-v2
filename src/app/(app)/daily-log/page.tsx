@@ -1,8 +1,7 @@
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
 import { hasCapability } from "@/lib/constants";
 import { dateKeyForOffset } from "@/lib/daily";
-import { getCurrentUser } from "@/server/auth/guards";
+import { getVerifiedUser } from "@/server/auth/guards";
 import { dailyService } from "@/server/services/daily.service";
 import { DailyLogView } from "./daily-log-view";
 
@@ -25,8 +24,7 @@ import { DailyLogView } from "./daily-log-view";
  * empty/hidden tab.
  */
 export default async function DailyLogPage() {
-  const user = await getCurrentUser();
-  if (!user) redirect("/sign-in");
+  const user = await getVerifiedUser();
   const canViewTeam = hasCapability(user.role, "viewReports");
 
   const cookieStore = await cookies();

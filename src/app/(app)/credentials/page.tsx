@@ -1,7 +1,6 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { hasCapability } from "@/lib/constants";
-import { getCurrentUser } from "@/server/auth/guards";
+import { getVerifiedUser } from "@/server/auth/guards";
 import { credentialsIntelligenceService } from "@/server/services/credentials-intelligence.service";
 import { ErrorState } from "@/components/ui/error-state";
 import { StatCard } from "../dashboard/stat-card";
@@ -20,8 +19,7 @@ import { NlcTracker } from "./nlc-tracker";
  * page summarizes (via the stat cards) and links out instead of duplicating that UI.
  */
 export default async function CredentialsPage() {
-  const user = await getCurrentUser();
-  if (!user) redirect("/sign-in");
+  const user = await getVerifiedUser();
 
   if (!hasCapability(user.role, "viewCredentials")) {
     return (

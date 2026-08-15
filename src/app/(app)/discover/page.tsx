@@ -1,6 +1,5 @@
-import { redirect } from "next/navigation";
 import { discoverSearchQuerySchema } from "@/lib/validation/discover";
-import { getCurrentUser } from "@/server/auth/guards";
+import { getVerifiedUser } from "@/server/auth/guards";
 import { discoverService } from "@/server/services/discover.service";
 import { cachedClientList } from "@/server/repositories/client.repository";
 import { DiscoverSearchForm } from "./discover-search-form";
@@ -19,8 +18,7 @@ export default async function DiscoverPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const user = await getCurrentUser();
-  if (!user) redirect("/sign-in");
+  const user = await getVerifiedUser();
 
   const sp = await searchParams;
   const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);

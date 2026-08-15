@@ -1,7 +1,6 @@
-import { redirect } from "next/navigation";
 import { hasCapability } from "@/lib/constants";
 import { searchProspectsSchema } from "@/lib/validation/prospect";
-import { getCurrentUser } from "@/server/auth/guards";
+import { getVerifiedUser } from "@/server/auth/guards";
 import { prospectService } from "@/server/services/prospect.service";
 import { savedIcpService } from "@/server/services/saved-icp.service";
 import { ErrorState } from "@/components/ui/error-state";
@@ -20,8 +19,7 @@ export default async function ClientDiscoverySearchPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const user = await getCurrentUser();
-  if (!user) redirect("/sign-in");
+  const user = await getVerifiedUser();
 
   if (!hasCapability(user.role, "viewClientDiscovery")) {
     return (

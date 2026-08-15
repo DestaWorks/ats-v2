@@ -1,6 +1,5 @@
-import { redirect } from "next/navigation";
 import { hasCapability } from "@/lib/constants";
-import { getCurrentUser } from "@/server/auth/guards";
+import { getVerifiedUser } from "@/server/auth/guards";
 import { adminUserService } from "@/server/services/admin-user.service";
 import { accessRequestService } from "@/server/services/access-request.service";
 import { portalAccessRequestService } from "@/server/services/portal-access-request.service";
@@ -16,8 +15,7 @@ import { AdminDashboard } from "./admin-dashboard";
  * see `docs/IMPLEMENTATION-PLAN.md` Wave 5.3 notes.
  */
 export default async function AdminPage() {
-  const user = await getCurrentUser();
-  if (!user) redirect("/sign-in");
+  const user = await getVerifiedUser();
 
   if (!hasCapability(user.role, "manageUsers")) {
     return (

@@ -11,6 +11,7 @@ export interface AuthUser {
   email: string;
   name: string;
   role: Role;
+  image?: string | null;
 }
 
 /**
@@ -35,6 +36,7 @@ export const getCurrentUser = cache(async (): Promise<AuthUser | null> => {
     email: session.user.email,
     name: session.user.name,
     role,
+    image: session.user.image ?? null,
   };
 });
 
@@ -42,6 +44,16 @@ export const getCurrentUser = cache(async (): Promise<AuthUser | null> => {
 export async function requireUser(): Promise<AuthUser> {
   const user = await getCurrentUser();
   if (!user) throw new AppError("UNAUTHORIZED", "Sign in required");
+  return user;
+}
+
+/** For `(app)` pages/loaders — `layout.tsx` already guards the whole group, so this is a
+ *  non-null narrowing, not a second check. Throws if that invariant is ever violated. */
+export async function getVerifiedUser(): Promise<AuthUser> {
+  const user = await getCurrentUser();
+  if (!user) {
+    throw new Error("getVerifiedUser() called outside the (app) layout's auth guard");
+  }
   return user;
 }
 

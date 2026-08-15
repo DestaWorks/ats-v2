@@ -1,7 +1,5 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { stateBoardLink } from "@/lib/constants";
-import { getCurrentUser } from "@/server/auth/guards";
 import { licenseVerifyService } from "@/server/services/license-verify.service";
 import { Table, Td } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -15,9 +13,6 @@ import { expiryDaysColor } from "../pipeline/lib/status-style";
  * lives; that's already the `/candidates/:id` License tab. This page only launches into it.
  */
 export default async function LicenseVerifyPage() {
-  const user = await getCurrentUser();
-  if (!user) redirect("/sign-in");
-
   const { queue, timeline, queueTruncated } = await licenseVerifyService.dashboard();
 
   return (

@@ -1,8 +1,7 @@
-import { redirect } from "next/navigation";
 import { hasCapability, isProspectStatus } from "@/lib/constants";
-import { getCurrentUser } from "@/server/auth/guards";
+import { getVerifiedUser } from "@/server/auth/guards";
 import { prospectService } from "@/server/services/prospect.service";
-import { userRepository } from "@/server/repositories/user.repository";
+import { cachedUserList } from "@/server/repositories/user.repository";
 import { ErrorState } from "@/components/ui/error-state";
 import { ProspectsInventory } from "./prospects-inventory";
 
@@ -20,8 +19,7 @@ export default async function ClientDiscoveryPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const user = await getCurrentUser();
-  if (!user) redirect("/sign-in");
+  const user = await getVerifiedUser();
 
   if (!hasCapability(user.role, "viewClientDiscovery")) {
     return (
@@ -47,7 +45,7 @@ export default async function ClientDiscoveryPage({
 
   const [list, userRows] = await Promise.all([
     prospectService.list({ status, ownerId, search, includeDeleted: showDeleted, page }),
-    userRepository.list(),
+    cachedUserList(),
   ]);
   const owners = userRows.map((u) => ({ id: u.id, name: u.name }));
 
