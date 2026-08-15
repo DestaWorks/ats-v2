@@ -11,10 +11,15 @@ const h = vi.hoisted(() => ({
   findByIdClient: vi.fn(),
   listClients: vi.fn(),
   groupByStatusFiltered: vi.fn(),
+  groupByStatusForClients: vi.fn(),
   listNotes: vi.fn(),
+  listNotesForClients: vi.fn(),
   listMeetings: vi.fn(),
+  listMeetingsForClients: vi.fn(),
   listTasks: vi.fn(),
+  listTasksForClients: vi.fn(),
   listDeals: vi.fn(),
+  listDealsForClients: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
@@ -22,20 +27,26 @@ vi.mock("@/server/repositories/client.repository", () => ({
   clientRepository: { findById: h.findByIdClient, list: h.listClients },
 }));
 vi.mock("@/server/repositories/candidate.repository", () => ({
-  candidateRepository: { groupByStatusFiltered: h.groupByStatusFiltered },
+  candidateRepository: {
+    groupByStatusFiltered: h.groupByStatusFiltered,
+    groupByStatusForClients: h.groupByStatusForClients,
+  },
   FIRST_TERMINAL_ORDER: 9,
 }));
 vi.mock("@/server/repositories/client-note.repository", () => ({
-  clientNoteRepository: { listForClient: h.listNotes },
+  clientNoteRepository: { listForClient: h.listNotes, listForClients: h.listNotesForClients },
 }));
 vi.mock("@/server/repositories/client-meeting.repository", () => ({
-  clientMeetingRepository: { listForClient: h.listMeetings },
+  clientMeetingRepository: {
+    listForClient: h.listMeetings,
+    listForClients: h.listMeetingsForClients,
+  },
 }));
 vi.mock("@/server/repositories/client-task.repository", () => ({
-  clientTaskRepository: { listForClient: h.listTasks },
+  clientTaskRepository: { listForClient: h.listTasks, listForClients: h.listTasksForClients },
 }));
 vi.mock("@/server/repositories/deal.repository", () => ({
-  dealRepository: { listForClient: h.listDeals },
+  dealRepository: { listForClient: h.listDeals, listForClients: h.listDealsForClients },
 }));
 
 import { crmAnalyticsService } from "./crm-analytics.service";
@@ -55,10 +66,15 @@ function clientRow(overrides: Record<string, unknown> = {}) {
 beforeEach(() => {
   Object.values(h).forEach((fn) => fn.mockReset());
   h.listNotes.mockResolvedValue([]);
+  h.listNotesForClients.mockResolvedValue([]);
   h.listMeetings.mockResolvedValue([]);
+  h.listMeetingsForClients.mockResolvedValue([]);
   h.listTasks.mockResolvedValue([]);
+  h.listTasksForClients.mockResolvedValue([]);
   h.listDeals.mockResolvedValue([]);
+  h.listDealsForClients.mockResolvedValue([]);
   h.groupByStatusFiltered.mockResolvedValue([]);
+  h.groupByStatusForClients.mockResolvedValue([]);
 });
 
 describe("crmAnalyticsService.revenue", () => {
@@ -104,6 +120,17 @@ describe("crmAnalyticsService — health score consistency (the actual bug fix)"
       { status: "done", createdAt: new Date() },
       { status: "open", createdAt: new Date() },
     ]);
+    // compare() reads exclusively from the batched *ForClients paths — same data, tagged with
+    // clientId so gatherHealthInputsForClients can bucket it back out per client.
+    h.groupByStatusForClients.mockResolvedValue([
+      { status: "NEW_CANDIDATE", clientId: "c1", _count: { _all: 3 } },
+      { status: "STARTED_DAY1", clientId: "c1", _count: { _all: 1 } },
+    ]);
+    h.listMeetingsForClients.mockResolvedValue([{ clientId: "c1", createdAt: new Date() }]);
+    h.listTasksForClients.mockResolvedValue([
+      { clientId: "c1", status: "done", createdAt: new Date() },
+      { clientId: "c1", status: "open", createdAt: new Date() },
+    ]);
 
     const [health, rows] = await Promise.all([
       crmAnalyticsService.healthScore("c1"),
@@ -113,5 +140,22 @@ describe("crmAnalyticsService — health score consistency (the actual bug fix)"
 
     expect(compareRow.healthScore).toBe(health.score);
     expect(compareRow.healthTier).toBe(health.tier);
+  });
+
+  it("compare() batches its reads into ONE query per data source, not one per client", async () => {
+    h.listClients.mockResolvedValue([
+      clientRow({ id: "c1" }),
+      clientRow({ id: "c2", name: "Beta" }),
+    ]);
+    await crmAnalyticsService.compare();
+    expect(h.groupByStatusForClients).toHaveBeenCalledTimes(1);
+    expect(h.groupByStatusForClients).toHaveBeenCalledWith(["c1", "c2"]);
+    expect(h.listNotesForClients).toHaveBeenCalledTimes(1);
+    expect(h.listMeetingsForClients).toHaveBeenCalledTimes(1);
+    expect(h.listDealsForClients).toHaveBeenCalledTimes(1);
+    expect(h.listTasksForClients).toHaveBeenCalledTimes(1);
+    // The old per-client path is never touched by compare() anymore.
+    expect(h.groupByStatusFiltered).not.toHaveBeenCalled();
+    expect(h.listNotes).not.toHaveBeenCalled();
   });
 });

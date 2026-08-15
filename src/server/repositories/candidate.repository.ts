@@ -393,6 +393,21 @@ export const candidateRepository = {
   },
 
   /**
+   * Per-status counts grouped by client, for a given set of client ids — `/crm/compare`'s health
+   * inputs. Perf audit 2026-08-15: was one `groupByStatusFiltered` per client run via
+   * `Promise.all`; this does the same aggregation in ONE query, same shape as
+   * `countStartedByClient` above.
+   */
+  groupByStatusForClients(clientIds: string[], tx?: Prisma.TransactionClient) {
+    if (clientIds.length === 0) return Promise.resolve([]);
+    return db(tx).candidate.groupBy({
+      by: ["status", "clientId"],
+      where: { deletedAt: null, clientId: { in: clientIds } },
+      _count: { _all: true },
+    });
+  },
+
+  /**
    * The oldest-in-stage ACTIVE candidates (stageOrder 0..8), capped small — the dashboard's targeted
    * "needs attention" read. Ordered by `stageEnteredAt` asc (longest in stage first) so the service
    * can flag overdue/stuck without scanning the whole table.

@@ -22,6 +22,14 @@ export const clientNoteRepository = {
     });
   },
 
+  /** Same as `listForClient`, batched across many clients in one query — feeds `/crm/compare`,
+   *  which previously ran one `listForClient` per client (perf audit 2026-08-15). */
+  listForClients(clientIds: string[], tx?: Prisma.TransactionClient) {
+    return db(tx).clientNote.findMany({
+      where: { clientId: { in: clientIds }, deletedAt: null },
+    });
+  },
+
   async softDelete(clientId: string, id: string, actorId: string, tx?: Prisma.TransactionClient) {
     const { count } = await db(tx).clientNote.updateMany({
       where: { id, clientId },
