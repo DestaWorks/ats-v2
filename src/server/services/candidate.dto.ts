@@ -41,12 +41,28 @@ export function toCandidateDTO(row: CandidateRow, viewer: DtoViewer): CandidateD
   return rest;
 }
 
+/** The fields `toRuleCandidate` actually reads — a `Pick`, not the full row, so it accepts either
+ *  `CandidateRow` or the leaner `CandidateCardRow` (no `licenseNumber`) without a cast. */
+export type RuleCandidateSource = Pick<
+  CandidateRow,
+  | "status"
+  | "track"
+  | "credential"
+  | "licenseState"
+  | "licenseStatus"
+  | "population"
+  | "setting"
+  | "clientId"
+  | "email"
+  | "phone"
+>;
+
 /**
  * Project a candidate row onto the minimal `RuleCandidate` the pure rules operate on
  * (`scoreCandidate`, `checkStageGate`, timing). Stored strings are cast to their constant
  * unions — values are validated with zod on write, so the cast is safe at read time.
  */
-export function toRuleCandidate(row: CandidateRow): RuleCandidate {
+export function toRuleCandidate(row: RuleCandidateSource): RuleCandidate {
   return {
     status: row.status as CandidateStatus,
     track: row.track as Track,

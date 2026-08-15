@@ -35,7 +35,7 @@ export default async function DashboardPage() {
     Number.isInteger(parsedTz) && parsedTz >= -840 && parsedTz <= 840 ? parsedTz : undefined;
 
   const [stats, initialDailyOverview] = await Promise.all([
-    candidateService.dashboardStats(user),
+    candidateService.dashboardStats(),
     initialTz !== undefined
       ? dailyService.overview(user, dateKeyForOffset(initialTz), initialTz)
       : Promise.resolve(undefined),

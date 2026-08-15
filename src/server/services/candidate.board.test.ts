@@ -15,7 +15,7 @@ import { decodeCursor } from "@/lib/validation/cursor";
 
 const h = vi.hoisted(() => ({
   candidateRepo: {
-    list: vi.fn(),
+    listCards: vi.fn(),
     count: vi.fn(),
     groupByStatusFiltered: vi.fn(),
     groupByStatus: vi.fn(),
@@ -83,7 +83,7 @@ function row(overrides: Record<string, unknown> = {}) {
 
 /** Mock the per-column reads + the filtered groupBy from a `status → rows` map. */
 function seedBoard(byStatus: Record<string, Record<string, unknown>[]>) {
-  h.candidateRepo.list.mockImplementation(async (f: { status?: string }) =>
+  h.candidateRepo.listCards.mockImplementation(async (f: { status?: string }) =>
     f.status ? (byStatus[f.status] ?? []) : [],
   );
   h.candidateRepo.groupByStatusFiltered.mockResolvedValue(
@@ -92,7 +92,7 @@ function seedBoard(byStatus: Record<string, Record<string, unknown>[]>) {
 }
 
 beforeEach(() => {
-  h.candidateRepo.list.mockReset().mockResolvedValue([]);
+  h.candidateRepo.listCards.mockReset().mockResolvedValue([]);
   h.candidateRepo.count.mockReset().mockResolvedValue(0);
   h.candidateRepo.groupByStatusFiltered.mockReset().mockResolvedValue([]);
   h.clientRepo.list.mockReset().mockResolvedValue([{ id: "cl1", name: "Sterling Institute" }]);
@@ -243,8 +243,8 @@ describe("candidateService.listBoard", () => {
       viewer,
     );
     // Focus → exactly one per-column read (the other 8 short-circuit to []).
-    expect(h.candidateRepo.list).toHaveBeenCalledTimes(1);
-    const [args] = h.candidateRepo.list.mock.calls[0]!;
+    expect(h.candidateRepo.listCards).toHaveBeenCalledTimes(1);
+    const [args] = h.candidateRepo.listCards.mock.calls[0]!;
     expect(args).toMatchObject({
       track: "Operations",
       clientId: "cl1",
@@ -259,7 +259,7 @@ describe("candidateService.listBoard", () => {
     const many = Array.from({ length: 26 }, (_, i) =>
       row({ id: `n${i}`, status: "NEW_CANDIDATE", stageOrder: 0 }),
     );
-    h.candidateRepo.list.mockImplementation(async (f: { status?: string }) =>
+    h.candidateRepo.listCards.mockImplementation(async (f: { status?: string }) =>
       f.status === "NEW_CANDIDATE" ? many : [],
     );
     h.candidateRepo.groupByStatusFiltered.mockResolvedValue([
@@ -280,7 +280,7 @@ describe("candidateService.listColumn (per-column load-more)", () => {
     const many = Array.from({ length: 26 }, (_, i) =>
       row({ id: `s${i}`, status: "INITIAL_SCREENING", stageOrder: 2 }),
     );
-    h.candidateRepo.list.mockResolvedValue(many);
+    h.candidateRepo.listCards.mockResolvedValue(many);
     const page = await candidateService.listColumn("INITIAL_SCREENING", { mine: true }, viewer, {
       kind: "createdAt",
       value: "2026-06-01T00:00:00.000Z",
@@ -290,7 +290,7 @@ describe("candidateService.listColumn (per-column load-more)", () => {
     expect(page.items).toHaveLength(25);
     expect(page.hasMore).toBe(true);
     expect(decodeCursor(page.nextCursor!, "createdAt_desc")!.id).toBe("s24");
-    const [args] = h.candidateRepo.list.mock.calls[0]!;
+    const [args] = h.candidateRepo.listCards.mock.calls[0]!;
     expect(args).toMatchObject({
       status: "INITIAL_SCREENING",
       orderBy: "createdAt_desc",
@@ -301,7 +301,7 @@ describe("candidateService.listColumn (per-column load-more)", () => {
   });
 
   it("last page → hasMore false, nextCursor null", async () => {
-    h.candidateRepo.list.mockResolvedValue([
+    h.candidateRepo.listCards.mockResolvedValue([
       row({ id: "only", status: "DESTA_REVIEW", stageOrder: 3 }),
     ]);
     const page = await candidateService.listColumn("DESTA_REVIEW", {}, viewer);
@@ -327,15 +327,15 @@ describe("candidateService.dashboardStats", () => {
   });
 
   it("derives total/active/terminal from the groupBy (no full-table load)", async () => {
-    const stats = await candidateService.dashboardStats(viewer);
-    expect(h.candidateRepo.list).not.toHaveBeenCalled();
+    const stats = await candidateService.dashboardStats();
+    expect(h.candidateRepo.listCards).not.toHaveBeenCalled();
     expect(stats.total).toBe(10);
     expect(stats.active).toBe(8); // 5 + 3
     expect(stats.terminal).toBe(2); // NOT_QUALIFIED
   });
 
   it("builds the 9 active funnel columns from the per-status counts", async () => {
-    const stats = await candidateService.dashboardStats(viewer);
+    const stats = await candidateService.dashboardStats();
     expect(stats.columns).toHaveLength(9);
     expect(stats.columns.find((c) => c.status === "NEW_CANDIDATE")!.count).toBe(5);
     expect(stats.columns.find((c) => c.status === "SUBMITTED_TO_CLIENT")!.count).toBe(3);
@@ -343,7 +343,7 @@ describe("candidateService.dashboardStats", () => {
   });
 
   it("surfaces only overdue/stuck candidates from the targeted stale read", async () => {
-    const stats = await candidateService.dashboardStats(viewer);
+    const stats = await candidateService.dashboardStats();
     expect(stats.attention.map((c) => c.id)).toEqual(["old"]);
     expect(h.candidateRepo.listStaleActive).toHaveBeenCalledWith(8);
   });

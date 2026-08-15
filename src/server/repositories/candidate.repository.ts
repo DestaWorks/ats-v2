@@ -13,6 +13,8 @@ import { decryptField, encryptField } from "@/server/db/field-crypto";
 
 /** A raw candidate row (Prisma model). Services/DTOs map this to API shapes. */
 export type CandidateRow = Candidate;
+/** `listCards`'s return shape — every scalar column except `licenseNumber`. */
+export type CandidateCardRow = Omit<Candidate, "licenseNumber">;
 
 /** In-stage threshold (days) that marks a candidate "stuck" — mirrors the `isStuck` default. */
 export const STUCK_DAYS = 7;
@@ -301,6 +303,27 @@ export const candidateRepository = {
   },
 
   /**
+   * Same as `list`, for the pipeline board / candidates browse list specifically — neither ever
+   * surfaces `licenseNumber` (the card/list-row DTOs don't carry it), so this omits it from the
+   * query entirely rather than fetching + decrypting it just to discard it (perf audit
+   * 2026-08-15). `omit` narrows both the SQL (never fetched from Postgres) and the returned type,
+   * so there's nothing for `decryptRow` to do here — skip it.
+   */
+  async listCards(filters: CandidateListFilters = {}, tx?: Prisma.TransactionClient) {
+    const now = filters.now ?? new Date();
+    const orderBy = filters.orderBy ?? "createdAt_desc";
+    let where = buildCandidateWhere(filters, now);
+    if (filters.cursor) where = andMerge(where, keysetWhere(filters.cursor, orderBy));
+    return db(tx).candidate.findMany({
+      where,
+      orderBy: orderByClause(orderBy),
+      omit: { licenseNumber: true },
+      ...(filters.skip !== undefined ? { skip: filters.skip } : {}),
+      ...(filters.take !== undefined ? { take: filters.take } : {}),
+    });
+  },
+
+  /**
    * True filtered total for the same `where` as `list` (minus cursor/orderBy/take) — the list's
    * `total` denominator and the board's per-status count fallback. No PII columns → no crypto.
    */
@@ -374,13 +397,15 @@ export const candidateRepository = {
    * "needs attention" read. Ordered by `stageEnteredAt` asc (longest in stage first) so the service
    * can flag overdue/stuck without scanning the whole table.
    */
-  async listStaleActive(limit: number, tx?: Prisma.TransactionClient) {
-    const rows = await db(tx).candidate.findMany({
+  /** Feeds the dashboard's "needs attention" list, rendered through the same card DTO as
+   *  `listCards` — same reasoning: `licenseNumber` is never surfaced, so omit it. */
+  listStaleActive(limit: number, tx?: Prisma.TransactionClient) {
+    return db(tx).candidate.findMany({
       where: { deletedAt: null, stageOrder: { lt: 9 } },
       orderBy: { stageEnteredAt: "asc" },
+      omit: { licenseNumber: true },
       take: limit,
     });
-    return rows.map(decryptRow);
   },
 
   /**

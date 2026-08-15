@@ -38,7 +38,11 @@ import type { JourneyDTO, JourneyEventDTO } from "@/lib/validation/journey";
 import { requireUser, type AuthUser } from "@/server/auth/guards";
 import { writeAudit } from "@/server/db/audit";
 import { withTransaction } from "@/server/db/with-transaction";
-import { candidateRepository, type CandidateRow } from "@/server/repositories/candidate.repository";
+import {
+  candidateRepository,
+  type CandidateRow,
+  type CandidateCardRow,
+} from "@/server/repositories/candidate.repository";
 import { clientRepository, cachedClientNameMap } from "@/server/repositories/client.repository";
 import {
   outreachRepository,
@@ -69,6 +73,7 @@ import {
   toRuleCandidate,
   toStageEventDTO,
   type CandidateDTO,
+  type RuleCandidateSource,
 } from "./candidate.dto";
 
 /**
@@ -224,7 +229,10 @@ function constrainsNothing(rules: ClientRules): boolean {
  * so we report `null` rather than a misleading license-only pct. The `max === 0` guard is kept as
  * defense-in-depth. (Reuses the locked pure rule unchanged; the guard lives in the service.)
  */
-function scoreFor(row: CandidateRow, rulesByClient: Map<string, ClientRules>): number | null {
+function scoreFor(
+  row: RuleCandidateSource,
+  rulesByClient: Map<string, ClientRules>,
+): number | null {
   if (!row.clientId) return null;
   const rules = rulesByClient.get(row.clientId);
   if (!rules || constrainsNothing(rules)) return null;
@@ -237,72 +245,70 @@ function scoreFor(row: CandidateRow, rulesByClient: Map<string, ClientRules>): n
  * scoring block). License-based reasons apply with or without a client; the state-mismatch check
  * needs the assigned client's rules. Display-only — NEVER mutates status (that stays a human move).
  */
-function dqFor(row: CandidateRow, rulesByClient: Map<string, ClientRules>): string[] {
+function dqFor(row: RuleCandidateSource, rulesByClient: Map<string, ClientRules>): string[] {
   const rules = row.clientId ? (rulesByClient.get(row.clientId) ?? null) : null;
   return getAutoDisqualify(toRuleCandidate(row), rules);
 }
 
 /**
- * Project a raw candidate row onto the client-safe `CandidateCardDTO`. Runs through
- * `toCandidateDTO` first (the PII boundary) — the card type omits `licenseNumber` entirely, so
- * it can never reach a card regardless of viewer role. Timing is derived from `stageEnteredAt`;
- * `score` (the precomputed fit `pct`, or `null`) is passed in by the service.
+ * Project a raw candidate row onto the client-safe `CandidateCardDTO`. Reads fields directly off
+ * `row` (a `CandidateCardRow` — `licenseNumber` already excluded at the query level, see
+ * `candidateRepository.listCards`) rather than through `toCandidateDTO`: neither this card DTO
+ * nor `CandidateListItemDTO` ever surfaces `licenseNumber`, so that PII-gating indirection was
+ * pure overhead here. Timing is derived from `stageEnteredAt`; `score` (the precomputed fit
+ * `pct`, or `null`) is passed in by the service.
  */
 function toCard(
-  row: CandidateRow,
-  viewer: AuthUser,
+  row: CandidateCardRow,
   clientNames: Map<string, string>,
   now: Date,
   score: number | null,
   dqFlags: string[],
 ): CandidateCardDTO {
-  const dto = toCandidateDTO(row, viewer);
-  const status = dto.status as CandidateStatus;
+  const status = row.status as CandidateStatus;
   return {
-    id: dto.id,
-    name: dto.name,
-    track: dto.track as Track,
-    credential: dto.credential,
-    licenseState: dto.licenseState,
-    licenseStatus: dto.licenseStatus as LicenseStatus,
-    clientId: dto.clientId,
-    clientName: dto.clientId ? (clientNames.get(dto.clientId) ?? null) : null,
+    id: row.id,
+    name: row.name,
+    track: row.track as Track,
+    credential: row.credential,
+    licenseState: row.licenseState,
+    licenseStatus: row.licenseStatus as LicenseStatus,
+    clientId: row.clientId,
+    clientName: row.clientId ? (clientNames.get(row.clientId) ?? null) : null,
     status,
-    stageOrder: dto.stageOrder,
-    daysInStage: getDaysInStage(dto.stageEnteredAt, now),
-    isOverdue: isOverdue(status, dto.stageEnteredAt, now),
-    isStuck: isStuck(dto.stageEnteredAt, now),
+    stageOrder: row.stageOrder,
+    daysInStage: getDaysInStage(row.stageEnteredAt, now),
+    isOverdue: isOverdue(status, row.stageEnteredAt, now),
+    isStuck: isStuck(row.stageEnteredAt, now),
     score,
     dqFlags,
   };
 }
 
 /**
- * Project a raw candidate row onto the PII-gated `CandidateListItemDTO` for the browse list. Runs
- * through `toCandidateDTO` first (the PII boundary) — the list item type omits `licenseNumber`
- * entirely, so it can never reach a row. `clientName` is resolved from the batch-loaded client map.
+ * Project a raw candidate row onto the `CandidateListItemDTO` for the browse list. Reads fields
+ * directly off `row` (a `CandidateCardRow`) — same reasoning as `toCard`, this type never
+ * surfaces `licenseNumber`. `clientName` is resolved from the batch-loaded client map.
  */
 function toListItem(
-  row: CandidateRow,
-  viewer: AuthUser,
+  row: CandidateCardRow,
   clientNames: Map<string, string>,
   now: Date,
   score: number | null,
   dqFlags: string[],
 ): CandidateListItemDTO {
-  const dto = toCandidateDTO(row, viewer);
-  const status = dto.status as CandidateStatus;
+  const status = row.status as CandidateStatus;
   return {
-    id: dto.id,
-    name: dto.name,
-    credential: dto.credential,
-    track: dto.track,
-    clientName: dto.clientId ? (clientNames.get(dto.clientId) ?? null) : null,
+    id: row.id,
+    name: row.name,
+    credential: row.credential,
+    track: row.track,
+    clientName: row.clientId ? (clientNames.get(row.clientId) ?? null) : null,
     status,
     statusLabel: statusLabel(status),
-    licenseStatus: dto.licenseStatus,
-    daysInStage: getDaysInStage(dto.stageEnteredAt, now),
-    createdAt: dto.createdAt.toISOString(),
+    licenseStatus: row.licenseStatus,
+    daysInStage: getDaysInStage(row.stageEnteredAt, now),
+    createdAt: row.createdAt.toISOString(),
     score,
     dqFlags,
   };
@@ -867,7 +873,7 @@ export const candidateService = {
       const [[clientNames, rulesRows], total, optimisticRows] = await Promise.all([
         namesAndRules,
         candidateRepository.count({ ...repoFilters, now }),
-        candidateRepository.list({
+        candidateRepository.listCards({
           ...repoFilters,
           orderBy: baseOrder,
           skip: optimisticSkip,
@@ -880,7 +886,7 @@ export const candidateService = {
       const rows =
         meta.page === requestedPage
           ? optimisticRows
-          : await candidateRepository.list({
+          : await candidateRepository.listCards({
               ...repoFilters,
               orderBy: baseOrder,
               skip: (meta.page - 1) * LIST_PAGE,
@@ -888,14 +894,7 @@ export const candidateService = {
               now,
             });
       const candidates = rows.map((row) =>
-        toListItem(
-          row,
-          viewer,
-          clientNames,
-          now,
-          scoreFor(row, rulesByClient),
-          dqFor(row, rulesByClient),
-        ),
+        toListItem(row, clientNames, now, scoreFor(row, rulesByClient), dqFor(row, rulesByClient)),
       );
       return { candidates, ...meta };
     }
@@ -904,7 +903,7 @@ export const candidateService = {
     // name/rules lookup doesn't depend on the rows either, so it runs alongside them too.
     const [[clientNames, rulesRows], allRows] = await Promise.all([
       namesAndRules,
-      candidateRepository.list({ ...repoFilters, orderBy: baseOrder, now }),
+      candidateRepository.listCards({ ...repoFilters, orderBy: baseOrder, now }),
     ]);
     const rulesByClient = buildRulesMap(clientNames, rulesRows);
     let scored = allRows.map((row) => ({ row, score: scoreFor(row, rulesByClient) }));
@@ -913,7 +912,7 @@ export const candidateService = {
     const meta = pageMeta(scored.length, requestedPage, LIST_PAGE);
     const pageRows = scored.slice((meta.page - 1) * LIST_PAGE, meta.page * LIST_PAGE);
     const candidates = pageRows.map((s) =>
-      toListItem(s.row, viewer, clientNames, now, s.score, dqFor(s.row, rulesByClient)),
+      toListItem(s.row, clientNames, now, s.score, dqFor(s.row, rulesByClient)),
     );
     return { candidates, ...meta };
   },
@@ -922,9 +921,10 @@ export const candidateService = {
    * Dashboard summary WITHOUT loading the whole candidate table (audit perf finding). Per-status
    * counts come from a Prisma `groupBy` (the funnel + total/active/terminal); the "needs attention"
    * list is a SMALL targeted read of the oldest-in-stage active candidates (`take: ATTENTION_LIMIT`)
-   * filtered to those actually overdue/stuck. AuthZ is the caller's; `viewer` drives the card PII gate.
+   * filtered to those actually overdue/stuck. AuthZ is the caller's — the card DTO never carries
+   * `licenseNumber`, so there's no PII gate here to drive.
    */
-  async dashboardStats(viewer: AuthUser): Promise<DashboardStatsDTO> {
+  async dashboardStats(): Promise<DashboardStatsDTO> {
     const [grouped, staleRows, clientNames, rulesRows] = await Promise.all([
       candidateRepository.groupByStatus(),
       candidateRepository.listStaleActive(ATTENTION_LIMIT),
@@ -952,14 +952,7 @@ export const candidateService = {
     const now = new Date();
     const attention = staleRows
       .map((row) =>
-        toCard(
-          row,
-          viewer,
-          clientNames,
-          now,
-          scoreFor(row, rulesByClient),
-          dqFor(row, rulesByClient),
-        ),
+        toCard(row, clientNames, now, scoreFor(row, rulesByClient), dqFor(row, rulesByClient)),
       )
       .filter((c) => c.isOverdue || c.isStuck);
 
@@ -998,29 +991,32 @@ export const candidateService = {
         Promise.all(
           ACTIVE_STATUS_CODES.map((status) =>
             !focus || focus === status
-              ? candidateRepository.list({ ...shared, status, orderBy: "createdAt_desc", take })
-              : Promise.resolve([] as CandidateRow[]),
+              ? candidateRepository.listCards({
+                  ...shared,
+                  status,
+                  orderBy: "createdAt_desc",
+                  take,
+                })
+              : Promise.resolve([] as CandidateCardRow[]),
           ),
         ),
         Promise.all(
           TERMINAL_STATUS_CODES.map((status) =>
             opts.includeTerminal
-              ? candidateRepository.list({ ...shared, status, orderBy: "createdAt_desc", take })
-              : Promise.resolve([] as CandidateRow[]),
+              ? candidateRepository.listCards({
+                  ...shared,
+                  status,
+                  orderBy: "createdAt_desc",
+                  take,
+                })
+              : Promise.resolve([] as CandidateCardRow[]),
           ),
         ),
       ]);
 
     const rulesByClient = buildRulesMap(clientNames, rulesRows);
-    const cardOf = (row: CandidateRow) =>
-      toCard(
-        row,
-        viewer,
-        clientNames,
-        now,
-        scoreFor(row, rulesByClient),
-        dqFor(row, rulesByClient),
-      );
+    const cardOf = (row: CandidateCardRow) =>
+      toCard(row, clientNames, now, scoreFor(row, rulesByClient), dqFor(row, rulesByClient));
 
     const countByStatus = new Map<string, number>();
     for (const g of grouped) countByStatus.set(g.status, g._count._all);
@@ -1032,7 +1028,7 @@ export const candidateService = {
     }
 
     // Project one keyset page per column: slice BOARD_PAGE, derive hasMore + per-column cursor.
-    const paginate = (rows: CandidateRow[]) => {
+    const paginate = (rows: CandidateCardRow[]) => {
       const hasMore = rows.length > BOARD_PAGE;
       const pageRows = hasMore ? rows.slice(0, BOARD_PAGE) : rows;
       return {
@@ -1078,7 +1074,7 @@ export const candidateService = {
     const now = new Date();
     const shared = { ...toRepoFilters(filters, viewer), now };
     const [rows, clientNames, rulesRows] = await Promise.all([
-      candidateRepository.list({
+      candidateRepository.listCards({
         ...shared,
         status,
         orderBy: "createdAt_desc",
@@ -1092,14 +1088,7 @@ export const candidateService = {
     const hasMore = rows.length > BOARD_PAGE;
     const pageRows = hasMore ? rows.slice(0, BOARD_PAGE) : rows;
     const items = pageRows.map((row) =>
-      toCard(
-        row,
-        viewer,
-        clientNames,
-        now,
-        scoreFor(row, rulesByClient),
-        dqFor(row, rulesByClient),
-      ),
+      toCard(row, clientNames, now, scoreFor(row, rulesByClient), dqFor(row, rulesByClient)),
     );
     const nextCursor = hasMore
       ? encodeCursor(pageRows[pageRows.length - 1]!, "createdAt_desc")
