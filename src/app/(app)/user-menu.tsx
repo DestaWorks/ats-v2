@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { UserCircleIcon, ArrowRightStartOnRectangleIcon } from "@heroicons/react/24/outline";
-import { signOut, useSession } from "@/lib/auth-client";
+import { signOut } from "@/lib/auth-client";
 import { cn } from "@/lib/utils/cn";
 
 /**
@@ -57,17 +57,17 @@ export function UserMenu({
   userName,
   userEmail,
   userRole,
+  image,
 }: {
   userName: string;
   userEmail: string;
   userRole: string;
+  image: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
-  const { data: session } = useSession();
-  const image = session?.user?.image ?? null;
   const initial = (userName.trim()[0] ?? "?").toUpperCase();
 
   useEffect(() => {
