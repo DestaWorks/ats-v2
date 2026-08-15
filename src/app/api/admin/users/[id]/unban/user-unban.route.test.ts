@@ -42,6 +42,6 @@ describe("POST /api/admin/users/:id/unban", () => {
     h.unban.mockResolvedValue({ id: "u2", banned: false });
     const res = await POST(postReq(), ctx);
     expect(res.status).toBe(200);
-    expect(h.unban).toHaveBeenCalledWith("u2");
+    expect(h.unban).toHaveBeenCalledWith("u2", "u1");
   });
 });

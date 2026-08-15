@@ -3,6 +3,8 @@ import { randomBytes } from "node:crypto";
 import { headers } from "next/headers";
 import { auth } from "@/server/auth/auth";
 import { toIso, isoOrNull } from "@/lib/utils/iso";
+import { writeAudit } from "@/server/db/audit";
+import { withTransaction } from "@/server/db/with-transaction";
 import type { Role } from "@/lib/constants";
 import type {
   AdminUserDTO,
@@ -67,7 +69,7 @@ export const adminUserService = {
    * every admin-created account would otherwise permanently fail to link ("account not linked"),
    * blocking the "sign in with either Google or password" flow entirely.
    */
-  async create(input: CreateUserInput): Promise<GeneratedPasswordDTO> {
+  async create(input: CreateUserInput, actorId: string): Promise<GeneratedPasswordDTO> {
     const generatedPassword = input.password ? null : generatePassword();
     const result = await auth.api.createUser({
       headers: await headers(),
@@ -79,15 +81,33 @@ export const adminUserService = {
         data: { emailVerified: true },
       },
     });
+    await withTransaction((tx) =>
+      writeAudit(tx, {
+        entity: "user",
+        entityId: result.user.id,
+        actor: actorId,
+        action: "create",
+        after: { email: result.user.email, role: input.role },
+      }),
+    );
     return { user: toDTO(result.user), generatedPassword };
   },
 
-  async setRole(userId: string, role: Role): Promise<AdminUserDTO> {
+  async setRole(userId: string, role: Role, actorId: string): Promise<AdminUserDTO> {
     const result = await auth.api.setRole({ headers: await headers(), body: { userId, role } });
+    await withTransaction((tx) =>
+      writeAudit(tx, {
+        entity: "user",
+        entityId: userId,
+        actor: actorId,
+        action: "setRole",
+        after: { role },
+      }),
+    );
     return toDTO(result.user);
   },
 
-  async ban(userId: string, input: BanUserInput): Promise<AdminUserDTO> {
+  async ban(userId: string, input: BanUserInput, actorId: string): Promise<AdminUserDTO> {
     const result = await auth.api.banUser({
       headers: await headers(),
       body: {
@@ -96,25 +116,49 @@ export const adminUserService = {
         banExpiresIn: input.expiresInDays ? input.expiresInDays * 86_400 : undefined,
       },
     });
+    await withTransaction((tx) =>
+      writeAudit(tx, {
+        entity: "user",
+        entityId: userId,
+        actor: actorId,
+        action: "ban",
+        after: { banReason: input.reason ?? null, expiresInDays: input.expiresInDays ?? null },
+      }),
+    );
     return toDTO(result.user);
   },
 
-  async unban(userId: string): Promise<AdminUserDTO> {
+  async unban(userId: string, actorId: string): Promise<AdminUserDTO> {
     const result = await auth.api.unbanUser({ headers: await headers(), body: { userId } });
+    await withTransaction((tx) =>
+      writeAudit(tx, { entity: "user", entityId: userId, actor: actorId, action: "unban" }),
+    );
     return toDTO(result.user);
   },
 
-  /** Generates + returns a new password once (never persisted in plaintext). */
-  async resetPassword(userId: string): Promise<{ generatedPassword: string }> {
+  /** Generates + returns a new password once (never persisted in plaintext — the audit row
+   *  records that a reset happened, never the password itself). */
+  async resetPassword(userId: string, actorId: string): Promise<{ generatedPassword: string }> {
     const generatedPassword = generatePassword();
     await auth.api.setUserPassword({
       headers: await headers(),
       body: { userId, newPassword: generatedPassword },
     });
+    await withTransaction((tx) =>
+      writeAudit(tx, {
+        entity: "user",
+        entityId: userId,
+        actor: actorId,
+        action: "resetPassword",
+      }),
+    );
     return { generatedPassword };
   },
 
-  async remove(userId: string): Promise<void> {
+  async remove(userId: string, actorId: string): Promise<void> {
     await auth.api.removeUser({ headers: await headers(), body: { userId } });
+    await withTransaction((tx) =>
+      writeAudit(tx, { entity: "user", entityId: userId, actor: actorId, action: "remove" }),
+    );
   },
 };

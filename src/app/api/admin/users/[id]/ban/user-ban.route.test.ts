@@ -47,6 +47,6 @@ describe("POST /api/admin/users/:id/ban", () => {
     h.ban.mockResolvedValue({ id: "u2", banned: true });
     const res = await POST(postReq({ reason: "abuse" }), ctx);
     expect(res.status).toBe(200);
-    expect(h.ban).toHaveBeenCalledWith("u2", expect.objectContaining({ reason: "abuse" }));
+    expect(h.ban).toHaveBeenCalledWith("u2", expect.objectContaining({ reason: "abuse" }), "u1");
   });
 });

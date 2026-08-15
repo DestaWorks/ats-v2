@@ -5,9 +5,9 @@ import { adminUserService } from "@/server/services/admin-user.service";
 
 /** PATCH /api/admin/users/:id/role — set a user's role. Gated `manageRoles`. */
 export const PATCH = apiHandler<{ params: Promise<{ id: string }> }>(async (req, ctx) => {
-  await requireCapability("manageRoles");
+  const actor = await requireCapability("manageRoles");
   const { id } = await ctx.params;
   const input = setRoleSchema.parse(await req.json());
-  const user = await adminUserService.setRole(id, input.role);
+  const user = await adminUserService.setRole(id, input.role, actor.id);
   return json({ user });
 });

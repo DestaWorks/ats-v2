@@ -7,8 +7,8 @@ import { adminUserService } from "@/server/services/admin-user.service";
  * (never persisted/emailed in plaintext, unlike legacy). Gated `manageUsers`.
  */
 export const POST = apiHandler<{ params: Promise<{ id: string }> }>(async (_req, ctx) => {
-  await requireCapability("manageUsers");
+  const actor = await requireCapability("manageUsers");
   const { id } = await ctx.params;
-  const result = await adminUserService.resetPassword(id);
+  const result = await adminUserService.resetPassword(id, actor.id);
   return json(result);
 });
