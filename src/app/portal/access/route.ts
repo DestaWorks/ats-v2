@@ -19,7 +19,7 @@ export async function GET(req: Request) {
   const rawToken = url.searchParams.get("token");
 
   try {
-    checkRateLimit("portal-access", { limit: 20, windowMs: 60_000 });
+    await checkRateLimit("portal-access", { limit: 20, windowMs: 60_000 });
   } catch (err) {
     if (err instanceof AppError && err.code === "RATE_LIMITED") {
       return NextResponse.redirect(
