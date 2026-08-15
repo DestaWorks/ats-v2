@@ -87,4 +87,14 @@ describe("userPreferencesService.uploadAvatar", () => {
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
     expect(h.uploadPublic).not.toHaveBeenCalled();
   });
+
+  it("throws BAD_REQUEST for an SVG data URI (can embed a <script>)", async () => {
+    const svgBase64 = Buffer.from("<svg><script>alert(1)</script></svg>").toString("base64");
+    await expect(
+      userPreferencesService.uploadAvatar(h.user as AuthUser, {
+        dataUrl: `data:image/svg+xml;base64,${svgBase64}`,
+      }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(h.uploadPublic).not.toHaveBeenCalled();
+  });
 });
