@@ -204,7 +204,7 @@ export const resumeService = {
    */
   async requestUploadUrl(input: RequestResumeUploadUrlInput): Promise<ResumeUploadUrlDTO> {
     const storageKey = `${randomUUID()}-${sanitizeFilename(input.filename)}`;
-    const { signedUrl } = await createSignedUploadUrl(RESUME_BUCKET, storageKey);
+    const { signedUrl } = await createSignedUploadUrl(RESUME_BUCKET, storageKey, input.mimeType);
     return { signedUrl, storageKey };
   },
 

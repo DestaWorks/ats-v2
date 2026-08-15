@@ -48,6 +48,12 @@ describe("POST /api/resume/upload-url", () => {
     expect(h.requestUploadUrl).not.toHaveBeenCalled();
   });
 
+  it("returns 422 for a mimeType outside the PDF/plain-text allowlist", async () => {
+    const res = await POST(req({ filename: "resume.svg", mimeType: "image/svg+xml" }), undefined);
+    expect(res.status).toBe(422);
+    expect(h.requestUploadUrl).not.toHaveBeenCalled();
+  });
+
   it("delegates to resumeService.requestUploadUrl and returns 200", async () => {
     h.requestUploadUrl.mockResolvedValue({ signedUrl: "https://x/upload", storageKey: "k1.pdf" });
     const res = await POST(req(validBody), undefined);

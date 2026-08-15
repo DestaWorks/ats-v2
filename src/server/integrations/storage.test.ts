@@ -58,7 +58,9 @@ describe("storage integration", () => {
     await expect(
       storage.uploadPublic("avatars", "u1.jpg", Buffer.from("x"), "image/jpeg"),
     ).rejects.toMatchObject({ code: "FEATURE_DISABLED" });
-    await expect(storage.createSignedUploadUrl("resumes", "r1.pdf")).rejects.toMatchObject({
+    await expect(
+      storage.createSignedUploadUrl("resumes", "r1.pdf", "application/pdf"),
+    ).rejects.toMatchObject({
       code: "FEATURE_DISABLED",
     });
     await expect(storage.getSignedDownloadUrl("resumes", "r1.pdf", 300)).rejects.toMatchObject({
@@ -103,12 +105,17 @@ describe("storage integration", () => {
       "https://proj.supabase.co/s3/resumes/r1.pdf?X-Amz-Signature=1",
     );
     const storage = await import("./storage");
-    const result = await storage.createSignedUploadUrl("resumes", "r1.pdf");
+    const result = await storage.createSignedUploadUrl("resumes", "r1.pdf", "application/pdf");
     expect(result).toEqual({
       signedUrl: "https://proj.supabase.co/s3/resumes/r1.pdf?X-Amz-Signature=1",
     });
     const [, command, opts] = h.getSignedUrl.mock.calls[0]!;
-    expect(command).toMatchObject({ __type: "PutObjectCommand", Bucket: "resumes", Key: "r1.pdf" });
+    expect(command).toMatchObject({
+      __type: "PutObjectCommand",
+      Bucket: "resumes",
+      Key: "r1.pdf",
+      ContentType: "application/pdf",
+    });
     expect(opts).toMatchObject({ expiresIn: 300 });
   });
 

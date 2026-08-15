@@ -274,8 +274,9 @@ describe("resumeService.requestUploadUrl", () => {
     expect(result.signedUrl).toBe("https://x/upload");
     expect(result.storageKey).toMatch(/^[0-9a-f-]{36}-.+\.pdf$/);
     expect(result.storageKey).not.toMatch(/[()'!]/);
-    const [bucket] = h.createSignedUploadUrl.mock.calls[0]!;
+    const [bucket, , contentType] = h.createSignedUploadUrl.mock.calls[0]!;
     expect(bucket).toBe("resumes");
+    expect(contentType).toBe("application/pdf");
   });
 });
 
