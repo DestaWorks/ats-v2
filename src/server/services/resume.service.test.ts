@@ -28,7 +28,7 @@ const h = vi.hoisted(() => ({
 vi.mock("server-only", () => ({}));
 vi.mock("@/server/ai/parse-resume", () => ({ parseResume: h.parseResume }));
 vi.mock("@/server/repositories/candidate.repository", () => ({
-  candidateRepository: h.candidateRepo,
+  candidateRepository: { ...h.candidateRepo, listForMatch: h.candidateRepo.list },
 }));
 vi.mock("@/server/repositories/document.repository", () => ({
   documentRepository: h.documentRepo,

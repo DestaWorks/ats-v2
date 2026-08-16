@@ -10,6 +10,6 @@ import { pipelineHealthService } from "@/server/services/pipeline-health.service
  */
 export const POST = apiHandler(async () => {
   const user = await requireUser();
-  checkRateLimit(`pipeline-health:${user.id}`, { limit: 20, windowMs: 60_000 });
+  await checkRateLimit(`pipeline-health:${user.id}`, { limit: 20, windowMs: 60_000 });
   return json(await pipelineHealthService.generate());
 });

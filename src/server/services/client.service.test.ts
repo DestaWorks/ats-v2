@@ -40,7 +40,13 @@ const h = vi.hoisted(() => ({
     update: vi.fn(),
     softDelete: vi.fn(),
   },
-  blockerRepo: { listForDeal: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
+  blockerRepo: {
+    listForDeal: vi.fn(),
+    listForDeals: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+    delete: vi.fn(),
+  },
   noteRepo: { listForClient: vi.fn(), create: vi.fn(), softDelete: vi.fn() },
   candidateRepo: { groupByStatusFiltered: vi.fn(), count: vi.fn() },
   userRepo: { namesByIds: vi.fn() },
@@ -206,6 +212,7 @@ beforeEach(() => {
   h.meetingRepo.listForClient.mockResolvedValue([]);
   h.dealRepo.listForClient.mockResolvedValue([]);
   h.blockerRepo.listForDeal.mockResolvedValue([]);
+  h.blockerRepo.listForDeals.mockResolvedValue([]);
   h.noteRepo.listForClient.mockResolvedValue([]);
 });
 
@@ -306,9 +313,7 @@ describe("clientService.detail", () => {
     h.clientRepo.findById.mockResolvedValue(clientRow());
     h.contactRepo.listForClient.mockResolvedValue([]);
     h.dealRepo.listForClient.mockResolvedValue([dealRow({ id: "cd1" }), dealRow({ id: "cd2" })]);
-    h.blockerRepo.listForDeal.mockImplementation((dealId: string) =>
-      Promise.resolve(dealId === "cd1" ? [blockerRow({ id: "db1", dealId: "cd1" })] : []),
-    );
+    h.blockerRepo.listForDeals.mockResolvedValue([blockerRow({ id: "db1", dealId: "cd1" })]);
     h.candidateRepo.groupByStatusFiltered.mockResolvedValue([]);
     h.candidateRepo.count.mockResolvedValue(0);
 

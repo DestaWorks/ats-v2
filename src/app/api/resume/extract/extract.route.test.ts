@@ -18,7 +18,7 @@ vi.mock("next/headers", () => ({ headers: async () => new Headers() }));
 vi.mock("@/server/auth/auth", () => ({ auth: { api: { getSession: async () => h.session } } }));
 vi.mock("@/server/db/prisma", () => ({ prisma: {} }));
 vi.mock("@/server/repositories/candidate.repository", () => ({
-  candidateRepository: { list: h.list },
+  candidateRepository: { list: h.list, listForMatch: h.list },
 }));
 vi.mock("@/server/ai/config", () => ({
   get aiEnabled() {

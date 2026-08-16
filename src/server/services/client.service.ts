@@ -268,15 +268,25 @@ export const clientService = {
         candidateRepository.groupByStatusFiltered({ clientId: id }),
         candidateRepository.count({ clientId: id, licenseStatus: "Active" }),
       ]);
-    const [userNames, noteUserNames, blockersByDeal] = await Promise.all([
+    const [userNames, noteUserNames, blockerRows]: [
+      Map<string, string>,
+      Map<string, string>,
+      DealBlockerRow[],
+    ] = await Promise.all([
       userRepository.namesByIds(
         contactRows.map((c) => c.addedById).filter((id): id is string => id != null),
       ),
       userRepository.namesByIds(
         noteRows.map((n) => n.loggedById).filter((id): id is string => id != null),
       ),
-      Promise.all(dealRows.map((d) => dealBlockerRepository.listForDeal(d.id))),
+      dealBlockerRepository.listForDeals(dealRows.map((d) => d.id)),
     ]);
+    const blockersByDealId = new Map<string, DealBlockerRow[]>();
+    for (const b of blockerRows) {
+      const list = blockersByDealId.get(b.dealId);
+      if (list) list.push(b);
+      else blockersByDealId.set(b.dealId, [b]);
+    }
 
     const total = statusGroups.reduce((sum, g) => sum + g._count._all, 0);
     const started = statusGroups.find((g) => g.status === "STARTED_DAY1")?._count._all ?? 0;
@@ -290,7 +300,7 @@ export const clientService = {
       contacts: contactRows.map((c) => toContactDTO(c, userNames)),
       tasks: taskRows.map(toTaskDTO),
       meetings: meetingRows.map(toMeetingDTO),
-      deals: dealRows.map((d, i) => toDealDTO(d, blockersByDeal[i]!)),
+      deals: dealRows.map((d) => toDealDTO(d, blockersByDealId.get(d.id) ?? [])),
       notes: noteRows.map((n) => toClientNoteDTO(n, noteUserNames)),
       timeline: buildTimeline(client, contactRows, taskRows, meetingRows, dealRows, noteRows),
       pipelineSnapshot,

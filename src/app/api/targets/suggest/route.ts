@@ -11,7 +11,7 @@ import { briefService } from "@/server/services/brief.service";
  */
 export const POST = apiHandler(async (req: Request) => {
   const user = await requireCapability("viewReports");
-  checkRateLimit(`targets-suggest:${user.id}`, { limit: 20, windowMs: 60_000 });
+  await checkRateLimit(`targets-suggest:${user.id}`, { limit: 20, windowMs: 60_000 });
   const input = suggestTargetsSchema.parse(await req.json());
   return json(await briefService.suggestTargets(input));
 });

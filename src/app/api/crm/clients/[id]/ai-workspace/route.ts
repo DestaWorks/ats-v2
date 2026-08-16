@@ -10,7 +10,7 @@ import { crmAiWorkspaceService } from "@/server/services/crm-ai-workspace.servic
  */
 export const POST = apiHandler<{ params: Promise<{ id: string }> }>(async (req, ctx) => {
   const user = await requireCapability("viewCrm");
-  checkRateLimit(`crm-ai-workspace:${user.id}`, { limit: 20, windowMs: 60_000 });
+  await checkRateLimit(`crm-ai-workspace:${user.id}`, { limit: 20, windowMs: 60_000 });
   const { id } = await ctx.params;
   const input = generateWorkspaceSchema.parse(await req.json());
   const result = await crmAiWorkspaceService.generate(id, input);

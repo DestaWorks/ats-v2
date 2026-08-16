@@ -14,9 +14,9 @@ import type { LeadDetailDTO } from "@/lib/validation/lead";
 import type { AuthUser } from "@/server/auth/guards";
 import { extractInbound } from "@/server/ai/extract-inbound";
 import { candidateRepository } from "@/server/repositories/candidate.repository";
-import { clientRepository } from "@/server/repositories/client.repository";
+import { cachedClientNameMap } from "@/server/repositories/client.repository";
 import {
-  clientRulesRepository,
+  cachedClientRulesList,
   toClientRules,
 } from "@/server/repositories/client-rules.repository";
 import { leadRepository } from "@/server/repositories/lead.repository";
@@ -97,8 +97,8 @@ function matchReasons(
  */
 async function matchClients(extracted: InboundExtractedDTO): Promise<InboundClientMatchDTO[]> {
   const [clientNames, rulesRows] = await Promise.all([
-    clientRepository.nameMap(),
-    clientRulesRepository.list(),
+    cachedClientNameMap(),
+    cachedClientRulesList(),
   ]);
   const ruleCandidate: RuleCandidate = {
     status: "NEW_CANDIDATE",

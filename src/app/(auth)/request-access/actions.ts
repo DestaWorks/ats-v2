@@ -18,7 +18,7 @@ export async function submitAccessRequest(
   raw: unknown,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
-    checkRateLimit("access-request", { limit: 20, windowMs: 60_000 });
+    await checkRateLimit("access-request", { limit: 20, windowMs: 60_000 });
   } catch (err) {
     if (err instanceof AppError && err.code === "RATE_LIMITED") {
       return { ok: false, error: "Too many requests. Please wait a moment and try again." };

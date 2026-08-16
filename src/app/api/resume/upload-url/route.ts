@@ -12,7 +12,7 @@ import { resumeService } from "@/server/services/resume.service";
  */
 export const POST = apiHandler(async (req: Request) => {
   const user = await requireUser();
-  checkRateLimit(`resume-upload-url:${user.id}`, { limit: 20, windowMs: 60_000 });
+  await checkRateLimit(`resume-upload-url:${user.id}`, { limit: 20, windowMs: 60_000 });
   const input = requestResumeUploadUrlSchema.parse(await req.json());
   return json(await resumeService.requestUploadUrl(input));
 });

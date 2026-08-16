@@ -36,6 +36,17 @@ export const clientPortalTokenRepository = {
     });
   },
 
+  /** Batched `findActiveForContact` for a set of contacts — perf audit 2026-08-16: the admin
+   *  Client Portal management page was issuing one query per contact. Only one active token per
+   *  contact can exist at a time (`revokeAllForContact` enforces it), so this returns at most one
+   *  row per `contactId` already; no `orderBy`/dedup needed on the caller's side. */
+  findActiveForContacts(contactIds: string[], tx?: Prisma.TransactionClient) {
+    if (contactIds.length === 0) return Promise.resolve([]);
+    return db(tx).clientPortalToken.findMany({
+      where: { contactId: { in: contactIds }, revokedAt: null },
+    });
+  },
+
   listForContact(contactId: string, tx?: Prisma.TransactionClient) {
     return db(tx).clientPortalToken.findMany({
       where: { contactId },

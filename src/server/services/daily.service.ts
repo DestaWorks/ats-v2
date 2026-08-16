@@ -40,7 +40,7 @@ import {
   type ManagerFeedbackRow,
 } from "@/server/repositories/daily.repository";
 import { clientRepository } from "@/server/repositories/client.repository";
-import { userRepository } from "@/server/repositories/user.repository";
+import { userRepository, cachedUserList } from "@/server/repositories/user.repository";
 import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/http/app-error";
 
@@ -264,20 +264,31 @@ export const dailyService = {
   /** The Daily Log page composite for the SESSION user. */
   async logView(user: AuthUser, date: string, tz: number): Promise<DailyLogViewDTO> {
     const w = dayWindow(date, tz);
-    const [log, added, moved, notes, verified, history, entries, userRow, clients, feedback] =
-      await Promise.all([
-        dailyRepository.logFor(user.id, date),
-        dailyRepository.countCandidatesAdded(user.id, w),
-        dailyRepository.countAuditAction(user.id, "move", w),
-        dailyRepository.countAuditAction(user.id, "add_note", w),
-        dailyRepository.countAuditAction(user.id, "verify_license", w),
-        dailyRepository.logsForUser(user.id, 15),
-        dailyRepository.entriesForUser(user.id, 20),
-        prisma.user.findUnique({ where: { id: user.id }, select: { createdAt: true } }),
-        clientRepository.list(),
-        dailyRepository.feedbackForUser(user.id, 2),
-      ]);
-    const goals = await dailyRepository.goalsForWeek(user.id, mondayOf(date));
+    const [
+      log,
+      added,
+      moved,
+      notes,
+      verified,
+      history,
+      entries,
+      userRow,
+      clients,
+      feedback,
+      goals,
+    ] = await Promise.all([
+      dailyRepository.logFor(user.id, date),
+      dailyRepository.countCandidatesAdded(user.id, w),
+      dailyRepository.countAuditAction(user.id, "move", w),
+      dailyRepository.countAuditAction(user.id, "add_note", w),
+      dailyRepository.countAuditAction(user.id, "verify_license", w),
+      dailyRepository.logsForUser(user.id, 15),
+      dailyRepository.entriesForUser(user.id, 20),
+      prisma.user.findUnique({ where: { id: user.id }, select: { createdAt: true } }),
+      clientRepository.list(),
+      dailyRepository.feedbackForUser(user.id, 2),
+      dailyRepository.goalsForWeek(user.id, mondayOf(date)),
+    ]);
     const weekNum = tenureWeek(userRow?.createdAt ?? new Date(), date);
     const ramp = rampFor(weekNum);
     const logsByDate = new Map(history.map((l) => [l.date, l.sourced]));
@@ -458,7 +469,7 @@ export const dailyService = {
     // populations are deliberately different, so this fetches both rather than filtering one.
     const [logs, users, associates] = await Promise.all([
       dailyRepository.logsForDateRange(monday, weekEnd),
-      userRepository.list(),
+      cachedUserList(),
       userRepository.listByRole("Associate"),
     ]);
     const names = new Map(users.map((u) => [u.id, u.name]));
