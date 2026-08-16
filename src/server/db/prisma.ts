@@ -10,8 +10,12 @@ import { PrismaPg } from "@prisma/adapter-pg";
  */
 const connectionString = process.env.DATABASE_URL;
 
+// `max` caps connections PER serverless instance — unset, node-postgres defaults to 10, and
+// Vercel can run many concurrent instances, each opening its own pool against Supabase's
+// transaction pooler. 5 is a conservative serverless default (perf audit 2026-08-16); raise it
+// only alongside confirming headroom on the pooler's own max-client-connections setting.
 function createPrisma(): PrismaClient {
-  const adapter = new PrismaPg({ connectionString });
+  const adapter = new PrismaPg({ connectionString, max: 5 });
   return new PrismaClient({ adapter });
 }
 

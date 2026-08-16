@@ -48,7 +48,11 @@ vi.mock("@/server/repositories/client-rules.repository", async () => {
   const actual = await vi.importActual<
     typeof import("@/server/repositories/client-rules.repository")
   >("@/server/repositories/client-rules.repository");
-  return { ...actual, clientRulesRepository: h.clientRulesRepo };
+  return {
+    ...actual,
+    clientRulesRepository: h.clientRulesRepo,
+    cachedClientRulesList: h.clientRulesRepo.list,
+  };
 });
 
 import { candidateService } from "./candidate.service";

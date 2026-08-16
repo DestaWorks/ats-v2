@@ -44,7 +44,7 @@ vi.mock("@/server/repositories/client.repository", () => ({
   clientRepository: { findById: h.findByIdClient },
 }));
 vi.mock("@/server/repositories/candidate.repository", () => ({
-  candidateRepository: { list: h.listCandidates },
+  candidateRepository: { list: h.listCandidates, listCards: h.listCandidates },
 }));
 vi.mock("@/server/repositories/open-role.repository", () => ({
   openRoleRepository: { list: h.listRoles, create: h.createRole },

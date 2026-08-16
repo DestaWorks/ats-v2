@@ -128,14 +128,16 @@ async function planImport(input: ImportInput): Promise<Planned> {
   const { rows, parseErrors } = parseSheet(input.content, input.format);
   const checksum = createHash("sha256").update(input.content).digest("hex");
 
-  const clients = await clientRepository.list();
+  const [clients, existing] = await Promise.all([
+    clientRepository.list(),
+    candidateRepository.listForDedupe(true),
+  ]);
   const clientsByName = new Map<string, string>();
   for (const c of clients) {
     clientsByName.set(normalizeClientKey(c.name), c.id);
     if (c.legacyId) clientsByName.set(normalizeClientKey(c.legacyId), c.id);
   }
 
-  const existing = await candidateRepository.list({ includeDeleted: true });
   const existingLegacyIds = new Set(
     existing.map((c) => c.legacyId).filter((id): id is string => Boolean(id)),
   );
@@ -147,15 +149,7 @@ async function planImport(input: ImportInput): Promise<Planned> {
     p.action = existingLegacyIds.has(p.legacyId) ? "update" : "add";
   }
 
-  const groups = dedupeByEmail(
-    plans,
-    existing.map((c) => ({
-      legacyId: c.legacyId,
-      email: c.email,
-      updatedAt: c.updatedAt,
-      createdAt: c.createdAt,
-    })),
-  );
+  const groups = dedupeByEmail(plans, existing);
 
   const unmatchedResumeFiles = matchResumes(plans, input.resumes);
   const resumesProvided = Boolean(input.resumes && input.resumes.length > 0);

@@ -48,7 +48,10 @@ const h = vi.hoisted(() => ({
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/server/repositories/lead.repository", () => ({ leadRepository: h.leadRepo }));
-vi.mock("@/server/repositories/client.repository", () => ({ clientRepository: h.clientRepo }));
+vi.mock("@/server/repositories/client.repository", () => ({
+  clientRepository: h.clientRepo,
+  cachedClientNameMap: h.clientRepo.nameMap,
+}));
 vi.mock("@/server/repositories/user.repository", () => ({ userRepository: h.userRepo }));
 vi.mock("@/server/services/candidate.service", () => ({ candidateService: h.candidateService }));
 vi.mock("@/server/db/audit", () => ({ writeAudit: h.writeAudit }));

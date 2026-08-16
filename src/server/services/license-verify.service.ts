@@ -5,7 +5,7 @@ import type {
   LicenseVerifyTimelineRowDTO,
 } from "@/lib/validation/license-verify";
 import { toIso } from "@/lib/utils/iso";
-import { clientRepository } from "@/server/repositories/client.repository";
+import { cachedClientNameMap } from "@/server/repositories/client.repository";
 import { licenseVerifyRepository } from "@/server/repositories/license-verify.repository";
 
 /** Operational cap on the queue read — legacy had none, but this many at once would be unusual. */
@@ -55,7 +55,7 @@ export const licenseVerifyService = {
     const [queue, timelineRows, clientNames] = await Promise.all([
       licenseVerifyRepository.verificationQueue(QUEUE_CAP),
       licenseVerifyRepository.expiryTimeline(TIMELINE_CAP),
-      clientRepository.nameMap(),
+      cachedClientNameMap(),
     ]);
     return {
       queue: queue.rows.map((c) => toQueueRowDTO(c, clientNames)),

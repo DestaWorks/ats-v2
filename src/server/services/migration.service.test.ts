@@ -23,7 +23,7 @@ const h = vi.hoisted(() => ({
 vi.mock("server-only", () => ({}));
 vi.mock("@/server/repositories/client.repository", () => ({ clientRepository: h.clientRepo }));
 vi.mock("@/server/repositories/candidate.repository", () => ({
-  candidateRepository: h.candidateRepo,
+  candidateRepository: { ...h.candidateRepo, listForDedupe: h.candidateRepo.list },
 }));
 vi.mock("@/server/repositories/document.repository", () => ({
   documentRepository: h.documentRepo,

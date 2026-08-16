@@ -43,7 +43,7 @@ import {
   type CandidateRow,
   type CandidateCardRow,
 } from "@/server/repositories/candidate.repository";
-import { clientRepository, cachedClientNameMap } from "@/server/repositories/client.repository";
+import { cachedClientNameMap } from "@/server/repositories/client.repository";
 import {
   outreachRepository,
   type OutreachAttemptRow,
@@ -51,7 +51,7 @@ import {
 import { userRepository } from "@/server/repositories/user.repository";
 import { leadRepository } from "@/server/repositories/lead.repository";
 import {
-  clientRulesRepository,
+  cachedClientRulesList,
   toClientRules,
   type ClientRulesRow,
 } from "@/server/repositories/client-rules.repository";
@@ -572,7 +572,7 @@ export const candidateService = {
    */
   async listTrash(viewer: AuthUser): Promise<CandidateTrashDTO> {
     const rows = await candidateRepository.listDeleted(TRASH_PAGE);
-    const clientNames = await clientRepository.nameMap();
+    const clientNames = await cachedClientNameMap();
     const actorIds = rows.map((r) => r.deletedById).filter((id): id is string => id !== null);
     const actorNames = await userRepository.namesByIds(actorIds);
     const items = rows.map((row) =>
@@ -612,7 +612,7 @@ export const candidateService = {
         noteRepository.listByCandidate(id),
         stageHistoryRepository.listByCandidate(id),
         cachedClientNameMap(),
-        clientRulesRepository.list(),
+        cachedClientRulesList(),
         outreachRepository.listForCandidate(id),
       ]);
     if (!candidate) throw new AppError("NOT_FOUND", "Candidate not found");
@@ -665,12 +665,12 @@ export const candidateService = {
     const candidate = await candidateRepository.findById(id);
     if (!candidate) throw new AppError("NOT_FOUND", "Candidate not found");
 
-    const [history, notes, outreachRows, lead, clients] = await Promise.all([
+    const [history, notes, outreachRows, lead, clientNames] = await Promise.all([
       stageHistoryRepository.listByCandidate(id),
       noteRepository.listByCandidate(id),
       outreachRepository.listForCandidate(id),
       leadRepository.findByPromotedCandidateId(id),
-      clientRepository.list(),
+      cachedClientNameMap(),
     ]);
     const actorIds = [
       ...history.map((h) => h.actorId),
@@ -685,9 +685,7 @@ export const candidateService = {
 
     const events: JourneyEventDTO[] = [];
     if (lead) {
-      const targetClient = lead.clientId
-        ? (clients.find((c) => c.id === lead.clientId)?.name ?? null)
-        : null;
+      const targetClient = lead.clientId ? (clientNames.get(lead.clientId) ?? null) : null;
       events.push({
         kind: "sourced",
         at: toIso(lead.createdAt),
@@ -852,7 +850,7 @@ export const candidateService = {
     const baseOrder = listSortToOrderBy(sort);
     const repoFilters = { ...toRepoFilters(filters, viewer), status: filters.status };
 
-    const namesAndRules = Promise.all([cachedClientNameMap(), clientRulesRepository.list()]);
+    const namesAndRules = Promise.all([cachedClientNameMap(), cachedClientRulesList()]);
 
     // DB path — sort is DB-native and Hot is off, so paginate in SQL. `count`, the page read, and
     // the name/rules lookup are all independent of each other (perf audit 2026-08-05 — these used
@@ -929,7 +927,7 @@ export const candidateService = {
       candidateRepository.groupByStatus(),
       candidateRepository.listStaleActive(ATTENTION_LIMIT),
       cachedClientNameMap(),
-      clientRulesRepository.list(),
+      cachedClientRulesList(),
     ]);
 
     const countByStatus = new Map<string, number>();
@@ -987,7 +985,7 @@ export const candidateService = {
         candidateRepository.count({ ...shared, overdue: true }),
         candidateRepository.count({ ...shared, stuck: true }),
         cachedClientNameMap(),
-        clientRulesRepository.list(),
+        cachedClientRulesList(),
         Promise.all(
           ACTIVE_STATUS_CODES.map((status) =>
             !focus || focus === status
@@ -1081,8 +1079,8 @@ export const candidateService = {
         cursor,
         take: BOARD_PAGE + 1,
       }),
-      clientRepository.nameMap(),
-      clientRulesRepository.list(),
+      cachedClientNameMap(),
+      cachedClientRulesList(),
     ]);
     const rulesByClient = buildRulesMap(clientNames, rulesRows);
     const hasMore = rows.length > BOARD_PAGE;

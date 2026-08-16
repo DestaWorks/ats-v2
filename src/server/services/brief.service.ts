@@ -1,9 +1,5 @@
 import "server-only";
-import {
-  ACTIVE_STATUS_CODES,
-  BRIEF_CLIENT_CARD_LIMIT,
-  BRIEF_STUCK_CANDIDATE_LIMIT,
-} from "@/lib/constants";
+import { BRIEF_CLIENT_CARD_LIMIT, BRIEF_STUCK_CANDIDATE_LIMIT } from "@/lib/constants";
 import { daysBefore, dayWindow, mondayOf, rampFor, tenureWeek, weekWindow } from "@/lib/daily";
 import type {
   DailyBriefDTO,
@@ -37,7 +33,7 @@ import { leadRepository } from "@/server/repositories/lead.repository";
 import { openRoleRepository } from "@/server/repositories/open-role.repository";
 import { stageHistoryRepository } from "@/server/repositories/stage-history.repository";
 import { clientRepository } from "@/server/repositories/client.repository";
-import { userRepository } from "@/server/repositories/user.repository";
+import { userRepository, cachedUserList } from "@/server/repositories/user.repository";
 import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/http/app-error";
 
@@ -87,16 +83,11 @@ async function topClientsByActiveCandidates(): Promise<
   { clientName: string; activityCount: number }[]
 > {
   const clients = await clientRepository.list();
-  const counted = await Promise.all(
-    clients.map(async (c) => ({
-      clientName: c.name,
-      activityCount: await candidateRepository.count({
-        clientId: c.id,
-        statuses: [...ACTIVE_STATUS_CODES],
-      }),
-    })),
-  );
-  return counted
+  const grouped: { clientId: string | null; _count: { _all: number } }[] =
+    await candidateRepository.countActiveByClient(clients.map((c) => c.id));
+  const countByClientId = new Map(grouped.map((g) => [g.clientId, g._count._all]));
+  return clients
+    .map((c) => ({ clientName: c.name, activityCount: countByClientId.get(c.id) ?? 0 }))
     .filter((c) => c.activityCount > 0)
     .sort((a, b) => b.activityCount - a.activityCount)
     .slice(0, BRIEF_CLIENT_CARD_LIMIT);
@@ -131,7 +122,7 @@ export const briefService = {
       priorityClient,
       yesterdayRow,
     ] = await Promise.all([
-      userRepository.list(),
+      cachedUserList(),
       dailyRepository.sourcedCountsByRange(w),
       dailyRepository.outreachCountsByRange(w),
       topClientsByActiveCandidates(),
@@ -147,18 +138,23 @@ export const briefService = {
       briefRepository.findDailyByDate(daysBefore(input.date, 1)),
     ]);
 
-    const perAssociate = await Promise.all(
-      users.map(async (u) => ({
-        name: u.name,
-        sourced: sourced.get(u.id) ?? 0,
-        outreach: outreach.get(u.id) ?? 0,
-        assignedCandidates: await candidateRepository.count({
-          createdById: u.id,
-          statuses: [...ACTIVE_STATUS_CODES],
-        }),
-        stuckCount: await candidateRepository.count({ createdById: u.id, stuck: true }),
-      })),
-    );
+    const userIds = users.map((u) => u.id);
+    const [activeByUser, stuckByUser]: [
+      { createdById: string | null; _count: { _all: number } }[],
+      { createdById: string | null; _count: { _all: number } }[],
+    ] = await Promise.all([
+      candidateRepository.countActiveByCreatedBy(userIds),
+      candidateRepository.countStuckByCreatedBy(userIds, now),
+    ]);
+    const activeCountOf = new Map(activeByUser.map((g) => [g.createdById, g._count._all]));
+    const stuckCountOf = new Map(stuckByUser.map((g) => [g.createdById, g._count._all]));
+    const perAssociate = users.map((u) => ({
+      name: u.name,
+      sourced: sourced.get(u.id) ?? 0,
+      outreach: outreach.get(u.id) ?? 0,
+      assignedCandidates: activeCountOf.get(u.id) ?? 0,
+      stuckCount: stuckCountOf.get(u.id) ?? 0,
+    }));
 
     const ctx: DailyBriefContext = {
       date: input.date,
@@ -243,7 +239,7 @@ export const briefService = {
     const lastW = weekWindow(lastWeekStart, input.tz);
 
     const [users, thisTotals, lastTotals, clientCards, lastWeekRow] = await Promise.all([
-      userRepository.list(),
+      cachedUserList(),
       weekTotals(thisW),
       weekTotals(lastW),
       topClientsByActiveCandidates(),

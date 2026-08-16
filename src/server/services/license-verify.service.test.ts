@@ -17,7 +17,10 @@ vi.mock("server-only", () => ({}));
 vi.mock("@/server/repositories/license-verify.repository", () => ({
   licenseVerifyRepository: h.licenseVerifyRepo,
 }));
-vi.mock("@/server/repositories/client.repository", () => ({ clientRepository: h.clientRepo }));
+vi.mock("@/server/repositories/client.repository", () => ({
+  clientRepository: h.clientRepo,
+  cachedClientNameMap: h.clientRepo.nameMap,
+}));
 
 import { licenseVerifyService } from "./license-verify.service";
 

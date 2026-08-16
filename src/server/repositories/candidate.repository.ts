@@ -324,6 +324,33 @@ export const candidateRepository = {
   },
 
   /**
+   * The `{id, name, email}` résumé-match candidate pool (`resume.match.ts`'s `MatchCandidate`) —
+   * perf audit 2026-08-16: `resumeService.extract`/`save` were pulling every scalar column
+   * (decrypting `licenseNumber` per row) of every candidate just to run in-memory name/email
+   * matching. `select` (not `omit`) so neither `licenseNumber` nor any other unused column is ever
+   * fetched from Postgres — no `decryptRow` needed, this shape never carries the encrypted field.
+   */
+  listForMatch(includeDeleted = false, tx?: Prisma.TransactionClient) {
+    return db(tx).candidate.findMany({
+      where: includeDeleted ? {} : { deletedAt: null },
+      select: { id: true, name: true, email: true },
+    });
+  },
+
+  /**
+   * The `{id, legacyId, email, updatedAt, createdAt}` dedupe-key projection the ETL import's
+   * `planImport` needs to classify each row as add/update and resolve email-collision groups —
+   * perf audit 2026-08-16: was pulling every scalar column (decrypting `licenseNumber` per row) of
+   * the ENTIRE candidate table (`includeDeleted: true`, no cap) on every prepare/commit call.
+   */
+  listForDedupe(includeDeleted = false, tx?: Prisma.TransactionClient) {
+    return db(tx).candidate.findMany({
+      where: includeDeleted ? {} : { deletedAt: null },
+      select: { id: true, legacyId: true, email: true, updatedAt: true, createdAt: true },
+    });
+  },
+
+  /**
    * True filtered total for the same `where` as `list` (minus cursor/orderBy/take) — the list's
    * `total` denominator and the board's per-status count fallback. No PII columns → no crypto.
    */
@@ -403,6 +430,56 @@ export const candidateRepository = {
     return db(tx).candidate.groupBy({
       by: ["status", "clientId"],
       where: { deletedAt: null, clientId: { in: clientIds } },
+      _count: { _all: true },
+    });
+  },
+
+  /**
+   * ACTIVE-status counts grouped by client, for a given set of client ids — the daily/weekly AI
+   * brief's "top clients by active candidates" figure. Perf audit 2026-08-16: was one `count()`
+   * per client run via `Promise.all`; same shape as `countStartedByClient` above.
+   */
+  countActiveByClient(clientIds: string[], tx?: Prisma.TransactionClient) {
+    if (clientIds.length === 0) return Promise.resolve([]);
+    return db(tx).candidate.groupBy({
+      by: ["clientId"],
+      where: {
+        deletedAt: null,
+        clientId: { in: clientIds },
+        status: { in: [...ACTIVE_STATUS_CODES] },
+      },
+      _count: { _all: true },
+    });
+  },
+
+  /**
+   * ACTIVE-status counts grouped by owner (`createdById`), for a given set of user ids — the AI
+   * brief's per-associate "assigned candidates" figure. Perf audit 2026-08-16: was one `count()`
+   * per user run via `Promise.all`.
+   */
+  countActiveByCreatedBy(createdByIds: string[], tx?: Prisma.TransactionClient) {
+    if (createdByIds.length === 0) return Promise.resolve([]);
+    return db(tx).candidate.groupBy({
+      by: ["createdById"],
+      where: {
+        deletedAt: null,
+        createdById: { in: createdByIds },
+        status: { in: [...ACTIVE_STATUS_CODES] },
+      },
+      _count: { _all: true },
+    });
+  },
+
+  /**
+   * `stuck` counts grouped by owner (`createdById`), for a given set of user ids — the AI brief's
+   * per-associate "stuck" figure. Perf audit 2026-08-16: was one `count()` per user run via
+   * `Promise.all`, same shape as `countActiveByCreatedBy` above.
+   */
+  countStuckByCreatedBy(createdByIds: string[], now: Date, tx?: Prisma.TransactionClient) {
+    if (createdByIds.length === 0) return Promise.resolve([]);
+    return db(tx).candidate.groupBy({
+      by: ["createdById"],
+      where: { deletedAt: null, createdById: { in: createdByIds }, ...stuckWhere(now) },
       _count: { _all: true },
     });
   },

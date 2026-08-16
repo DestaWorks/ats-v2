@@ -3,9 +3,9 @@ import { scoreCandidate } from "@/lib/rules/scoring";
 import type { ClientRules } from "@/lib/rules/types";
 import type { ReportFilters } from "@/lib/validation/reports";
 import { candidateRepository, type CandidateRow } from "@/server/repositories/candidate.repository";
-import { clientRepository } from "@/server/repositories/client.repository";
+import { cachedClientNameMap } from "@/server/repositories/client.repository";
 import {
-  clientRulesRepository,
+  cachedClientRulesList,
   toClientRules,
 } from "@/server/repositories/client-rules.repository";
 import { userRepository } from "@/server/repositories/user.repository";
@@ -41,7 +41,7 @@ export interface ReportCohort {
  * (`clientRepository.nameMap()`, `userRepository.namesByIds()`, `buildRulesMap`-equivalent).
  */
 export async function loadCohort(filters: ReportFilters): Promise<ReportCohort> {
-  const [candidates, clients, rulesRows] = await Promise.all([
+  const [candidates, clientNames, rulesRows] = await Promise.all([
     candidateRepository.list({
       clientId: filters.clientId,
       createdById: filters.createdById,
@@ -51,10 +51,9 @@ export async function loadCohort(filters: ReportFilters): Promise<ReportCohort> 
       addedTo: filters.addedTo ? utcNextDayStart(filters.addedTo) : undefined,
       take: REPORT_ROW_CAP,
     }),
-    clientRepository.list(),
-    clientRulesRepository.list(),
+    cachedClientNameMap(),
+    cachedClientRulesList(),
   ]);
-  const clientNames = new Map(clients.map((c) => [c.id, c.name]));
   const userNames = await userRepository.namesByIds([
     ...new Set(candidates.map((c) => c.createdById).filter((id): id is string => !!id)),
   ]);
