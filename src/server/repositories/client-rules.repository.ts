@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import type { ClientRules as ClientRulesModel, Prisma } from "@/generated/prisma/client";
 import type { ClientRules } from "@/lib/rules/types";
 import { db } from "@/server/db/prisma";
@@ -18,6 +19,10 @@ export const clientRulesRepository = {
     return db(tx).clientRules.findMany();
   },
 };
+
+/** Request-memoized `clientRulesRepository.list()` — same render-path-only caveat as
+ *  `cachedClientList` (client.repository.ts): never use this around a write in the same request. */
+export const cachedClientRulesList = cache(() => clientRulesRepository.list());
 
 /**
  * Build the pure-rule `ClientRules` (the shape `scoreCandidate` / `getAutoDisqualify` consume) from a

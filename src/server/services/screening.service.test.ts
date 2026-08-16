@@ -25,9 +25,13 @@ vi.mock("server-only", () => ({}));
 vi.mock("@/server/repositories/candidate.repository", () => ({
   candidateRepository: h.candidateRepo,
 }));
-vi.mock("@/server/repositories/client.repository", () => ({ clientRepository: h.clientRepo }));
+vi.mock("@/server/repositories/client.repository", () => ({
+  clientRepository: h.clientRepo,
+  cachedClientNameMap: h.clientRepo.nameMap,
+}));
 vi.mock("@/server/repositories/client-rules.repository", () => ({
   clientRulesRepository: h.clientRulesRepo,
+  cachedClientRulesList: h.clientRulesRepo.list,
 }));
 vi.mock("@/server/repositories/screening.repository", () => ({
   screeningRepository: h.screeningRepo,

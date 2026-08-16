@@ -165,14 +165,10 @@ export const clientPortalService = {
 
   async listContactsForClient(clientId: string): Promise<AdminPortalContactDTO[]> {
     const contacts = await clientContactRepository.listForClient(clientId);
-    return Promise.all(
-      contacts.map(async (c) => {
-        const active = c.portalEnabled
-          ? await clientPortalTokenRepository.findActiveForContact(c.id)
-          : null;
-        return toAdminContactDTO(c, active);
-      }),
-    );
+    const portalEnabledIds = contacts.filter((c) => c.portalEnabled).map((c) => c.id);
+    const activeTokens = await clientPortalTokenRepository.findActiveForContacts(portalEnabledIds);
+    const activeByContactId = new Map(activeTokens.map((t) => [t.contactId, t]));
+    return contacts.map((c) => toAdminContactDTO(c, activeByContactId.get(c.id) ?? null));
   },
 
   // --- public portal surface (acting identity = the resolved PortalContext) ---
@@ -180,7 +176,7 @@ export const clientPortalService = {
   async data(ctx: PortalContext): Promise<PortalDataDTO> {
     const [client, candidateRows, roleRows] = await Promise.all([
       clientRepository.findById(ctx.clientId),
-      candidateRepository.list({
+      candidateRepository.listCards({
         clientId: ctx.clientId,
         statuses: [...PORTAL_VISIBLE_STATUS_CODES],
       }),

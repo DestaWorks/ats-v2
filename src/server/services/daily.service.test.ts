@@ -48,7 +48,10 @@ const h = vi.hoisted(() => ({
 vi.mock("server-only", () => ({}));
 vi.mock("@/server/repositories/daily.repository", () => ({ dailyRepository: h.repo }));
 vi.mock("@/server/repositories/client.repository", () => ({ clientRepository: h.clientRepo }));
-vi.mock("@/server/repositories/user.repository", () => ({ userRepository: h.userRepo }));
+vi.mock("@/server/repositories/user.repository", () => ({
+  userRepository: h.userRepo,
+  cachedUserList: h.userRepo.list,
+}));
 vi.mock("@/server/db/prisma", () => ({ prisma: { user: h.prismaUser } }));
 vi.mock("@/server/db/audit", () => ({ writeAudit: h.writeAudit }));
 vi.mock("@/server/db/with-transaction", () => ({

@@ -12,8 +12,8 @@ import type { AuthUser } from "@/server/auth/guards";
 import { writeAudit } from "@/server/db/audit";
 import { withTransaction } from "@/server/db/with-transaction";
 import { candidateRepository } from "@/server/repositories/candidate.repository";
-import { clientRepository } from "@/server/repositories/client.repository";
-import { clientRulesRepository } from "@/server/repositories/client-rules.repository";
+import { cachedClientNameMap } from "@/server/repositories/client.repository";
+import { cachedClientRulesList } from "@/server/repositories/client-rules.repository";
 import {
   screeningRepository,
   type ScreeningScorecardRow,
@@ -66,8 +66,8 @@ export const screeningService = {
         search,
         take: 20,
       }),
-      clientRepository.nameMap(),
-      clientRulesRepository.list(),
+      cachedClientNameMap(),
+      cachedClientRulesList(),
     ]);
     const rulesByClient = new Map(rulesRows.map((r) => [r.clientId, r]));
     return rows.map((c) => {
@@ -102,7 +102,7 @@ export const screeningService = {
     const candidate = await candidateRepository.findById(candidateId);
     if (!candidate) throw new AppError("NOT_FOUND", "Candidate not found");
 
-    const rulesRows = candidate.clientId ? await clientRulesRepository.list() : [];
+    const rulesRows = candidate.clientId ? await cachedClientRulesList() : [];
     const rulesRow = rulesRows.find((r) => r.clientId === candidate.clientId) ?? null;
     const clientRules: ScreeningClientRules | null = rulesRow
       ? { states: rulesRow.states, schedule: rulesRow.schedule }

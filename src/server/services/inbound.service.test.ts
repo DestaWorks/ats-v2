@@ -30,12 +30,19 @@ vi.mock("@/server/repositories/candidate.repository", () => ({
   candidateRepository: h.candidateRepo,
 }));
 vi.mock("@/server/repositories/lead.repository", () => ({ leadRepository: h.leadRepo }));
-vi.mock("@/server/repositories/client.repository", () => ({ clientRepository: h.clientRepo }));
+vi.mock("@/server/repositories/client.repository", () => ({
+  clientRepository: h.clientRepo,
+  cachedClientNameMap: h.clientRepo.nameMap,
+}));
 vi.mock("@/server/repositories/client-rules.repository", async () => {
   const actual = await vi.importActual<
     typeof import("@/server/repositories/client-rules.repository")
   >("@/server/repositories/client-rules.repository");
-  return { clientRulesRepository: h.clientRulesRepo, toClientRules: actual.toClientRules };
+  return {
+    clientRulesRepository: h.clientRulesRepo,
+    cachedClientRulesList: h.clientRulesRepo.list,
+    toClientRules: actual.toClientRules,
+  };
 });
 vi.mock("./lead.service", () => ({ leadService: h.leadService }));
 

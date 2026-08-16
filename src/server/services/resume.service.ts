@@ -70,7 +70,7 @@ export const resumeService = {
    */
   async extract(input: ParseResumeInput): Promise<ExtractResumeResponse> {
     const data = await parseResume(input);
-    const candidates = await candidateRepository.list({});
+    const candidates = await candidateRepository.listForMatch();
     const match = matchResumeToCandidate(data, candidates);
     return { variant: input.variant, data, match };
   },
@@ -89,7 +89,7 @@ export const resumeService = {
     const data = resumeSchemaFor(input.variant).parse(input.data);
 
     // Recompute the match server-side; resolve the attach target.
-    const candidates = await candidateRepository.list({});
+    const candidates = await candidateRepository.listForMatch();
     const match = matchResumeToCandidate(data, candidates);
 
     let candidateId: string | null = null;

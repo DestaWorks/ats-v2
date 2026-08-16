@@ -7,8 +7,8 @@ import type {
 } from "@/lib/validation/credentials";
 import { COMPACT_STATES } from "@/lib/constants";
 import { credentialsIntelligenceRepository } from "@/server/repositories/credentials-intelligence.repository";
-import { clientRulesRepository } from "@/server/repositories/client-rules.repository";
-import { clientRepository } from "@/server/repositories/client.repository";
+import { cachedClientRulesList } from "@/server/repositories/client-rules.repository";
+import { cachedClientNameMap } from "@/server/repositories/client.repository";
 
 /** NLC tracker row cap — a leadership summary, not a full list; matches other dashboard caps. */
 const NLC_HOLDER_CAP = 20;
@@ -35,8 +35,8 @@ export const credentialsIntelligenceService = {
         credentialsIntelligenceRepository.matrixCounts(),
         credentialsIntelligenceRepository.gapAnalysisCandidates(),
         credentialsIntelligenceRepository.nlcCompactHolders(NLC_HOLDER_CAP),
-        clientRulesRepository.list(),
-        clientRepository.nameMap(),
+        cachedClientRulesList(),
+        cachedClientNameMap(),
       ]);
 
     return {
@@ -64,7 +64,7 @@ function toNlcHolderDTO(row: {
 }
 
 type MatrixCounts = Awaited<ReturnType<typeof credentialsIntelligenceRepository.matrixCounts>>;
-type RulesRows = Awaited<ReturnType<typeof clientRulesRepository.list>>;
+type RulesRows = Awaited<ReturnType<typeof cachedClientRulesList>>;
 
 /** Composite key for the credential/state maps below — "::" can't collide with a real
  *  credential or state code (none of `CREDENTIALS`/`US_STATES` contain it). */
