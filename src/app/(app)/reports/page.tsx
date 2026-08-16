@@ -1,6 +1,5 @@
-import { redirect } from "next/navigation";
 import { hasCapability } from "@/lib/constants";
-import { getCurrentUser } from "@/server/auth/guards";
+import { getVerifiedUser } from "@/server/auth/guards";
 import { reportFilterOptionsService } from "@/server/services/reports/filter-options.service";
 import { pipelineReportsService } from "@/server/services/reports/pipeline-reports.service";
 import { ErrorState } from "@/components/ui/error-state";
@@ -13,8 +12,7 @@ import { ReportsView } from "./reports-view";
  * gates consistently on `viewReports`, matching the nav.
  */
 export default async function ReportsPage() {
-  const user = await getCurrentUser();
-  if (!user) redirect("/sign-in");
+  const user = await getVerifiedUser();
 
   if (!hasCapability(user.role, "viewReports")) {
     return (

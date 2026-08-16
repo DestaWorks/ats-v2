@@ -15,8 +15,8 @@ export const GET = apiHandler(async () => {
 });
 
 export const POST = apiHandler(async (req: Request) => {
-  await requireCapability("manageUsers");
+  const actor = await requireCapability("manageUsers");
   const input = createUserSchema.parse(await req.json());
-  const result = await adminUserService.create(input);
+  const result = await adminUserService.create(input, actor.id);
   return json(result, 201);
 });

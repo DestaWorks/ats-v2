@@ -1,7 +1,6 @@
-import { redirect } from "next/navigation";
 import Link from "next/link";
 import { hasCapability } from "@/lib/constants";
-import { getCurrentUser } from "@/server/auth/guards";
+import { getVerifiedUser } from "@/server/auth/guards";
 import { cachedClientList } from "@/server/repositories/client.repository";
 import { AddCandidateForm } from "./add-candidate-form";
 
@@ -13,8 +12,7 @@ import { AddCandidateForm } from "./add-candidate-form";
  * a UI hint only.
  */
 export default async function AddCandidatePage() {
-  const user = await getCurrentUser();
-  if (!user) redirect("/sign-in");
+  const user = await getVerifiedUser();
 
   const clientRows = await cachedClientList();
   const clients = clientRows.map((c) => ({ id: c.id, name: c.name }));

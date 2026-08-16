@@ -40,7 +40,7 @@ const h = vi.hoisted(() => ({
     outreachSince: vi.fn(),
   },
   clientRepo: { list: vi.fn() },
-  userRepo: { namesByIds: vi.fn(), list: vi.fn() },
+  userRepo: { namesByIds: vi.fn(), list: vi.fn(), listByRole: vi.fn() },
   prismaUser: { findUnique: vi.fn() },
   writeAudit: vi.fn(),
 }));
@@ -62,11 +62,13 @@ beforeEach(() => {
   h.clientRepo.list.mockReset();
   h.userRepo.namesByIds.mockReset();
   h.userRepo.list.mockReset();
+  h.userRepo.listByRole.mockReset();
   h.prismaUser.findUnique.mockReset();
   h.writeAudit.mockReset();
   h.clientRepo.list.mockResolvedValue([{ id: "cl1", name: "Acme Health" }]);
   h.userRepo.namesByIds.mockResolvedValue(new Map());
   h.userRepo.list.mockResolvedValue([{ id: "u1", name: "Test User" }]);
+  h.userRepo.listByRole.mockResolvedValue([{ id: "u1", name: "Test User" }]);
   h.repo.countLeadsSourced.mockResolvedValue(0);
   h.repo.countOutreach.mockResolvedValue(0);
   h.repo.countCleanup.mockResolvedValue(0);
@@ -331,6 +333,10 @@ describe("dailyService.teamBreakdown — Wave 3.1 backlog", () => {
       { id: "u1", name: "Test User" },
       { id: "u2", name: "Associate Two" },
     ]);
+    h.userRepo.listByRole.mockResolvedValue([
+      { id: "u1", name: "Test User" },
+      { id: "u2", name: "Associate Two" },
+    ]);
 
     const out = await dailyService.teamBreakdown("2026-07-15", h.owner as AuthUser);
 
@@ -370,9 +376,38 @@ describe("dailyService.teamBreakdown — Wave 3.1 backlog", () => {
   it("returns an empty rows array (not an error) when nobody has logged yet", async () => {
     h.repo.logsForDateRange.mockResolvedValue([]);
     h.userRepo.list.mockResolvedValue([{ id: "u1", name: "Test User" }]);
+    h.userRepo.listByRole.mockResolvedValue([{ id: "u1", name: "Test User" }]);
     const out = await dailyService.teamBreakdown("2026-07-13", h.owner as AuthUser);
     expect(out.rows).toEqual([]);
     expect(out.teammates).toEqual([{ id: "u1", name: "Test User" }]);
+  });
+
+  it("teammates (the feedback picker) is Associate-only, independent of who logged that week", async () => {
+    // An Owner logged their own activity this week — the row should still show their real name
+    // (resolved from the ALL-roles `list()`), but they must NOT appear in the Associate-only
+    // `teammates` picker (resolved from `listByRole("Associate")`).
+    h.repo.logsForDateRange.mockResolvedValue([
+      {
+        userId: "owner1",
+        date: "2026-07-13",
+        sourced: 5,
+        outreach: 2,
+        responses: 0,
+        screenings: 0,
+        submitted: 0,
+      },
+    ]);
+    h.userRepo.list.mockResolvedValue([
+      { id: "owner1", name: "The Owner" },
+      { id: "u1", name: "Test User" },
+    ]);
+    h.userRepo.listByRole.mockResolvedValue([{ id: "u1", name: "Test User" }]);
+
+    const out = await dailyService.teamBreakdown("2026-07-13", h.owner as AuthUser);
+
+    expect(out.rows).toEqual([expect.objectContaining({ userId: "owner1", name: "The Owner" })]);
+    expect(out.teammates).toEqual([{ id: "u1", name: "Test User" }]);
+    expect(h.userRepo.listByRole).toHaveBeenCalledWith("Associate");
   });
 });
 
@@ -386,7 +421,7 @@ describe("dailyService.overview — target roster (design pass 2026-08-04)", () 
   });
 
   it("flags hasTargetToday per teammate and sums week-to-date (Monday through today, not the full week)", async () => {
-    h.userRepo.list.mockResolvedValue([
+    h.userRepo.listByRole.mockResolvedValue([
       { id: "u1", name: "Test User" },
       { id: "u2", name: "Associate Two" },
     ]);
@@ -420,10 +455,11 @@ describe("dailyService.overview — target roster (design pass 2026-08-04)", () 
     const [start, end] = h.repo.logsForDateRange.mock.calls[0]!;
     expect(start).toBe("2026-07-13"); // Monday of that week
     expect(end).toBe("2026-07-15"); // through TODAY, not the full week
+    expect(h.userRepo.listByRole).toHaveBeenCalledWith("Associate");
   });
 
   it("a teammate with zero logs this week still appears, zeroed (not omitted)", async () => {
-    h.userRepo.list.mockResolvedValue([{ id: "u1", name: "Test User" }]);
+    h.userRepo.listByRole.mockResolvedValue([{ id: "u1", name: "Test User" }]);
     h.repo.targetsForDate.mockResolvedValue([]);
     h.repo.logsForDateRange.mockResolvedValue([]);
 

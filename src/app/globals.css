@@ -135,6 +135,23 @@ select {
   padding-right: 1.75rem;
 }
 
+/* Auth screens use a dark-glass input (`authInputClass` in auth-field.tsx) — translucent-dark
+   bg + light `ivory` text, sitting on the sign-in card's dark gradient. Chromium/WebKit force an
+   opaque light background + dark text on autofilled fields via an internal paint layer that a
+   plain `background-color` override can't beat — it also washed out the light password-toggle
+   icon layered on top, since a near-white icon on the browser's forced near-white background is
+   unreadable. Re-asserting the intended colors via `-webkit-box-shadow` inset (the standard way
+   to override Chromium's autofill paint) keeps the dark-glass look intact. */
+.auth-input:-webkit-autofill,
+.auth-input:-webkit-autofill:hover,
+.auth-input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--color-ivory);
+  -webkit-box-shadow: 0 0 0px 1000px rgb(255 255 255 / 0.04) inset;
+  box-shadow: 0 0 0px 1000px rgb(255 255 255 / 0.04) inset;
+  caret-color: var(--color-ivory);
+  transition: background-color 9999s ease-in-out 0s;
+}
+
 /* Screen-reader-only utility (visually hidden, still announced). */
 .sr-only {
   position: absolute;

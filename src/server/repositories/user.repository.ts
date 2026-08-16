@@ -1,6 +1,7 @@
 import "server-only";
 import { cache } from "react";
 import type { Prisma } from "@/generated/prisma/client";
+import type { Role } from "@/lib/constants";
 import { db } from "@/server/db/prisma";
 
 /**
@@ -31,6 +32,18 @@ export const userRepository = {
    */
   list(tx?: Prisma.TransactionClient) {
     return db(tx).user.findMany({
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    });
+  },
+
+  /** `{ id, name }` options for exactly one role, sorted by name — feeds the Daily Log "Team"
+   *  view's target roster / feedback picker, which is Associate-only by design (a Manager sets
+   *  targets/gives feedback to their associates, not to other leadership or Admin accounts that
+   *  happen to exist in the same user table). */
+  listByRole(role: Role, tx?: Prisma.TransactionClient) {
+    return db(tx).user.findMany({
+      where: { role },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     });

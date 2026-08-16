@@ -1,7 +1,6 @@
-import { redirect } from "next/navigation";
 import Link from "next/link";
 import { hasCapability } from "@/lib/constants";
-import { getCurrentUser } from "@/server/auth/guards";
+import { getVerifiedUser } from "@/server/auth/guards";
 import { clientService } from "@/server/services/client.service";
 import { ErrorState } from "@/components/ui/error-state";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -14,8 +13,7 @@ import { AddClientButton } from "./add-client-modal";
  * capability, so this is a friendly no-access screen + the real gate, matching `migration/page.tsx`.
  */
 export default async function CrmPage() {
-  const user = await getCurrentUser();
-  if (!user) redirect("/sign-in");
+  const user = await getVerifiedUser();
 
   if (!hasCapability(user.role, "viewCrm")) {
     return (

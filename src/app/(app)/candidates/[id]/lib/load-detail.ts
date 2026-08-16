@@ -1,6 +1,6 @@
 import "server-only";
-import { notFound, redirect } from "next/navigation";
-import { getCurrentUser } from "@/server/auth/guards";
+import { notFound } from "next/navigation";
+import { getVerifiedUser } from "@/server/auth/guards";
 import { candidateService } from "@/server/services/candidate.service";
 import { cachedClientList } from "@/server/repositories/client.repository";
 import { cachedUserList } from "@/server/repositories/user.repository";
@@ -14,8 +14,7 @@ import { AppError } from "@/server/http/app-error";
  * entries can never drift. Returns everything `<CandidateDetail>` needs.
  */
 export async function loadCandidateDetail(id: string) {
-  const user = await getCurrentUser();
-  if (!user) redirect("/sign-in");
+  const user = await getVerifiedUser();
 
   // Perf audit 2026-08-04: `clients`/`taggable` only depend on `user` (already resolved above),
   // not on the candidate detail result — kick off all three reads together instead of making two

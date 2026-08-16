@@ -42,15 +42,16 @@ interface HealthInputs {
  * legacy's 3-divergent-formulas bug (they call the same pure function on the same inputs, not
  * three independent approximations).
  */
-async function gatherHealthInputs(clientId: string, now: Date): Promise<HealthInputs> {
-  const [statusGroups, notes, meetings, deals, tasks] = await Promise.all([
-    candidateRepository.groupByStatusFiltered({ clientId }),
-    clientNoteRepository.listForClient(clientId),
-    clientMeetingRepository.listForClient(clientId),
-    dealRepository.listForClient(clientId),
-    clientTaskRepository.listForClient(clientId),
-  ]);
-
+/** Pure aggregation shared by the single-client and batched (`compare()`) paths — same inputs,
+ *  just sourced from either one client's reads or a bucket sliced out of a batched read. */
+function computeHealthInputs(
+  statusGroups: { status: string; _count: { _all: number } }[],
+  notes: { createdAt: Date }[],
+  meetings: { createdAt: Date }[],
+  deals: { updatedAt: Date }[],
+  tasks: { status: string }[],
+  now: Date,
+): HealthInputs {
   const totalCandidates = statusGroups.reduce((sum, g) => sum + g._count._all, 0);
   const activeCandidateCount = statusGroups
     .filter((g) => statusOrder(g.status as CandidateStatus) < FIRST_TERMINAL_ORDER)
@@ -78,6 +79,70 @@ async function gatherHealthInputs(clientId: string, now: Date): Promise<HealthIn
     totalTaskCount: tasks.length,
     touchCount: notes.length + meetings.length + deals.length + tasks.length,
   };
+}
+
+async function gatherHealthInputs(clientId: string, now: Date): Promise<HealthInputs> {
+  const [statusGroups, notes, meetings, deals, tasks] = await Promise.all([
+    candidateRepository.groupByStatusFiltered({ clientId }),
+    clientNoteRepository.listForClient(clientId),
+    clientMeetingRepository.listForClient(clientId),
+    dealRepository.listForClient(clientId),
+    clientTaskRepository.listForClient(clientId),
+  ]);
+  return computeHealthInputs(statusGroups, notes, meetings, deals, tasks, now);
+}
+
+/** Bucket a batched read by `clientId` — the shared groupBy-into-Map step every input needs. */
+function byClient<T extends { clientId: string | null }>(rows: T[]): Map<string, T[]> {
+  const map = new Map<string, T[]>();
+  for (const row of rows) {
+    if (!row.clientId) continue;
+    const bucket = map.get(row.clientId);
+    if (bucket) bucket.push(row);
+    else map.set(row.clientId, [row]);
+  }
+  return map;
+}
+
+/**
+ * Same as `gatherHealthInputs`, for EVERY client in one shot — `/crm/compare`'s health inputs
+ * (perf audit 2026-08-15). Was `gatherHealthInputs` called once per client (5 queries × N
+ * clients); this fires 5 queries total, batched across all clients, then buckets each result set
+ * by `clientId` client-side.
+ */
+async function gatherHealthInputsForClients(
+  clientIds: string[],
+  now: Date,
+): Promise<Map<string, HealthInputs>> {
+  const [statusGroups, notes, meetings, deals, tasks] = await Promise.all([
+    candidateRepository.groupByStatusForClients(clientIds),
+    clientNoteRepository.listForClients(clientIds),
+    clientMeetingRepository.listForClients(clientIds),
+    dealRepository.listForClients(clientIds),
+    clientTaskRepository.listForClients(clientIds),
+  ]);
+
+  const statusGroupsByClient = byClient(statusGroups);
+  const notesByClient = byClient(notes);
+  const meetingsByClient = byClient(meetings);
+  const dealsByClient = byClient(deals);
+  const tasksByClient = byClient(tasks);
+
+  const result = new Map<string, HealthInputs>();
+  for (const clientId of clientIds) {
+    result.set(
+      clientId,
+      computeHealthInputs(
+        statusGroupsByClient.get(clientId) ?? [],
+        notesByClient.get(clientId) ?? [],
+        meetingsByClient.get(clientId) ?? [],
+        dealsByClient.get(clientId) ?? [],
+        tasksByClient.get(clientId) ?? [],
+        now,
+      ),
+    );
+  }
+  return result;
 }
 
 export const crmAnalyticsService = {
@@ -134,27 +199,37 @@ export const crmAnalyticsService = {
   async compare(): Promise<CompareRowDTO[]> {
     const now = new Date();
     const clients = await clientRepository.list();
-    return Promise.all(
-      clients.map(async (c) => {
-        const inputs = await gatherHealthInputs(c.id, now);
-        const health = computeHealthScore(inputs);
-        return {
-          clientId: c.id,
-          clientName: c.name,
-          priority: c.priority,
-          cadence: c.cadence,
-          pipelineCount: inputs.totalCandidates,
-          placedCount: inputs.placedCount,
-          activeCount: inputs.activeCandidateCount,
-          conversionPct:
-            inputs.totalCandidates > 0
-              ? Math.round((inputs.placedCount / inputs.totalCandidates) * 100)
-              : null,
-          healthScore: health.score,
-          healthTier: health.tier,
-          lastContactDaysAgo: inputs.daysSinceLastTouch,
-        };
-      }),
+    const inputsByClient = await gatherHealthInputsForClients(
+      clients.map((c) => c.id),
+      now,
     );
+    return clients.map((c) => {
+      const inputs = inputsByClient.get(c.id) ?? {
+        totalCandidates: 0,
+        activeCandidateCount: 0,
+        placedCount: 0,
+        daysSinceLastTouch: null,
+        doneTaskCount: 0,
+        totalTaskCount: 0,
+        touchCount: 0,
+      };
+      const health = computeHealthScore(inputs);
+      return {
+        clientId: c.id,
+        clientName: c.name,
+        priority: c.priority,
+        cadence: c.cadence,
+        pipelineCount: inputs.totalCandidates,
+        placedCount: inputs.placedCount,
+        activeCount: inputs.activeCandidateCount,
+        conversionPct:
+          inputs.totalCandidates > 0
+            ? Math.round((inputs.placedCount / inputs.totalCandidates) * 100)
+            : null,
+        healthScore: health.score,
+        healthTier: health.tier,
+        lastContactDaysAgo: inputs.daysSinceLastTouch,
+      };
+    });
   },
 };

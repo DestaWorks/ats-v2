@@ -8,9 +8,9 @@ import { adminUserService } from "@/server/services/admin-user.service";
  * legacy's client-side-only "blocked" check). Gated `manageUsers`.
  */
 export const POST = apiHandler<{ params: Promise<{ id: string }> }>(async (req, ctx) => {
-  await requireCapability("manageUsers");
+  const actor = await requireCapability("manageUsers");
   const { id } = await ctx.params;
   const input = banUserSchema.parse(await req.json());
-  const user = await adminUserService.ban(id, input);
+  const user = await adminUserService.ban(id, input, actor.id);
   return json({ user });
 });

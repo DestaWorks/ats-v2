@@ -1,9 +1,7 @@
 import Link from "next/link";
-import dynamic from "next/dynamic";
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
 import { BoltIcon, FlagIcon, UserGroupIcon } from "@heroicons/react/24/outline";
-import { getCurrentUser } from "@/server/auth/guards";
+import { getVerifiedUser } from "@/server/auth/guards";
 import { candidateService } from "@/server/services/candidate.service";
 import { dailyService } from "@/server/services/daily.service";
 import { dateKeyForOffset } from "@/lib/daily";
@@ -15,12 +13,7 @@ import { STATUS_BG } from "../pipeline/lib/status-style";
 import { StatCard } from "./stat-card";
 import { DailyStrip } from "./daily-strip";
 import { SinceYouClosed } from "./since-you-closed";
-
-// recharts is heavy — load it only once the distribution card actually renders (perf audit
-// 2026-08-05), matching the `next/dynamic` pattern used for Candidate/Client Detail tabs.
-const PipelineDistributionChart = dynamic(() =>
-  import("./pipeline-distribution-chart").then((m) => m.PipelineDistributionChart),
-);
+import { PipelineDistributionChart } from "./pipeline-distribution-chart-lazy";
 
 /**
  * Overview (RSC, legacy-parity). Reads a lightweight summary (`candidateService.dashboardStats`)
@@ -30,8 +23,7 @@ const PipelineDistributionChart = dynamic(() =>
  * stage + dot legend), headline stats, the attention list, and a prominent link into the board.
  */
 export default async function DashboardPage() {
-  const user = await getCurrentUser();
-  if (!user) redirect("/sign-in");
+  const user = await getVerifiedUser();
 
   // Daily strip's "today" is the USER-LOCAL date (`app-tz` cookie, shared with `/daily-log` and
   // `/weekly-brief` — see those pages' comments) — seed it server-side when the cookie is
@@ -43,7 +35,7 @@ export default async function DashboardPage() {
     Number.isInteger(parsedTz) && parsedTz >= -840 && parsedTz <= 840 ? parsedTz : undefined;
 
   const [stats, initialDailyOverview] = await Promise.all([
-    candidateService.dashboardStats(user),
+    candidateService.dashboardStats(),
     initialTz !== undefined
       ? dailyService.overview(user, dateKeyForOffset(initialTz), initialTz)
       : Promise.resolve(undefined),
@@ -145,22 +137,32 @@ export default async function DashboardPage() {
           ) : (
             <ul className="flex flex-col divide-y divide-black/5">
               {attention.map((c) => (
-                <li key={c.id} className="flex flex-col gap-1 py-2.5">
-                  <span className="flex items-center gap-2">
-                    <span aria-hidden className={cn("h-2 w-2 rounded-full", STATUS_BG[c.status])} />
-                    <span className="text-sm font-medium text-charcoal">{c.name}</span>
-                  </span>
-                  <span className="flex items-center justify-between gap-3 pl-4">
-                    <span className="text-xs text-gray">{c.clientName ?? "Unassigned"}</span>
-                    <span
-                      className={cn(
-                        "text-xs font-semibold",
-                        c.isOverdue ? "text-red" : "text-orange",
-                      )}
-                    >
-                      {c.isOverdue ? "overdue" : "stuck"} · {c.daysInStage}d
+                <li key={c.id}>
+                  <Link
+                    href={`/candidates/${c.id}`}
+                    className="flex flex-col gap-1 rounded-lg px-2 py-2.5 transition hover:bg-black/[0.03]"
+                  >
+                    <span className="flex items-center gap-2">
+                      <span
+                        aria-hidden
+                        className={cn("h-2 w-2 rounded-full", STATUS_BG[c.status])}
+                      />
+                      <span className="text-sm font-semibold text-navy hover:underline">
+                        {c.name}
+                      </span>
                     </span>
-                  </span>
+                    <span className="flex items-center justify-between gap-3 pl-4">
+                      <span className="text-xs text-gray">{c.clientName ?? "Unassigned"}</span>
+                      <span
+                        className={cn(
+                          "text-xs font-semibold",
+                          c.isOverdue ? "text-red" : "text-orange",
+                        )}
+                      >
+                        {c.isOverdue ? "overdue" : "stuck"} · {c.daysInStage}d
+                      </span>
+                    </span>
+                  </Link>
                 </li>
               ))}
             </ul>

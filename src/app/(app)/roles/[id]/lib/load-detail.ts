@@ -1,14 +1,13 @@
 import "server-only";
-import { notFound, redirect } from "next/navigation";
-import { getCurrentUser } from "@/server/auth/guards";
+import { notFound } from "next/navigation";
+import { getVerifiedUser } from "@/server/auth/guards";
 import { openRoleService } from "@/server/services/open-role.service";
 import { cachedClientList } from "@/server/repositories/client.repository";
 import { AppError } from "@/server/http/app-error";
 
 /** Shared RSC loader for `/roles/[id]` — one place owns the guard → composite-read → NOT_FOUND mapping. */
 export async function loadRoleDetail(id: string) {
-  const user = await getCurrentUser();
-  if (!user) redirect("/sign-in");
+  const user = await getVerifiedUser();
 
   let role;
   try {

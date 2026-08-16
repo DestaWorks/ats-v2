@@ -1,5 +1,3 @@
-import { redirect } from "next/navigation";
-import { getCurrentUser } from "@/server/auth/guards";
 import { cachedClientList } from "@/server/repositories/client.repository";
 import { InboundTriage } from "./inbound-triage";
 
@@ -10,9 +8,6 @@ import { InboundTriage } from "./inbound-triage";
  * so the reviewer can edit before anything is written.
  */
 export default async function InboundTriagePage() {
-  const user = await getCurrentUser();
-  if (!user) redirect("/sign-in");
-
   const clientRows = await cachedClientList();
   const clients = clientRows.map((c) => ({ id: c.id, name: c.name }));
 

@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
-import { updateUser, changePassword, useSession } from "@/lib/auth-client";
+import { updateUser, changePassword } from "@/lib/auth-client";
 import type { UserPreferencesDTO } from "@/lib/validation/user-preferences";
 import { useApiForm } from "@/lib/forms/use-api-form";
 import { emptyToNull } from "@/lib/forms/empty-to-null";
@@ -59,18 +59,19 @@ export function ProfileView({
   userName,
   userEmail,
   userRole,
+  userImage,
   preferences,
 }: {
   userName: string;
   userEmail: string;
   userRole: string;
+  userImage: string | null;
   preferences: UserPreferencesDTO;
 }) {
-  const { data: session } = useSession();
   const [signature, setSignature] = useState(preferences.emailSignature);
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
-  const image = session?.user?.image ?? null;
+  const [image, setImage] = useState(userImage);
 
   async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -86,8 +87,12 @@ export function ProfileView({
         return;
       }
       const { error } = await updateUser({ image: uploadResult.data.url });
-      if (error) toast.error(error.message ?? "Couldn't update your avatar");
-      else toast.success("Avatar updated");
+      if (error) {
+        toast.error(error.message ?? "Couldn't update your avatar");
+      } else {
+        setImage(uploadResult.data.url);
+        toast.success("Avatar updated");
+      }
     } catch {
       toast.error("Couldn't process that image");
     } finally {

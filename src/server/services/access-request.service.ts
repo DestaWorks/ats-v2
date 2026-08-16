@@ -74,7 +74,7 @@ export const accessRequestService = {
    * unmapped `APIError` — not one of our own `AppError`s, so it fell through to the generic
    * catch-all as an opaque 500 instead of a clear message. Pre-check and reject with CONFLICT.
    */
-  async approve(id: string, role: Role): Promise<GeneratedPasswordDTO> {
+  async approve(id: string, role: Role, actorId: string): Promise<GeneratedPasswordDTO> {
     const request = await accessRequestRepository.findById(id);
     if (!request) throw new AppError("NOT_FOUND", "Access request not found");
     if (request.status !== "pending") {
@@ -83,11 +83,14 @@ export const accessRequestService = {
     if (await userRepository.findByEmail(request.email)) {
       throw new AppError("CONFLICT", "An account with this email already exists");
     }
-    const created = await adminUserService.create({
-      name: request.name,
-      email: request.email,
-      role,
-    });
+    const created = await adminUserService.create(
+      {
+        name: request.name,
+        email: request.email,
+        role,
+      },
+      actorId,
+    );
     await accessRequestRepository.updateStatus(id, "approved");
     // Best-effort: the account is already created and the request already resolved by this
     // point, so a failed/unconfigured send shouldn't turn into a false "approval failed" error

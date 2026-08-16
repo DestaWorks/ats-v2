@@ -9,9 +9,9 @@ import { accessRequestService } from "@/server/services/access-request.service";
  * where `approve_request` has no backend handler at all. Gated `manageAccessRequests`.
  */
 export const POST = apiHandler<{ params: Promise<{ id: string }> }>(async (req, ctx) => {
-  await requireCapability("manageAccessRequests");
+  const actor = await requireCapability("manageAccessRequests");
   const { id } = await ctx.params;
   const input = approveRequestSchema.parse(await req.json());
-  const result = await accessRequestService.approve(id, input.role);
+  const result = await accessRequestService.approve(id, input.role, actor.id);
   return json(result);
 });

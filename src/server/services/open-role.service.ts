@@ -34,7 +34,7 @@ import { withTransaction } from "@/server/db/with-transaction";
 import { extractJd } from "@/server/ai/extract-jd";
 import { openRoleRepository, type OpenRoleRow } from "@/server/repositories/open-role.repository";
 import { clientMatchProfileRepository } from "@/server/repositories/client-match-profile.repository";
-import { clientRepository } from "@/server/repositories/client.repository";
+import { cachedClientNameMap } from "@/server/repositories/client.repository";
 import { leadRepository, type LeadMatchRow } from "@/server/repositories/lead.repository";
 import { userRepository } from "@/server/repositories/user.repository";
 import { AppError } from "@/server/http/app-error";
@@ -185,7 +185,7 @@ export const openRoleService = {
     };
     const [total, clientNames] = await Promise.all([
       openRoleRepository.count(repoFilters),
-      clientRepository.nameMap(),
+      cachedClientNameMap(),
     ]);
     const meta = pageMeta(total, filters.page ?? 1, LIST_PAGE);
     const rows = await openRoleRepository.list({
@@ -204,7 +204,7 @@ export const openRoleService = {
     const role = await requireRole(id);
     const [notes, clientNames] = await Promise.all([
       openRoleRepository.listNotes(id),
-      clientRepository.nameMap(),
+      cachedClientNameMap(),
     ]);
     const authorIds = notes.map((n) => n.authorId);
     const assigneeIds = role.assignedToId ? [role.assignedToId] : [];
@@ -366,7 +366,7 @@ export const openRoleService = {
   async triage(): Promise<TriageRoleDTO[]> {
     const [roles, clientNames, candidates, profiles] = await Promise.all([
       openRoleRepository.listActive(),
-      clientRepository.nameMap(),
+      cachedClientNameMap(),
       loadMatchCandidates(),
       clientMatchProfileRepository.list(),
     ]);

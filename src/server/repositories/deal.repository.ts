@@ -25,6 +25,14 @@ export const dealRepository = {
     });
   },
 
+  /** Same as `listForClient`, batched across many clients in one query — feeds `/crm/compare`,
+   *  which previously ran one `listForClient` per client (perf audit 2026-08-15). */
+  listForClients(clientIds: string[], tx?: Prisma.TransactionClient) {
+    return db(tx).deal.findMany({
+      where: { clientId: { in: clientIds }, deletedAt: null },
+    });
+  },
+
   /** Scoped to `clientId` — an id belonging to another client is a 0-row no-op, never cross-client. */
   async update(
     clientId: string,

@@ -1,5 +1,4 @@
-import { redirect } from "next/navigation";
-import { getCurrentUser } from "@/server/auth/guards";
+import { getVerifiedUser } from "@/server/auth/guards";
 import { LEARN_CHAPTERS } from "@/lib/validation/learn";
 import { learnService } from "@/server/services/learn.service";
 import { LearnView } from "./learn-view";
@@ -9,8 +8,7 @@ import { LearnView } from "./learn-view";
  * links, and real per-user progress (`User.learnProgress`, not legacy's unscoped localStorage).
  */
 export default async function LearnPage() {
-  const user = await getCurrentUser();
-  if (!user) redirect("/sign-in");
+  const user = await getVerifiedUser();
 
   const progress = await learnService.getMine(user);
 

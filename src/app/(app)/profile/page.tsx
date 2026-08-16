@@ -1,5 +1,4 @@
-import { redirect } from "next/navigation";
-import { getCurrentUser } from "@/server/auth/guards";
+import { getVerifiedUser } from "@/server/auth/guards";
 import { userPreferencesService } from "@/server/services/user-preferences.service";
 import { ProfileView } from "./profile-view";
 
@@ -8,8 +7,7 @@ import { ProfileView } from "./profile-view";
  * location/signature/password, self-service. Open to any signed-in user (own record only).
  */
 export default async function ProfilePage() {
-  const user = await getCurrentUser();
-  if (!user) redirect("/sign-in");
+  const user = await getVerifiedUser();
 
   const preferences = await userPreferencesService.getMine(user);
 
@@ -25,6 +23,7 @@ export default async function ProfilePage() {
         userName={user.name}
         userEmail={user.email}
         userRole={user.role}
+        userImage={user.image ?? null}
         preferences={preferences}
       />
     </div>

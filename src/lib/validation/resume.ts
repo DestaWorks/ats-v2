@@ -169,10 +169,14 @@ export const saveResumeInputSchema = z.object({
 export type SaveResumeInput = z.infer<typeof saveResumeInputSchema>;
 
 /** POST /api/resume/upload-url (Wave 6) — request: the file's name/type, to build a scoped
- *  storage path. Response: a short-lived URL the browser PUTs the raw bytes to directly. */
+ *  storage path. Response: a short-lived URL the browser PUTs the raw bytes to directly.
+ *  `mimeType` is an allowlist, not a free string — it's threaded into the presigned PUT's
+ *  required Content-Type, so this is the one place that actually constrains what can land in the
+ *  resumes bucket (both upload flows only ever produce PDF or plain text — see resume-flow.tsx /
+ *  resume-tab.tsx). */
 export const requestResumeUploadUrlSchema = z.object({
   filename: z.string().min(1).max(255),
-  mimeType: z.string().min(1).max(120),
+  mimeType: z.enum(["application/pdf", "text/plain"]),
 });
 export type RequestResumeUploadUrlInput = z.infer<typeof requestResumeUploadUrlSchema>;
 

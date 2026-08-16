@@ -1,5 +1,4 @@
-import { redirect } from "next/navigation";
-import { getCurrentUser } from "@/server/auth/guards";
+import { getVerifiedUser } from "@/server/auth/guards";
 import { hasCapability } from "@/lib/constants";
 import { cachedClientList } from "@/server/repositories/client.repository";
 import { userPreferencesService } from "@/server/services/user-preferences.service";
@@ -14,8 +13,7 @@ import { TemplatesWorkspace } from "./templates-workspace";
  * signature/sticky note.
  */
 export default async function TemplatesPage() {
-  const user = await getCurrentUser();
-  if (!user) redirect("/sign-in");
+  const user = await getVerifiedUser();
 
   const [clientRows, preferences] = await Promise.all([
     cachedClientList(),

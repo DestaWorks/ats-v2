@@ -138,7 +138,7 @@ export const dailyService = {
       this.liveActuals(user.id, date, tz),
       dailyRepository.actualFor(user.id, date),
       clientRepository.list(),
-      canSetTargets ? userRepository.list() : Promise.resolve(undefined),
+      canSetTargets ? userRepository.listByRole("Associate") : Promise.resolve(undefined),
       canSetTargets ? dailyRepository.targetsForDate(date) : Promise.resolve(undefined),
       canSetTargets ? dailyRepository.logsForDateRange(monday, date) : Promise.resolve(undefined),
     ]);
@@ -452,9 +452,14 @@ export const dailyService = {
     }
     const monday = mondayOf(weekStart);
     const weekEnd = daysAfter(monday, 6);
-    const [logs, users] = await Promise.all([
+    // `users` (ALL roles) resolves row names for whoever actually logged that week — a
+    // leadership account that logs their own activity should still show their name, not "—".
+    // `associates` (Associate-only) is the "send feedback to" picker's option list; those two
+    // populations are deliberately different, so this fetches both rather than filtering one.
+    const [logs, users, associates] = await Promise.all([
       dailyRepository.logsForDateRange(monday, weekEnd),
       userRepository.list(),
+      userRepository.listByRole("Associate"),
     ]);
     const names = new Map(users.map((u) => [u.id, u.name]));
     const byUser = new Map<string, TeamBreakdownDTO["rows"][number]>();
@@ -480,7 +485,7 @@ export const dailyService = {
     return {
       weekStart: monday,
       rows: [...byUser.values()].sort((a, b) => b.sourced - a.sourced),
-      teammates: users.map((u) => ({ id: u.id, name: u.name })),
+      teammates: associates.map((u) => ({ id: u.id, name: u.name })),
     };
   },
 };

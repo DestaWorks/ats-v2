@@ -9,8 +9,10 @@ import type { AuthUser } from "@/server/auth/guards";
 import { AppError } from "@/server/http/app-error";
 import { AVATAR_BUCKET, uploadPublic } from "@/server/integrations/storage";
 
-/** `data:<mime>;base64,<payload>` — the shape `resizeToDataUrl` (profile-view.tsx) always produces. */
-const DATA_URL_RE = /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/;
+/** `data:<mime>;base64,<payload>` — the shape `resizeToDataUrl` (profile-view.tsx) always
+ *  produces (JPEG). Mime is restricted to raster types with no active-content risk — an avatar
+ *  has no legitimate reason to be an SVG, which can embed a `<script>`. */
+const DATA_URL_RE = /^data:(image\/(?:jpeg|png|webp));base64,(.+)$/;
 
 /**
  * Per-user profile preferences (Wave 4.1 Templates + Wave 5.4 My Profile) — email signature,

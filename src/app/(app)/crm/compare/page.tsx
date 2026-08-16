@@ -1,8 +1,7 @@
-import { redirect } from "next/navigation";
 import Link from "next/link";
 import { hasCapability } from "@/lib/constants";
 import type { ClientHealthTier } from "@/lib/rules/client-health";
-import { getCurrentUser } from "@/server/auth/guards";
+import { getVerifiedUser } from "@/server/auth/guards";
 import { crmAnalyticsService } from "@/server/services/crm-analytics.service";
 import { Badge, type BadgeTone } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -22,8 +21,7 @@ const TIER_TONE: Record<ClientHealthTier, BadgeTone> = {
  * health score every client detail page shows, never a cheaper re-approximation.
  */
 export default async function ComparePage() {
-  const user = await getCurrentUser();
-  if (!user) redirect("/sign-in");
+  const user = await getVerifiedUser();
 
   if (!hasCapability(user.role, "viewCrm")) {
     return (

@@ -1,5 +1,4 @@
-import { redirect } from "next/navigation";
-import { getCurrentUser } from "@/server/auth/guards";
+import { getVerifiedUser } from "@/server/auth/guards";
 import { hasCapability } from "@/lib/constants";
 import { storageEnabled } from "@/server/integrations/storage";
 import { ErrorState } from "@/components/ui/error-state";
@@ -12,8 +11,7 @@ import { MigrationWizard } from "./migration-wizard";
  * gate is defence-in-depth + a friendly no-access screen rather than the wizard shell.
  */
 export default async function MigrationPage() {
-  const user = await getCurrentUser();
-  if (!user) redirect("/sign-in");
+  const user = await getVerifiedUser();
 
   if (!hasCapability(user.role, "bulkImport")) {
     return (

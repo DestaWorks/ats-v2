@@ -10,10 +10,12 @@ export function AppHeader({
   userName,
   userEmail,
   userRole,
+  userImage,
 }: {
   userName: string;
   userEmail: string;
   userRole: string;
+  userImage: string | null;
 }) {
   return (
     <header className="no-print sticky top-0 z-40 flex items-center justify-between gap-4 border-b border-black/10 bg-white px-5 py-2.5">
@@ -30,7 +32,7 @@ export function AppHeader({
 
       <div className="flex items-center gap-3">
         <AlertsBell viewerFirstName={userName.split(" ")[0] ?? userName} />
-        <UserMenu userName={userName} userEmail={userEmail} userRole={userRole} />
+        <UserMenu userName={userName} userEmail={userEmail} userRole={userRole} image={userImage} />
       </div>
     </header>
   );

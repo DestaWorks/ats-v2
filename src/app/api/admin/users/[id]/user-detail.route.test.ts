@@ -45,6 +45,6 @@ describe("DELETE /api/admin/users/:id", () => {
     const res = await DELETE(deleteReq(), ctx);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true, id: "u2" });
-    expect(h.remove).toHaveBeenCalledWith("u2");
+    expect(h.remove).toHaveBeenCalledWith("u2", "u1");
   });
 });

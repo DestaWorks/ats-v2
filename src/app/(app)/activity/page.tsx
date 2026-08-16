@@ -1,4 +1,3 @@
-import { redirect } from "next/navigation";
 import {
   hasCapability,
   isAuditAction,
@@ -7,7 +6,7 @@ import {
   type AuditEntity,
 } from "@/lib/constants";
 import { EmptyState } from "@/components/ui/empty-state";
-import { getCurrentUser } from "@/server/auth/guards";
+import { getVerifiedUser } from "@/server/auth/guards";
 import type { AuditListFilters } from "@/server/repositories/audit.repository";
 import { auditService } from "@/server/services/audit.service";
 import { ActivityFilters } from "./activity-filters";
@@ -28,8 +27,7 @@ export default async function ActivityPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const user = await getCurrentUser();
-  if (!user) redirect("/sign-in");
+  const user = await getVerifiedUser();
 
   if (!hasCapability(user.role, "viewAudit")) {
     return (

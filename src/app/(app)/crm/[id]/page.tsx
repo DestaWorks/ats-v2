@@ -1,14 +1,13 @@
-import { redirect, notFound } from "next/navigation";
+import { notFound } from "next/navigation";
 import { hasCapability } from "@/lib/constants";
-import { getCurrentUser } from "@/server/auth/guards";
+import { getVerifiedUser } from "@/server/auth/guards";
 import { clientService } from "@/server/services/client.service";
 import { AppError } from "@/server/http/app-error";
 import { ErrorState } from "@/components/ui/error-state";
 import { ClientDetail } from "./client-detail";
 
 export default async function ClientDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const user = await getCurrentUser();
-  if (!user) redirect("/sign-in");
+  const user = await getVerifiedUser();
 
   if (!hasCapability(user.role, "viewCrm")) {
     return (

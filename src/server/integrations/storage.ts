@@ -71,16 +71,22 @@ export async function uploadPublic(
 
 /** A short-lived URL the browser can PUT raw bytes to directly (resumes never pass through our
  *  own server — avoids Vercel's serverless body-size limit for multi-MB PDFs). A standard S3
- *  presigned PUT — works identically against any S3-compatible provider, no vendor-specific token. */
+ *  presigned PUT — works identically against any S3-compatible provider, no vendor-specific token.
+ *  `contentType` is signed into the URL, so S3 rejects a PUT whose Content-Type header doesn't
+ *  match — the caller must validate it against an allowlist first (this function only enforces
+ *  whatever it's given). */
 export async function createSignedUploadUrl(
   bucket: string,
   key: string,
+  contentType: string,
 ): Promise<{ signedUrl: string }> {
   const s3 = getClient();
   try {
-    const signedUrl = await getSignedUrl(s3, new PutObjectCommand({ Bucket: bucket, Key: key }), {
-      expiresIn: 300,
-    });
+    const signedUrl = await getSignedUrl(
+      s3,
+      new PutObjectCommand({ Bucket: bucket, Key: key, ContentType: contentType }),
+      { expiresIn: 300 },
+    );
     return { signedUrl };
   } catch {
     throw new AppError("UPSTREAM_ERROR", "Could not create an upload URL");

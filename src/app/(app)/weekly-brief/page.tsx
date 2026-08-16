@@ -1,8 +1,7 @@
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
 import { hasCapability } from "@/lib/constants";
 import { dateKeyForOffset, mondayOf } from "@/lib/daily";
-import { getCurrentUser } from "@/server/auth/guards";
+import { getVerifiedUser } from "@/server/auth/guards";
 import { briefService } from "@/server/services/brief.service";
 import { ErrorState } from "@/components/ui/error-state";
 import { WeeklyBriefView } from "./weekly-brief-view";
@@ -18,8 +17,7 @@ import { WeeklyBriefView } from "./weekly-brief-view";
  * its redundant first client fetch.
  */
 export default async function WeeklyBriefPage() {
-  const user = await getCurrentUser();
-  if (!user) redirect("/sign-in");
+  const user = await getVerifiedUser();
 
   if (!hasCapability(user.role, "viewReports")) {
     return (

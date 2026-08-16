@@ -35,6 +35,12 @@ const h = vi.hoisted(() => ({
       return new Map(clients.map((c: { id: string; name: string }) => [c.id, c.name]));
     },
   },
+  // Same derivation as the real `cachedClientNameMap` (built from the list), mocked separately
+  // since several services now call this instead of `clientRepository.nameMap()`.
+  cachedClientNameMap: async () => {
+    const clients = await h.clientRepo.list();
+    return new Map(clients.map((c: { id: string; name: string }) => [c.id, c.name]));
+  },
   clientRulesRepo: { list: vi.fn() },
   userRepo: { namesByIds: vi.fn() },
   writeAudit: vi.fn(),
@@ -52,7 +58,10 @@ vi.mock("@/server/repositories/document.repository", () => ({
   documentRepository: h.docRepo,
 }));
 vi.mock("@/server/repositories/note.repository", () => ({ noteRepository: h.noteRepo }));
-vi.mock("@/server/repositories/client.repository", () => ({ clientRepository: h.clientRepo }));
+vi.mock("@/server/repositories/client.repository", () => ({
+  clientRepository: h.clientRepo,
+  cachedClientNameMap: h.cachedClientNameMap,
+}));
 vi.mock("@/server/repositories/user.repository", () => ({ userRepository: h.userRepo }));
 vi.mock("@/server/repositories/outreach.repository", () => ({
   outreachRepository: h.outreachRepo,

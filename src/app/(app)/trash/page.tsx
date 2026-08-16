@@ -1,6 +1,5 @@
-import { redirect } from "next/navigation";
 import { hasCapability } from "@/lib/constants";
-import { getCurrentUser } from "@/server/auth/guards";
+import { getVerifiedUser } from "@/server/auth/guards";
 import { candidateService } from "@/server/services/candidate.service";
 import { TrashList } from "./trash-list";
 
@@ -12,8 +11,7 @@ import { TrashList } from "./trash-list";
  * authoritative: soft-delete/restore are open to any operator, Purge requires `purgeCandidate`.
  */
 export default async function TrashPage() {
-  const user = await getCurrentUser();
-  if (!user) redirect("/sign-in");
+  const user = await getVerifiedUser();
 
   const { items } = await candidateService.listTrash(user);
   const canPurge = hasCapability(user.role, "purgeCandidate");
