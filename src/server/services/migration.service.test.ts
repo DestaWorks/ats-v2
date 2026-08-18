@@ -6,7 +6,7 @@ import type { AuthUser } from "@/server/auth/guards";
  * Migration service (Wave 1.3 §10) WITHOUT a DB: the pure pipeline (sheet-parse + transform +
  * dedupe) runs for real; repositories, `writeAudit`, and `withTransaction` are mocked. Asserts the
  * headline invariants: prepare writes nothing; commit upserts by legacy_id (never `create`, so
- * re-run = no dupes); email-dupes flagged + kept; résumé doc upserted; checksum mismatch warns; and
+ * re-run = no dupes); email-dupes flagged + kept; resume doc upserted; checksum mismatch warns; and
  * no PII is logged.
  */
 
@@ -153,7 +153,7 @@ describe("migrationService.commit", () => {
     expect(create.tags).toContain("Needs Review");
   });
 
-  it("a résumé trio → a documents upsert keyed by ResumeFileID, linked to the candidate", async () => {
+  it("a resume trio → a documents upsert keyed by ResumeFileID, linked to the candidate", async () => {
     const content = csv([
       { ID: "L-1", Name: "Jane", Status: NEW, ResumeFileID: "drive-1", ResumeURL: "https://d/1" },
     ]);
@@ -226,7 +226,7 @@ describe("migrationService.commit", () => {
   });
 });
 
-/** A minimal but shape-valid clinical résumé extraction, for mocking `parseResume`. */
+/** A minimal but shape-valid clinical resume extraction, for mocking `parseResume`. */
 const FAKE_RESUME_DATA = {
   name: "Jane Doe",
   email: "jane.new@x.com",
@@ -256,8 +256,8 @@ const FAKE_RESUME_DATA = {
   skills: { modalities: [], populations: ["Adult"] },
 };
 
-describe("migrationService — résumé ZIP matching (Wave 1.3 backlog, Indrasur flow)", () => {
-  it("matches a résumé to its row by normalized name, unmatched files are surfaced (never dropped)", async () => {
+describe("migrationService — resume ZIP matching (Wave 1.3 backlog, Indrasur flow)", () => {
+  it("matches a resume to its row by normalized name, unmatched files are surfaced (never dropped)", async () => {
     const content = csv([
       { ID: "L-1", Name: "Jane Doe", Status: NEW },
       { ID: "L-2", Name: "No Resume Here", Status: NEW },
@@ -288,7 +288,7 @@ describe("migrationService — résumé ZIP matching (Wave 1.3 backlog, Indrasur
     expect(report.resumeCounts).toEqual({ matched: 1, ambiguous: 0, none: 1 });
   });
 
-  it("a row with no résumé still imports normally (never hard-blocked, unlike legacy)", async () => {
+  it("a row with no resume still imports normally (never hard-blocked, unlike legacy)", async () => {
     const content = csv([{ ID: "L-1", Name: "No Resume", Status: NEW }]);
     const report = await migrationService.prepare(
       {
@@ -308,7 +308,7 @@ describe("migrationService — résumé ZIP matching (Wave 1.3 backlog, Indrasur
     expect(report.rows[0]!.resumeMatch).toBe("none");
   });
 
-  it("collision — >1 résumé file for one name → ambiguous for every affected row, no silent overwrite", async () => {
+  it("collision — >1 resume file for one name → ambiguous for every affected row, no silent overwrite", async () => {
     const content = csv([{ ID: "L-1", Name: "Jane Doe", Status: NEW }]);
     const report = await migrationService.prepare(
       {
@@ -325,7 +325,7 @@ describe("migrationService — résumé ZIP matching (Wave 1.3 backlog, Indrasur
     expect(report.rows[0]!.reasons).toContain("resume-ambiguous");
   });
 
-  it("collision — >1 row sharing a name with exactly 1 résumé → ambiguous for both rows", async () => {
+  it("collision — >1 row sharing a name with exactly 1 resume → ambiguous for both rows", async () => {
     const content = csv([
       { ID: "L-1", Name: "Same Name", Status: NEW },
       { ID: "L-2", Name: "Same Name", Status: NEW },
@@ -352,8 +352,8 @@ describe("migrationService — résumé ZIP matching (Wave 1.3 backlog, Indrasur
   });
 });
 
-describe("migrationService.commit — AI résumé extraction (Wave 1.3 backlog, Indrasur flow)", () => {
-  it("extractWithAi=false (default) never calls parseResume even when a résumé matched", async () => {
+describe("migrationService.commit — AI resume extraction (Wave 1.3 backlog, Indrasur flow)", () => {
+  it("extractWithAi=false (default) never calls parseResume even when a resume matched", async () => {
     const content = csv([{ ID: "L-1", Name: "Jane Doe", Status: NEW }]);
     await migrationService.commit(
       {
@@ -366,10 +366,10 @@ describe("migrationService.commit — AI résumé extraction (Wave 1.3 backlog, 
       owner,
     );
     expect(h.parseResume).not.toHaveBeenCalled();
-    expect(h.documentRepo.create).not.toHaveBeenCalled();
+    expect(h.documentRepo.upsertByLegacyId).not.toHaveBeenCalled();
   });
 
-  it("extractWithAi=true + matched résumé → parseResume called, Document created, empty fields filled", async () => {
+  it("extractWithAi=true + matched resume → parseResume called, Document created, empty fields filled", async () => {
     h.parseResume.mockResolvedValue(FAKE_RESUME_DATA);
     h.candidateRepo.findById.mockResolvedValue({
       id: "db-L-1",
@@ -403,19 +403,46 @@ describe("migrationService.commit — AI résumé extraction (Wave 1.3 backlog, 
       variant: "clinical",
       text: "resume text for jane",
     });
-    expect(h.documentRepo.create).toHaveBeenCalledTimes(1);
-    const [docData] = h.documentRepo.create.mock.calls[0]!;
+    expect(h.documentRepo.upsertByLegacyId).toHaveBeenCalledTimes(1);
+    const [legacyId, docData] = h.documentRepo.upsertByLegacyId.mock.calls[0]!;
+    expect(legacyId).toBe("resume-ai:L-1");
     expect(docData).toMatchObject({
       candidateId: "db-L-1",
       type: "resume",
       extractedText: "resume text for jane",
     });
-    // email/phone were empty on the existing candidate → filled from the extraction
     expect(h.candidateRepo.update).toHaveBeenCalledWith(
       "db-L-1",
       expect.objectContaining({ email: "jane.new@x.com" }),
       h.fakeTx,
     );
+  });
+
+  it("F5: re-running commit for the same row reuses the same resume legacyId key (upsert, not a duplicate insert)", async () => {
+    h.parseResume.mockResolvedValue(FAKE_RESUME_DATA);
+    h.candidateRepo.findById.mockResolvedValue({
+      id: "db-L-1",
+      name: "Jane Doe",
+      email: null,
+      phone: null,
+    });
+    const input = {
+      format: "csv" as const,
+      content: csv([{ ID: "L-1", Name: "Jane Doe", Status: NEW }]),
+      resumes: [
+        { filenamePrefix: "Jane Doe", originalFilename: "Jane Doe.pdf", text: "resume text" },
+      ],
+      extractWithAi: true,
+    };
+
+    await migrationService.commit(input, owner);
+    await migrationService.commit(input, owner);
+
+    expect(h.documentRepo.upsertByLegacyId).toHaveBeenCalledTimes(2);
+    const [firstKey] = h.documentRepo.upsertByLegacyId.mock.calls[0]!;
+    const [secondKey] = h.documentRepo.upsertByLegacyId.mock.calls[1]!;
+    expect(firstKey).toBe(secondKey);
+    expect(firstKey).toBe("resume-ai:L-1");
   });
 
   it("never overwrites an existing (non-empty) candidate field", async () => {
@@ -461,9 +488,9 @@ describe("migrationService.commit — AI résumé extraction (Wave 1.3 backlog, 
     );
     expect(report.rows[0]!.action).toBe("add"); // candidate itself still committed
     expect(report.rows[0]!.reasons).toContain("ai-extraction-failed");
-    // The résumé still attaches text-only — an AI failure shouldn't also lose the free part.
-    expect(h.documentRepo.create).toHaveBeenCalledTimes(1);
-    const [docData] = h.documentRepo.create.mock.calls[0]!;
+    // The resume still attaches text-only — an AI failure shouldn't also lose the free part.
+    expect(h.documentRepo.upsertByLegacyId).toHaveBeenCalledTimes(1);
+    const [, docData] = h.documentRepo.upsertByLegacyId.mock.calls[0]!;
     expect(docData).toMatchObject({
       candidateId: "db-L-1",
       type: "resume",

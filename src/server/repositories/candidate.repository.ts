@@ -81,7 +81,7 @@ export function overdueWhere(now: Date): Prisma.CandidateWhereInput {
 /** DB-expressible `stuck` predicate — in-stage > `STUCK_DAYS` AND still active (order < 9). */
 export function stuckWhere(now: Date): Prisma.CandidateWhereInput {
   return {
-    stageEnteredAt: { lt: new Date(now.getTime() - STUCK_DAYS * MS_PER_DAY) },
+    stageEnteredAt: { lte: new Date(now.getTime() - (STUCK_DAYS + 1) * MS_PER_DAY) },
     stageOrder: { lt: FIRST_TERMINAL_ORDER },
   };
 }
@@ -324,7 +324,7 @@ export const candidateRepository = {
   },
 
   /**
-   * The `{id, name, email}` résumé-match candidate pool (`resume.match.ts`'s `MatchCandidate`) —
+   * The `{id, name, email}` resume-match candidate pool (`resume.match.ts`'s `MatchCandidate`) —
    * perf audit 2026-08-16: `resumeService.extract`/`save` were pulling every scalar column
    * (decrypting `licenseNumber` per row) of every candidate just to run in-memory name/email
    * matching. `select` (not `omit`) so neither `licenseNumber` nor any other unused column is ever

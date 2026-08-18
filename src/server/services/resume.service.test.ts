@@ -10,7 +10,7 @@ import type { ClinicalResume } from "@/lib/validation/resume";
  */
 
 const h = vi.hoisted(() => ({
-  fakeTx: { __tx: true },
+  fakeTx: { __tx: true, $executeRaw: vi.fn() },
   user: { id: "u1", email: "u@desta.works", name: "Test User", role: "Associate" as const },
   parseResume: vi.fn(),
   candidateRepo: {
@@ -108,6 +108,7 @@ beforeEach(() => {
   h.documentRepo.create.mockReset();
   h.documentRepo.findById.mockReset();
   h.writeAudit.mockReset();
+  h.fakeTx.$executeRaw.mockReset();
   h.createSignedUploadUrl.mockReset();
   h.getSignedDownloadUrl.mockReset();
   h.documentRepo.create.mockResolvedValue({ id: "d1", candidateId: "x", type: "resume" });
@@ -186,6 +187,7 @@ describe("resumeService.save", () => {
     const [atx, params] = h.writeAudit.mock.calls[0]!;
     expect(atx).toBe(h.fakeTx);
     expect(params).toMatchObject({ entity: "document", action: "attach", actor: "u1" });
+    expect(h.fakeTx.$executeRaw).not.toHaveBeenCalled();
     assertNoPiiLogged();
   });
 
@@ -206,6 +208,20 @@ describe("resumeService.save", () => {
     expect(h.writeAudit.mock.calls[0]![1]).toMatchObject({ action: "attach" });
   });
 
+  it("a name-fuzzy (confirm) match with NO confirmedCandidateId still creates a NEW candidate — the F8 lock/re-check must never silently attach a declined confirm-match", async () => {
+    h.candidateRepo.list.mockResolvedValue([{ id: "c2", name: "Jane Doe", email: "other@x.com" }]);
+    h.candidateRepo.create.mockResolvedValue({ id: "new5", name: "Jane Doe" });
+    h.documentRepo.create.mockResolvedValue({ id: "d7", candidateId: "new5", type: "resume" });
+
+    await resumeService.save(saveInput(), h.user as AuthUser);
+
+    expect(h.fakeTx.$executeRaw).not.toHaveBeenCalled();
+    expect(h.candidateRepo.findById).not.toHaveBeenCalled();
+    expect(h.candidateRepo.update).not.toHaveBeenCalled();
+    expect(h.candidateRepo.create).toHaveBeenCalledTimes(1);
+    expect(h.writeAudit.mock.calls[0]![1]).toMatchObject({ action: "create" });
+  });
+
   it("creates a NEW candidate when there is no match (none)", async () => {
     h.candidateRepo.list.mockResolvedValue([]);
     h.candidateRepo.create.mockResolvedValue({ id: "new1", name: "Jane Doe" });
@@ -220,7 +236,34 @@ describe("resumeService.save", () => {
     expect(h.candidateRepo.findById).not.toHaveBeenCalled();
     expect(h.candidateRepo.update).not.toHaveBeenCalled();
     expect(h.writeAudit.mock.calls[0]![1]).toMatchObject({ action: "create" });
+    expect(h.fakeTx.$executeRaw).toHaveBeenCalled();
     assertNoPiiLogged();
+  });
+
+  it("F8: after the create-lock, a fresh re-check finding a match (a concurrent request won the race) attaches instead of creating a duplicate", async () => {
+    h.candidateRepo.list
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ id: "winner", name: "Jane Doe", email: "jane@example.com" }]);
+    h.candidateRepo.findById.mockResolvedValue({
+      id: "winner",
+      name: "Jane Doe",
+      email: "jane@example.com",
+    });
+    h.candidateRepo.update.mockResolvedValue({ id: "winner", name: "Jane Doe" });
+    h.documentRepo.create.mockResolvedValue({
+      id: "d-race",
+      candidateId: "winner",
+      type: "resume",
+    });
+
+    await resumeService.save(saveInput(), h.user as AuthUser);
+
+    expect(h.fakeTx.$executeRaw).toHaveBeenCalled();
+    expect(h.candidateRepo.create).not.toHaveBeenCalled();
+    const [uid, , utx] = h.candidateRepo.update.mock.calls[0]!;
+    expect(uid).toBe("winner");
+    expect(utx).toBe(h.fakeTx);
+    expect(h.writeAudit.mock.calls[0]![1]).toMatchObject({ action: "attach" });
   });
 
   it("REFUSES a confirmedCandidateId the server does not re-match → creates new instead", async () => {

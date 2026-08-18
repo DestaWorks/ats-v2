@@ -25,7 +25,12 @@ import {
 import { toCandidateDTO } from "./candidate.dto";
 import { toDocumentDTO } from "./document.dto";
 import { toCandidateCreateInput } from "./resume.mapper";
-import { classifyMatch, matchResumeToCandidate } from "./resume.match";
+import {
+  classifyMatch,
+  matchResumeToCandidate,
+  normalizeEmail,
+  normalizeName,
+} from "./resume.match";
 
 /** A storage-safe filename fragment — strips anything but alnum/dot/dash/underscore. */
 function sanitizeFilename(filename: string): string {
@@ -109,6 +114,16 @@ export const resumeService = {
       let candidate;
       let action: "attach" | "create";
 
+      if (!candidateId && match.status === "none") {
+        const lockKey = `resume-create:${normalizeName(data.name)}:${data.email ? normalizeEmail(data.email) : ""}`;
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
+        const freshCandidates = await candidateRepository.listForMatch(false, tx);
+        const freshMatch = matchResumeToCandidate(data, freshCandidates);
+        if (freshMatch.status !== "none") {
+          candidateId = freshMatch.candidateId;
+        }
+      }
+
       if (candidateId) {
         const existing = await candidateRepository.findById(candidateId, undefined, tx);
         if (!existing) throw new AppError("NOT_FOUND", "Candidate not found");
@@ -165,7 +180,7 @@ export const resumeService = {
   },
 
   /**
-   * Attach a résumé directly to an ALREADY-KNOWN candidate (the candidate detail page's own
+   * Attach a resume directly to an ALREADY-KNOWN candidate (the candidate detail page's own
    * Resume tab) — unlike `save()`, there's no candidate to match/create and no AI field
    * extraction; this just persists whatever text/storage key the browser already produced
    * (pdf.js text extraction + an optional Storage PUT) as a new `Document`.

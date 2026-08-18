@@ -35,6 +35,7 @@ import {
   STUCK_DAYS,
 } from "./candidate.repository";
 import { statusSlaDays, ACTIVE_STATUS_CODES } from "@/lib/constants";
+import { isStuck } from "@/lib/rules/stage-timing";
 
 const NOW = new Date("2026-07-01T00:00:00.000Z");
 const DAY = 86_400_000;
@@ -133,9 +134,18 @@ describe("overdueWhere / stuckWhere predicates", () => {
   it("stuck = in-stage > STUCK_DAYS AND active (stageOrder < 9)", () => {
     const where = stuckWhere(NOW);
     expect(where).toEqual({
-      stageEnteredAt: { lt: new Date(NOW.getTime() - STUCK_DAYS * DAY) },
+      stageEnteredAt: { lte: new Date(NOW.getTime() - (STUCK_DAYS + 1) * DAY) },
       stageOrder: { lt: 9 },
     });
+  });
+
+  it("F9/F10: stuckWhere's threshold matches lib/rules/stage-timing.ts's isStuck exactly (no DB-vs-badge disagreement)", () => {
+    const where = stuckWhere(NOW) as { stageEnteredAt: { lte: Date } };
+    const exactlyAtThreshold = where.stageEnteredAt.lte;
+    const oneMsBeforeThreshold = new Date(exactlyAtThreshold.getTime() + 1);
+
+    expect(isStuck(exactlyAtThreshold, NOW)).toBe(true);
+    expect(isStuck(oneMsBeforeThreshold, NOW)).toBe(false);
   });
 });
 

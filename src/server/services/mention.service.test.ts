@@ -14,6 +14,7 @@ const h = vi.hoisted(() => ({
     countUnread: vi.fn(),
     markRead: vi.fn(),
     markAllRead: vi.fn(),
+    existsForRecipient: vi.fn(),
   },
 }));
 
@@ -46,6 +47,7 @@ beforeEach(() => {
   h.repo.countUnread.mockReset();
   h.repo.markRead.mockReset();
   h.repo.markAllRead.mockReset();
+  h.repo.existsForRecipient.mockReset();
   h.repo.listForRecipient.mockResolvedValue([]);
   h.repo.countUnread.mockResolvedValue(0);
 });
@@ -103,19 +105,28 @@ describe("mentionService.markRead", () => {
   });
 
   it("marking an ALREADY-READ mention of mine is an idempotent success", async () => {
-    h.repo.markRead.mockResolvedValue(0); // no unread row updated
-    h.repo.listForRecipient.mockResolvedValue([
-      mentionRow({ readAt: new Date("2026-07-09T11:00:00.000Z") }),
-    ]);
+    h.repo.markRead.mockResolvedValue(0);
+    h.repo.existsForRecipient.mockResolvedValue(true);
 
     await expect(
       mentionService.markRead({ mentionId: "m1", all: false }, h.user as AuthUser),
     ).resolves.toEqual({ unread: 0 });
   });
 
+  it("F7: an already-read mention OLDER than the 20-most-recent page is still an idempotent success (existsForRecipient is unbounded)", async () => {
+    h.repo.markRead.mockResolvedValue(0);
+    h.repo.existsForRecipient.mockResolvedValue(true);
+
+    await expect(
+      mentionService.markRead({ mentionId: "old-m1", all: false }, h.user as AuthUser),
+    ).resolves.toEqual({ unread: 0 });
+    expect(h.repo.existsForRecipient).toHaveBeenCalledWith("old-m1", "u1");
+    expect(h.repo.listForRecipient).not.toHaveBeenCalled();
+  });
+
   it("someone else's / missing mention id → NOT_FOUND", async () => {
     h.repo.markRead.mockResolvedValue(0);
-    h.repo.listForRecipient.mockResolvedValue([]); // not among the viewer's mentions
+    h.repo.existsForRecipient.mockResolvedValue(false);
 
     await expect(
       mentionService.markRead({ mentionId: "not-mine", all: false }, h.user as AuthUser),

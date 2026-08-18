@@ -38,6 +38,9 @@ const h = vi.hoisted(() => ({
     candidatesAddedSince: vi.fn(),
     stageMovesSince: vi.fn(),
     outreachSince: vi.fn(),
+    countCandidatesAddedSince: vi.fn(),
+    countStageMovesSince: vi.fn(),
+    countOutreachSince: vi.fn(),
   },
   clientRepo: { list: vi.fn() },
   userRepo: { namesByIds: vi.fn(), list: vi.fn(), listByRole: vi.fn() },
@@ -245,13 +248,36 @@ describe("dailyService.recap", () => {
     ]);
     h.repo.stageMovesSince.mockResolvedValue([{ candidate: { name: "Jane" } }]);
     h.repo.outreachSince.mockResolvedValue([{ actorId: "u1" }, { actorId: "u1" }]);
+    h.repo.countCandidatesAddedSince.mockResolvedValue(4);
+    h.repo.countStageMovesSince.mockResolvedValue(1);
+    h.repo.countOutreachSince.mockResolvedValue(2);
     h.userRepo.namesByIds.mockResolvedValue(new Map([["u1", "Test User"]]));
 
     const recap = await dailyService.recap(new Date("2026-07-12T00:00:00Z"));
 
     expect(recap.added).toEqual({ count: 4, names: ["A", "B", "C"] });
     expect(recap.moves).toEqual({ count: 1, names: ["Jane"] });
-    expect(recap.outreach).toEqual({ count: 2, actors: ["Test User"] }); // distinct actors
+    expect(recap.outreach).toEqual({ count: 2, actors: ["Test User"] });
+  });
+
+  it("F6: count comes from a real count query, not the capped preview list's length", async () => {
+    h.repo.candidatesAddedSince.mockResolvedValue(
+      Array.from({ length: 50 }, (_, i) => ({ name: `C${i}` })),
+    );
+    h.repo.stageMovesSince.mockResolvedValue(
+      Array.from({ length: 50 }, () => ({ candidate: { name: "Jane" } })),
+    );
+    h.repo.outreachSince.mockResolvedValue(Array.from({ length: 100 }, () => ({ actorId: "u1" })));
+    h.repo.countCandidatesAddedSince.mockResolvedValue(63);
+    h.repo.countStageMovesSince.mockResolvedValue(58);
+    h.repo.countOutreachSince.mockResolvedValue(140);
+    h.userRepo.namesByIds.mockResolvedValue(new Map([["u1", "Test User"]]));
+
+    const recap = await dailyService.recap(new Date("2026-07-12T00:00:00Z"));
+
+    expect(recap.added.count).toBe(63);
+    expect(recap.moves.count).toBe(58);
+    expect(recap.outreach.count).toBe(140);
   });
 });
 

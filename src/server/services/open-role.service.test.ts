@@ -232,9 +232,24 @@ describe("openRoleService.deleteNote", () => {
     h.roleRepo.findById.mockResolvedValue(role());
     h.roleRepo.softDeleteNote.mockResolvedValue({ count: 1 });
     await openRoleService.deleteNote("r1", "n1", associate);
+    expect(h.roleRepo.softDeleteNote).toHaveBeenCalledWith("n1", "r1", associate.id, h.fakeTx);
     expect(h.writeAudit).toHaveBeenCalledWith(
       h.fakeTx,
       expect.objectContaining({ action: "delete_note", after: { noteId: "n1" } }),
+    );
+  });
+
+  it("F4: passes the URL's roleId through to the repository, so a note under a DIFFERENT role can't be deleted (repo scopes by id AND roleId)", async () => {
+    h.roleRepo.findById.mockResolvedValue(role());
+    h.roleRepo.softDeleteNote.mockResolvedValue({ count: 0 });
+    await expect(
+      openRoleService.deleteNote("r1", "note-belongs-to-other-role", associate),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(h.roleRepo.softDeleteNote).toHaveBeenCalledWith(
+      "note-belongs-to-other-role",
+      "r1",
+      associate.id,
+      h.fakeTx,
     );
   });
 });

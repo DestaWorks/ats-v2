@@ -247,17 +247,20 @@ export const dailyService = {
 
   /** "Since you closed" recap — counts + a few names, from DOMAIN tables (never gated audit). */
   async recap(since: Date): Promise<RecapDTO> {
-    const [added, moves, outreach] = await Promise.all([
+    const [added, moves, outreach, addedCount, movesCount, outreachCount] = await Promise.all([
       dailyRepository.candidatesAddedSince(since),
       dailyRepository.stageMovesSince(since),
       dailyRepository.outreachSince(since),
+      dailyRepository.countCandidatesAddedSince(since),
+      dailyRepository.countStageMovesSince(since),
+      dailyRepository.countOutreachSince(since),
     ]);
     const actorNames = await userRepository.namesByIds(outreach.map((o) => o.actorId));
     const distinctActors = [...new Set(outreach.map((o) => actorNames.get(o.actorId) ?? "—"))];
     return {
-      added: { count: added.length, names: added.slice(0, 3).map((c) => c.name) },
-      moves: { count: moves.length, names: moves.slice(0, 3).map((m) => m.candidate.name) },
-      outreach: { count: outreach.length, actors: distinctActors.slice(0, 3) },
+      added: { count: addedCount, names: added.slice(0, 3).map((c) => c.name) },
+      moves: { count: movesCount, names: moves.slice(0, 3).map((m) => m.candidate.name) },
+      outreach: { count: outreachCount, actors: distinctActors.slice(0, 3) },
     };
   },
 

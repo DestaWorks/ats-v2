@@ -24,4 +24,18 @@ describe("toCsv", () => {
     const csv = toCsv([{ a: 1 }, { a: 2 }], [{ header: "A", value: (r) => r.a }]);
     expect(csv).toBe("A\r\n1\r\n2");
   });
+
+  it("neutralizes a leading =/+/-/@ on string cells (F2: formula injection)", () => {
+    const csv = toCsv(
+      [{ name: "=CMD('/C calc')!A1" }, { name: "+1+1" }, { name: "-1+1" }, { name: "@SUM(1,1)" }],
+      [{ header: "Name", value: (r) => r.name }],
+    );
+    const rows = csv.split("\r\n").slice(1);
+    expect(rows).toEqual(["'=CMD('/C calc')!A1", "'+1+1", "'-1+1", '"\'@SUM(1,1)"']);
+  });
+
+  it("leaves a genuine negative NUMBER unescaped — only string cells are neutralized", () => {
+    const csv = toCsv([{ n: -5 }], [{ header: "N", value: (r) => r.n }]);
+    expect(csv).toBe("N\r\n-5");
+  });
 });

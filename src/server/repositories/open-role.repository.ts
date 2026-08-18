@@ -130,9 +130,9 @@ export const openRoleRepository = {
     });
   },
 
-  softDeleteNote(id: string, actorId: string, tx?: Prisma.TransactionClient) {
+  softDeleteNote(id: string, roleId: string, actorId: string, tx?: Prisma.TransactionClient) {
     return db(tx).roleNote.updateMany({
-      where: { id, deletedAt: null },
+      where: { id, roleId, deletedAt: null },
       data: { deletedAt: new Date(), deletedById: actorId },
     });
   },

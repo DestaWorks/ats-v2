@@ -250,4 +250,15 @@ export const dailyRepository = {
       take: 100,
     });
   },
+  countCandidatesAddedSince(since: Date, tx?: Prisma.TransactionClient) {
+    return db(tx).candidate.count({ where: { createdAt: { gt: since }, deletedAt: null } });
+  },
+  countStageMovesSince(since: Date, tx?: Prisma.TransactionClient) {
+    return db(tx).stageHistory.count({
+      where: { enteredAt: { gt: since }, fromStatus: { not: null } },
+    });
+  },
+  countOutreachSince(since: Date, tx?: Prisma.TransactionClient) {
+    return db(tx).outreachAttempt.count({ where: { at: { gt: since } } });
+  },
 };
