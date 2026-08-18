@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
 /**
- * POST /api/candidates/:id/resume — attach a résumé directly to an already-known candidate (the
+ * POST /api/candidates/:id/resume — attach a resume directly to an already-known candidate (the
  * detail page's own Resume tab, no AI/matching). Unauth → 401; a valid request delegates to
  * `resumeService.attachToCandidate` and returns 201 with the `DocumentSummaryDTO`; a bad body →
  * 422 (candidate existence / NOT_FOUND is covered by resume.service.test.ts).

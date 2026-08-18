@@ -146,7 +146,7 @@ export function StringListEditor<T extends FieldValues>({
 }
 
 /**
- * The résumé → candidate match + confirm gate + Save button (design §7), announced via
+ * The resume → candidate match + confirm gate + Save button (design §7), announced via
  * `role="status"`. `auto` pre-selects the attach toggle; `confirm` requires an explicit tick;
  * `none` always creates a new candidate. Returns the chosen `confirmedCandidateId` through
  * `onSubmit` — never sent unless the user's choice permits it (see `confirm-gate.ts`).
@@ -169,7 +169,7 @@ export function SaveBar({
         {match.status === "auto" ? (
           <>
             <strong className="text-navy">{match.candidateName}</strong> is already in the pipeline
-            (email match) — this résumé will be attached to them.
+            (email match) — this resume will be attached to them.
           </>
         ) : match.status === "confirm" ? (
           <>

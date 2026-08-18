@@ -6,7 +6,7 @@ import { resumeService } from "@/server/services/resume.service";
 import { toDocumentSummaryDTO } from "@/server/services/candidate.dto";
 
 /**
- * POST /api/candidates/:id/resume — attach a résumé directly to this ALREADY-KNOWN candidate (the
+ * POST /api/candidates/:id/resume — attach a resume directly to this ALREADY-KNOWN candidate (the
  * detail page's own Resume tab), no AI extraction/matching involved (that's the separate Parse
  * Resume flow, `/api/resume/*`). Guarded by `requireUser()`, same posture as every other candidate
  * mutation route. Rate-limited since a real Storage call may have already backed the upload.

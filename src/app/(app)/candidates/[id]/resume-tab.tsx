@@ -97,7 +97,7 @@ const STAGE_LABEL: Record<Exclude<UploadStage, "idle">, string> = {
   saving: "Attaching to this candidate…",
 };
 
-/** Attach a résumé straight to THIS candidate — no AI extraction, no candidate matching (this
+/** Attach a resume straight to THIS candidate — no AI extraction, no candidate matching (this
  *  candidate is already known). PDF text is extracted client-side (best-effort — a failure here
  *  never blocks the attach, it just means no `extractedText`); when Storage is configured the raw
  *  bytes also go straight to it via a signed URL, same flow the Parse Resume page already uses.

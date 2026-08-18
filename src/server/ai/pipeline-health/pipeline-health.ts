@@ -50,6 +50,6 @@ export function generatePipelineHealth(ctx: PipelineHealthContext): Promise<Pipe
     schema: pipelineHealthAiSchema,
     system: SYSTEM_PROMPT,
     prompt: buildPrompt(ctx),
-    maxOutputTokens: 512,
+    maxOutputTokens: 1024,
   });
 }

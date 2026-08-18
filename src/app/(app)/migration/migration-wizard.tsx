@@ -225,7 +225,7 @@ export function MigrationWizard({ storageEnabled }: { storageEnabled: boolean })
 
   /** Unzip client-side + pdf.js-extract each PDF entry — same client-only path as the
    *  single-resume flow (`resume/lib/pdf-extract.ts`); the raw bytes are kept (not just the text)
-   *  so a matched résumé can also be PUT to Storage right before commit (Wave 6). */
+   *  so a matched resume can also be PUT to Storage right before commit (Wave 6). */
   async function onResumeZipFiles(files: FileList) {
     const picked = files[0];
     if (!picked) return;
@@ -334,10 +334,10 @@ export function MigrationWizard({ storageEnabled }: { storageEnabled: boolean })
     }
   }
 
-  /** Best-effort: PUTs each matched résumé's raw bytes straight to Storage via a short-lived
-   *  signed URL (Wave 6, same flow the single-résumé Parse Resume page already uses) and returns
+  /** Best-effort: PUTs each matched resume's raw bytes straight to Storage via a short-lived
+   *  signed URL (Wave 6, same flow the single-resume Parse Resume page already uses) and returns
    *  `resumes` enriched with the resulting `storageKey`. A Storage hiccup never blocks commit — a
-   *  résumé that fails to upload just attaches text-only, same as when storage is off entirely. */
+   *  resume that fails to upload just attaches text-only, same as when storage is off entirely. */
   async function uploadMatchedResumesToStorage(): Promise<ImportResume[] | null> {
     if (!storageEnabled || !extractWithAi || !resumes || resumes.length === 0 || !preview) {
       return resumes;
@@ -386,8 +386,8 @@ export function MigrationWizard({ storageEnabled }: { storageEnabled: boolean })
       }),
     );
     if (failures.length > 0) {
-      console.error("Résumé Storage upload failures:", failures);
-      toast.warning(`${failures.length} résumé file(s) couldn't be stored — attaching text only.`, {
+      console.error("Resume Storage upload failures:", failures);
+      toast.warning(`${failures.length} resume file(s) couldn't be stored — attaching text only.`, {
         description: failures.join(" · "),
       });
     }

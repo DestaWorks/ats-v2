@@ -2,7 +2,7 @@ import "server-only";
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 
 /**
- * Application-level field encryption for the heaviest PII/PHI columns (`licenseNumber`, résumé
+ * Application-level field encryption for the heaviest PII/PHI columns (`licenseNumber`, resume
  * `extractedText`/`extractedData`). AES-256-GCM (authenticated) with a random 96-bit IV per value.
  *
  * FORMAT: `enc:v1:` + base64(iv | tag | ciphertext). The version tag lets us rotate the scheme

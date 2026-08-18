@@ -1,10 +1,7 @@
 import "server-only";
-import { APICallError } from "ai";
 import { z } from "zod";
 import { INBOUND_INTENTS, type InboundExtractedDTO } from "@/lib/validation/inbound";
-import { AppError } from "@/server/http/app-error";
-import { aiEnabled } from "./config";
-import { generateStructured } from "./provider";
+import { generateAi } from "./shared";
 
 /**
  * Inbound-message extraction (Wave 2.8, legacy `inbound_triage` — Gemini-only). Provider-agnostic
@@ -55,9 +52,6 @@ export async function extractInbound(
   messageText: string,
   context?: string | null,
 ): Promise<InboundExtractedDTO> {
-  if (!aiEnabled) {
-    throw new AppError("FEATURE_DISABLED", "Inbound triage is not configured");
-  }
   const prompt = [
     context ? `Context from the recruiter: ${context}` : null,
     "--- MESSAGE ---",
@@ -66,22 +60,9 @@ export async function extractInbound(
     .filter(Boolean)
     .join("\n");
 
-  try {
-    return await generateStructured({
-      schema: extractionSchema,
-      system: SYSTEM_PROMPT.join(" "),
-      prompt,
-    });
-  } catch (err) {
-    if (err instanceof AppError) throw err;
-    if (APICallError.isInstance(err)) {
-      if (err.statusCode === 401 || err.statusCode === 403) {
-        throw new AppError("FEATURE_DISABLED", "Inbound triage is not configured");
-      }
-      if (err.statusCode === 429) {
-        throw new AppError("RATE_LIMITED", "Inbound triage is busy, please retry shortly");
-      }
-    }
-    throw new AppError("EXTRACTION_FAILED", "The message could not be extracted");
-  }
+  return generateAi("Inbound triage", {
+    schema: extractionSchema,
+    system: SYSTEM_PROMPT.join(" "),
+    prompt,
+  });
 }

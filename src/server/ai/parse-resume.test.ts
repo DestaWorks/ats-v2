@@ -4,7 +4,7 @@ import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
  * Extraction tests with a MOCKED provider wrapper (never a real LLM call, §8): the feature flag
  * gates the call, validated data flows through, and provider errors map to the right `AppError` by
  * HTTP status (401/403 → FEATURE_DISABLED, 429 → RATE_LIMITED, else EXTRACTION_FAILED). Also asserts
- * the résumé text / structured output is NEVER written to the console. Provider-agnostic: we mock
+ * the resume text / structured output is NEVER written to the console. Provider-agnostic: we mock
  * `./provider` (`generateStructured`), so this holds for Claude / OpenAI / Gemini alike.
  */
 
@@ -36,6 +36,10 @@ vi.mock("@/server/ai/config", () => ({
 
 vi.mock("./provider", () => ({ generateStructured: h.gen }));
 
+vi.mock("@/server/repositories/ai-settings.repository", () => ({
+  aiSettingsRepository: { getCached: async () => ({ disabled: false }) },
+}));
+
 vi.mock("ai", () => ({ APICallError: h.APICallError }));
 
 import { parseResume } from "./parse-resume";
@@ -60,7 +64,7 @@ afterEach(() => {
   warnSpy.mockRestore();
 });
 
-/** Assert nothing sensitive (résumé text or extracted output) reached the console. */
+/** Assert nothing sensitive (resume text or extracted output) reached the console. */
 function assertNoPiiLogged() {
   for (const spy of [errorSpy, logSpy, warnSpy]) {
     for (const call of spy.mock.calls) {

@@ -5,7 +5,7 @@ import { checkRateLimit } from "@/server/http/rate-limit";
 import { resumeService } from "@/server/services/resume.service";
 
 /**
- * POST /api/resume/extract — Claude structured extraction of a pasted/pdf.js-extracted résumé.
+ * POST /api/resume/extract — Claude structured extraction of a pasted/pdf.js-extracted resume.
  * Guarded by `requireUser()` (any signed-in user, same posture as the candidate pipeline). Writes
  * NOTHING — returns the validated structured data + the server-computed match for the review UI.
  * When the key is absent the service throws `FEATURE_DISABLED` (503), mapped by `apiHandler`.

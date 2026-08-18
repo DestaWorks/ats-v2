@@ -29,7 +29,7 @@ const VARIANT_META: Record<ResumeVariant, { icon: string; sub: string; examples:
 
 /**
  * Accessible variant (role) picker — an ARIA radio group with roving tabindex + arrow-key
- * navigation and visible focus. Selecting a card sets the résumé parse schema + render layout.
+ * navigation and visible focus. Selecting a card sets the resume parse schema + render layout.
  */
 export function VariantPicker({
   value,

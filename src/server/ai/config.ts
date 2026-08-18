@@ -13,6 +13,8 @@ export type AiProvider = (typeof AI_PROVIDERS)[number];
 /** e.g. `anthropic/claude-opus-4-8` · `openai/gpt-5` · `google/gemini-2.5-pro`. */
 export const AI_MODEL = process.env.AI_MODEL ?? "anthropic/claude-opus-4-8";
 
+export const AI_MODEL_FALLBACK = process.env.AI_MODEL_FALLBACK || undefined;
+
 /** Which env var holds each provider's key. */
 const PROVIDER_KEY_ENV: Record<AiProvider, string> = {
   anthropic: "ANTHROPIC_API_KEY",
@@ -33,8 +35,9 @@ export function parseModel(model: string = AI_MODEL): { provider: AiProvider; mo
   return { provider: provider as AiProvider, modelId };
 }
 
-/** AI features are enabled iff the configured provider's API key is present. */
+/** AI features are enabled iff the configured provider's API key is present and `AI_DISABLED` isn't set. */
 export const aiEnabled: boolean = (() => {
+  if (process.env.AI_DISABLED === "true") return false;
   try {
     return Boolean(process.env[PROVIDER_KEY_ENV[parseModel().provider]]);
   } catch {

@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils/cn";
 /**
  * Upload step (design §7): drag-drop / keyboard-accessible file input for a PDF, plus a
  * paste-text fallback. On a PDF the parent runs client-side pdf.js extraction; on pasted
- * text it uses the text directly. The Extract action is disabled (with a hint) when résumé
+ * text it uses the text directly. The Extract action is disabled (with a hint) when resume
  * extraction is not configured (`resumeExtractionEnabled === false`, design §7 / S-6).
  */
 export function UploadZone({

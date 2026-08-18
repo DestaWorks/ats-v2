@@ -13,7 +13,7 @@
 export const MAX_RESUME_TEXT_CHARS = 60_000;
 
 /**
- * Pure: assemble one résumé text blob from per-page text-item strings.
+ * Pure: assemble one resume text blob from per-page text-item strings.
  * Each page's items are space-joined (legacy `items.map(i => i.str).join(" ")`), pages are
  * separated by a blank line (legacy `pages.join("\n\n")`). Unit-tested in isolation.
  */
@@ -29,7 +29,7 @@ export function capResumeText(text: string): string {
 let workerConfigured = false;
 
 /**
- * Extract résumé text from a PDF File, client-side.
+ * Extract resume text from a PDF File, client-side.
  *
  * Worker setup: we point `GlobalWorkerOptions.workerSrc` at the bundler-resolved worker
  * asset via `new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url)`. This is the

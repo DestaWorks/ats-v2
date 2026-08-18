@@ -15,12 +15,12 @@ import { defaultConfirmed } from "../lib/confirm-gate";
 import { attachIdFor, SaveBar, Section, StringListEditor, TextArea, TextField } from "./shared";
 
 /**
- * Shared, variant-agnostic editors for the fields present on every résumé variant
+ * Shared, variant-agnostic editors for the fields present on every resume variant
  * (ports the legacy render helpers: name block, snapshot, experience, education,
  * verification line). Generic over the concrete form so `useFieldArray` stays typed.
  */
 
-/** What a layout hands back on Save: the validated résumé + the (gated) attach target. */
+/** What a layout hands back on Save: the validated resume + the (gated) attach target. */
 export type SaveHandler = (
   data: ResumeData,
   confirmedCandidateId: string | undefined,

@@ -28,6 +28,9 @@ vi.mock("@/server/ai/config", () => ({
 }));
 vi.mock("../provider", () => ({ generateStructured: h.gen }));
 vi.mock("ai", () => ({ APICallError: h.APICallError }));
+vi.mock("@/server/repositories/ai-settings.repository", () => ({
+  aiSettingsRepository: { getCached: async () => ({ disabled: false }) },
+}));
 
 import { generateWorkspaceText } from "./ai-workspace";
 

@@ -13,7 +13,7 @@ import {
 
 /**
  * Pure transform + dedupe (Wave 1.3 §10). No DB, no I/O — the golden mapping, the tolerant scalar
- * parsers, the résumé-doc plan, and the email keep-newest dedupe are all exercised here.
+ * parsers, the resume-doc plan, and the email keep-newest dedupe are all exercised here.
  */
 
 /** A blank 32-column row, overridable per test. */
@@ -241,7 +241,7 @@ describe("transformRow — column mapping", () => {
     expect(none.flags).toEqual([]);
   });
 
-  it("résumé trio present → a DocumentUpsertPlan keyed by ResumeFileID with legacyUrl preserved; absent → none", () => {
+  it("resume trio present → a DocumentUpsertPlan keyed by ResumeFileID with legacyUrl preserved; absent → none", () => {
     const withDoc = transformRow(
       row({
         ID: "9",

@@ -4,12 +4,14 @@ import { useState } from "react";
 import { ROLES } from "@/lib/constants";
 import type { AccessRequestDTO, AdminUserDTO } from "@/lib/validation/admin";
 import type { PortalAccessRequestDTO } from "@/lib/validation/portal";
+import type { AiSettingsDTO, AiUsageOverviewDTO } from "@/lib/validation/ai-ops";
 import { cn } from "@/lib/utils/cn";
 import { DetailTabs, type TabDef } from "@/components/ui/tabs";
 import { GeneratedPasswordBanner, UsersTab } from "./users-tab";
 import { AccessRequestsTab } from "./access-requests-tab";
 import { RolesTab } from "./roles-tab";
 import { GeneratedPortalLinkBanner, PortalRequestsTab } from "./portal-requests-tab";
+import { AiOpsTab } from "./ai-ops-tab";
 
 /** One clickable summary tile — legacy `AdminView`'s stat-card row parity. Colored only when its
  *  count is worth calling out (Pending/Blocked > 0); a zero count reads as neutral gray. */
@@ -53,6 +55,9 @@ export function AdminDashboard({
   canConfigurePortal,
   initialPortalRequests,
   clients,
+  canManageAi,
+  initialAiSettings,
+  aiUsage,
 }: {
   initialUsers: AdminUserDTO[];
   initialRequests: AccessRequestDTO[];
@@ -60,6 +65,9 @@ export function AdminDashboard({
   canConfigurePortal: boolean;
   initialPortalRequests: PortalAccessRequestDTO[];
   clients: { id: string; name: string }[];
+  canManageAi: boolean;
+  initialAiSettings: AiSettingsDTO;
+  aiUsage: AiUsageOverviewDTO;
 }) {
   const [users, setUsers] = useState(initialUsers);
   const [requests, setRequests] = useState(initialRequests);
@@ -144,6 +152,15 @@ export function AdminDashboard({
                 onLinkGenerated={setGeneratedLink}
               />
             ),
+          },
+        ]
+      : []),
+    ...(canManageAi
+      ? [
+          {
+            key: "ai-ops",
+            label: "AI Ops",
+            panel: <AiOpsTab initialSettings={initialAiSettings} usage={aiUsage} />,
           },
         ]
       : []),

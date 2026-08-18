@@ -1,7 +1,7 @@
 import type { ResumeMatch } from "@/lib/validation/resume";
 
 /**
- * Client-side confirm gate for the résumé → candidate match (Wave 1.2, design §7).
+ * Client-side confirm gate for the resume → candidate match (Wave 1.2, design §7).
  *
  * This is the UI half of the no-silent-wrong-person-merge invariant (the server
  * re-runs `matchResumeToCandidate` and is the real authority — see design §5).

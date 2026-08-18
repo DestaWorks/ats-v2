@@ -70,7 +70,7 @@ export async function postNote(id: string, input: AddNoteInput): Promise<ApiResu
   return res.ok ? { ok: true, data: res.data.note } : res;
 }
 
-/** POST a résumé attach (candidate detail's own Resume tab — no AI/matching involved). Returns
+/** POST a resume attach (candidate detail's own Resume tab — no AI/matching involved). Returns
  *  the created `DocumentSummaryDTO`. */
 export async function postResumeUpload(
   id: string,

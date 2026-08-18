@@ -150,6 +150,39 @@ model ActivityLog {
   @@map("activity_log")
 }
 
+model AiUsageEvent {
+  id        String @id @default(cuid())
+  operation String
+  provider  String
+  model     String
+  status    String
+
+  inputTokens  Int?
+  outputTokens Int?
+  latencyMs    Int
+
+  errorName       String?
+  errorStatusCode Int?
+
+  createdAt DateTime @default(now())
+
+  @@index([operation, createdAt])
+  @@index([createdAt])
+  @@map("ai_usage_event")
+}
+
+// Global AI kill switch — single row (id="singleton"), checked on every AI call. Lets an admin
+// disable AI app-wide without a redeploy.
+model AiSettings {
+  id             String   @id
+  disabled       Boolean  @default(false)
+  disabledReason String?
+  updatedAt      DateTime @updatedAt
+  updatedBy      String?
+
+  @@map("ai_settings")
+}
+
 // --- Recruiting pipeline (Wave 1.1) ---
 // Candidate + Client + StageHistory. Vocabulary enums (credential, status, track, source,
 // population, setting, tags, licenseStatus) are stored as String/String[] and validated in
@@ -492,7 +525,7 @@ model Candidate {
   @@map("candidates")
 }
 
-// Uploaded documents (résumés today; licenses/other later). Wave 1.2 (design S-1/S-2):
+// Uploaded documents (resumes today; licenses/other later). Wave 1.2 (design S-1/S-2):
 // stores metadata + client-extracted text + captured structured JSON. Physical PDF bytes are
 // deferred to Wave 6 — `storageKey` stays null until the Supabase bucket is wired.
 model Document {
@@ -500,7 +533,7 @@ model Document {
   legacyId String? @unique // ETL upsert (legacy ResumeFileID)
 
   // ownership — NULLABLE: a doc can exist pre-match (uploaded, not yet attached).
-  // Cascade: a résumé is pure candidate PII — a hard purge takes its documents with it.
+  // Cascade: a resume is pure candidate PII — a hard purge takes its documents with it.
   candidateId String?
   candidate   Candidate? @relation(fields: [candidateId], references: [id], onDelete: Cascade)
 

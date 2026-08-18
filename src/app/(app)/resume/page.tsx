@@ -1,5 +1,5 @@
 import { getVerifiedUser } from "@/server/auth/guards";
-import { aiEnabled } from "@/server/ai/config";
+import { isAiAvailable } from "@/server/ai/shared";
 import { storageEnabled } from "@/server/integrations/storage";
 import { ResumeFlow } from "./resume-flow";
 
@@ -11,7 +11,7 @@ import { ResumeFlow } from "./resume-flow";
  * client flow may NOT.
  */
 export default async function ResumePage() {
-  const user = await getVerifiedUser();
+  const [user, resumeExtractionEnabled] = await Promise.all([getVerifiedUser(), isAiAvailable()]);
 
   return (
     <div className="flex flex-col gap-6 px-8 py-6">
@@ -24,7 +24,7 @@ export default async function ResumePage() {
       </header>
       <ResumeFlow
         recruiterName={user.name}
-        resumeExtractionEnabled={aiEnabled}
+        resumeExtractionEnabled={resumeExtractionEnabled}
         resumeStorageEnabled={storageEnabled}
       />
     </div>

@@ -31,7 +31,7 @@ function originFromEnvUrl(envVar: string | undefined): string | null {
 
 /** The object-storage PUBLIC origin (Wave 6) — permanent avatar URLs read straight from here. */
 const STORAGE_PUBLIC_ORIGIN = originFromEnvUrl(process.env.S3_PUBLIC_URL_BASE);
-/** The object-storage S3-PROTOCOL origin (Wave 6) — signed upload/download URLs (résumés) live on
+/** The object-storage S3-PROTOCOL origin (Wave 6) — signed upload/download URLs (resumes) live on
  *  a DIFFERENT subdomain than the public origin above (e.g. Supabase splits `storage.supabase.co`
  *  from `supabase.co`), so both need to be allowed independently. */
 const STORAGE_S3_ORIGIN = originFromEnvUrl(process.env.S3_ENDPOINT);
@@ -43,12 +43,12 @@ const STORAGE_S3_ORIGIN = originFromEnvUrl(process.env.S3_ENDPOINT);
 const SENTRY_ORIGIN = originFromEnvUrl(process.env.NEXT_PUBLIC_SENTRY_DSN);
 
 const IMG_SRC = ["'self'", "data:", STORAGE_PUBLIC_ORIGIN].filter(Boolean).join(" ");
-// connect-src: the browser PUTs résumé bytes directly to the signed S3 URL (never through our own
+// connect-src: the browser PUTs resume bytes directly to the signed S3 URL (never through our own
 // server), and (when configured) reports errors directly to Sentry's ingest endpoint — without
 // this, fetch()/XHR to either origin is blocked outright, silently, before the request is even
 // sent (indistinguishable from a network error in a bare try/catch).
 const CONNECT_SRC = ["'self'", STORAGE_S3_ORIGIN, SENTRY_ORIGIN].filter(Boolean).join(" ");
-// frame-src: the résumé Preview modal embeds the signed GET URL in an <iframe>.
+// frame-src: the resume Preview modal embeds the signed GET URL in an <iframe>.
 const FRAME_SRC = ["'self'", STORAGE_S3_ORIGIN].filter(Boolean).join(" ");
 
 const SECURITY_HEADERS = [

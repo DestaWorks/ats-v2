@@ -8,7 +8,7 @@ import type {
 } from "@/lib/validation/resume";
 
 /**
- * The client-facing BRANDED résumé render (parity audit P0 #6 — legacy's core output). Read-only:
+ * The client-facing BRANDED resume render (parity audit P0 #6 — legacy's core output). Read-only:
  * a polished, printable document built from the reviewed extraction, in the new app's design
  * language (hairline structure, brand wordmark) rather than the legacy 1:1 look — same
  * app-wide sans-serif font throughout (2026-08-10: dropped the earlier serif identity treatment).
