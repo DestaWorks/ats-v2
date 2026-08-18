@@ -53,8 +53,9 @@ export const portalAccessRequestService = {
   },
 
   /**
-   * Links to an existing contact (`input.contactId`) or creates a new one from the request's
-   * name/email under `input.clientId`, THEN generates a portal link and flips status to approved.
+   * Flips status to approved (atomically, before any side effect), then links to an existing
+   * contact (`input.contactId`) or creates a new one from the request's name/email under
+   * `input.clientId`, then generates a portal link.
    */
   async approve(
     id: string,
@@ -63,33 +64,38 @@ export const portalAccessRequestService = {
   ): Promise<GeneratedPortalLinkDTO> {
     const request = await portalAccessRequestRepository.findById(id);
     if (!request) throw new AppError("NOT_FOUND", "Access request not found");
-    if (request.status !== "pending") {
+
+    const claimed = await portalAccessRequestRepository.claimPending(id, "approved");
+    if (claimed !== 1) {
       throw new AppError("CONFLICT", "This request has already been resolved");
     }
 
-    const contactId = input.contactId
-      ? input.contactId
-      : (
-          await clientContactRepository.create({
-            clientId: input.clientId,
-            fullName: request.name,
-            email: request.email,
-            role: "unknown",
-            addedById: actor.id,
-          })
-        ).id;
+    try {
+      const contactId = input.contactId
+        ? input.contactId
+        : (
+            await clientContactRepository.create({
+              clientId: input.clientId,
+              fullName: request.name,
+              email: request.email,
+              role: "unknown",
+              addedById: actor.id,
+            })
+          ).id;
 
-    const result = await clientPortalService.generateLink(input.clientId, contactId, actor);
-    await portalAccessRequestRepository.updateStatus(id, "approved");
-    return result;
+      return await clientPortalService.generateLink(input.clientId, contactId, actor);
+    } catch (err) {
+      await portalAccessRequestRepository.revertToPending(id);
+      throw err;
+    }
   },
 
   async decline(id: string): Promise<void> {
     const request = await portalAccessRequestRepository.findById(id);
     if (!request) throw new AppError("NOT_FOUND", "Access request not found");
-    if (request.status !== "pending") {
+    const claimed = await portalAccessRequestRepository.claimPending(id, "declined");
+    if (claimed !== 1) {
       throw new AppError("CONFLICT", "This request has already been resolved");
     }
-    await portalAccessRequestRepository.updateStatus(id, "declined");
   },
 };

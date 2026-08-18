@@ -9,9 +9,12 @@ export interface CsvColumn<T> {
   value: (row: T) => string | number | null;
 }
 
+const FORMULA_TRIGGER = /^[=+\-@]/;
+
 function escapeCell(value: string | number | null): string {
   const s = value === null ? "" : String(value);
-  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  const safe = typeof value === "string" && FORMULA_TRIGGER.test(s) ? `'${s}` : s;
+  return /[",\n\r]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
 }
 
 /** Build a CSV string (CRLF line endings, per RFC4180) from rows + a column definition list. */

@@ -29,7 +29,7 @@ import {
 } from "./candidate-import.transform";
 import { parseSheet } from "./sheet-parse";
 
-/** Track label → résumé variant, derived from the SAME table Wave 1.2 uses (never a second source
+/** Track label → resume variant, derived from the SAME table Wave 1.2 uses (never a second source
  *  of truth). Rows carry no explicit track from the Indrasur CSV — `DEFAULT_TRACK` ("Clinical")
  *  is what `transformRow` implicitly relies on today (via the DB column default), so that's the
  *  safe fallback here too. */
@@ -43,11 +43,11 @@ function variantForPlan(plan: ImportRowPlan): ResumeVariant {
 }
 
 /**
- * Match uploaded résumé texts to plan rows by normalized name (Wave 1.3 backlog, the "Indrasur"
- * bulk-résumé flow). UNLIKE legacy's filename-prefix matcher: a collision in EITHER direction
- * (>1 résumé file for one name, or >1 row sharing a name) marks every affected row `"ambiguous"`
- * rather than silently letting one file win; a résumé file matching no row is collected into
- * `unmatchedFiles` rather than silently discarded; a row with no résumé still imports normally
+ * Match uploaded resume texts to plan rows by normalized name (Wave 1.3 backlog, the "Indrasur"
+ * bulk-resume flow). UNLIKE legacy's filename-prefix matcher: a collision in EITHER direction
+ * (>1 resume file for one name, or >1 row sharing a name) marks every affected row `"ambiguous"`
+ * rather than silently letting one file win; a resume file matching no row is collected into
+ * `unmatchedFiles` rather than silently discarded; a row with no resume still imports normally
  * (`resumeMatch: "none"`) rather than being hard-blocked from commit.
  */
 function matchResumes(plans: ImportRowPlan[], resumes: ImportResume[] | undefined): string[] {
@@ -117,12 +117,12 @@ interface Planned {
   checksum: string;
   parseErrors: string[];
   unmatchedResumeFiles: string[];
-  /** Whether a résumé ZIP was actually part of this request — distinguishes "0 matched because no
+  /** Whether a resume ZIP was actually part of this request — distinguishes "0 matched because no
    *  ZIP was uploaded" from "0 matched despite a ZIP" so the report never shows a misleading stat. */
   resumesProvided: boolean;
 }
 
-/** Parse → transform → resolve add/update against the DB → dedupe → match résumés. No writes.
+/** Parse → transform → resolve add/update against the DB → dedupe → match resumes. No writes.
  *  Shared by both ops. */
 async function planImport(input: ImportInput): Promise<Planned> {
   const { rows, parseErrors } = parseSheet(input.content, input.format);
@@ -196,7 +196,7 @@ function buildReport(planned: Planned): ImportReport {
   if (planned.parseErrors.length > 0) {
     report.warnings = planned.parseErrors.map((e) => `parse: ${e}`);
   }
-  // Résumé files that matched no row (Wave 1.3 backlog) — visible, never silently dropped.
+  // Resume files that matched no row (Wave 1.3 backlog) — visible, never silently dropped.
   if (planned.unmatchedResumeFiles.length > 0) {
     report.unmatchedResumeFiles = planned.unmatchedResumeFiles;
   }
@@ -213,10 +213,10 @@ function buildReport(planned: Planned): ImportReport {
 }
 
 /**
- * Attach one matched résumé to its candidate (Wave 1.3 backlog, extended Wave 6). Always creates
+ * Attach one matched resume to its candidate (Wave 1.3 backlog, extended Wave 6). Always creates
  * the `Document` with the already-extracted text and, when the browser already PUT the file to
  * Storage, its `storageKey` — that part is free and never fails the row. On top of that, AI-parse
- * the résumé into structured fields via Wave 1.2's REAL extraction schema/prompt (`parseResume`,
+ * the resume into structured fields via Wave 1.2's REAL extraction schema/prompt (`parseResume`,
  * never legacy's own broken field-harvesting) and merge them in via the conservative "fill empty
  * fields only" pass (`fillEmptyFields`, `resume.service.ts`). Rate-limited per user since a bulk
  * commit can trigger many calls in a row. An AI failure (rate-limit, provider error, disabled)
@@ -246,13 +246,14 @@ async function attachResumeWithAi(
     });
   } catch {
     // Never log the row (PII). Surface the failure instead of legacy's silent swallow — the
-    // résumé file/text below still attaches even when AI field-parsing fails, since that part
+    // resume file/text below still attaches even when AI field-parsing fails, since that part
     // is free (client-side text extraction + a Storage PUT the browser already did).
     plan.errors.push("ai-extraction-failed");
   }
 
   await withTransaction(async (tx) => {
-    const document = await documentRepository.create(
+    const document = await documentRepository.upsertByLegacyId(
+      `resume-ai:${plan.legacyId}`,
       {
         candidateId,
         type: "resume",
@@ -283,7 +284,7 @@ export const migrationService = {
 
   /**
    * Idempotent commit: one transaction per non-error, non-skip row — `upsertByLegacyId`
-   * (+ optional résumé document upsert) + a per-candidate `import` audit — continue-on-error so a
+   * (+ optional resume document upsert) + a per-candidate `import` audit — continue-on-error so a
    * single bad row can't abort the batch. Then one `import_batch` summary audit. Returns the
    * same-shape report with realized actions.
    */
@@ -338,9 +339,9 @@ export const migrationService = {
         continue;
       }
 
-      // Wave 1.3 backlog (Indrasur bulk-résumé flow) — deliberately OUTSIDE the upsert transaction
+      // Wave 1.3 backlog (Indrasur bulk-resume flow) — deliberately OUTSIDE the upsert transaction
       // (a paid, slow LLM call has no business holding a DB lock). Runs only for rows with an
-      // unambiguously matched résumé, and only when the caller opted in — this is also what
+      // unambiguously matched resume, and only when the caller opted in — this is also what
       // attaches the Storage file (Wave 6), not just the AI-parsed fields, since both are cheap/
       // free relative to the LLM call this same opt-in already gates.
       if (input.extractWithAi && plan.resumeMatch === "matched" && plan.resumeText && candidateId) {

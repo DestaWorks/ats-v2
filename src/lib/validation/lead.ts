@@ -175,6 +175,11 @@ export type UpdateOutreachInput = z.infer<typeof updateOutreachSchema>;
 
 const bulkIds = z.array(z.string().min(1)).min(1).max(200);
 
+const BULK_SETTABLE_LEAD_STATUSES = LEAD_STATUSES.filter((s) => s !== "Promoted") as Exclude<
+  LeadStatus,
+  "Promoted"
+>[];
+
 /**
  * Body for `POST /api/leads/bulk` (`source_lead_bulk_action` + `source_lead_undelete` +
  * `source_lead_bulk_log_outreach` parity, one discriminated endpoint). Promoted leads are
@@ -184,7 +189,13 @@ const bulkIds = z.array(z.string().min(1)).min(1).max(200);
 export const bulkLeadActionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("delete"), ids: bulkIds }).strict(),
   z.object({ action: z.literal("restore"), ids: bulkIds }).strict(),
-  z.object({ action: z.literal("status"), ids: bulkIds, value: z.enum(LEAD_STATUSES) }).strict(),
+  z
+    .object({
+      action: z.literal("status"),
+      ids: bulkIds,
+      value: z.enum(BULK_SETTABLE_LEAD_STATUSES),
+    })
+    .strict(),
   z.object({ action: z.literal("assign"), ids: bulkIds, value: z.string().min(1) }).strict(),
   z
     .object({ action: z.literal("client"), ids: bulkIds, value: z.string().min(1).nullable() })

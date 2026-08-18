@@ -56,6 +56,17 @@ export const mentionRepository = {
     });
   },
 
+  /** Whether a mention id belongs to this recipient at all — unbounded, not the recency-capped
+   *  `listForRecipient` page. */
+  async existsForRecipient(
+    id: string,
+    recipientId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const count = await db(tx).mention.count({ where: { id, recipientId } });
+    return count > 0;
+  },
+
   /**
    * Mark ONE mention read. Scoped to the recipient (`updateMany`, not `update`) so a caller can
    * never mark someone else's mention; returns the affected count (0 → not yours / not found).

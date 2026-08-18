@@ -11,7 +11,7 @@ vi.mock("server-only", () => ({}));
 import { classifyMatch, matchResumeToCandidate, type MatchCandidate } from "./resume.match";
 import type { ResumeData } from "@/lib/validation/resume";
 
-/** Only `name`/`email` drive matching — a minimal résumé is enough for these pure tests. */
+/** Only `name`/`email` drive matching — a minimal resume is enough for these pure tests. */
 function resume(name: string, email: string): ResumeData {
   return { name, email } as unknown as ResumeData;
 }

@@ -182,7 +182,11 @@ export function LeadsInventory({
           onChange={(e) => {
             if (e.target.value) {
               void runBulk(
-                { action: "status", ids: [...selected], value: e.target.value as LeadStatus },
+                {
+                  action: "status",
+                  ids: [...selected],
+                  value: e.target.value as Exclude<LeadStatus, "Promoted">,
+                },
                 "Status changed",
               );
             }

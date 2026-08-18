@@ -19,7 +19,18 @@ export const portalAccessRequestRepository = {
     return prisma.portalAccessRequest.findUnique({ where: { id } });
   },
 
-  updateStatus(id: string, status: "approved" | "declined") {
-    return prisma.portalAccessRequest.update({ where: { id }, data: { status } });
+  async claimPending(id: string, status: "approved" | "declined") {
+    const { count } = await prisma.portalAccessRequest.updateMany({
+      where: { id, status: "pending" },
+      data: { status },
+    });
+    return count;
+  },
+
+  async revertToPending(id: string) {
+    await prisma.portalAccessRequest.updateMany({
+      where: { id, status: "approved" },
+      data: { status: "pending" },
+    });
   },
 };

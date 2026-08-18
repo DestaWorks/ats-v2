@@ -2,7 +2,7 @@ import "server-only";
 import type { ResumeData, ResumeMatch } from "@/lib/validation/resume";
 
 /**
- * Résumé → existing-candidate matching (Wave 1.2 §5). Pure + unit-tested. Enforces the
+ * Resume → existing-candidate matching (Wave 1.2 §5). Pure + unit-tested. Enforces the
  * no-silent-wrong-person-merge invariant: an email-exact hit is `auto` (the UI pre-selects but
  * the user still accepts), a name-fuzzy-only hit is `confirm` (requires an explicit toggle), and
  * anything below threshold is `none` (save creates a NEW candidate). This runs SERVER-SIDE on
@@ -22,12 +22,12 @@ export interface MatchCandidate {
 /** Per-candidate classification (auto = email-exact, confirm = name-fuzzy, none = neither). */
 export type MatchClass = "auto" | "confirm" | "none";
 
-function normalizeEmail(email: string): string {
+export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
 /** Lowercase, collapse punctuation/whitespace to single spaces. */
-function normalizeName(name: string): string {
+export function normalizeName(name: string): string {
   return name
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, " ")
@@ -63,7 +63,7 @@ function nameSimilarity(a: string, b: string): number {
 }
 
 /**
- * Classify a single candidate against the extracted résumé. Email-exact (case/space-insensitive)
+ * Classify a single candidate against the extracted resume. Email-exact (case/space-insensitive)
  * wins as `auto`; otherwise a name-similarity ≥ threshold (with NO email match) is `confirm`;
  * everything else is `none`.
  */

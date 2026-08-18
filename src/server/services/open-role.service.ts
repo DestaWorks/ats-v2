@@ -334,7 +334,7 @@ export const openRoleService = {
   async deleteNote(id: string, noteId: string, user: AuthUser): Promise<OpenRoleDetailDTO> {
     await requireRole(id);
     await withTransaction(async (tx) => {
-      const { count } = await openRoleRepository.softDeleteNote(noteId, user.id, tx);
+      const { count } = await openRoleRepository.softDeleteNote(noteId, id, user.id, tx);
       if (count === 0) throw new AppError("NOT_FOUND", "Note not found");
       await writeAudit(tx, {
         entity: "open_role",

@@ -56,9 +56,8 @@ export const mentionService = {
     } else {
       const count = await mentionRepository.markRead(input.mentionId!, user.id);
       if (count === 0) {
-        // Distinguish "not yours / missing" from "already read" (idempotent success).
-        const mine = await mentionRepository.listForRecipient(user.id, MENTIONS_PAGE);
-        if (!mine.some((m) => m.id === input.mentionId)) {
+        const exists = await mentionRepository.existsForRecipient(input.mentionId!, user.id);
+        if (!exists) {
           throw new AppError("NOT_FOUND", "Mention not found");
         }
       }
