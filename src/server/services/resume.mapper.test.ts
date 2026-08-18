@@ -93,7 +93,7 @@ function operations(overrides: Partial<OperationsResume> = {}): OperationsResume
 }
 
 describe("toCandidateCreateInput", () => {
-  it("maps a clinical résumé onto the Clinical track with license + credential", () => {
+  it("maps a clinical resume onto the Clinical track with license + credential", () => {
     const input = toCandidateCreateInput("clinical", clinical());
     expect(input.track).toBe("Clinical");
     expect(input.name).toBe("Jane Doe");
@@ -112,7 +112,7 @@ describe("toCandidateCreateInput", () => {
     expect("status" in input).toBe(false);
   });
 
-  it("maps a prescriber résumé onto the Prescriber track with MD credential + DEA-bearing license", () => {
+  it("maps a prescriber resume onto the Prescriber track with MD credential + DEA-bearing license", () => {
     const input = toCandidateCreateInput("prescriber", prescriber());
     expect(input.track).toBe("Prescriber");
     expect(input.credential).toBe("MD");
@@ -125,7 +125,7 @@ describe("toCandidateCreateInput", () => {
     expect("snapshot" in input).toBe(false);
   });
 
-  it("maps an operations résumé onto the Operations track with NO license/credential", () => {
+  it("maps an operations resume onto the Operations track with NO license/credential", () => {
     const input = toCandidateCreateInput("operations", operations());
     expect(input.track).toBe("Operations");
     expect(input.credential).toBeNull();

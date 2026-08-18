@@ -9,7 +9,7 @@ export type DocumentRow = Document;
 
 /**
  * Domain input for creating a document. `extractedData` is typed `unknown` so callers pass the
- * structured résumé object directly; the repository casts it to the Prisma JSON input at this
+ * structured resume object directly; the repository casts it to the Prisma JSON input at this
  * boundary (keeping Prisma types confined to the repository layer).
  */
 export interface DocumentCreateData {
@@ -75,7 +75,7 @@ function decryptRow<T extends Document | null>(row: T): T {
  *
  * SOFT DELETE: like the candidate repository, reads add `deletedAt: null` unless `includeDeleted`
  * is set, so soft-deleted rows never surface by accident. Every method accepts an optional `tx`
- * so the résumé service can compose the candidate write + document write + audit atomically.
+ * so the resume service can compose the candidate write + document write + audit atomically.
  */
 export const documentRepository = {
   async create(data: DocumentCreateData, tx?: Prisma.TransactionClient) {

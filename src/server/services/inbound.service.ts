@@ -181,7 +181,7 @@ export const inboundService = {
    * different person than the lead id the (now-stale) "Attach to this lead" banner still
    * references. Re-run the same dedupe lookup against what the reviewer actually confirmed and
    * refuse to attach unless it independently resolves to the SAME lead — never trust `leadId`
-   * alone (same posture as the résumé-match flow's server-side re-classification).
+   * alone (same posture as the resume-match flow's server-side re-classification).
    */
   async attach(input: AttachInboundInput, user: AuthUser): Promise<LeadDetailDTO> {
     const reMatch = await findExisting({ name: input.name, email: input.email ?? null });

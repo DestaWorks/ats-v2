@@ -97,7 +97,7 @@ export default async function DashboardPage() {
             {distributionTotal === 0 ? (
               <EmptyState
                 title="No candidates yet"
-                description="Add candidates via the résumé flow to populate the pipeline."
+                description="Add candidates via the resume flow to populate the pipeline."
               />
             ) : (
               <div className="flex flex-col gap-3">

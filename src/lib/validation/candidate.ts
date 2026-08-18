@@ -51,7 +51,7 @@ export interface NoteDTO {
   createdAt: string; // ISO
 }
 
-/** A résumé/document row (metadata + link; no byte preview). `extracted*` are PII-gated. */
+/** A resume/document row (metadata + link; no byte preview). `extracted*` are PII-gated. */
 export interface DocumentSummaryDTO {
   id: string;
   candidateId: string | null;
@@ -286,7 +286,7 @@ export const addNoteSchema = z
 export type AddNoteInput = z.infer<typeof addNoteSchema>;
 
 /**
- * Body for `POST /api/candidates/:id/resume` — attach a résumé directly to an ALREADY-KNOWN
+ * Body for `POST /api/candidates/:id/resume` — attach a resume directly to an ALREADY-KNOWN
  * candidate (no AI extraction, no candidate matching — unlike `saveResumeInputSchema`, which is
  * the standalone Parse Resume flow's attach-or-create). `extractedText` is optional since a plain
  * (non-PDF) upload or a client-side extraction failure shouldn't block attaching the file itself.

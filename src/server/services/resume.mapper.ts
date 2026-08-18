@@ -5,7 +5,7 @@ import type { ResumeData } from "@/lib/validation/resume";
 import type { CandidateCreateInput } from "./candidate.service";
 
 /**
- * Map an extracted résumé onto the Wave 1.1 Candidate columns (Wave 1.2 §4.5). Pure + unit-tested.
+ * Map an extracted resume onto the Wave 1.1 Candidate columns (Wave 1.2 §4.5). Pure + unit-tested.
  * DELIBERATELY LOSSY: the extraction is far richer than the Candidate table — only the columns that
  * exist map here (credential/population/setting are collapsed onto the fixed vocab, unmapped → null;
  * operations carry no license). The full structured payload is preserved in `documents.extractedData`

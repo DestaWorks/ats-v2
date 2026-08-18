@@ -24,7 +24,7 @@ import { RowInspectModal } from "./row-inspect-modal";
  *
  * `csvContent`/`csvFormat`/`resumes` are optional — when the caller has them (the wizard does, in
  * both the preview and commit-result steps), rows become clickable to open the legacy-parity
- * "inspect before commit" modal (CSV data + matched résumé text). Without them, the table is
+ * "inspect before commit" modal (CSV data + matched resume text). Without them, the table is
  * read-only, same as before.
  */
 

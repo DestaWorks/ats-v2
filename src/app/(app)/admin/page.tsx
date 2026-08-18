@@ -3,6 +3,7 @@ import { getVerifiedUser } from "@/server/auth/guards";
 import { adminUserService } from "@/server/services/admin-user.service";
 import { accessRequestService } from "@/server/services/access-request.service";
 import { portalAccessRequestService } from "@/server/services/portal-access-request.service";
+import { aiOpsService } from "@/server/services/ai-ops.service";
 import { cachedClientList } from "@/server/repositories/client.repository";
 import { ErrorState } from "@/components/ui/error-state";
 import { AdminDashboard } from "./admin-dashboard";
@@ -29,11 +30,27 @@ export default async function AdminPage() {
   }
 
   const canConfigurePortal = hasCapability(user.role, "configureClientPortal");
-  const [{ users }, requests, portalRequests, clientRows] = await Promise.all([
+  const canManageAi = hasCapability(user.role, "manageAiSettings");
+  const [{ users }, requests, portalRequests, clientRows, aiSettings, aiUsage] = await Promise.all([
     adminUserService.list(),
     accessRequestService.list(),
     canConfigurePortal ? portalAccessRequestService.list() : Promise.resolve([]),
     canConfigurePortal ? cachedClientList() : Promise.resolve([]),
+    canManageAi
+      ? aiOpsService.getSettings()
+      : Promise.resolve({ disabled: false, disabledReason: null }),
+    canManageAi
+      ? aiOpsService.getUsageOverview()
+      : Promise.resolve({
+          windowHours: 24,
+          totalCalls: 0,
+          successCount: 0,
+          errorCount: 0,
+          totalInputTokens: 0,
+          totalOutputTokens: 0,
+          avgLatencyMs: 0,
+          recent: [],
+        }),
   ]);
   const clients = clientRows.map((c) => ({ id: c.id, name: c.name }));
 
@@ -45,6 +62,9 @@ export default async function AdminPage() {
       canConfigurePortal={canConfigurePortal}
       initialPortalRequests={portalRequests}
       clients={clients}
+      canManageAi={canManageAi}
+      initialAiSettings={aiSettings}
+      aiUsage={aiUsage}
     />
   );
 }

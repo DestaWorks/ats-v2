@@ -29,7 +29,7 @@ import type {
 } from "@/lib/validation/migration";
 import type { LegacyRow } from "./sheet-parse";
 
-/** A résumé document to upsert alongside the candidate, keyed deterministically by legacy id (§5). */
+/** A resume document to upsert alongside the candidate, keyed deterministically by legacy id (§5). */
 export interface DocumentUpsertPlan {
   /** ResumeFileID, or a derived `resume:<legacyId>` when only URL/filename are present. */
   legacyId: string;
@@ -61,17 +61,17 @@ export interface ImportRowPlan {
   /** Legacy row carries a DeletedAt → imports soft-deleted (to Trash). */
   softDeleted: boolean;
   action: ImportAction;
-  /** Wave 1.3 backlog (Indrasur bulk-résumé flow) — set by `migration.service.ts`'s `planImport`
+  /** Wave 1.3 backlog (Indrasur bulk-resume flow) — set by `migration.service.ts`'s `planImport`
    *  AFTER `transformRow` runs (matching needs every row's name at once, not just this one's).
-   *  Optional/undefined when no résumé ZIP was uploaded at all. */
+   *  Optional/undefined when no resume ZIP was uploaded at all. */
   resumeMatch?: ResumeMatchStatus;
-  /** The matched résumé's already-extracted text (client-side pdf.js) — only set when
+  /** The matched resume's already-extracted text (client-side pdf.js) — only set when
    *  `resumeMatch === "matched"`. Never persisted on the plan beyond the commit request's lifetime. */
   resumeText?: string | null;
-  /** The matched résumé's original filename — only set when `resumeMatch === "matched"`. Surfaced
+  /** The matched resume's original filename — only set when `resumeMatch === "matched"`. Surfaced
    *  in the report so a reviewer can see WHICH file matched (legacy parity), not just that one did. */
   resumeFilename?: string | null;
-  /** The matched résumé's already-uploaded Storage key (Wave 6, client-side signed-URL PUT) — only
+  /** The matched resume's already-uploaded Storage key (Wave 6, client-side signed-URL PUT) — only
    *  set when `resumeMatch === "matched"` AND the browser successfully stored the file. */
   resumeStorageKey?: string | null;
 }

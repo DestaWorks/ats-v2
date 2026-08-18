@@ -15,7 +15,7 @@ import {
   type LayoutProps,
 } from "./common-sections";
 
-/** Clinical résumé profile — licensure + NPI/CAQH + modalities/populations (no DEA/board certs). */
+/** Clinical resume profile — licensure + NPI/CAQH + modalities/populations (no DEA/board certs). */
 export function ClinicalLayout({ data, match, submitting, onSave }: LayoutProps<ClinicalResume>) {
   const form = useZodForm(ClinicalResumeSchema, { defaultValues: data });
   return (

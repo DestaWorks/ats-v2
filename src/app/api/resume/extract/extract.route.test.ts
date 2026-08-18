@@ -26,10 +26,13 @@ vi.mock("@/server/ai/config", () => ({
   },
 }));
 vi.mock("@/server/ai/provider", () => ({ generateStructured: h.gen }));
+vi.mock("@/server/repositories/ai-settings.repository", () => ({
+  aiSettingsRepository: { getCached: async () => ({ disabled: false }) },
+}));
 
 import { POST } from "./route";
 
-const LONG_TEXT = "Jane Doe résumé ".repeat(10); // > 50 chars
+const LONG_TEXT = "Jane Doe resume ".repeat(10); // > 50 chars
 
 function req(body: unknown) {
   return new Request("http://localhost/api/resume/extract", {

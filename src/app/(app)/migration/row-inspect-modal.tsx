@@ -8,8 +8,8 @@ import { findRawRow } from "./lib/inspect-row";
 /**
  * Legacy parity — "click any row to inspect the CSV data and preview the matched resume before
  * committing." Read-only (no per-row skip toggle — that's a separate, not-yet-built feature).
- * Shows the raw CSV/JSON row (display-only, via `findRawRow`) and the matched résumé's already-
- * extracted TEXT (never a PDF render — this app never stores résumé binaries, see Wave 1.2).
+ * Shows the raw CSV/JSON row (display-only, via `findRawRow`) and the matched resume's already-
+ * extracted TEXT (never a PDF render — this app never stores resume binaries, see Wave 1.2).
  */
 export function RowInspectModal({
   report,

@@ -18,7 +18,7 @@ const DEFAULT_STATUS: Record<AppErrorCode, number> = {
   BAD_REQUEST: 400,
   CONFLICT: 409,
   STAGE_BLOCKED: 422,
-  // Wave 1.2 résumé extraction: feature not configured (no ANTHROPIC_API_KEY),
+  // Wave 1.2 resume extraction: feature not configured (no ANTHROPIC_API_KEY),
   // upstream rate limit, and a failed/refused/empty Claude extraction.
   FEATURE_DISABLED: 503,
   RATE_LIMITED: 429,

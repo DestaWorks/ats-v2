@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { APICallError } from "ai";
 import type { ZodType } from "zod";
 import { AppError } from "@/server/http/app-error";
+import { aiSettingsRepository } from "@/server/repositories/ai-settings.repository";
 import { aiEnabled } from "./config";
 import { generateStructured } from "./provider";
 
@@ -13,15 +14,21 @@ import { generateStructured } from "./provider";
  * factored out once rather than re-implemented per module. Originally lived at
  * `ai/briefs/shared.ts`; relocated here once a second, non-brief module (CRM) needed it too.
  */
+export async function isAiAvailable(): Promise<boolean> {
+  if (!aiEnabled) return false;
+  const { disabled } = await aiSettingsRepository.getCached();
+  return !disabled;
+}
+
 export async function generateAi<T>(
   featureLabel: string,
   opts: { schema: ZodType<T>; system: string; prompt: string; maxOutputTokens?: number },
 ): Promise<T> {
-  if (!aiEnabled) {
+  if (!(await isAiAvailable())) {
     throw new AppError("FEATURE_DISABLED", `${featureLabel} is not configured`);
   }
   try {
-    return await generateStructured(opts);
+    return await generateStructured({ ...opts, operation: featureLabel });
   } catch (err) {
     if (err instanceof AppError) throw err;
     if (APICallError.isInstance(err)) {
