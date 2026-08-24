@@ -22,6 +22,8 @@ export interface StageMoverCandidate {
   credential: string | null;
   licenseState: string | null;
   licenseStatus: LicenseStatus;
+  /** ISO date string from the profile DTO; the gates need a `Date`. */
+  licenseExpiry: string | null;
   population: string | null;
   setting: string | null;
   clientId: string | null;
@@ -48,6 +50,7 @@ export function toRuleCandidate(c: StageMoverCandidate): RuleCandidate {
     credential: c.credential,
     licenseState: c.licenseState,
     licenseStatus: c.licenseStatus,
+    licenseExpiry: c.licenseExpiry ? new Date(c.licenseExpiry) : null,
     population: c.population,
     setting: c.setting,
     clientId: c.clientId,

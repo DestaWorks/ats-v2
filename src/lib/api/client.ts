@@ -47,12 +47,29 @@ export function messageForFailure(failure: ApiFailure): string {
   return failure.message || "Something went wrong. Please try again.";
 }
 
-/** Issue `fetch(url, init)` and turn a non-OK response into an `ApiFailure` (shared by every verb below). */
+/** Issue `fetch(url, init)` and turn a non-OK response — or a transport failure — into an
+ *  `ApiFailure` (shared by every verb below). `fetch` *rejects* rather than resolving when the
+ *  network is unreachable (offline, DNS failure, connection reset) and `res.json()` throws on a
+ *  non-JSON body from an edge/proxy error page; both are surfaced as `NETWORK` so callers never
+ *  have to catch. A deliberate `AbortController.abort()` still rejects with `AbortError`, which
+ *  is the contract effect cleanups rely on to tell "cancelled" apart from "failed". */
 async function request<T>(url: string, init: RequestInit): Promise<ApiResult<T>> {
-  const res = await fetch(url, init);
-  if (!res.ok) return { ok: false, failure: await readFailure(res) };
-  const data = (await res.json()) as T;
-  return { ok: true, data };
+  try {
+    const res = await fetch(url, init);
+    if (!res.ok) return { ok: false, failure: await readFailure(res) };
+    const data = (await res.json()) as T;
+    return { ok: true, data };
+  } catch (err: unknown) {
+    if (err instanceof DOMException && err.name === "AbortError") throw err;
+    return {
+      ok: false,
+      failure: {
+        code: "NETWORK",
+        message: "Couldn't reach the server. Check your connection and try again.",
+        issues: [],
+      },
+    };
+  }
 }
 
 /** A JSON body request — `Content-Type` header + serialized body (shared by POST/PATCH/PUT). */

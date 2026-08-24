@@ -183,6 +183,7 @@ export function StageMover({
     credential: candidate.credential,
     licenseState: candidate.licenseState,
     licenseStatus: candidate.licenseStatus as LicenseStatus,
+    licenseExpiry: candidate.licenseExpiry,
     population: candidate.population,
     setting: candidate.setting,
     clientId: candidate.clientId,

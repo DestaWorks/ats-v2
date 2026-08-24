@@ -1,6 +1,6 @@
 import "server-only";
 import type { Prisma } from "@/generated/prisma/client";
-import { COMPACT_STATES } from "@/lib/constants";
+import { COMPACT_STATES, UNVERIFIED_LICENSE_STATUSES } from "@/lib/constants";
 import { db } from "@/server/db/prisma";
 import { FIRST_TERMINAL_ORDER } from "@/server/repositories/candidate.repository";
 
@@ -30,7 +30,9 @@ export const credentialsIntelligenceRepository = {
     const [total, active, unverified, expired, expiringSoon, nlcCompact] = await Promise.all([
       db(tx).candidate.count({ where: { deletedAt: null } }),
       db(tx).candidate.count({ where: { deletedAt: null, licenseStatus: "Active" } }),
-      db(tx).candidate.count({ where: { deletedAt: null, licenseStatus: "Not Verified" } }),
+      db(tx).candidate.count({
+        where: { deletedAt: null, licenseStatus: { in: [...UNVERIFIED_LICENSE_STATUSES] } },
+      }),
       db(tx).candidate.count({ where: { deletedAt: null, licenseStatus: "Expired" } }),
       db(tx).candidate.count({
         where: {

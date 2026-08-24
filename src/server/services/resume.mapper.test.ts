@@ -175,3 +175,54 @@ describe("toCandidateCreateInput", () => {
     expect(input.licenseStatus).toBe("Active"); // "Certified" → Active
   });
 });
+
+describe("mapLicenseStatus — a resume's CLAIM is never treated as verification", () => {
+  const statusOf = (status: string) =>
+    toCandidateCreateInput(
+      "clinical",
+      clinical({
+        licensure: [{ type: "LPC", state: "TX", number: "LPC-1", status, expires: "" }],
+      }),
+    ).licenseStatus;
+
+  it("never reads an inactive license as Active", () => {
+    // "Inactive".includes("active") is TRUE — the old substring test mapped every one of these
+    // to Active, clearing the submit-to-client gate and scoring the full 10/10.
+    for (const claim of [
+      "Inactive",
+      "INACTIVE",
+      "Inactive - renewal pending",
+      "non-active",
+      "Non Active",
+      "Not currently active",
+      "not active",
+      "Not certified",
+      "Suspended",
+      "Revoked",
+      "Lapsed",
+    ]) {
+      expect(statusOf(claim), claim).not.toBe("Active");
+    }
+  });
+
+  it("still maps genuinely-active claims onto Active", () => {
+    for (const claim of [
+      "Active",
+      "ACTIVE",
+      "Active - current and in good standing",
+      "Current",
+      "Certified",
+      "In good standing",
+    ]) {
+      expect(statusOf(claim), claim).toBe("Active");
+    }
+  });
+
+  it("maps the negative vocab onto its own codes", () => {
+    expect(statusOf("Expired")).toBe("Expired");
+    expect(statusOf("Lapsed")).toBe("Expired");
+    expect(statusOf("Under investigation")).toBe("Under Investigation");
+    expect(statusOf("Not found")).toBe("Not Found");
+    expect(statusOf("anything unrecognized")).toBe("Not Verified");
+  });
+});

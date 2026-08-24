@@ -1,5 +1,10 @@
 import "server-only";
-import { ACTIVE_STATUS_CODES, statusLabel, statusSlaDays } from "@/lib/constants";
+import {
+  ACTION_LICENSE_STATUSES,
+  ACTIVE_STATUS_CODES,
+  statusLabel,
+  statusSlaDays,
+} from "@/lib/constants";
 import { getAutoDisqualify } from "@/lib/rules/disqualify";
 import { getDaysInStage } from "@/lib/rules/stage-timing";
 import type { ComplianceDTO, ReportFilters, TimeAnalysisDTO } from "@/lib/validation/reports";
@@ -7,8 +12,7 @@ import { toRuleCandidate } from "@/server/services/candidate.dto";
 import { average, median, timeToFillDays } from "@/lib/reports/metrics";
 import { loadCohort } from "./cohort";
 
-/** License statuses that need a recruiter's attention, on their own (legacy `index.html:8656-8683`). */
-const ACTION_LICENSE_STATUSES = new Set(["Expired", "Not Verified"]);
+const ACTION_LICENSE_STATUS_SET = new Set<string>(ACTION_LICENSE_STATUSES);
 const REQUIRING_ACTION_LIMIT = 200;
 
 export const timeReportsService = {
@@ -60,7 +64,7 @@ export const timeReportsService = {
       .map((c) => {
         const rules = c.clientId ? cohort.rulesByClient.get(c.clientId) : undefined;
         const dq = getAutoDisqualify(toRuleCandidate(c), rules ?? null);
-        const reasons = ACTION_LICENSE_STATUSES.has(c.licenseStatus)
+        const reasons = ACTION_LICENSE_STATUS_SET.has(c.licenseStatus)
           ? [`License ${c.licenseStatus.toLowerCase()}`, ...dq]
           : dq;
         return { c, reasons };

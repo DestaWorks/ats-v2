@@ -13,6 +13,7 @@ const bareClinical: StageMoverCandidate = {
   credential: null,
   licenseState: null,
   licenseStatus: "Not Verified",
+  licenseExpiry: null,
   population: null,
   setting: null,
   clientId: null,
@@ -27,6 +28,7 @@ const readyClinical: StageMoverCandidate = {
   credential: "PMHNP",
   licenseState: "AZ",
   licenseStatus: "Active",
+  licenseExpiry: null,
   population: "Adult",
   setting: "Telehealth",
   clientId: "client-1",
@@ -87,5 +89,29 @@ describe("buildStageMoverOptions", () => {
     // Operations needs only contact info — no credential/license gate blocks the pre-screen.
     expect(byCode.get("QUALIFIED_PRESCREEN")!.valid).toBe(true);
     expect(byCode.get("SUBMITTED_TO_CLIENT")!.reasons).toContain("Client assignment required");
+  });
+
+  it("mirrors the server when an Active license has lapsed", () => {
+    // The client mirror must not offer a move the server's gate will reject: `licenseExpiry` is
+    // part of the gate input, so a lapsed license has to disable SUBMITTED_TO_CLIENT here too.
+    const lapsed: StageMoverCandidate = {
+      ...readyClinical,
+      licenseExpiry: "2020-01-01T00:00:00.000Z",
+    };
+    const byCode = new Map(buildStageMoverOptions(lapsed).map((o) => [o.code, o]));
+    expect(byCode.get("SUBMITTED_TO_CLIENT")!.valid).toBe(false);
+    expect(byCode.get("SUBMITTED_TO_CLIENT")!.reasons).toContain("License must be Active");
+    // And it agrees with the server rule it mirrors, option for option.
+    for (const o of buildStageMoverOptions(lapsed)) {
+      if (o.current) continue;
+      expect(o.valid).toBe(checkStageGate(toRuleCandidate(lapsed), o.code).length === 0);
+    }
+  });
+
+  it("still allows submission while the license is unexpired", () => {
+    const future = new Date(Date.now() + 365 * 86_400_000).toISOString();
+    const valid: StageMoverCandidate = { ...readyClinical, licenseExpiry: future };
+    const byCode = new Map(buildStageMoverOptions(valid).map((o) => [o.code, o]));
+    expect(byCode.get("SUBMITTED_TO_CLIENT")!.valid).toBe(true);
   });
 });

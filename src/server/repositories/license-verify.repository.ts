@@ -1,5 +1,6 @@
 import "server-only";
 import type { Prisma } from "@/generated/prisma/client";
+import { UNVERIFIED_LICENSE_STATUSES } from "@/lib/constants";
 import { db } from "@/server/db/prisma";
 import { FIRST_TERMINAL_ORDER } from "@/server/repositories/candidate.repository";
 
@@ -24,7 +25,7 @@ export const licenseVerifyRepository = {
     const rows = await db(tx).candidate.findMany({
       where: {
         deletedAt: null,
-        licenseStatus: "Not Verified",
+        licenseStatus: { in: [...UNVERIFIED_LICENSE_STATUSES] },
         stageOrder: { lt: FIRST_TERMINAL_ORDER },
       },
       select: {

@@ -7,11 +7,16 @@
  */
 import type { CandidateStatus } from "./pipeline-status";
 
-/** The 8 of 13 statuses shown in the portal — everything except the 5 legacy also hid. */
+/**
+ * The 5 of 13 statuses shown in the portal — submission and later, ONLY.
+ *
+ * Narrowed from 8 (audit 2026-08-21). The three pre-submission stages legacy also showed
+ * (`QUALIFIED_PRESCREEN`, `INITIAL_SCREENING`, `DESTA_REVIEW`) disclosed a candidate's full
+ * legal name AND current employer to a client we had not yet submitted them to — enough to
+ * identify and approach a clinician who is job-hunting confidentially, or to out them to their
+ * employer. Once a candidate reaches `SUBMITTED_TO_CLIENT` that disclosure is the point.
+ */
 export const PORTAL_VISIBLE_STATUS_CODES: readonly CandidateStatus[] = [
-  "QUALIFIED_PRESCREEN",
-  "INITIAL_SCREENING",
-  "DESTA_REVIEW",
   "SUBMITTED_TO_CLIENT",
   "CLIENT_INTERVIEW",
   "OFFER_NEGOTIATION",

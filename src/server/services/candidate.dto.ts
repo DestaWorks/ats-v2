@@ -50,6 +50,7 @@ export type RuleCandidateSource = Pick<
   | "credential"
   | "licenseState"
   | "licenseStatus"
+  | "licenseExpiry"
   | "population"
   | "setting"
   | "clientId"
@@ -69,6 +70,7 @@ export function toRuleCandidate(row: RuleCandidateSource): RuleCandidate {
     credential: row.credential,
     licenseState: row.licenseState,
     licenseStatus: row.licenseStatus as LicenseStatus,
+    licenseExpiry: row.licenseExpiry,
     population: row.population,
     setting: row.setting,
     clientId: row.clientId,

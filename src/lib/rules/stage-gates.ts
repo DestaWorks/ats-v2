@@ -1,4 +1,5 @@
-import type { CandidateStatus } from "@/lib/constants";
+import { UNVERIFIED_LICENSE_STATUSES, type CandidateStatus } from "@/lib/constants";
+import { effectiveLicenseStatus } from "./license";
 import type { RuleCandidate } from "./types";
 
 /**
@@ -13,10 +14,12 @@ import type { RuleCandidate } from "./types";
  * Track rule: "Operations" needs only contact info; "Clinical"/"Prescriber" need the
  * credential + license checks.
  */
-type StageValidator = (c: RuleCandidate) => string[];
+type StageValidator = (c: RuleCandidate, now: Date) => string[];
 
 const hasContact = (c: RuleCandidate): boolean => Boolean(c.email || c.phone);
 const isOperations = (c: RuleCandidate): boolean => c.track === "Operations";
+const isUnverified = (c: RuleCandidate): boolean =>
+  !c.licenseStatus || UNVERIFIED_LICENSE_STATUSES.includes(c.licenseStatus);
 
 const STAGE_REQUIRED: Partial<Record<CandidateStatus, StageValidator>> = {
   QUALIFIED_PRESCREEN: (c) => {
@@ -32,7 +35,7 @@ const STAGE_REQUIRED: Partial<Record<CandidateStatus, StageValidator>> = {
 
   INITIAL_SCREENING: (c) => {
     const missing: string[] = [];
-    if (!isOperations(c) && c.licenseStatus === "Not Verified") {
+    if (!isOperations(c) && isUnverified(c)) {
       missing.push("License must be verified first");
     }
     return missing;
@@ -44,9 +47,9 @@ const STAGE_REQUIRED: Partial<Record<CandidateStatus, StageValidator>> = {
     return missing;
   },
 
-  SUBMITTED_TO_CLIENT: (c) => {
+  SUBMITTED_TO_CLIENT: (c, now) => {
     const missing: string[] = [];
-    if (!isOperations(c) && c.licenseStatus !== "Active") {
+    if (!isOperations(c) && effectiveLicenseStatus(c, now) !== "Active") {
       missing.push("License must be Active");
     }
     if (!c.clientId) missing.push("Client assignment required");
@@ -61,12 +64,20 @@ const STAGE_REQUIRED: Partial<Record<CandidateStatus, StageValidator>> = {
  * Blocking requirements for moving a candidate INTO `toStatus`.
  * Empty array = the transition is allowed.
  */
-export function checkStageGate(candidate: RuleCandidate, toStatus: CandidateStatus): string[] {
+export function checkStageGate(
+  candidate: RuleCandidate,
+  toStatus: CandidateStatus,
+  now: Date = new Date(),
+): string[] {
   const validator = STAGE_REQUIRED[toStatus];
-  return validator ? validator(candidate) : [];
+  return validator ? validator(candidate, now) : [];
 }
 
 /** Convenience: is the transition into `toStatus` allowed? */
-export function canTransition(candidate: RuleCandidate, toStatus: CandidateStatus): boolean {
-  return checkStageGate(candidate, toStatus).length === 0;
+export function canTransition(
+  candidate: RuleCandidate,
+  toStatus: CandidateStatus,
+  now: Date = new Date(),
+): boolean {
+  return checkStageGate(candidate, toStatus, now).length === 0;
 }

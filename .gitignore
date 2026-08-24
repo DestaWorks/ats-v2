@@ -43,3 +43,6 @@ yarn-error.log*
 /legacy/
 .vercel
 .env*
+
+# Internal-only defense-book study reference (chapters + generator + output, all private).
+/internal-docs/
