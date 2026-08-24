@@ -43,6 +43,13 @@ async function resolveByRawToken(
   if (tokenRow.revokedAt) return null;
   if (tokenRow.expiresAt.getTime() <= Date.now()) return null;
   if (tokenRow.contact.deletedAt) return null;
+  // A contact who left the client keeps a live 30-day cookie otherwise: `status: "left"` is the
+  // only "this person is gone" signal the CRM offers short of deletion, and `portalEnabled` is
+  // the explicit opt-in this token was minted under. Both are re-checked on EVERY request, so
+  // revoking access is a CRM edit — it does not require also hunting down the token (audit
+  // 2026-08-21).
+  if (tokenRow.contact.status === "left") return null;
+  if (!tokenRow.contact.portalEnabled) return null;
 
   await clientPortalTokenRepository.touchLastUsed(tokenRow.id);
 

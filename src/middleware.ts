@@ -11,9 +11,10 @@ export function middleware(request: NextRequest) {
   return NextResponse.next();
 }
 
-/** Denylist, not an allowlist — protects every route except the public `(auth)` pages, `/api/**`, and static assets. */
+/** Denylist, not an allowlist — protects every route except the public `(auth)` pages, the
+ *  client `/portal/**` (its own token cookie, not a staff session), `/api/**`, and static assets. */
 export const config = {
   matcher: [
-    "/((?!api|_next/static|_next/image|favicon.ico|sign-in|forgot-password|reset-password|request-access).*)",
+    "/((?!api|_next/static|_next/image|favicon.ico|sign-in|forgot-password|reset-password|request-access|portal).*)",
   ],
 };
