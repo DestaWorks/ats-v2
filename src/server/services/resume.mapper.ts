@@ -52,15 +52,23 @@ function parseMonthYear(raw: string | undefined): Date | null {
   return new Date(Date.UTC(Number(match[2]), month, 1));
 }
 
-/** Map a free-text license status onto the fixed vocab; default "Not Verified". */
+/** Negations checked BEFORE the positive match: `"Inactive".includes("active")` is true, so the
+ *  old substring test mapped an INACTIVE license to `Active` — which then cleared the
+ *  submit-to-client gate and scored the full 10/10 (audit 2026-08-21). Word boundaries alone
+ *  aren't enough either: `"non-active"` boundaries on the hyphen. */
+const NEGATED_ACTIVE =
+  /\b(?:in|non[\s-]?)active\b|\bnot\s+(?:currently\s+)?(?:active|current|certified|licensed)\b|\blapsed\b|\bsuspended\b|\brevoked\b/;
+const POSITIVE_ACTIVE = /\b(?:active|certified|current|in\s+good\s+standing)\b/;
+
+/** Map a free-text license status onto the fixed vocab; default "Not Verified". Anything a
+ *  resume merely *claims* is never authoritative — `license-verify` owns the real transition. */
 function mapLicenseStatus(raw: string | undefined): LicenseStatus {
   const value = (raw ?? "").toLowerCase();
-  if (value.includes("active") || value.includes("certified") || value.includes("current")) {
-    return "Active";
-  }
-  if (value.includes("expired")) return "Expired";
-  if (value.includes("investigation")) return "Under Investigation";
   if (value.includes("not found")) return "Not Found";
+  if (value.includes("investigation")) return "Under Investigation";
+  if (value.includes("expired") || value.includes("lapsed")) return "Expired";
+  if (NEGATED_ACTIVE.test(value)) return "Not Verified";
+  if (POSITIVE_ACTIVE.test(value)) return "Active";
   return "Not Verified";
 }
 

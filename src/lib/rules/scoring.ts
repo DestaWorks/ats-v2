@@ -1,3 +1,4 @@
+import { effectiveLicenseStatus } from "./license";
 import type { ClientRules, RuleCandidate } from "./types";
 
 export interface CandidateScore {
@@ -19,6 +20,7 @@ export interface CandidateScore {
 export function scoreCandidate(
   candidate: RuleCandidate,
   clientRules: ClientRules | null | undefined,
+  now: Date = new Date(),
 ): CandidateScore {
   if (!clientRules) return { score: 0, max: 0, pct: 0, flags: [] };
 
@@ -66,9 +68,10 @@ export function scoreCandidate(
 
   // License status (10) — always counts toward max
   max += 10;
-  if (candidate.licenseStatus === "Active") {
+  const licenseStatus = effectiveLicenseStatus(candidate, now);
+  if (licenseStatus === "Active") {
     score += 10;
-  } else if (candidate.licenseStatus === "Expired") {
+  } else if (licenseStatus === "Expired") {
     flags.push("License expired");
   }
 

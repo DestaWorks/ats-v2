@@ -1,3 +1,4 @@
+import { effectiveLicenseStatus } from "./license";
 import type { ClientRules, RuleCandidate } from "./types";
 
 /**
@@ -11,10 +12,11 @@ import type { ClientRules, RuleCandidate } from "./types";
 export function getAutoDisqualify(
   candidate: RuleCandidate,
   clientRules: ClientRules | null | undefined,
+  now: Date = new Date(),
 ): string[] {
   const dq: string[] = [];
 
-  if (candidate.licenseStatus === "Expired") dq.push("License expired");
+  if (effectiveLicenseStatus(candidate, now) === "Expired") dq.push("License expired");
   if (candidate.licenseStatus === "Under Investigation") {
     dq.push("License under investigation");
   }

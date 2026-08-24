@@ -100,3 +100,18 @@ export const LICENSE_STATUSES = [
   "Not Found",
 ] as const;
 export type LicenseStatus = (typeof LICENSE_STATUSES)[number];
+
+/**
+ * Statuses meaning "we have NOT confirmed a live license". `Not Found` is strictly weaker
+ * evidence than `Not Verified` (a board was checked and returned nothing), so every gate,
+ * queue and report treats the two identically — audit 2026-08-21 found `Not Found` was in the
+ * vocab but handled nowhere, letting those candidates slip past the screening gate AND out of
+ * the verification queue that would have caught them.
+ */
+export const UNVERIFIED_LICENSE_STATUSES: readonly LicenseStatus[] = ["Not Verified", "Not Found"];
+
+/** Statuses that need a recruiter's attention on their own (legacy `index.html:8656-8683`). */
+export const ACTION_LICENSE_STATUSES: readonly LicenseStatus[] = [
+  ...UNVERIFIED_LICENSE_STATUSES,
+  "Expired",
+];

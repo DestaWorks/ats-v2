@@ -2,6 +2,7 @@ import "server-only";
 import type { Candidate, Prisma } from "@/generated/prisma/client";
 import {
   ACTIVE_STATUS_CODES,
+  UNVERIFIED_LICENSE_STATUSES,
   statusSlaDays,
   type CandidateStatus,
   type LicenseStatus,
@@ -519,7 +520,7 @@ export const candidateRepository = {
    * The alerts-bell derived buckets in one round of queries — viewer-scoped (`createdById`), each
    * capped at `take` rows with its TRUE count (legacy panel: caps 5, header shows the full count).
    * Overdue = the SAME `overdueWhere` the list/board chips use (stageEnteredAt vs per-stage SLA);
-   * new-to-review = sitting in stage 0; verification-pending = `licenseStatus: "Not Verified"`
+   * new-to-review = sitting in stage 0; verification-pending = any UNVERIFIED status
    * (non-null column, default covers the legacy empty case) excluding Future Pipeline. Only
    * non-PII columns are selected → no crypto.
    */
@@ -548,7 +549,10 @@ export const candidateRepository = {
       bucket({ AND: [overdueWhere(now)] }, { stageEnteredAt: "asc" }),
       bucket({ status: "NEW_CANDIDATE" }, { createdAt: "desc" }),
       bucket(
-        { licenseStatus: "Not Verified", NOT: { status: "FUTURE_PIPELINE" } },
+        {
+          licenseStatus: { in: [...UNVERIFIED_LICENSE_STATUSES] },
+          NOT: { status: "FUTURE_PIPELINE" },
+        },
         { createdAt: "desc" },
       ),
     ]);

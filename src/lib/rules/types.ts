@@ -10,6 +10,8 @@ export interface RuleCandidate {
   credential?: string | null;
   licenseState?: string | null;
   licenseStatus?: LicenseStatus | null;
+  /** Date-only, UTC midnight. Read via `effectiveLicenseStatus` — never compared directly. */
+  licenseExpiry?: Date | null;
   population?: string | null;
   setting?: string | null;
   /** Whether a client is assigned (the submit gate needs a client). */
