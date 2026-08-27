@@ -5,6 +5,7 @@ import { candidateRepository } from "@/server/repositories/candidate.repository"
 import { userRepository } from "@/server/repositories/user.repository";
 import { AppError } from "@/server/http/app-error";
 import { utcDayStart, utcNextDayStart } from "@/lib/daily";
+import type { AuditAction, AuditEntity } from "@/lib/constants";
 import { encodeCursor, type PageCursor } from "@/lib/validation/cursor";
 import type {
   ActivityActorOption,
@@ -30,6 +31,22 @@ import type {
 
 /** One keyset page of the Activity Log (matches the candidate list's `LIST_PAGE`). */
 const ACTIVITY_PAGE = 50;
+
+/**
+ * What a caller supplies to `listActivity` — the service's own input contract, distinct from the
+ * repository's `AuditListFilters` even though the fields line up. `from`/`to` here are the raw,
+ * INCLUSIVE dates a user picked; the service widens them to the repository's half-open
+ * `[utcDayStart(from), utcNextDayStart(to))` window. Callers must not pass pre-widened bounds.
+ */
+export interface AuditListInput {
+  action?: AuditAction;
+  entity?: AuditEntity;
+  actor?: string;
+  /** Inclusive — the whole of this UTC day is included. */
+  from?: Date;
+  /** Inclusive — the whole of this UTC day is included. */
+  to?: Date;
+}
 
 /** The list row shape the repo returns (before/after selected only to derive `hasChanges`). */
 interface AuditListRow {
@@ -90,10 +107,7 @@ export const auditService = {
    * the raw `before`/`after` (only `hasChanges`). AuthZ is session-authoritative via
    * `requireCapability` (mirrors `listAuditForEntity` — no viewer arg to trust).
    */
-  async listActivity(
-    filters: AuditListFilters,
-    cursor: PageCursor | null,
-  ): Promise<ActivityListDTO> {
+  async listActivity(filters: AuditListInput, cursor: PageCursor | null): Promise<ActivityListDTO> {
     await requireCapability("viewAudit"); // AL-6 — server authoritative, never trusts UI hiding.
     const repoFilters: AuditListFilters = {
       ...filters,

@@ -7,8 +7,7 @@ import {
 } from "@/lib/constants";
 import { EmptyState } from "@/components/ui/empty-state";
 import { getVerifiedUser } from "@/server/auth/guards";
-import type { AuditListFilters } from "@/server/repositories/audit.repository";
-import { auditService } from "@/server/services/audit.service";
+import { auditService, type AuditListInput } from "@/server/services/audit.service";
 import { ActivityFilters } from "./activity-filters";
 import { ActivityLog } from "./activity-log";
 
@@ -56,7 +55,7 @@ export default async function ActivityPage({
   const from = parseDay(one(sp.from));
   const to = parseDay(one(sp.to));
 
-  const filters: AuditListFilters = {
+  const filters: AuditListInput = {
     ...(action ? { action } : {}),
     ...(entity ? { entity } : {}),
     ...(actor ? { actor } : {}),
