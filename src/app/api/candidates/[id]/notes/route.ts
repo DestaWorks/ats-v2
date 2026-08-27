@@ -33,7 +33,7 @@ export const POST = apiHandler<{ params: Promise<{ id: string }> }>(async (req, 
  * GET /api/candidates/:id/notes — the candidate's notes, SERVER-scoped by `visibleNotes` (never
  * client-filtered — the legacy shipped hidden notes to the browser). Guarded by `requireUser()`.
  */
-export const GET = apiHandler<{ params: Promise<{ id: string }> }>(async (req, ctx) => {
+export const GET = apiHandler<{ params: Promise<{ id: string }> }>(async (_req, ctx) => {
   const user = await requireUser();
   const { id } = await ctx.params;
   return json<GetCandidateNotesResponse>({ notes: await noteService.listByCandidate(id, user) });

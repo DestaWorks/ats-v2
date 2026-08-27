@@ -40,11 +40,7 @@ import { cachedUserList } from "@/server/http/request-cache";
 /** Candidates entering this status = a "hire" for the week's KPI ribbon (legacy: Status===Started). */
 const HIRE_STATUS = "STARTED_DAY1";
 
-function toDailyDTO(
-  row: DailyBriefRow,
-  priorityClientName: string | null,
-  savedByName: string | null,
-): DailyBriefDTO {
+function toDailyDTO(row: DailyBriefRow, savedByName: string | null): DailyBriefDTO {
   return {
     date: row.date,
     headline: row.headline ?? "",
@@ -214,7 +210,7 @@ export const briefService = {
       });
       return saved;
     });
-    return toDailyDTO(row, row.priorityClientId, user.name);
+    return toDailyDTO(row, user.name);
   },
 
   async getDaily(date: string): Promise<DailyBriefDTO | null> {
@@ -223,11 +219,7 @@ export const briefService = {
     const names = row.savedById
       ? await userRepository.namesByIds([row.savedById])
       : new Map<string, string>();
-    return toDailyDTO(
-      row,
-      row.priorityClientId,
-      row.savedById ? (names.get(row.savedById) ?? null) : null,
-    );
+    return toDailyDTO(row, row.savedById ? (names.get(row.savedById) ?? null) : null);
   },
 
   // --- Weekly Brief ---
