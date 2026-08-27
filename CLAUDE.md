@@ -77,6 +77,16 @@ The **live build docs** are `docs/DECISIONS.md` (authoritative decisions), `docs
    `docs/PROJECT-CONTEXT.md`.
 3. **Every change is a reviewable diff.** No more whole-file uploads. Work on a branch,
    open a PR, keep commits small and described.
+3b. **Branching, worktrees and merging are `docs/CONVENTIONS.md` §1 — follow it, don't improvise.**
+   The short version while the restructure runs: **never work on `main`** (it equals what is
+   deployed); branch from `restructure` as `<type>/p<N>-<slug>`; a hotfix goes `main` → deployed →
+   **merged down to `restructure` the same day**. One worktree per concurrent line of work, and
+   **verify its base commit before starting** — tooling cuts worktrees from whatever `HEAD` was.
+   `.env*` never follows a worktree; **never put `DATABASE_URL` in `.env.local`**, because Next.js
+   prefers it while the Prisma CLI reads only `.env`. When merging parallel branches, order by
+   ascending file overlap, gate between every merge, and **re-run the boundary invariant checks
+   after the last one** — branches that are each green can combine to undo one another, and no test
+   will tell you.
 4. **Do not expand the monolith.** New functionality goes into `src/` (the new project
    structure), never into `legacy/index.html`. We are strangling that file, not growing it.
 5. **Preserve behavior during migration.** The legacy app and the new app run side by side.

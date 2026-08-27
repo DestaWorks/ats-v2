@@ -8,7 +8,78 @@ ship continuously.
 
 ## 1. Source control & workflow
 
-- **Trunk-based with short-lived branches.** Branch from `main`, open a PR, merge when green.
+### 1.1 Branching — while the restructure is in progress
+
+**`main` is not worked on.** It stays exactly equal to what is deployed, so there is always an
+unambiguous answer to "what are our users running?" It is merged into once, at the end of the
+programme, with a merge commit — never a squash, because every commit reaching it was already
+reviewed on the way in.
+
+| Branch | Cut from | Merges into | Purpose |
+|---|---|---|---|
+| `main` | — | — | Deployed truth. Hotfixes only |
+| `restructure` | `main` | `main`, once, at the end | The integration base. Every phase lands here |
+| `<type>/p<N>-<slug>` | `restructure` | `restructure` | One concern, short-lived |
+| `fix/<slug>` | `main` | `main`, **then down to `restructure` the same day** | Hotfix |
+
+Branch names carry their phase so history reads as the plan: `chore/p0-clock-module`,
+`refactor/p2-pkg-domain`, `feat/p6-tenant-schema`.
+
+**A hotfix that has not been merged down to `restructure` by end of day is a defect, not a state to
+tolerate.** Divergence is what kills long-lived branches.
+
+### 1.2 Worktrees
+
+The workspace layout changes during the restructure, so `node_modules` does not match across
+branches and switching in place means repeated reinstalls. One worktree per concurrent line of work:
+
+```
+~/Documents/biruh/
+├── desta-ats/          restructure — primary, all phase work
+├── desta-ats-main/     main — hotfixes only
+└── desta-ats-wt/<task> per-task, cut from restructure
+```
+
+```bash
+git worktree add ../desta-ats-wt/p2-domain -b refactor/p2-pkg-domain restructure
+git worktree remove ../desta-ats-wt/p2-domain    # when its PR merges
+```
+
+Rules, each learned the hard way:
+
+- **Verify the base before working.** A worktree created by tooling is cut from whatever `HEAD`
+  pointed at, which is not necessarily the branch you meant. `git log --oneline -1` first.
+- **Environment files do not follow a worktree**, and that is a safety feature. Link deliberately:
+  the hotfix worktree gets `.env` (shared infrastructure); task worktrees get local values only.
+- **Never put `DATABASE_URL` or `DIRECT_URL` in `.env.local`.** Next.js prefers `.env.local`, but
+  the **Prisma CLI reads only `.env`** — split them and the app and your migrations talk to
+  different databases while both appear to work.
+- **Each worktree needs its own `pnpm install`.** Install lazily; a hotfix worktree does not need
+  dependencies until there is a hotfix.
+- **Tooling must exclude nested worktree paths.** ESLint flat-config `ignores` anchor at the repo
+  root, so `.next/**` does not match `.claude/worktrees/*/.next`. Use `**/.next/**`.
+
+### 1.3 Parallel work and merging
+
+When several branches run at once:
+
+1. **Compute file overlap before assigning the work**, and give overlapping files to one owner
+   where possible. Tell each owner which files another is touching.
+2. **Merge in ascending order of overlap** — least entangled first — so each conflict is resolved
+   once, against work already landed.
+3. **Run `typecheck`, `lint` and `test` between every merge**, never only at the end. A conflict
+   resolved wrongly is cheapest to find immediately.
+4. **`git apply --3way` stages what it applies.** A following `git add <one-file>` and commit will
+   sweep everything staged into that commit. Check `git show --stat` before moving on.
+5. **After the last merge, re-run the invariant checks** — the boundary greps, not just the suite.
+   Branches that are each green can still combine to undo one another: a parallel change reopened
+   the `next/headers` boundary another had just closed, and **no test failed**. Invariants must be
+   asserted as invariants.
+
+### 1.4 Everything else
+
+- **Trunk-based with short-lived branches.** Branch from the integration base, open a PR, merge
+  when green.
 - **No whole-file uploads.** Every change is a reviewable diff. (The current
   "Add files via upload / Delete index.html" history stops now.)
 - **Branch protection on `main`**: require PR + passing CI + at least one review.

@@ -955,39 +955,23 @@ independently.
 
 ## Branching and delivery
 
-**`main` is never touched by this work until the end.** It stays exactly equal to what is deployed,
-so at any moment there is an unambiguous answer to "what are our users running?"
+**The mechanics are canonical in [`CONVENTIONS.md`](./CONVENTIONS.md) §1** — branching model,
+worktree rules, and the parallel-work merge procedure. Do not restate them here; what follows is
+only what is specific to this programme.
 
-```text
-main ──────●───────────────●──────────────────────────────────●── merge
-            \             ↑ hotfix                            ↑
-             \            │ merged down same day              │
-              restructure ●───●───●───●───●───●───●───●───●───●
-                           \   \   \
-                    feature branches, one per PR, short-lived
-```
-
-| Branch | Purpose |
-|---|---|
-| `main` | Deployed truth. Only hotfixes land here directly |
-| `restructure` | The base branch. Every phase merges here |
-| `<type>/p<N>-<slug>` | One PR of work, branched from and merged to `restructure` |
-| `fix/*` | Hotfix off `main`, merged to `main`, **then merged down to `restructure` the same day** |
-
-Branch names carry their phase so history reads as this plan: `chore/p0-clock-module`,
-`refactor/p2-pkg-domain`, `feat/p4-api-candidates`, `feat/p6-tenant-schema`.
+`main` stays equal to what is deployed for the whole restructure and is merged into once, at the
+end. All work integrates on `restructure`.
 
 ### The three conditions that make a long-lived branch safe
 
 A long-lived branch fails when it drifts and when it is never exercised. Both are preventable:
 
-1. **Merge `main` down on the same day as any hotfix.** Never let divergence accumulate. If a week
-   passes with `restructure` behind `main`, that is a defect to fix, not a state to tolerate.
+1. **Merge `main` down on the same day as any hotfix.** A week of `restructure` behind `main` is a
+   defect, not a state to tolerate.
 2. **Deploy `restructure` continuously to its own preview environment.** A branch that runs for
-   months without being deployed is a branch that surprises everyone on merge day. It must be
-   exercised the entire time, not validated at the end.
-3. **The final merge is a formality, not a review.** Every PR into `restructure` was reviewed on the
-   way in. Merge with a merge commit, never a squash, so that history survives.
+   months without being deployed is a branch that surprises everyone on merge day.
+3. **The final merge is a formality, not a review.** Every PR into `restructure` was reviewed on
+   the way in. Merge commit, never squash.
 
 ### Phase gates
 
@@ -999,50 +983,6 @@ there is no separate consolidation step.
 
 Deploys are manual through the Vercel CLI, and **nothing currently records what is live.** Tag every
 deploy: `deploy/staging-YYYY-MM-DD`. Without this there is no answer to "roll back to what?"
-
-### Worktrees
-
-The restructure changes the shape of the tree, so switching branches in a single checkout means
-repeated dependency reinstalls and a `node_modules` that does not match the branch. Use worktrees:
-
-The primary checkout stays on `restructure`, because that is where the work happens for the duration.
-`main` gets its own worktree so a hotfix never requires stashing restructure work in progress.
-
-```text
-~/Documents/biruh/
-├── desta-ats/                    restructure — primary; all phase work
-├── desta-ats-main/               main — deployed truth; hotfixes only
-└── desta-ats-wt/
-    ├── p2-domain/                one task, one worktree
-    └── p4-api-candidates/
-```
-
-```bash
-# already created
-git worktree add ../desta-ats-main main
-
-# per task, branched from restructure
-git worktree add ../desta-ats-wt/p2-domain -b refactor/p2-pkg-domain restructure
-
-# when its PR merges
-git worktree remove ../desta-ats-wt/p2-domain
-```
-
-**Environment files do not follow a worktree.** `.env*` is gitignored, so a new worktree starts with
-none. This is a safety feature, not an inconvenience — link deliberately, per worktree:
-
-| Worktree | Gets | Never gets |
-|---|---|---|
-| `desta-ats/` (restructure) | `.env.local` → local Postgres | Production values |
-| `desta-ats-main/` (hotfix) | `.env` → staging Supabase | `.env.local`, which would silently redirect it to a local database |
-| `desta-ats-wt/*` (task) | `.env.local` → local Postgres | Anything pointing at shared infrastructure |
-
-The trap worth naming: **Next.js loads `.env.local` in preference to `.env`.** A worktree that
-inherits a stray `.env.local` runs against the wrong database while appearing to work perfectly.
-
-**Each worktree needs its own `pnpm install`** — roughly 1.5 GB of `node_modules` each, and the
-workspace layout differs per branch during Phases 1–2, so they cannot be shared. Install lazily: a
-hotfix worktree does not need dependencies until there is a hotfix.
 
 ### Environments — a prerequisite for Phase 6
 
