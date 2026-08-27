@@ -103,6 +103,13 @@ const eslintConfig = [
     files: ["**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx", "scripts/**"],
     rules: { "no-console": "off" },
   },
+  // The console adapter IS the sanctioned console call site — it is what the Edge runtime logs
+  // through, since pino cannot run there. Exempted here rather than disabled inline, so the one
+  // exception lives beside the rule.
+  {
+    files: ["src/lib/logger/console-logger.ts"],
+    rules: { "no-console": "off" },
+  },
 
   {
     ignores: [

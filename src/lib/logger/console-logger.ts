@@ -14,11 +14,9 @@ export interface ConsoleLoggerOptions {
 }
 
 function defaultWrite(line: string, level: LogLevel): void {
-  /* eslint-disable no-console */
   if (level === "error") console.error(line);
   else if (level === "warn") console.warn(line);
   else console.log(line);
-  /* eslint-enable no-console */
 }
 
 export function createConsoleLogger(options: ConsoleLoggerOptions = {}): Logger {
