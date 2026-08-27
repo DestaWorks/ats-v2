@@ -184,8 +184,9 @@ ats-v2/
 │   │   └── src/
 │   │       ├── constants/        # statuses, roles, capabilities, vocabularies
 │   │       ├── rules/            # scoring, stage gates, license rules
-│   │       ├── time/             # Clock — systemClock, fixedClock, advanceableClock
-│   │       ├── money/            # integer minor units
+│   │       ├── clock.ts          # systemClock, fixedClock, advanceableClock
+│   │       ├── money.ts          # integer minor units
+│   │       ├── daily.ts          # day/week windows, half-open [start, end)
 │   │       └── utils/
 │   │
 │   ├── contracts/                # @destaworks/contracts — the API's single source of truth
@@ -229,8 +230,9 @@ ats-v2/
 │   │
 │   └── config/                   # @destaworks/config — env contracts + the Logger
 │       └── src/
-│           ├── env.ts            # zod-validated environment schema
-│           └── logger/           # Logger interface + node (Pino) and edge adapters
+│           ├── env.ts            # zod-validated environment schema (does not exist yet)
+│           └── logger/           # Logger interface, redaction, node (Pino) + edge adapters,
+│                                 #   and the AsyncLocalStorage request context
 │
 ├── tooling/
 │   ├── eslint/                   # flat config base + architecture rules
@@ -260,18 +262,40 @@ ats-v2/
 
 The mapping Phase 2 executes. Every row is a **move**, not a rewrite.
 
+**`src/lib` does not move as a unit.** It holds four different concerns today, and moving it
+wholesale would put React, Sonner, Better Auth and Sentry inside `domain`, breaking the
+zero-dependency rule the whole dependency graph rests on. It must be split:
+
+| Today, under `src/lib` | External deps | Lands in |
+|---|---|---|
+| `constants/`, `rules/`, `utils/` | none | `packages/domain` |
+| `clock.ts`, `money.ts`, `daily.ts`, `mentions.ts`, `pagination.ts` | none | `packages/domain` |
+| `validation/` | zod | `packages/contracts` |
+| `reports/filter-options.ts` | none | `packages/contracts` — a wire DTO, not domain vocabulary |
+| `logger/` | none | `packages/config` |
+| `api/client.ts` | none | `apps/web` — a browser fetch wrapper |
+| `forms/` | react, react-hook-form, sonner | `apps/web` |
+| `monitoring/` | @sentry/nextjs | `apps/web` |
+| `auth-client.ts` | better-auth/react | `apps/web` |
+| `use-tz-cookie-sync.ts` | react | `apps/web` |
+
+Everything else:
+
 | Today | Lands in |
 |---|---|
-| `src/lib/{constants,rules,utils}` | `packages/domain` |
-| `src/lib/validation` | `packages/contracts` |
 | `src/server/services` | `packages/application` |
 | `prisma/`, `src/generated`, `src/server/{db,repositories}` | `packages/db` |
 | `src/server/auth` | `packages/auth` |
 | `src/server/{ai,email,http}` | `packages/integrations` |
+| `src/server/logging` | `packages/config` — the Node adapter belongs with the interface |
 | `src/components/ui` | `packages/ui` |
 | `src/app`, remaining `src/components` | `apps/web` |
 | `src/app/api/**/route.ts` | `apps/api` — rewritten as controllers in **Phase 4**, not moved in Phase 2 |
-| `src/modules/` | deleted — empty, and `CONVENTIONS.md` already says so |
+| `src/modules/` | deleted — done in Phase 0 |
+
+**Phase 2.1 gate:** after extracting `packages/domain`, its `package.json` must declare **no runtime
+dependencies**, and CI must assert it. If anything above was misclassified, that assertion is where
+it surfaces — not months later.
 
 ---
 ## Engineering standards
@@ -613,8 +637,9 @@ new rule fails CI.
 
 Order is forced by the dependency graph. One PR each, suite green between.
 
-- [ ] **2.1 `@destaworks/domain`** — `lib/{constants,rules,validation,utils}`, plus the Clock and money modules from 0.6
-  - Assert zero runtime dependencies in `package.json`
+- [ ] **2.1 `@destaworks/domain`** — only the dependency-free half of `lib/`, per the mapping above
+  - **Do not move `lib/` as a unit** — `forms/`, `monitoring/`, `auth-client.ts` and `use-tz-cookie-sync.ts` carry React, Sonner, Better Auth and Sentry
+  - Assert **zero runtime dependencies** in `package.json`, enforced in CI
 - [ ] **2.2 `@destaworks/contracts`** — the per-route response types from 0.7 and the shared zod wire schemas, promoted to the single source of API shapes
   - Formalize the collection shape `{ items, nextCursor, hasMore }` as one exported type
   - Formalize the error envelope and the error-code union as exported types
