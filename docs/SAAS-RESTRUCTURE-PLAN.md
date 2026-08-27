@@ -549,82 +549,82 @@ boundary. Mutations audited. No PII in logs. Conventional commit message.
 rules enforced. Everything after this depends on it.
 
 ### 0.1 Decouple — invert the UI type dependency
-- [ ] Define the badge tone union in `lib/constants`; have `components/ui/badge.tsx` import it
-- [ ] Update `lib/constants/{audit,lead-status,prospect-status}.ts` to stop importing from `components/ui/badge`
+- [x] Define the badge tone union in `lib/constants`; have `components/ui/badge.tsx` import it
+- [x] Update `lib/constants/{audit,lead-status,prospect-status}.ts` to stop importing from `components/ui/badge`
 - **Done-when:** no file under `lib/` imports from `components/`
 
 ### 0.2 Decouple — framework caching out of repositories
-- [ ] Move React `cache()` out of `repositories/{client,client-rules,user}.repository.ts`
-- [ ] Re-introduce request-scoped caching in an RSC loader or `server/http` seam
+- [x] Move React `cache()` out of `repositories/{client,client-rules,user}.repository.ts`
+- [x] Re-introduce request-scoped caching in an RSC loader or `server/http` seam
 - **Done-when:** no repository imports from `react`
 
 ### 0.3 Decouple — framework request access out of guards
-- [ ] Introduce a request-context adapter that guards receive rather than reach for
-- [ ] Update `server/auth/{guards,portal-guards}.ts` and `server/services/admin-user.service.ts`
+- [x] Introduce a request-context adapter that guards receive rather than reach for
+- [x] Update `server/auth/{guards,portal-guards}.ts` and `server/services/admin-user.service.ts`
 - **Done-when:** no file under `server/` imports `next/headers`
 
 ### 0.4 Close the column-exposure defect
-- [ ] Replace `CandidateDTO = Omit<CandidateRow, "licenseNumber">` with an explicit field whitelist
-- [ ] Apply the same treatment to the other DTOs defined by omission
-- [ ] Add a test asserting an added column is **not** published without an explicit change
+- [x] Replace `CandidateDTO = Omit<CandidateRow, "licenseNumber">` with an explicit field whitelist
+- [x] Apply the same treatment to the other DTOs defined by omission
+- [x] Add a test asserting an added column is **not** published without an explicit change
 - **Done-when:** adding a column to `Candidate` does not change any API response
 
 ### 0.5 Close the service-layer bypass
-- [ ] Add service methods for the 14 RSC pages that call repositories directly
-- [ ] Point those pages at the services
+- [x] Add service methods for the 14 RSC pages that call repositories directly
+- [x] Point those pages at the services
 - **Done-when:** no file under `app/` imports from `server/repositories`
 
 ### 0.6 Domain primitives
-- [ ] `Clock` — export `systemClock`, `fixedClock(instant)`, `advanceableClock(start)`; inject rather than calling `new Date()` in business logic
-- [ ] Fold in the ad-hoc trailing `now: Date = new Date()` parameters added to the rules functions
-- [ ] Fix the defects this exposes: "today" resolving to host UTC rather than the user's zone; `utcDayStart` duplicated three times with two end-of-day semantics; license expiry off by one; weekly pacing double-counting the current day
-- [ ] Money — integer minor units with explicit currency and per-currency scale
-- [ ] Fix `crm-analytics.service.ts:181` — `(monthlyRate ?? 0) * (contractAgeDays / 30)` assumes 30-day months and goes negative on future-dated contracts
+- [x] `Clock` — export `systemClock`, `fixedClock(instant)`, `advanceableClock(start)`; inject rather than calling `new Date()` in business logic
+- [x] Fold in the ad-hoc trailing `now: Date = new Date()` parameters added to the rules functions
+- [x] Fix the defects this exposes: "today" resolving to host UTC rather than the user's zone; `utcDayStart` duplicated three times with two end-of-day semantics; license expiry off by one; weekly pacing double-counting the current day
+- [x] Money — integer minor units with explicit currency and per-currency scale
+- [x] Fix `crm-analytics.service.ts:181` — `(monthlyRate ?? 0) * (contractAgeDays / 30)` assumes 30-day months and goes negative on future-dated contracts
 - **Done-when:** business logic never reads the wall clock; money arithmetic cannot produce a float
 
 ### 0.7 Per-route response types
-- [ ] Every route handler exports its response type
-- [ ] The browser imports that type instead of asserting a shape
-- [ ] Remove the 82 unverified `getJson<T>` assertions
+- [x] Every route handler exports its response type
+- [x] The browser imports that type instead of asserting a shape
+- [x] Remove the 82 unverified `getJson<T>` assertions
 - **Done-when:** zero client call sites assert a response type the route does not declare
 
 ### 0.8 Make the rules real
-- [ ] Retarget `import/no-restricted-paths` at `src/app` and `src/components` — the configured zones currently point where violations are impossible
-- [ ] Add the Prisma zone: nothing outside `server/repositories` may import Prisma
-- [ ] Fix the 2 known violations (`brief.service.ts:361`, `daily.service.ts:290` — both `prisma.user.findUnique`)
-- [ ] Add commitlint with the Conventional Commits config that `CONVENTIONS.md` already mandates
-- [ ] Add husky + lint-staged for pre-commit format and lint
-- [ ] Add a CI check that the `pg_trgm` indexes still exist — they have been dropped three times
-- [ ] Delete the empty `src/modules/`
+- [x] Retarget `import/no-restricted-paths` at `src/app` and `src/components` — the configured zones currently point where violations are impossible
+- [x] Add the Prisma zone: nothing outside `server/repositories` may import Prisma
+- [x] Fix the 2 known violations (`brief.service.ts:361`, `daily.service.ts:290` — both `prisma.user.findUnique`)
+- [x] Add commitlint with the Conventional Commits config that `CONVENTIONS.md` already mandates
+- [x] Add husky + lint-staged for pre-commit format and lint
+- [x] Add a CI check that the `pg_trgm` indexes still exist — they have been dropped three times
+- [x] Delete the empty `src/modules/`
 - **Done-when:** each rule has a check, and each check has been proven to fail on a deliberate violation
 
 ### 0.9 Logging and observability
-- [ ] Add Pino; define the `Logger` interface in `@destaworks/config` with Node and edge adapters
-- [ ] Configure `redact` for PII/PHI paths — email, phone, licenseNumber, npi, name, dateOfBirth
-- [ ] `AsyncLocalStorage` context carrying `requestId`, `tenantId`, `userId`
-- [ ] Generate a `requestId` per request; put it on every log line and in the `ref` of any 500
-- [ ] Replace the 9 raw `console.*` calls in non-test code
-- [ ] Lint rule: `console.*` banned outside tests
-- [ ] CI check: no PII/PHI field names in log calls — names, emails, phones, license numbers, NPI
-- [ ] Route API errors to Sentry — they are currently not reaching it
-- [ ] Add connection-pool timeouts to the Prisma client
+- [x] Add Pino; define the `Logger` interface in `@destaworks/config` with Node and edge adapters
+- [x] Configure `redact` for PII/PHI paths — email, phone, licenseNumber, npi, name, dateOfBirth
+- [x] `AsyncLocalStorage` context carrying `requestId`, `tenantId`, `userId`
+- [x] Generate a `requestId` per request; put it on every log line and in the `ref` of any 500
+- [x] Replace the 9 raw `console.*` calls in non-test code
+- [x] Lint rule: `console.*` banned outside tests
+- [x] CI check: no PII/PHI field names in log calls — implemented as `no-pii-in-logs.test.ts`, which parses each `logger.*()` call's fields object, so it runs in `pnpm test` locally as well as in CI
+- [x] Route API errors to Sentry — tagged with the request's `requestId`, so a user's `ref` resolves to one event. Required scrubbing Prisma messages in `sentry-scrub` first: they embed field VALUES, which the scrubber had explicitly assumed error messages never do
+- [x] Add connection-pool timeouts to the Prisma client
 - **Done-when:** a thrown API error appears in Sentry with a `requestId` that matches the client's `ref`, and no log line contains PII
 
 ### 0.10 Type safety
 - [x] Enable `noUnusedLocals`, `noUnusedParameters` — `verbatimModuleSyntax` was already on
-- [ ] **`exactOptionalPropertyTypes` — folded into Phase 2.0.** It alone accounts for 243 of the
+- [x] **`exactOptionalPropertyTypes` — done in Phase 2.0.** It alone accounts for 243 of the
       245 errors the four flags produce, across 80 files, and the majority of those files are moved
       by the package extraction anyway. Enabling it now means editing them twice and putting a
       wide, shallow diff in front of reviewers at the same time as the moves
-- [ ] Fix the fallout
-- [ ] Lint rule: no `any` in application code; no non-null assertion used to silence a nullable
-- [ ] Lint rule: `eslint-disable` requires a reason comment
+- [x] Fix the fallout
+- [x] Lint rule: no `any` in application code; no non-null assertion used to silence a nullable — 82 assertions removed by narrowing, not by moving the assertion. Scoped past test files: under `noUncheckedIndexedAccess` a `rows[0]!` on a fixture the test just built asserts something visible three lines above
+- [x] Lint rule: `eslint-disable` requires a reason comment
 - **Done-when:** the stricter flags are on and CI is green
 
 ### 0.11 First DRY sweep
-- [ ] Collapse the three `utcDayStart` implementations into the `Clock` module (0.6)
-- [ ] Replace the 14 hand-rolled `id → name` maps with the shared helper
-- [ ] Confirm no second implementation exists of anything in the DRY table above
+- [x] Collapse the three `utcDayStart` implementations into the `Clock` module (0.6)
+- [x] Replace the 14 hand-rolled `id → name` maps with the shared helper *(the remaining `new Map(xs.map(...))` sites are id→count / id→row derivations, or derive a name map from a list the caller already needed for other output — swapping those to the shared helper would add a fetch, not remove one)*
+- [x] Confirm no second implementation exists of anything in the DRY table above
 - **Done-when:** each concern in the DRY table resolves to exactly one implementation
 
 **Phase 0 done-when:** all of the above green, full suite passing, and a deliberate violation of each
@@ -636,12 +636,12 @@ new rule fails CI.
 
 **Goal:** the workspace exists and the tooling is shared, with no application code moved yet.
 
-- [ ] Add `packages:` to `pnpm-workspace.yaml` — the file exists but declares no packages, so this is additive
-- [ ] Add Turborepo; define the task graph: `build → ^build`, `lint`/`typecheck → ["^topo", "^build"]`, cached outputs
-- [ ] Adopt pnpm `catalog:` so React, Zod and TypeScript have one version across the workspace
-- [ ] Extract `tooling/eslint`, `tooling/prettier`, `tooling/typescript`, `tooling/vitest` as real workspace packages
-- [ ] Each package declares its tooling as a dependency rather than inheriting from the root
-- [ ] Add a workspace dependency-version drift check
+- [x] Add `packages:` to `pnpm-workspace.yaml` — the file exists but declares no packages, so this is additive
+- [x] Add Turborepo; define the task graph: `build → ^build`, `lint`/`typecheck → ["^topo", "^build"]`, cached outputs
+- [x] Adopt pnpm `catalog:` so React, Zod and TypeScript have one version across the workspace
+- [x] Extract `tooling/eslint`, `tooling/prettier`, `tooling/typescript`, `tooling/vitest` as real workspace packages
+- [x] Each package declares its tooling as a dependency rather than inheriting from the root
+- [x] Add a workspace dependency-version drift check
 - **Done-when:** `pnpm build`, `lint`, `typecheck` and `test` all run through Turborepo; a second run is cache-hit; the application still builds unchanged
 
 ---
@@ -654,10 +654,9 @@ new rule fails CI.
 
 Deferred here from 0.10. It must land **before** the moves, not during: a move PR is a pure
 relocation with zero content edits, and mixing type fixes into one destroys the property that makes
-an 800-file move reviewable.
 
-- [ ] Enable the flag and fix the fallout — 80 files, 243 errors at the time of measuring
-- [ ] The flag makes `{ foo: undefined }` and `{}` different types. That distinction is real: it
+- [x] Enable the flag and fix the fallout — 80 files, 243 errors at the time of measuring
+- [x] The flag makes `{ foo: undefined }` and `{}` different types. That distinction is real: it
       changes `Object.keys`, spread behaviour, and whether Prisma reads a field as "leave alone"
       versus "set it". Fix by omitting the key (`...(x !== undefined && { x })`), not by widening
       the target to accept `undefined` — widening throws away exactly what the flag buys
@@ -665,24 +664,32 @@ an 800-file move reviewable.
 
 Order is forced by the dependency graph. One PR each, suite green between.
 
-- [ ] **2.1 `@destaworks/domain`** — only the dependency-free half of `lib/`, per the mapping above
+- [x] **2.1 `@destaworks/domain`** — only the dependency-free half of `lib/`, per the mapping above
   - **Do not move `lib/` as a unit** — `forms/`, `monitoring/`, `auth-client.ts` and `use-tz-cookie-sync.ts` carry React, Sonner, Better Auth and Sentry
   - Assert **zero runtime dependencies** in `package.json`, enforced in CI
-- [ ] **2.2 `@destaworks/contracts`** — the per-route response types from 0.7 and the shared zod wire schemas, promoted to the single source of API shapes
+- [x] **2.2 `@destaworks/contracts`** — the per-route response types from 0.7 and the shared zod wire schemas, promoted to the single source of API shapes
   - Formalize the collection shape `{ items, nextCursor, hasMore }` as one exported type
   - Formalize the error envelope and the error-code union as exported types
   - CI check: no endpoint type is defined by omission from a database model
-- [ ] **2.3 `@destaworks/db`** — `prisma/`, `src/generated`, `server/{db,repositories}`
+- [x] **2.3 `@destaworks/db`** — `prisma/`, `src/generated`, `server/{db,repositories}`
   - This is the security boundary. Nothing outside it may import Prisma
-- [ ] **2.4 `@destaworks/auth`** — `server/auth`, including the request-context adapter from 0.3
-- [ ] **2.5 `@destaworks/integrations`** — `server/{ai,email,http}` and external adapters
-- [ ] **2.6 `@destaworks/application`** — `server/services`, the 171 methods, moved as-is
+- [x] **2.4 `@destaworks/auth`** — `server/auth`, including the request-context adapter from 0.3
+- [x] **2.5 `@destaworks/integrations`** — `server/{ai,email,http}` and external adapters
+- [x] **2.6 `@destaworks/application`** — `server/services`, the 171 methods, moved as-is
   - Framework-free by construction; it will be consumed by both `apps/api` and `@destaworks/jobs`
   - Assert in CI that it imports neither NestJS nor Next.js
-- [ ] **2.7 `@destaworks/ui`** — `components/ui`
-- [ ] **2.8 `@destaworks/config`** — environment contracts and shared configuration
-- [ ] **2.9 `apps/web`** — everything remaining
-- [ ] **2.10 Cleanup** — retire the transitional `@/*` aliases; imports name packages
+- [x] **2.7 `@destaworks/ui`** — `components/ui`
+- [x] **2.8 `@destaworks/config`** — environment contracts and shared configuration
+- [x] **2.9 `apps/web`** — everything remaining
+- [x] **2.10 Cleanup** — retire the transitional `@/*` aliases; imports name packages. 2,687
+      specifiers rewritten; `paths` went 26 → 1 (`apps/web`'s own `@/*`). Retiring the aliases
+      surfaced three misfiled modules the mapping had missed, each fixed by a move rather than an
+      exception: the pure report math (`csv`/`metrics`/`stage-progress`) sat in `apps/web` while
+      `packages/application` imported it — a package→app back-edge; `request-context.ts` sat in
+      `auth` with zero auth logic, creating an `auth ↔ integrations` cycle that **turbo refuses to
+      build**; and the wire envelope types (`FieldIssue`, `ApiFailure`) sat in the browser fetch
+      wrapper while the server's `apiHandler` imported them back. None were visible while the
+      aliases papered over them.
 
 **Done-when:** every package builds independently; `apps/web` behaves identically; the diff of each
 move PR contains no logic changes.
