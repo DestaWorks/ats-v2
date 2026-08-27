@@ -1005,26 +1005,44 @@ deploy: `deploy/staging-YYYY-MM-DD`. Without this there is no answer to "roll ba
 The restructure changes the shape of the tree, so switching branches in a single checkout means
 repeated dependency reinstalls and a `node_modules` that does not match the branch. Use worktrees:
 
-```bash
-# main stays checked out where it is — the deployed truth, ready for hotfixes
-git worktree add ../desta-ats-restructure restructure
-git worktree add ../desta-ats-wt/p2-domain -b refactor/p2-pkg-domain restructure
-```
+The primary checkout stays on `restructure`, because that is where the work happens for the duration.
+`main` gets its own worktree so a hotfix never requires stashing restructure work in progress.
 
 ```text
 ~/Documents/biruh/
-├── desta-ats/                    main — deployed truth, hotfixes
-├── desta-ats-restructure/        restructure — integration, continuously deployed
+├── desta-ats/                    restructure — primary; all phase work
+├── desta-ats-main/               main — deployed truth; hotfixes only
 └── desta-ats-wt/
     ├── p2-domain/                one task, one worktree
     └── p4-api-candidates/
 ```
 
-Two practical notes: each worktree needs its own `pnpm install`, because the workspace layout differs
-per branch during Phases 1–2. And `.env*` files are gitignored, so they are **not** copied into a new
-worktree — symlink them deliberately, and never copy a production value into a scratch tree.
+```bash
+# already created
+git worktree add ../desta-ats-main main
 
-Remove a worktree when its PR merges: `git worktree remove ../desta-ats-wt/p2-domain`.
+# per task, branched from restructure
+git worktree add ../desta-ats-wt/p2-domain -b refactor/p2-pkg-domain restructure
+
+# when its PR merges
+git worktree remove ../desta-ats-wt/p2-domain
+```
+
+**Environment files do not follow a worktree.** `.env*` is gitignored, so a new worktree starts with
+none. This is a safety feature, not an inconvenience — link deliberately, per worktree:
+
+| Worktree | Gets | Never gets |
+|---|---|---|
+| `desta-ats/` (restructure) | `.env.local` → local Postgres | Production values |
+| `desta-ats-main/` (hotfix) | `.env` → staging Supabase | `.env.local`, which would silently redirect it to a local database |
+| `desta-ats-wt/*` (task) | `.env.local` → local Postgres | Anything pointing at shared infrastructure |
+
+The trap worth naming: **Next.js loads `.env.local` in preference to `.env`.** A worktree that
+inherits a stray `.env.local` runs against the wrong database while appearing to work perfectly.
+
+**Each worktree needs its own `pnpm install`** — roughly 1.5 GB of `node_modules` each, and the
+workspace layout differs per branch during Phases 1–2, so they cannot be shared. Install lazily: a
+hotfix worktree does not need dependencies until there is a hotfix.
 
 ### Environments — a prerequisite for Phase 6
 
