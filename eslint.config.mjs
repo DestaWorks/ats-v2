@@ -41,11 +41,23 @@ const eslintConfig = [
     },
   },
 
+  // --- Structured logging (Phase 0.9) ---
+  // `console.*` is unstructured and unredacted — the one way PII/PHI reaches a log line in an app
+  // bound by HIPAA + Proclamation 1321/2024. Use `logger` from `@/lib/logger` instead.
+  {
+    rules: { "no-console": "error" },
+  },
+  {
+    files: ["**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx", "scripts/**"],
+    rules: { "no-console": "off" },
+  },
+
   {
     ignores: [
       "**/.next/**",
       "**/node_modules/**",
       ".claude/**",
+      "internal-docs/**",
       "next-env.d.ts",
       "index.html",
       "src/generated/**",

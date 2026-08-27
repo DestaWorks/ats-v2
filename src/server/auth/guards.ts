@@ -4,6 +4,7 @@ import { auth } from "./auth";
 import { requestContext } from "./request-context";
 import { AppError } from "@/server/http/app-error";
 import { hasCapability, isRole, type Capability, type Role } from "@/lib/constants";
+import { setLogContext } from "@/server/logging/request-context";
 
 /** The authenticated user as the app cares about it (role is a validated `Role`). */
 export interface AuthUser {
@@ -31,6 +32,7 @@ export const getCurrentUser = cache(async (): Promise<AuthUser | null> => {
   if (!session) return null;
   const rawRole = (session.user as { role?: string }).role ?? "Associate";
   const role: Role = isRole(rawRole) ? rawRole : "Associate";
+  setLogContext({ userId: session.user.id });
   return {
     id: session.user.id,
     email: session.user.email,

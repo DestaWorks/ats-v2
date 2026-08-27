@@ -1,6 +1,7 @@
 import "server-only";
 import type { Prisma } from "@/generated/prisma/client";
 import { db } from "@/server/db/prisma";
+import { logger } from "@/lib/logger";
 
 const SINGLETON_ID = "singleton";
 const CACHE_TTL_MS = 5000;
@@ -18,7 +19,9 @@ export const aiSettingsRepository = {
       const row = await db(tx).aiSettings.findUnique({ where: { id: SINGLETON_ID } });
       return { disabled: row?.disabled ?? false, disabledReason: row?.disabledReason ?? null };
     } catch (err) {
-      console.error("Failed to read AI settings:", err instanceof Error ? err.message : err);
+      logger.error("ai.settings.read_failed", {
+        errorType: err instanceof Error ? err.name : "UnknownError",
+      });
       return { disabled: false, disabledReason: null };
     }
   },

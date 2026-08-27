@@ -63,6 +63,22 @@ describe("apiHandler — centralized error mapping", () => {
     errSpy.mockRestore();
   });
 
+  it("logs the 500 with the SAME requestId it returns to the client as `ref`", async () => {
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const handler = apiHandler(async () => {
+      throw new Error("secret leak");
+    });
+    const res = await handler(req(), undefined);
+    const body = (await res.json()) as { error: { ref?: string } };
+    const line = JSON.parse(String(errSpy.mock.calls[0]?.[0])) as Record<string, unknown>;
+    expect(line.msg).toBe("api.request.failed");
+    expect(line.requestId).toBe(body.error.ref);
+    expect(line.route).toBe("/api/test");
+    expect(line.status).toBe(500);
+    expect(typeof line.durationMs).toBe("number");
+    errSpy.mockRestore();
+  });
+
   it("returns the data + status on success", async () => {
     const handler = apiHandler(async () => json({ hello: "world" }, 201));
     const res = await handler(req(), undefined);

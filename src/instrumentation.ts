@@ -15,6 +15,8 @@ import { scrubBreadcrumb, scrubEvent } from "@/lib/monitoring/sentry-scrub";
 export async function register(): Promise<void> {
   if (process.env.NEXT_RUNTIME === "nodejs") {
     await import("@/app/request-context");
+    const { installNodeLogger } = await import("@/server/logging/install");
+    installNodeLogger();
   }
 
   const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN;

@@ -75,6 +75,9 @@ const SECURITY_HEADERS = [
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  // Pino (and its dev-only pretty transport) load worker threads / native-ish modules at runtime;
+  // bundling them breaks `pino.transport()`. Leave them to Node's own resolver.
+  serverExternalPackages: ["pino", "pino-pretty"],
   poweredByHeader: false, // L6 — don't fingerprint the stack via X-Powered-By
   // Legacy `index.html` lives at the repo root for reference during the migration;
   // it is not part of the Next.js build (App Router serves from `src/app`).

@@ -11,6 +11,7 @@ import type {
 } from "@/lib/validation/migration";
 import { MAX_IMPORT_RESUMES } from "@/lib/validation/migration";
 import { messageForFailure, postJson } from "@/lib/api/client";
+import { logger } from "@/lib/logger";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ErrorState } from "@/components/ui/error-state";
@@ -386,7 +387,7 @@ export function MigrationWizard({ storageEnabled }: { storageEnabled: boolean })
       }),
     );
     if (failures.length > 0) {
-      console.error("Resume Storage upload failures:", failures);
+      logger.error("migration.resume_upload.failed", { failureCount: failures.length });
       toast.warning(`${failures.length} resume file(s) couldn't be stored — attaching text only.`, {
         description: failures.join(" · "),
       });

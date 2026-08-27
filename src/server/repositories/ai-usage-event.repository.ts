@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@/server/db/prisma";
+import { logger } from "@/lib/logger";
 
 export interface AiUsageEventInput {
   operation: string;
@@ -26,7 +27,9 @@ export const aiUsageEventRepository = {
     try {
       await prisma.aiUsageEvent.create({ data });
     } catch (err) {
-      console.error("Failed to record AI usage event:", err instanceof Error ? err.message : err);
+      logger.error("ai.usage_event.record_failed", {
+        errorType: err instanceof Error ? err.name : "UnknownError",
+      });
     }
   },
 

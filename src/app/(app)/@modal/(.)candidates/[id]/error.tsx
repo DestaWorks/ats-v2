@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { ErrorState } from "@/components/ui/error-state";
+import { logger } from "@/lib/logger";
 
 /**
  * Error boundary for the intercepted candidate-detail modal — sibling to `loading.tsx`. Without
@@ -24,7 +25,10 @@ export default function InterceptedDetailError({
   const router = useRouter();
 
   useEffect(() => {
-    console.error("Candidate detail modal failed to load:", error);
+    logger.error("candidate_detail_modal.load_failed", {
+      errorType: error.name,
+      digest: error.digest,
+    });
   }, [error]);
 
   return (

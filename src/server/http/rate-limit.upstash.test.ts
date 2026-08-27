@@ -53,9 +53,13 @@ describe("checkRateLimit (Upstash-backed)", () => {
 
   it("fails open when the Upstash call itself errors", async () => {
     limitMock.mockRejectedValue(new Error("network error"));
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     await expect(checkRateLimit("k", { limit: 20, windowMs: 60_000 })).resolves.not.toThrow();
-    expect(errorSpy).toHaveBeenCalled();
-    errorSpy.mockRestore();
+    expect(warnSpy).toHaveBeenCalled();
+    const line = JSON.parse(String(warnSpy.mock.calls[0]?.[0])) as Record<string, unknown>;
+    expect(line.level).toBe("warn");
+    expect(line.msg).toBe("rate_limit.upstash.unavailable");
+    expect(line.outcome).toBe("fail-open");
+    warnSpy.mockRestore();
   });
 });

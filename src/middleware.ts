@@ -1,11 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getSessionCookie } from "better-auth/cookies";
+import { logger } from "@/lib/logger";
 
 /** Fast, DB-free redirect when there's no session cookie at all. Not authoritative —
  *  `layout.tsx`'s `getCurrentUser()` still does the real check on every request that gets past this. */
 export function middleware(request: NextRequest) {
   const sessionCookie = getSessionCookie(request);
   if (!sessionCookie) {
+    logger.debug("middleware.redirect.no_session", { route: request.nextUrl.pathname });
     return NextResponse.redirect(new URL("/sign-in", request.url));
   }
   return NextResponse.next();

@@ -2,6 +2,7 @@ import "server-only";
 import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
 import { AppError } from "./app-error";
+import { logger } from "@/lib/logger";
 
 // Upstash-backed when UPSTASH_REDIS_REST_URL/TOKEN are set; falls back to in-memory otherwise.
 export interface RateLimitOptions {
@@ -14,10 +15,7 @@ export const rateLimitEnabled: boolean = Boolean(
 );
 
 if (!rateLimitEnabled && process.env.NODE_ENV === "production") {
-  console.error(
-    "checkRateLimit: UPSTASH_REDIS_REST_URL/TOKEN not set in production — falling back to the " +
-      "per-instance in-memory limiter (no cross-instance protection).",
-  );
+  logger.error("rate_limit.upstash.not_configured", { fallback: "in-memory" });
 }
 
 let redis: Redis | null = null;
@@ -75,7 +73,7 @@ export async function checkRateLimit(key: string, opts: RateLimitOptions): Promi
   } catch (err) {
     // Fail OPEN: a Redis outage/misconfig should degrade rate limiting, not break the request.
     const name = err instanceof Error ? err.name : "UnknownError";
-    console.error(`checkRateLimit: Upstash request failed (${name}) — allowing request through`);
+    logger.warn("rate_limit.upstash.unavailable", { errorType: name, outcome: "fail-open" });
     return;
   }
   if (!success) {
