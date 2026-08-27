@@ -38,6 +38,14 @@ production-grade system.
     month-by-month, roles, conditions, and the honest risk/safety-valve. The committed schedule.
 14. **[IMPLEMENTATION-PLAN.md](./IMPLEMENTATION-PLAN.md)** — **the executable build guide**: every
     wave/module broken into schema→repo→service→API→client→tests tasks + a "done-when" for each.
+15. **[ARCHITECTURE-PROPOSAL.md](./ARCHITECTURE-PROPOSAL.md)** — **the architecture decision**:
+    multi-tenant SaaS built on a monorepo, with the current state, the options weighed, and the
+    reasoning. **[SAAS-RESTRUCTURE-PLAN.md](./SAAS-RESTRUCTURE-PLAN.md)** — **the executable plan**:
+    engineering standards, target structure, and 10 phases from hardening through to a sellable
+    product.
+16. **[MIGRATION-GAP-ANALYSIS.md](./MIGRATION-GAP-ANALYSIS.md)** — legacy Sheet → Postgres, one
+    migrate/derive/drop decision per tab plus what must be restructured before any import.
+
 _Superseded plans are archived in **[archive/](./archive/)** (`PLAN.md`, `MIGRATION-PLAN.md`) —
 kept for history only. The live plan is DECISIONS + IMPLEMENTATION-PLAN + ESTIMATE._
 

@@ -59,6 +59,9 @@ The **live build docs** are `docs/DECISIONS.md` (authoritative decisions), `docs
 | `docs/ESTIMATE.md` | **LIVE — LOCKED 3-month plan: 7 waves, per-module hours, month-by-month, conditions** |
 | `docs/IMPLEMENTATION-PLAN.md` | **LIVE — executable build guide: per-module tasks (schema→API→client→tests) + done-when** |
 | `docs/MIGRATION-CHEATSHEET.md` | **End-user: which app (old/new) to use for which task, month by month, during the rebuild** |
+| `docs/ARCHITECTURE-PROPOSAL.md` | **The architecture decision: multi-tenant SaaS on a monorepo, with the reasoning and trade-offs** |
+| `docs/SAAS-RESTRUCTURE-PLAN.md` | **LIVE — the executable restructure + multi-tenancy plan: 10 phases, standards, target structure** |
+| `docs/MIGRATION-GAP-ANALYSIS.md` | Legacy Sheet → Postgres: migrate/derive/drop per tab + restructuring blockers |
 | `docs/archive/` | _Superseded_ (kept for history) — early `PLAN.md` + `MIGRATION-PLAN.md`; the live plan is DECISIONS + IMPLEMENTATION-PLAN + ESTIMATE |
 
 ## Ground rules for contributors
