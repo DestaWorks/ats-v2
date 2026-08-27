@@ -611,7 +611,11 @@ rules enforced. Everything after this depends on it.
 - **Done-when:** a thrown API error appears in Sentry with a `requestId` that matches the client's `ref`, and no log line contains PII
 
 ### 0.10 Type safety
-- [ ] Enable `noUnusedLocals`, `noUnusedParameters`, `exactOptionalPropertyTypes`, `verbatimModuleSyntax`
+- [x] Enable `noUnusedLocals`, `noUnusedParameters` — `verbatimModuleSyntax` was already on
+- [ ] **`exactOptionalPropertyTypes` — folded into Phase 2.0.** It alone accounts for 243 of the
+      245 errors the four flags produce, across 80 files, and the majority of those files are moved
+      by the package extraction anyway. Enabling it now means editing them twice and putting a
+      wide, shallow diff in front of reviewers at the same time as the moves
 - [ ] Fix the fallout
 - [ ] Lint rule: no `any` in application code; no non-null assertion used to silence a nullable
 - [ ] Lint rule: `eslint-disable` requires a reason comment
@@ -645,6 +649,19 @@ new rule fails CI.
 ## Phase 2 — Package extraction
 
 **Goal:** the source tree becomes packages. **Pure moves only.**
+
+### 2.0 `exactOptionalPropertyTypes` — before any file moves
+
+Deferred here from 0.10. It must land **before** the moves, not during: a move PR is a pure
+relocation with zero content edits, and mixing type fixes into one destroys the property that makes
+an 800-file move reviewable.
+
+- [ ] Enable the flag and fix the fallout — 80 files, 243 errors at the time of measuring
+- [ ] The flag makes `{ foo: undefined }` and `{}` different types. That distinction is real: it
+      changes `Object.keys`, spread behaviour, and whether Prisma reads a field as "leave alone"
+      versus "set it". Fix by omitting the key (`...(x !== undefined && { x })`), not by widening
+      the target to accept `undefined` — widening throws away exactly what the flag buys
+- **Done-when:** all four 0.10 flags are on and CI is green
 
 Order is forced by the dependency graph. One PR each, suite green between.
 
