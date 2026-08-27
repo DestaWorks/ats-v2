@@ -1,0 +1,1088 @@
+# SaaS Restructure — Implementation Plan
+
+The executable build guide for the decision recorded in
+[`ARCHITECTURE-PROPOSAL.md`](./ARCHITECTURE-PROPOSAL.md): **restructure into a monorepo first, then
+build multi-tenancy inside it.**
+
+Read with [`STACK-ARCHITECTURE.md`](./STACK-ARCHITECTURE.md) (current layers),
+[`DATA-MODEL.md`](./DATA-MODEL.md) (entities) and
+[`MIGRATION-GAP-ANALYSIS.md`](./MIGRATION-GAP-ANALYSIS.md) (legacy data).
+
+Phases are ordered by dependency, not by calendar. Each phase states its goal, its tasks, and a
+**done-when** that must be true before the next phase starts.
+
+---
+
+## How we build
+
+1. **One package per pull request.** Never two.
+2. **Moves are pure moves.** A relocation PR changes zero lines of logic. If a file needs editing,
+   that is a separate PR before or after the move — never inside it.
+3. **Aliases keep working throughout.** `@/*` paths resolve to the new locations until the final
+   cleanup, so no PR breaks the rest of the tree.
+4. **The suite is green between every PR.** 1,410 tests today; the number only goes up.
+5. **A rule without an automated check is not a rule.** Every architectural constraint in this plan
+   ships with the check that enforces it, in the same PR.
+
+---
+
+## Scope
+
+**In scope:** hardening, monorepo restructure, CI/CD and architecture enforcement, the NestJS API,
+job runner, multi-tenancy, legacy data migration, platform-admin console, billing and onboarding.
+
+**Held — not in this plan:**
+
+| Held | Why | Revisit when |
+|---|---|---|
+| **Flutter / Dart / mobile** | No mobile application exists or is scoped | A mobile client is committed to |
+| **Dedicated observability package** | Fix error reporting in place first (Phase 0) | After multi-tenancy is live |
+
+---
+
+## Platform standard
+
+| Area | Standard |
+|---|---|
+| Monorepo | pnpm workspaces + Turborepo |
+| Language | TypeScript everywhere; SQL for PostgreSQL; YAML/Dockerfile for infrastructure |
+| Frontend | Next.js + React + TypeScript + Tailwind + shared UI package |
+| Backend | NestJS + TypeScript; controllers → application → domain → repositories; contract-first typed REST |
+| Database | PostgreSQL + Prisma; repository pattern; Row-Level Security |
+| Validation | Zod at every boundary |
+| Testing | Vitest; Playwright for critical end-to-end flows |
+| CI/CD | GitHub Actions; affected builds and tests; architecture checks |
+
+A new general-purpose language requires a documented architectural reason and must be isolated to a
+specialised workload. No package may introduce one for preference.
+
+### Package naming
+
+Internal packages use the `@destaworks/` scope, matching the GitHub organisation (`DestaWorks/ats-v2`). These are private workspace packages and are never published, so the scope is a naming convention rather than a registration.
+
+```
+@destaworks/domain   @destaworks/contracts   @destaworks/application   @destaworks/db
+@destaworks/auth     @destaworks/integrations   @destaworks/jobs   @destaworks/ui   @destaworks/config
+@destaworks/web      @destaworks/admin          @destaworks/api
+```
+
+Generic names — `utils`, `common`, `misc`, `helpers`, `shared` — are prohibited. One package, one
+responsibility.
+
+### The dependency law
+
+```mermaid
+flowchart TD
+    subgraph apps["apps/"]
+        WEB["web<br/>Next.js"]
+        ADMIN["admin<br/>Next.js"]
+        API["api<br/>NestJS"]
+    end
+
+    subgraph pkgs["packages/"]
+        UI["ui"]
+        CONTRACTS["contracts"]
+        APPLICATION["application"]
+        AUTH["auth"]
+        JOBS["jobs"]
+        INTEGRATIONS["integrations"]
+        DB["db<br/>only Prisma importer"]
+        DOMAIN["domain<br/>zero dependencies"]
+    end
+
+    PG[("PostgreSQL")]
+
+    WEB -->|HTTP| API
+    ADMIN -->|HTTP| API
+    WEB --> UI
+    ADMIN --> UI
+    WEB --> CONTRACTS
+    ADMIN --> CONTRACTS
+    API --> CONTRACTS
+    API --> APPLICATION
+    API --> AUTH
+    JOBS --> APPLICATION
+    APPLICATION --> DB
+    APPLICATION --> INTEGRATIONS
+    AUTH --> DB
+    DB --> PG
+    UI --> DOMAIN
+    CONTRACTS --> DOMAIN
+    APPLICATION --> DOMAIN
+    DB --> DOMAIN
+    AUTH --> DOMAIN
+
+    classDef boundary fill:#fdf2e9,stroke:#d97757,stroke-width:2px
+    classDef pure fill:#eef6ee,stroke:#4a7c4a,stroke-width:2px
+    class DB boundary
+    class DOMAIN pure
+```
+
+Read top-down: everything may depend on `domain`; nothing may depend on an app. `db` is the only
+package that reaches PostgreSQL, and the only one permitted to import Prisma.
+
+`apps/api` is the only application that exposes the backend HTTP API. NestJS controllers and guards
+handle transport and authentication; **business rules live in `application` and `domain`, never in
+controllers.**
+
+Forbidden, and each one gets a CI check in Phase 3:
+
+```
+web    ──X──> db          admin  ──X──> db
+web    ──X──> Prisma      admin  ──X──> Prisma
+domain ──X──> Prisma      domain ──X──> Next.js
+domain ──X──> NestJS      domain ──X──> PostgreSQL
+domain ──X──> Redis       domain ──X──> any UI package
+application ──X──> NestJS  application ──X──> Prisma implementations
+packages ──X──> apps      any circular dependency
+```
+
+`packages/domain` is pure TypeScript with **zero runtime dependencies**. `packages/db` is the only
+package permitted to import Prisma.
+
+---
+
+### Target structure
+
+```text
+ats-v2/
+├── apps/
+│   ├── web/                      # @destaworks/web — Next.js operator application
+│   │   ├── src/
+│   │   │   ├── app/              # App Router — routes, layouts, pages
+│   │   │   │   ├── (app)/        # authenticated shell; feature UI co-located per route
+│   │   │   │   ├── (auth)/       # sign-in, reset, request-access
+│   │   │   │   └── portal/       # client portal (external audience)
+│   │   │   ├── components/       # app-specific components (shared ones live in ui)
+│   │   │   ├── hooks/
+│   │   │   └── middleware.ts     # edge runtime — see the logging note
+│   │   └── package.json
+│   │
+│   ├── admin/                    # @destaworks/admin — platform-admin console (Phase 8)
+│   │   └── src/app/              # tenants, health, impersonation, platform metrics
+│   │
+│   └── api/                      # @destaworks/api — NestJS backend (Phase 4)
+│       └── src/
+│           ├── main.ts
+│           ├── app.module.ts
+│           ├── common/           # filters, guards, interceptors, pipes
+│           │   ├── filters/      # exception filter — the error envelope
+│           │   ├── guards/       # capability guard, tenant guard
+│           │   ├── interceptors/ # request-id, logging, audit
+│           │   └── pipes/        # zod validation bound to contracts
+│           └── modules/          # one module per domain area, thin controllers
+│               ├── candidates/
+│               │   ├── candidates.controller.ts
+│               │   └── candidates.module.ts
+│               ├── clients/
+│               ├── leads/
+│               ├── reports/
+│               └── tenants/
+│
+├── packages/
+│   ├── domain/                   # @destaworks/domain — ZERO runtime dependencies
+│   │   └── src/
+│   │       ├── constants/        # statuses, roles, capabilities, vocabularies
+│   │       ├── rules/            # scoring, stage gates, license rules
+│   │       ├── time/             # Clock — systemClock, fixedClock, advanceableClock
+│   │       ├── money/            # integer minor units
+│   │       └── utils/
+│   │
+│   ├── contracts/                # @destaworks/contracts — the API's single source of truth
+│   │   └── src/
+│   │       ├── candidates/       # request + response schemas per endpoint
+│   │       ├── clients/
+│   │       ├── common/           # Paginated<T>, ErrorEnvelope, ErrorCode union
+│   │       └── index.ts
+│   │
+│   ├── application/              # @destaworks/application — services; framework-free
+│   │   └── src/
+│   │       ├── candidates/
+│   │       ├── clients/
+│   │       ├── reports/
+│   │       └── tenants/
+│   │
+│   ├── db/                       # @destaworks/db — THE ONLY package that imports Prisma
+│   │   ├── prisma/
+│   │   │   ├── schema.prisma
+│   │   │   └── migrations/
+│   │   └── src/
+│   │       ├── client.ts         # db(ctx, tx) — the tenant-scoping seam
+│   │       ├── generated/        # ~80k lines, walled off from every browser bundle
+│   │       └── repositories/     # 35 files, 243 methods
+│   │
+│   ├── auth/                     # @destaworks/auth — sessions, guards, capabilities
+│   │   └── src/
+│   │       ├── capabilities.ts   # hasCapability — never a role-name check
+│   │       ├── guards.ts
+│   │       ├── tenant-context.ts # TenantContext resolution (Phase 6)
+│   │       └── request-context.ts# framework-free adapter (Phase 0.3)
+│   │
+│   ├── integrations/             # @destaworks/integrations — external adapters
+│   │   └── src/{ai,email,storage,http}/
+│   │
+│   ├── jobs/                     # @destaworks/jobs — queues, workers, schedules (Phase 5)
+│   │   └── src/{queues,workers,schedules}/
+│   │
+│   ├── ui/                       # @destaworks/ui — shared React primitives
+│   │   └── src/components/
+│   │
+│   └── config/                   # @destaworks/config — env contracts + the Logger
+│       └── src/
+│           ├── env.ts            # zod-validated environment schema
+│           └── logger/           # Logger interface + node (Pino) and edge adapters
+│
+├── tooling/
+│   ├── eslint/                   # flat config base + architecture rules
+│   ├── prettier/
+│   ├── typescript/               # tsconfig bases
+│   ├── vitest/
+│   └── generators/               # scaffold a package or feature consistently
+│
+├── infrastructure/
+│   ├── docker/                   # api and worker images, local compose
+│   └── environments/             # per-environment configuration
+│
+├── scripts/
+│   └── migrate/                  # legacy Sheet ETL (Phase 7)
+│
+├── docs/
+├── .github/workflows/            # CI: PR validation, affected builds, deploys
+├── package.json
+├── pnpm-workspace.yaml
+└── turbo.json
+```
+
+**Not present, deliberately:** no `apps/mobile` — no mobile application is scoped. No `packages/utils`,
+`common`, `shared` or `helpers` — prohibited by the naming rules above.
+
+### Where today's code goes
+
+The mapping Phase 2 executes. Every row is a **move**, not a rewrite.
+
+| Today | Lands in |
+|---|---|
+| `src/lib/{constants,rules,utils}` | `packages/domain` |
+| `src/lib/validation` | `packages/contracts` |
+| `src/server/services` | `packages/application` |
+| `prisma/`, `src/generated`, `src/server/{db,repositories}` | `packages/db` |
+| `src/server/auth` | `packages/auth` |
+| `src/server/{ai,email,http}` | `packages/integrations` |
+| `src/components/ui` | `packages/ui` |
+| `src/app`, remaining `src/components` | `apps/web` |
+| `src/app/api/**/route.ts` | `apps/api` — rewritten as controllers in **Phase 4**, not moved in Phase 2 |
+| `src/modules/` | deleted — empty, and `CONVENTIONS.md` already says so |
+
+---
+## Engineering standards
+
+These are the conventions every phase is built to. Each one names the **single place** it lives and
+the **check** that enforces it — a standard without a check is a suggestion.
+
+### API contracts
+
+`@destaworks/contracts` is the single source of every request and response shape. Handlers import from it;
+clients import from it. Nothing infers a shape from an implementation detail.
+
+**Requests.** Zod schema per endpoint, `.strict()` so unknown keys are rejected rather than ignored
+(84 schemas already do this). Validation happens once, at the boundary — never re-validated in a
+service, never trusted from the client.
+
+**Responses.** Resources are returned bare; there is no `{ data: ... }` wrapper. Collections use one
+shape, which the codebase already converged on:
+
+```ts
+{ items: T[], nextCursor: string | null, hasMore: boolean }
+```
+
+**Errors** are always enveloped, and this is already centralized in `apiHandler`:
+
+```ts
+{ error: { code, message, issues?: FieldIssue[], ref?: string } }
+```
+
+- `code` comes from the fixed union — `BAD_REQUEST`, `UNAUTHORIZED`, `FORBIDDEN`, `NOT_FOUND`,
+  `CONFLICT`, `RATE_LIMITED`, `STAGE_BLOCKED`, `FEATURE_DISABLED`, `UPSTREAM_ERROR`,
+  `EXTRACTION_FAILED`, `INTERNAL`. Adding a code is a deliberate change to the union, not a string
+  literal at a call site.
+- `message` is safe to show a user. **An unexpected error never leaks its message** — it becomes
+  `INTERNAL` with a generated `ref` that ties the response to a PII-free log line. This is tested
+  today and must stay tested.
+- `issues` carries field-level validation errors as `{ path, message }`.
+
+**Rules:** every endpoint declares request and response types; no endpoint returns a raw database
+row; no endpoint returns a type defined by omission from a model.
+
+#### Worked examples
+
+**`GET /api/candidates/:id` → `200`** — a single resource, returned bare.
+
+```json
+{
+  "id": "cand_01HQ8X2M4K",
+  "legacyId": "ATS-0147",
+  "name": "A. Bekele",
+  "email": "a.bekele@example.com",
+  "phone": "+251911000000",
+  "track": "Clinical",
+  "credential": "PMHNP",
+  "status": "3 - Submitted to Client",
+  "stageOrder": 3,
+  "stageEnteredAt": "2026-08-14T09:12:04.000Z",
+  "licenseState": "TX",
+  "licenseStatus": "Active",
+  "licenseExpiry": "2027-04-30",
+  "population": "Adult",
+  "setting": "Telehealth",
+  "clientId": "cli_01HQ7A9B2C",
+  "tags": ["IndrasurID:42"],
+  "createdAt": "2026-07-02T11:40:00.000Z",
+  "updatedAt": "2026-08-14T09:12:04.000Z"
+}
+```
+
+`licenseNumber` is **absent unless the viewer holds `viewCredentials`** — the PII gate in
+`toCandidateDTO`. It is omitted, not nulled, so an unauthorized viewer cannot tell it exists.
+
+**`GET /api/candidates?status=3&limit=2` → `200`** — a collection, always the same envelope.
+
+```json
+{
+  "items": [
+    {
+      "id": "cand_01HQ8X2M4K",
+      "name": "A. Bekele",
+      "track": "Clinical",
+      "credential": "PMHNP",
+      "status": "3 - Submitted to Client",
+      "stageOrder": 3,
+      "licenseState": "TX",
+      "licenseStatus": "Active",
+      "clientId": "cli_01HQ7A9B2C",
+      "updatedAt": "2026-08-14T09:12:04.000Z"
+    },
+    {
+      "id": "cand_01HQ8X5P7R",
+      "name": "M. Tadesse",
+      "track": "Clinical",
+      "credential": "LCSW",
+      "status": "3 - Submitted to Client",
+      "stageOrder": 3,
+      "licenseState": "CA",
+      "licenseStatus": "Not Verified",
+      "clientId": "cli_01HQ7A9B2C",
+      "updatedAt": "2026-08-13T16:20:11.000Z"
+    }
+  ],
+  "nextCursor": "eyJpZCI6ImNhbmRfMDFIUThYNVA3UiJ9",
+  "hasMore": true
+}
+```
+
+The list item is a **narrower type than the detail resource**, declared separately in
+`@destaworks/contracts`. A list endpoint never returns the full resource "because it was already loaded".
+`nextCursor` is `null` and `hasMore` is `false` on the last page. Cursor pagination, not offset —
+offset drifts as rows are inserted.
+
+**Errors** — same envelope at every status.
+
+```json
+// 404
+{ "error": { "code": "NOT_FOUND", "message": "Candidate not found." } }
+
+// 422
+{
+  "error": {
+    "code": "BAD_REQUEST",
+    "message": "Validation failed.",
+    "issues": [{ "path": "licenseExpiry", "message": "Expected an ISO date." }]
+  }
+}
+
+// 500 — the cause never reaches the client; `ref` ties it to the log line
+{ "error": { "code": "INTERNAL", "message": "Internal server error", "ref": "req_01HQ8XB3F9" } }
+```
+
+### DRY — what must exist exactly once
+
+The recurring defect in this codebase is the same logic living in several places and drifting. Each
+of these gets one home and a check:
+
+| Concern | Single home |
+|---|---|
+| Wire shapes | `@destaworks/contracts` |
+| Business rules, stage gates, scoring | `@destaworks/domain` |
+| Time — "today", day boundaries, expiry | the `Clock` module, `@destaworks/domain` |
+| Money arithmetic | the money module, `@destaworks/domain` |
+| Database access | `@destaworks/db` |
+| Permission decisions | capability checks in `@destaworks/auth` |
+| Error mapping | one exception filter |
+| Tenant scoping | the `db(ctx)` seam |
+
+Known duplication to remove as it is encountered: `utcDayStart` exists three times with two
+different end-of-day semantics; `id → name` maps are hand-rolled at 14 call sites. A PR that
+introduces a second implementation of anything above is rejected.
+
+### Logging
+
+There is **no logger today** — nine raw `console.*` calls in non-test code. Phase 0 introduces one.
+
+**Library: Pino**, with `nestjs-pino` in `apps/api` and `pino-http` for request logging. Sentry
+(`@sentry/nextjs`, already installed) keeps exception reporting; Pino owns structured logs. They are
+complementary, not alternatives.
+
+Pino is chosen for one reason above the others: **redaction is a first-class feature.**
+
+```ts
+redact: {
+  paths: ["*.email", "*.phone", "*.licenseNumber", "*.npi", "*.name", "*.dateOfBirth"],
+  censor: "[redacted]",
+}
+```
+
+"Never log PII" is currently enforced by nothing. A logger that strips it before serialization makes
+the mistake structurally hard rather than a thing reviewers must catch — the same argument that
+decided the package boundary.
+
+**Two constraints to design around:**
+
+1. **Pino does not run on the edge runtime**, and `src/middleware.ts` is edge. So the logger is our
+   own thin interface in `@destaworks/config` with two adapters — Pino on Node, a minimal JSON-to-console
+   shim on edge. Application code imports the interface, never Pino directly, so the runtime split
+   stays invisible and the library stays replaceable.
+2. **Context propagation** uses `AsyncLocalStorage` so `requestId`, `tenantId` and `userId` reach
+   every log line without being threaded through every function signature.
+
+Transport: JSON to stdout in production — the host collects it, no transport process needed.
+`pino-pretty` in local development only.
+
+- One logger in `@destaworks/config`, injected rather than imported ad hoc
+- Structured output: level, message, `requestId`, `tenantId`, `userId`, duration — never free text
+- Levels used deliberately: `error` is actionable, `warn` is degraded-but-working, `info` is a
+  state change, `debug` is off in production
+- **Never log PII or PHI** — no names, emails, phones, license numbers, NPI. This is binding under
+  HIPAA and Proclamation 1321/2024, and a CI check greps for the obvious field names
+- Every request carries a `requestId`; it appears on every log line for that request and in the
+  `ref` of any 500
+- `console.*` is banned outside tests by lint rule
+
+### Type safety
+
+`strict` and `noUncheckedIndexedAccess` are on. Add, fixing fallout as it appears:
+
+- `noUnusedLocals`, `noUnusedParameters`
+- `exactOptionalPropertyTypes`
+- `verbatimModuleSyntax`
+
+**No `any` in application code.** No non-null assertion (`!`) to silence a nullable — narrow it or
+handle it. `as` casts require a comment justifying why the compiler cannot know. External data is
+`unknown` until a zod schema proves otherwise.
+
+### Formatting, linting, commits
+
+| Gate | Tool | When |
+|---|---|---|
+| Format | Prettier, one config in `tooling/prettier` | Pre-commit and CI |
+| Lint | ESLint flat config, one base in `tooling/eslint` | Pre-commit and CI |
+| Types | `tsc --noEmit` per package | CI |
+| Commits | commitlint, Conventional Commits | Pre-commit hook |
+| Architecture | dependency-graph and forbidden-import checks | CI |
+
+No `eslint-disable` without a comment naming the reason. A rule disabled in more than three places
+is the wrong rule — fix the rule, not the call sites.
+
+### Testing
+
+- Every package owns its tests, beside the code they protect
+- `domain` — unit; `application` — unit and integration; `db` — repository and database integration;
+  `api` — contract and integration; `web`/`admin` — component and integration; Playwright for
+  critical end-to-end flows
+- **Tenant isolation tests are mandatory** for every tenant-scoped repository
+- A package is not done when the implementation exists and its required tests do not
+
+### Definition of done for any PR
+
+Format · lint · typecheck · dependency and architecture checks · unit tests · integration tests ·
+contract tests · build — all green. Authorization enforced server-side. Inputs validated at the
+boundary. Mutations audited. No PII in logs. Conventional commit message.
+
+---
+
+## Phase 0 — Hardening
+
+**Goal:** remove the last framework coupling, close the exposure defects, and make the existing
+rules enforced. Everything after this depends on it.
+
+### 0.1 Decouple — invert the UI type dependency
+- [ ] Define the badge tone union in `lib/constants`; have `components/ui/badge.tsx` import it
+- [ ] Update `lib/constants/{audit,lead-status,prospect-status}.ts` to stop importing from `components/ui/badge`
+- **Done-when:** no file under `lib/` imports from `components/`
+
+### 0.2 Decouple — framework caching out of repositories
+- [ ] Move React `cache()` out of `repositories/{client,client-rules,user}.repository.ts`
+- [ ] Re-introduce request-scoped caching in an RSC loader or `server/http` seam
+- **Done-when:** no repository imports from `react`
+
+### 0.3 Decouple — framework request access out of guards
+- [ ] Introduce a request-context adapter that guards receive rather than reach for
+- [ ] Update `server/auth/{guards,portal-guards}.ts` and `server/services/admin-user.service.ts`
+- **Done-when:** no file under `server/` imports `next/headers`
+
+### 0.4 Close the column-exposure defect
+- [ ] Replace `CandidateDTO = Omit<CandidateRow, "licenseNumber">` with an explicit field whitelist
+- [ ] Apply the same treatment to the other DTOs defined by omission
+- [ ] Add a test asserting an added column is **not** published without an explicit change
+- **Done-when:** adding a column to `Candidate` does not change any API response
+
+### 0.5 Close the service-layer bypass
+- [ ] Add service methods for the 14 RSC pages that call repositories directly
+- [ ] Point those pages at the services
+- **Done-when:** no file under `app/` imports from `server/repositories`
+
+### 0.6 Domain primitives
+- [ ] `Clock` — export `systemClock`, `fixedClock(instant)`, `advanceableClock(start)`; inject rather than calling `new Date()` in business logic
+- [ ] Fold in the ad-hoc trailing `now: Date = new Date()` parameters added to the rules functions
+- [ ] Fix the defects this exposes: "today" resolving to host UTC rather than the user's zone; `utcDayStart` duplicated three times with two end-of-day semantics; license expiry off by one; weekly pacing double-counting the current day
+- [ ] Money — integer minor units with explicit currency and per-currency scale
+- [ ] Fix `crm-analytics.service.ts:181` — `(monthlyRate ?? 0) * (contractAgeDays / 30)` assumes 30-day months and goes negative on future-dated contracts
+- **Done-when:** business logic never reads the wall clock; money arithmetic cannot produce a float
+
+### 0.7 Per-route response types
+- [ ] Every route handler exports its response type
+- [ ] The browser imports that type instead of asserting a shape
+- [ ] Remove the 82 unverified `getJson<T>` assertions
+- **Done-when:** zero client call sites assert a response type the route does not declare
+
+### 0.8 Make the rules real
+- [ ] Retarget `import/no-restricted-paths` at `src/app` and `src/components` — the configured zones currently point where violations are impossible
+- [ ] Add the Prisma zone: nothing outside `server/repositories` may import Prisma
+- [ ] Fix the 2 known violations (`brief.service.ts:361`, `daily.service.ts:290` — both `prisma.user.findUnique`)
+- [ ] Add commitlint with the Conventional Commits config that `CONVENTIONS.md` already mandates
+- [ ] Add husky + lint-staged for pre-commit format and lint
+- [ ] Add a CI check that the `pg_trgm` indexes still exist — they have been dropped three times
+- [ ] Delete the empty `src/modules/`
+- **Done-when:** each rule has a check, and each check has been proven to fail on a deliberate violation
+
+### 0.9 Logging and observability
+- [ ] Add Pino; define the `Logger` interface in `@destaworks/config` with Node and edge adapters
+- [ ] Configure `redact` for PII/PHI paths — email, phone, licenseNumber, npi, name, dateOfBirth
+- [ ] `AsyncLocalStorage` context carrying `requestId`, `tenantId`, `userId`
+- [ ] Generate a `requestId` per request; put it on every log line and in the `ref` of any 500
+- [ ] Replace the 9 raw `console.*` calls in non-test code
+- [ ] Lint rule: `console.*` banned outside tests
+- [ ] CI check: no PII/PHI field names in log calls — names, emails, phones, license numbers, NPI
+- [ ] Route API errors to Sentry — they are currently not reaching it
+- [ ] Add connection-pool timeouts to the Prisma client
+- **Done-when:** a thrown API error appears in Sentry with a `requestId` that matches the client's `ref`, and no log line contains PII
+
+### 0.10 Type safety
+- [ ] Enable `noUnusedLocals`, `noUnusedParameters`, `exactOptionalPropertyTypes`, `verbatimModuleSyntax`
+- [ ] Fix the fallout
+- [ ] Lint rule: no `any` in application code; no non-null assertion used to silence a nullable
+- [ ] Lint rule: `eslint-disable` requires a reason comment
+- **Done-when:** the stricter flags are on and CI is green
+
+### 0.11 First DRY sweep
+- [ ] Collapse the three `utcDayStart` implementations into the `Clock` module (0.6)
+- [ ] Replace the 14 hand-rolled `id → name` maps with the shared helper
+- [ ] Confirm no second implementation exists of anything in the DRY table above
+- **Done-when:** each concern in the DRY table resolves to exactly one implementation
+
+**Phase 0 done-when:** all of the above green, full suite passing, and a deliberate violation of each
+new rule fails CI.
+
+---
+
+## Phase 1 — Monorepo foundation
+
+**Goal:** the workspace exists and the tooling is shared, with no application code moved yet.
+
+- [ ] Add `packages:` to `pnpm-workspace.yaml` — the file exists but declares no packages, so this is additive
+- [ ] Add Turborepo; define the task graph: `build → ^build`, `lint`/`typecheck → ["^topo", "^build"]`, cached outputs
+- [ ] Adopt pnpm `catalog:` so React, Zod and TypeScript have one version across the workspace
+- [ ] Extract `tooling/eslint`, `tooling/prettier`, `tooling/typescript`, `tooling/vitest` as real workspace packages
+- [ ] Each package declares its tooling as a dependency rather than inheriting from the root
+- [ ] Add a workspace dependency-version drift check
+- **Done-when:** `pnpm build`, `lint`, `typecheck` and `test` all run through Turborepo; a second run is cache-hit; the application still builds unchanged
+
+---
+
+## Phase 2 — Package extraction
+
+**Goal:** the source tree becomes packages. **Pure moves only.**
+
+Order is forced by the dependency graph. One PR each, suite green between.
+
+- [ ] **2.1 `@destaworks/domain`** — `lib/{constants,rules,validation,utils}`, plus the Clock and money modules from 0.6
+  - Assert zero runtime dependencies in `package.json`
+- [ ] **2.2 `@destaworks/contracts`** — the per-route response types from 0.7 and the shared zod wire schemas, promoted to the single source of API shapes
+  - Formalize the collection shape `{ items, nextCursor, hasMore }` as one exported type
+  - Formalize the error envelope and the error-code union as exported types
+  - CI check: no endpoint type is defined by omission from a database model
+- [ ] **2.3 `@destaworks/db`** — `prisma/`, `src/generated`, `server/{db,repositories}`
+  - This is the security boundary. Nothing outside it may import Prisma
+- [ ] **2.4 `@destaworks/auth`** — `server/auth`, including the request-context adapter from 0.3
+- [ ] **2.5 `@destaworks/integrations`** — `server/{ai,email,http}` and external adapters
+- [ ] **2.6 `@destaworks/application`** — `server/services`, the 171 methods, moved as-is
+  - Framework-free by construction; it will be consumed by both `apps/api` and `@destaworks/jobs`
+  - Assert in CI that it imports neither NestJS nor Next.js
+- [ ] **2.7 `@destaworks/ui`** — `components/ui`
+- [ ] **2.8 `@destaworks/config`** — environment contracts and shared configuration
+- [ ] **2.9 `apps/web`** — everything remaining
+- [ ] **2.10 Cleanup** — retire the transitional `@/*` aliases; imports name packages
+
+**Done-when:** every package builds independently; `apps/web` behaves identically; the diff of each
+move PR contains no logic changes.
+
+---
+
+## Phase 3 — CI/CD and architecture enforcement
+
+**Goal:** the dependency law is machine-enforced. This is what the restructure was for.
+
+- [ ] Architecture check: package dependency direction matches the declared graph
+- [ ] Architecture check: forbidden imports (the `──X──>` list above)
+- [ ] Architecture check: no circular dependencies
+- [ ] Architecture check: Prisma imported only inside `@destaworks/db`
+- [ ] Architecture check: `@destaworks/domain` has no runtime dependencies
+- [ ] Architecture check: packages never import from apps
+- [ ] Every PR runs: format · lint · typecheck · dependency-graph validation · architecture checks · unit tests · integration tests · contract tests · build
+- [ ] Contract check: every endpoint declares request and response types from `@destaworks/contracts`
+- [ ] Contract check: no endpoint returns a raw database row
+- [ ] Log check: no PII/PHI field names in log calls
+- [ ] Commitlint enforced on the merge commit, not only pre-commit
+- [ ] Turborepo affected-package execution — unaffected packages are not rebuilt or retested
+- [ ] Branch protection on `main`: merge only when all required checks are green
+- [ ] Deployment workflows separated from PR validation, building from the same immutable revision that passed
+- **Done-when:** each forbidden dependency has been deliberately introduced once and proven to fail CI
+
+---
+
+## Phase 4 — NestJS API (`apps/api`)
+
+**Goal:** the backend becomes a NestJS application, with controllers as thin transport in front of
+the unchanged `@destaworks/application` services.
+
+This is the highest-risk phase in the plan. It rebuilds the authentication and authorization surface,
+so it ships behind a route-by-route cutover rather than a big-bang switch.
+
+### 4.0 Decide the read path — do this first
+
+Today 39 server-rendered pages read data in-process by calling services directly. Once NestJS owns
+the API, that has to resolve one of two ways, and the choice shapes the rest of the phase:
+
+| Option | Consequence |
+|---|---|
+| **A. `apps/web` calls `apps/api` over HTTP for everything** | One backend, one contract, one audit surface. Adds a network hop to every server render |
+| **B. `apps/web` keeps importing `@destaworks/application` for server-side reads; NestJS serves mutations and external clients** | No added latency; two paths into the same logic, so guards and tenant scoping must be proven in both |
+
+- [ ] Decide and record it here; **Option A is the recommendation** — under multi-tenancy, two paths into the data mean two places a tenant filter can be missed
+- **Done-when:** the decision is written down and the isolation strategy for the chosen option is stated
+
+### 4.1 Scaffold
+- [ ] Create `apps/api` — NestJS + TypeScript
+- [ ] Module per domain area, mirroring the current service boundaries
+- [ ] Controllers depend only on `@destaworks/application` and `@destaworks/contracts`
+- [ ] CI check: `apps/api` never imports Prisma or `@destaworks/db` directly
+- **Done-when:** the app boots and serves one trivial endpoint end-to-end
+
+### 4.2 Cross-cutting concerns — port before any route moves
+- [ ] Port `apiHandler` semantics to a Nest exception filter — the error envelope, the code union, and the rule that an unexpected error never leaks its message; 138 of 141 routes rely on it today
+- [ ] Request-id interceptor: generate, log, and return it as `ref` on 500s
+- [ ] Logging interceptor: one structured line per request with method, path, status, duration, `requestId`, `tenantId`
+- [ ] Port capability gating to a Nest guard — capabilities, never role names
+- [ ] Port rate limiting
+- [ ] Port the Better Auth integration, including `nextCookies()` session handling across the app boundary
+- [ ] Zod validation pipe bound to `@destaworks/contracts`
+- [ ] Audit logging on every mutation, matching current behaviour
+- **Done-when:** an equivalence test proves a guarded endpoint behaves identically to its Next.js counterpart for authorized, unauthorized and unauthenticated callers
+
+### 4.3 Route cutover
+- [ ] Migrate the 141 routes in groups, one domain area per PR
+- [ ] Each PR: contract test asserting request/response parity with the route it replaces
+- [ ] Keep the Next.js route serving until its replacement passes, then remove it
+- [ ] Security review of the auth surface before the last group cuts over
+- **Done-when:** no route handler remains under `apps/web/app/api`, and contract tests cover every migrated endpoint
+
+### 4.4 Deployment
+- [ ] Host `apps/api` — this leaves serverless for a long-running process; record the target and cost
+- [ ] Health checks, graceful shutdown, connection-pool sizing for a persistent process
+- [ ] Deploy workflow building from the same immutable revision that passed CI
+- **Done-when:** the API runs in staging with the web app pointed at it
+
+**Phase 4 done-when:** the full suite is green, contract tests cover every endpoint, and the auth
+surface has had a security review.
+
+---
+
+## Phase 5 — Job runner
+
+**Goal:** slow work leaves the request path. Built on NestJS now that Phase 4 has landed.
+
+- [ ] Choose the queue and document the choice; bind it through NestJS
+- [ ] Create `@destaworks/jobs` — background jobs, queues, schedulers, consuming `@destaworks/application`
+- [ ] Move the ETL commit off the request path — it cannot finish inside `maxDuration = 300`
+- [ ] Give AI calls an overall deadline; they currently retry up to six times holding a function slot
+- [ ] Move brief generation and CSV export to jobs
+- [ ] Add the scheduler — nothing scheduled runs today
+- [ ] Job observability: failures visible, retries bounded, dead-letter handling
+- **Done-when:** no request handler performs unbounded work; a failed job is visible and retryable
+
+---
+
+## Phase 6 — Multi-tenancy
+
+**Goal:** tenant isolation that is provable, not assumed. The largest phase; sub-phases ship in order.
+
+### 6.0 Reference — the shapes this phase builds
+
+```prisma
+model Tenant {
+  id        String    @id @default(cuid())
+  slug      String    @unique          // URL / subdomain key
+  name      String
+  status    String    @default("active") // active | suspended | trial
+  plan      String    @default("trial")
+  seatLimit Int?
+  trialEndsAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+  members   Membership[]
+  @@map("tenants")
+}
+
+model Membership {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Role moves HERE from User. One person may be Owner of one tenant and Associate of another.
+  role   String @default("Associate")
+  status String @default("active")   // active | invited | removed
+
+  invitedById String?
+  createdAt   DateTime @default(now())
+
+  @@unique([tenantId, userId])
+  @@index([userId])
+  @@map("memberships")
+}
+```
+
+Every tenant-scoped model gains:
+
+```prisma
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  @@index([tenantId])
+```
+
+**The seven uniqueness rules to re-key:**
+
+| Today | Becomes |
+|---|---|
+| `Candidate.legacyId @unique` | `@@unique([tenantId, legacyId])` |
+| `Client.legacyId @unique` | `@@unique([tenantId, legacyId])` |
+| `Document.legacyId @unique` | `@@unique([tenantId, legacyId])` |
+| `OutreachAttempt.legacyId @unique` | `@@unique([tenantId, legacyId])` |
+| `Prospect.npi @unique` | `@@unique([tenantId, npi])` |
+| `SourceLead.promotedCandidateId @unique` | `@@unique([tenantId, promotedCandidateId])` |
+| `source_leads_email_lower_unique_idx` *(raw SQL)* | add `tenantId` to the index |
+
+Already safe — they hang off `userId`, and users are reachable only through a membership:
+`@@unique([userId, date])` on targets/actuals/logs, `SavedView`, `SavedIcp`, `ClientRules.clientId`.
+
+`User.email` stays **globally unique**: one human, one login, membership in many tenants. Relaxing
+that later is easy; tightening it later is a data migration.
+
+**The enforcement seam** — `db(tx)` becomes `db(ctx, tx)`:
+
+```ts
+export function db(ctx: TenantContext, tx?: Prisma.TransactionClient) {
+  return (tx ?? prisma).$extends({
+    query: {
+      $allModels: {
+        async $allOperations({ args, query, model }) {
+          if (GLOBAL_MODELS.has(model)) return query(args); // User, Session, Account, Verification
+          args.where = { ...(args.where ?? {}), tenantId: ctx.tenantId };
+          if ("data" in args && args.data) injectTenant(args.data, ctx.tenantId);
+          return query(args);
+        },
+      },
+    },
+  });
+}
+```
+
+Repository bodies barely change — one argument, no new logic:
+
+```ts
+// before
+findById(id: string, tx?: Prisma.TransactionClient) {
+  return db(tx).client.findUnique({ where: { id } });
+}
+
+// after — scoping cannot be forgotten
+findById(ctx: TenantContext, id: string, tx?: Prisma.TransactionClient) {
+  return db(ctx, tx).client.findUnique({ where: { id } });
+}
+```
+
+**The RLS backstop** (6.6), applied per tenant-scoped table:
+
+```sql
+ALTER TABLE candidates ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON candidates
+  USING (tenant_id = current_setting('app.tenant_id')::text);
+```
+
+with `SET LOCAL app.tenant_id = $1` at transaction start.
+
+**The context every guard resolves:**
+
+```ts
+export interface TenantContext {
+  tenantId: string;
+  membershipId: string;
+  user: AuthUser; // identity only — no role
+  role: Role;     // from the MEMBERSHIP
+}
+```
+
+### 6.1 Schema — expand
+- [ ] Add `Tenant` and `Membership` models
+- [ ] Create tenant #1 for the current operator
+- [ ] Add `tenantId` **nullable** to the 37 tenant-scoped models (all except `User`, `Session`, `Account`, `Verification`)
+- **Done-when:** migration applied to staging with the app running unchanged
+
+### 6.2 Schema — backfill and contract
+- [ ] Backfill every row to tenant #1
+- [ ] Create a membership per existing user carrying their current `User.role`
+- [ ] Flip `tenantId` to `NOT NULL`; add composite indexes
+- [ ] Re-key the 7 uniqueness rules per tenant: `Candidate.legacyId`, `Client.legacyId`, `Document.legacyId`, `OutreachAttempt.legacyId`, `Prospect.npi`, `SourceLead.promotedCandidateId`, and the raw-SQL `source_leads_email_lower_unique_idx`
+- [ ] Add a CI check that the raw-SQL index survives `prisma migrate` — it is the only guard against duplicate leads
+- [ ] Drop `User.role`
+- **Done-when:** reconciliation proves every row belongs to exactly one tenant
+
+### 6.3 The enforcement seam
+- [ ] Extend `db(tx)` to `db(ctx, tx)` with a Prisma client extension that injects `tenantId` into every `where` and `data`
+- [ ] Allowlist the four global models
+- [ ] Thread `TenantContext` through the 243 repository methods — one argument, no new logic
+- [ ] CI check: no repository method without a `TenantContext` first argument, except the allowlist
+- **Done-when:** a repository call cannot omit tenant scoping and still compile
+
+### 6.4 Services and routes
+- [ ] Thread context through the 171 methods in `@destaworks/application`
+- [ ] `getCurrentUser` returns `TenantContext` — `{ tenantId, membershipId, user, role }`, role read from the membership
+- [ ] Resolve the tenant in a Nest guard and pass it down; controllers stay thin
+- [ ] Verify the migrated controllers; most need no change, since no role names are hardcoded
+- **Done-when:** every endpoint resolves a tenant before touching data
+
+### 6.5 Tenant resolution and membership
+- [ ] Resolve the active tenant from session plus subdomain, path segment or cookie
+- [ ] Tenant switching for users with multiple memberships
+- [ ] Invitation flow — invite, accept, remove
+- [ ] Keep `User.email` globally unique: one human, one login, many memberships
+- **Done-when:** a user in two tenants sees only the active tenant's data and can switch
+
+### 6.6 Defence in depth
+- [ ] Enable Row-Level Security on the 37 tenant-scoped tables
+- [ ] `SET LOCAL app.tenant_id` at transaction start; verify behaviour under connection pooling
+- [ ] Per-tenant object-storage key prefixes
+- **Done-when:** a query that bypasses the extension returns zero rows rather than another tenant's data
+
+### 6.7 Proof of isolation
+- [ ] Isolation suite: for each of the 37 models, seed two tenants and assert A cannot read B
+- [ ] Run it on every PR as a required check
+- [ ] Add tenant context to the 213 existing test files
+- **Done-when:** isolation is proven per table on every change, not asserted in a document
+
+### 6.8 Platform-admin plane
+- [ ] Platform-admin capability on a **different axis** from a tenant's Owner
+- [ ] Every cross-tenant action audited
+- **Done-when:** no tenant role value, including Owner, can reach another tenant's data
+
+**Phase 6 done-when:** two tenants coexist on staging with isolation proven by the suite and by RLS
+independently.
+
+---
+
+## Phase 7 — Legacy data migration
+
+**Goal:** the legacy Sheet data lands in the tenant-aware schema. **Must come after Phase 6.**
+
+- [ ] Commit the existing importers under `scripts/migrate/`
+- [ ] Point them at tenant #1 — two files deep, trivially redirected
+- [ ] Resolve the 9 outstanding field-mapping decisions in `resolutions.json`
+- [ ] Fill the actor map — 28 of 29 candidates currently resolve to `system-import`
+- [ ] Decide `ATS_ClientSignals` (59 rows, no Postgres target, no design doc)
+- [ ] Resume files: Drive → private storage bucket, widen the MIME allowlist, implement `deleteObject`
+- [ ] Reconcile: `inserted + updated + skipped + errored == sourceRows` for every tab
+- [ ] Plan run against production data with zero writes, reviewed before apply
+- **Done-when:** reconciliation is exact and no source row is silently dropped
+
+---
+
+## Phase 8 — Platform-admin console
+
+**Goal:** the second application, in the structure built for it.
+
+- [ ] `apps/admin` — Next.js, consuming `@destaworks/contracts` and `@destaworks/ui`
+- [ ] Tenant list, health, suspend and restore
+- [ ] Support impersonation — time-boxed, audited, consented
+- [ ] Platform metrics separate from any tenant's reports
+- **Done-when:** tenants are supportable without database access
+
+---
+
+## Phase 9 — Sellable
+
+**Goal:** a customer can sign up, pay and be served.
+
+- [ ] Onboarding and provisioning: signup → tenant → seed vocabulary and client rules → first Owner invite
+- [ ] Tenant routing: subdomain or path; custom domains later
+- [ ] Billing: plans, seat limits, payment webhooks
+- [ ] Usage metering — the AI usage ledger becomes revenue data, so its fire-and-forget write becomes a billing bug and must be made durable
+- [ ] Trial, suspension and dunning states honoured by the guards
+- [ ] Tenant data export and offboarding
+- [ ] Per-tenant business associate agreements
+- **Done-when:** a new agency can self-serve from signup to working pipeline
+
+---
+
+## Branching and delivery
+
+**`main` is never touched by this work until the end.** It stays exactly equal to what is deployed,
+so at any moment there is an unambiguous answer to "what are our users running?"
+
+```text
+main ──────●───────────────●──────────────────────────────────●── merge
+            \             ↑ hotfix                            ↑
+             \            │ merged down same day              │
+              restructure ●───●───●───●───●───●───●───●───●───●
+                           \   \   \
+                    feature branches, one per PR, short-lived
+```
+
+| Branch | Purpose |
+|---|---|
+| `main` | Deployed truth. Only hotfixes land here directly |
+| `restructure` | The base branch. Every phase merges here |
+| `<type>/p<N>-<slug>` | One PR of work, branched from and merged to `restructure` |
+| `fix/*` | Hotfix off `main`, merged to `main`, **then merged down to `restructure` the same day** |
+
+Branch names carry their phase so history reads as this plan: `chore/p0-clock-module`,
+`refactor/p2-pkg-domain`, `feat/p4-api-candidates`, `feat/p6-tenant-schema`.
+
+### The three conditions that make a long-lived branch safe
+
+A long-lived branch fails when it drifts and when it is never exercised. Both are preventable:
+
+1. **Merge `main` down on the same day as any hotfix.** Never let divergence accumulate. If a week
+   passes with `restructure` behind `main`, that is a defect to fix, not a state to tolerate.
+2. **Deploy `restructure` continuously to its own preview environment.** A branch that runs for
+   months without being deployed is a branch that surprises everyone on merge day. It must be
+   exercised the entire time, not validated at the end.
+3. **The final merge is a formality, not a review.** Every PR into `restructure` was reviewed on the
+   way in. Merge with a merge commit, never a squash, so that history survives.
+
+### Phase gates
+
+Tag `restructure` at the end of each phase — `phase-0-complete`, `phase-1-complete` — so progress is
+a fact in the repository rather than a claim in a document. The done-when of each phase is the gate;
+there is no separate consolidation step.
+
+### Deploy tags
+
+Deploys are manual through the Vercel CLI, and **nothing currently records what is live.** Tag every
+deploy: `deploy/staging-YYYY-MM-DD`. Without this there is no answer to "roll back to what?"
+
+### Worktrees
+
+The restructure changes the shape of the tree, so switching branches in a single checkout means
+repeated dependency reinstalls and a `node_modules` that does not match the branch. Use worktrees:
+
+```bash
+# main stays checked out where it is — the deployed truth, ready for hotfixes
+git worktree add ../desta-ats-restructure restructure
+git worktree add ../desta-ats-wt/p2-domain -b refactor/p2-pkg-domain restructure
+```
+
+```text
+~/Documents/biruh/
+├── desta-ats/                    main — deployed truth, hotfixes
+├── desta-ats-restructure/        restructure — integration, continuously deployed
+└── desta-ats-wt/
+    ├── p2-domain/                one task, one worktree
+    └── p4-api-candidates/
+```
+
+Two practical notes: each worktree needs its own `pnpm install`, because the workspace layout differs
+per branch during Phases 1–2. And `.env*` files are gitignored, so they are **not** copied into a new
+worktree — symlink them deliberately, and never copy a production value into a scratch tree.
+
+Remove a worktree when its PR merges: `git worktree remove ../desta-ats-wt/p2-domain`.
+
+### Environments — a prerequisite for Phase 6
+
+`DECISIONS.md` D6 specifies staging and production on **separate Supabase projects**. Today there is
+one shared database.
+
+**Phase 6 performs schema surgery on 37 tables.** With a single database there is no safe rehearsal:
+the backfill and the `NOT NULL` flip get exactly one attempt, against live data.
+
+- [ ] **Separate staging database provisioned before Phase 6 starts** — not required for Phases 0–5
+- [ ] Phase 6 and Phase 7 migrations run staging-first, then production, never authored against production
+
+This does not block hardening, the restructure, CI or the job runner. It does block tenancy.
+
+---
+
+## Risk register
+
+| Risk | Severity | Mitigation |
+|---|---|---|
+| **Cross-tenant data leak** | Reportable breach | Phase 6.3 seam + 6.6 RLS + 6.7 per-table proof; three independent layers |
+| **800-file move unreviewable** | High | One package per PR; pure moves, zero logic edits; aliases kept; suite green between each |
+| **NestJS migration reopens the auth surface** | High | Phase 4.2 ports cross-cutting concerns before any route moves; equivalence tests per guard; route-by-route cutover with contract parity tests; security review before the final group |
+| **Two read paths into the same data** | High | Phase 4.0 decides this explicitly; Option A (single HTTP path) recommended so a tenant filter can only be missed in one place |
+| **Scope creep inside the pure-move phase** | High | Phase 2 is moves only. NestJS is Phase 4 and the application layer is a Phase 2 move, not a rewrite — any logic change inside a move PR is rejected |
+| **`pg_trgm` / raw-SQL indexes dropped again** | High | CI check in 0.8 and 5.2; has already happened three times |
+| **Migration data loss** | High | Plan-first, reconciliation invariant, no apply without a reviewed plan |
+| **Schema change under live traffic** | Medium | Expand/backfill/contract; volumes are small |
+| **RLS breaks connection pooling** | Medium | Validate `SET LOCAL` under the pooler on staging before production |
+| **Turborepo/CI churn destabilises delivery** | Medium | Phase 1 completes before any code moves; application untouched |
+| **`restructure` drifts from `main`** | Medium | Merge `main` down the same day as any hotfix; a week of divergence is a defect |
+| **Long-lived branch never exercised** | Medium | `restructure` deploys continuously to its own preview environment from day one |
+| **Phase 6 rehearsed against live data only** | High | Separate staging database provisioned before Phase 6; migrations staging-first |
+| **Repository is public with client names** | High, live | Make private — unrelated to this plan and should not wait for it |
+
+---
+
+## Rollback
+
+| Phase | Rollback |
+|---|---|
+| 0 | Revert the PR; changes are independent |
+| 1–3 | Revert; aliases still resolve, so the application is unaffected |
+| 4 | Each route group cuts over independently; revert the group and the Next.js route still serves |
+| 5 | Feature-flag jobs back onto the request path |
+| 6.1–6.2 | Expand/backfill is reversible until the `NOT NULL` flip; that flip is the point of no return and needs a verified backup |
+| 6.3–6.8 | Revert application layers; schema stays — it is additive |
+| 7 | Importers are idempotent upserts keyed on `legacyId`; re-runnable |
+
+---
+
+## Definition of done
+
+The programme is complete when:
+
+1. Two tenants run on production with isolation proven per table on every pull request
+2. Every architectural rule in this plan has a CI check that has been observed to fail on violation
+3. Every endpoint is served by `apps/api` with a contract test proving parity, and no request handler performs unbounded work
+4. The legacy Sheet data is migrated with exact reconciliation
+5. A new agency can be onboarded without an engineer
+6. `docs/` reflects the built system, not the intended one
