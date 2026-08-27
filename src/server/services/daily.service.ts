@@ -41,7 +41,6 @@ import {
 } from "@/server/repositories/daily.repository";
 import { clientRepository } from "@/server/repositories/client.repository";
 import { userRepository } from "@/server/repositories/user.repository";
-import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/http/app-error";
 import { cachedUserList } from "@/server/http/request-cache";
 
@@ -288,7 +287,7 @@ export const dailyService = {
       dailyRepository.countAuditAction(user.id, "verify_license", w),
       dailyRepository.logsForUser(user.id, 15),
       dailyRepository.entriesForUser(user.id, 20),
-      prisma.user.findUnique({ where: { id: user.id }, select: { createdAt: true } }),
+      userRepository.findTenureBasis(user.id),
       clientRepository.list(),
       dailyRepository.feedbackForUser(user.id, 2),
       dailyRepository.goalsForWeek(user.id, mondayOf(date)),

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { DetailTabs, type TabDef } from "@/components/ui/tabs";
 import type { ExecutiveSummaryDTO } from "@/lib/validation/reports";
-import type { ReportFilterOptionsDTO } from "@/server/services/reports/filter-options.service";
+import type { ReportFilterOptionsDTO } from "@/lib/reports/filter-options";
 import { PrintButton } from "../credentials/print-button";
 import { ClientCapacityTab } from "./client-capacity-tab";
 import { ClientFunnelTab } from "./client-funnel-tab";

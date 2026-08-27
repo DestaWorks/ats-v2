@@ -13,7 +13,9 @@ ship continuously.
   "Add files via upload / Delete index.html" history stops now.)
 - **Branch protection on `main`**: require PR + passing CI + at least one review.
 - **Conventional Commits**: `feat:`, `fix:`, `refactor:`, `docs:`, `test:`, `chore:`,
-  `security:`. Subject ≤ 72 chars, imperative mood.
+  `security:`. Subject ≤ 72 chars, imperative mood. **Enforced** by commitlint
+  (`commitlint.config.mjs`) via a husky `commit-msg` hook; a husky `pre-commit` hook runs
+  lint-staged (Prettier + `eslint --fix`) over staged files.
 - **Small PRs.** One concern per PR. A ported view is fine; a 9,000-line dump is not.
 - **No secrets in git.** `.env` is gitignored; commit `.env.example` with keys, not values.
 - **Promotion path (DECISIONS D6):** branch → per-PR preview URL → merge to `staging`
@@ -25,7 +27,11 @@ ship continuously.
 
 - **TypeScript everywhere.** `strict: true`. No `any` without a written reason.
 - **Formatting**: Prettier (single source of truth — no style debates in review).
-- **Linting**: ESLint (typescript-eslint, react-hooks). CI fails on lint errors.
+- **Linting**: ESLint (typescript-eslint, react-hooks). CI fails on lint errors. The layer
+  boundaries are lint-enforced, not just documented: client/UI code under `app/**` +
+  `components/**` may not import `server/**` (`import/no-restricted-paths`), and the Prisma
+  client may only be imported from `server/repositories/**`, `server/db/**`, and
+  `server/auth/**` (`no-restricted-imports`).
 - **Package manager**: pick one (pnpm recommended) and commit the lockfile.
 - **Node**: pin the version (`.nvmrc` / `engines`).
 
@@ -34,8 +40,9 @@ ship continuously.
 **The authoritative folder structure is `docs/STACK-ARCHITECTURE.md` §2** — client feature code
 co-located under `app/(app)/<feature>/` (§3.6) + `server/{services, repositories, rules, auth,
 db, ai, http}` (layered backend). Do not invent a parallel `features/` + `domain/` + `api/` tree,
-and do not add to `src/modules/` (an unused, empty placeholder from an earlier plan — see
-STACK-ARCHITECTURE §2). This section only adds file-size/complexity conventions on top.
+and do not recreate `src/modules/` (an unused, empty placeholder from an earlier plan, now
+deleted — see STACK-ARCHITECTURE §2). This section only adds file-size/complexity conventions
+on top.
 
 - **One component per file.** No 9,000-line files; flag any file > ~400 lines in review.
 - **No giant components.** If a component has more than a handful of `useState`, extract

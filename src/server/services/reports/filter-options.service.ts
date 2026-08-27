@@ -1,14 +1,8 @@
 import "server-only";
 import { CREDENTIALS, SOURCES } from "@/lib/constants";
+import type { ReportFilterOptionsDTO } from "@/lib/reports/filter-options";
 import { clientRepository } from "@/server/repositories/client.repository";
 import { userRepository } from "@/server/repositories/user.repository";
-
-export interface ReportFilterOptionsDTO {
-  clients: { id: string; name: string }[];
-  users: { id: string; name: string }[];
-  sources: readonly string[];
-  credentials: readonly string[];
-}
 
 /** Dropdown options for the `/reports` and `/analytics` filter bars — loaded once by the RSC page. */
 export const reportFilterOptionsService = {

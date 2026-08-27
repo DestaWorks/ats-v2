@@ -43,8 +43,7 @@ const h = vi.hoisted(() => ({
     countOutreachSince: vi.fn(),
   },
   clientRepo: { list: vi.fn() },
-  userRepo: { namesByIds: vi.fn(), list: vi.fn(), listByRole: vi.fn() },
-  prismaUser: { findUnique: vi.fn() },
+  userRepo: { namesByIds: vi.fn(), list: vi.fn(), listByRole: vi.fn(), findTenureBasis: vi.fn() },
   writeAudit: vi.fn(),
 }));
 
@@ -55,7 +54,6 @@ vi.mock("@/server/repositories/user.repository", () => ({
   userRepository: h.userRepo,
   cachedUserList: h.userRepo.list,
 }));
-vi.mock("@/server/db/prisma", () => ({ prisma: { user: h.prismaUser } }));
 vi.mock("@/server/db/audit", () => ({ writeAudit: h.writeAudit }));
 vi.mock("@/server/db/with-transaction", () => ({
   withTransaction: (fn: (tx: unknown) => unknown) => fn(h.fakeTx),
@@ -69,7 +67,7 @@ beforeEach(() => {
   h.userRepo.namesByIds.mockReset();
   h.userRepo.list.mockReset();
   h.userRepo.listByRole.mockReset();
-  h.prismaUser.findUnique.mockReset();
+  h.userRepo.findTenureBasis.mockReset();
   h.writeAudit.mockReset();
   h.clientRepo.list.mockResolvedValue([{ id: "cl1", name: "Acme Health" }]);
   h.userRepo.namesByIds.mockResolvedValue(new Map());
@@ -88,7 +86,10 @@ beforeEach(() => {
   h.repo.entriesForUser.mockResolvedValue([]);
   h.repo.goalsForWeek.mockResolvedValue([]);
   h.repo.feedbackForUser.mockResolvedValue([]);
-  h.prismaUser.findUnique.mockResolvedValue({ createdAt: new Date("2026-07-01T00:00:00Z") });
+  h.userRepo.findTenureBasis.mockResolvedValue({
+    name: "Test User",
+    createdAt: new Date("2026-07-01T00:00:00Z"),
+  });
 });
 
 describe("dailyService.liveActuals", () => {

@@ -70,6 +70,15 @@ export const userRepository = {
     return new Map(rows.map((r) => [r.id, r.email] as const));
   },
 
+  /** Display name + account creation date for one user — the tenure basis the Daily Log /
+   *  Brief ramp math keys off (`tenureWeek(createdAt, date)`). Name only, no other PII. */
+  findTenureBasis(userId: string, tx?: Prisma.TransactionClient) {
+    return db(tx).user.findUnique({
+      where: { id: userId },
+      select: { name: true, createdAt: true },
+    });
+  },
+
   /** Wave 4.1 (Templates) + Wave 5.4 (My Profile) — one user's self-service profile fields. */
   findPreferences(userId: string, tx?: Prisma.TransactionClient) {
     return db(tx).user.findUnique({

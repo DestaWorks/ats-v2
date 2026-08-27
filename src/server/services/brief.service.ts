@@ -34,7 +34,6 @@ import { openRoleRepository } from "@/server/repositories/open-role.repository";
 import { stageHistoryRepository } from "@/server/repositories/stage-history.repository";
 import { clientRepository } from "@/server/repositories/client.repository";
 import { userRepository } from "@/server/repositories/user.repository";
-import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/http/app-error";
 import { cachedUserList } from "@/server/http/request-cache";
 
@@ -359,10 +358,7 @@ export const briefService = {
 
   async suggestTargets(input: SuggestTargetsInput) {
     const [userRow, history] = await Promise.all([
-      prisma.user.findUnique({
-        where: { id: input.userId },
-        select: { name: true, createdAt: true },
-      }),
+      userRepository.findTenureBasis(input.userId),
       dailyRepository.logsForUser(input.userId, 5),
     ]);
     if (!userRow) throw new AppError("NOT_FOUND", "User not found");

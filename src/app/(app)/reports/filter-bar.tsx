@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReportFilterOptionsDTO } from "@/server/services/reports/filter-options.service";
+import type { ReportFilterOptionsDTO } from "@/lib/reports/filter-options";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";

@@ -84,8 +84,7 @@ downward**; a lower layer must never import an upper one.
 > **Superseded from the original design:** a separate `modules/<feature>/` client tree
 > (components/hooks/api/query-keys.ts, TanStack Query-backed) was planned but never built. Every
 > wave shipped instead co-locates a feature's client code directly under
-> `app/(app)/<feature>/` — see §3.6/§6. `src/modules/` exists on disk only as an empty,
-> unused placeholder; do not add to it.
+> `app/(app)/<feature>/` — see §3.6/§6. `src/modules/` has been deleted; do not recreate it.
 
 ```
 desta-ats/
