@@ -39,6 +39,19 @@ final cutover (not a live Sheet adapter — see `docs/DECISIONS.md` D1). The liv
 `docs/IMPLEMENTATION-PLAN.md` + `docs/ESTIMATE.md`; `docs/DECISIONS.md` is authoritative;
 coding standards for the new codebase are `docs/CONVENTIONS.md`.
 
+## Before you start any task
+
+**Read [`docs/SAAS-RESTRUCTURE-PLAN.md`](docs/SAAS-RESTRUCTURE-PLAN.md) first. Every time.**
+
+It is the **base document**: target architecture, the `@destaworks/*` package graph and dependency
+law, the engineering standards (API contracts, DRY, logging, type safety, testing), the phased plan
+with a done-when per phase, and the branching/worktree/merge process. Check which phase the work
+belongs to and what that phase's done-when requires before writing anything.
+
+**Where any other doc, convention, or general habit conflicts with the plan, the plan wins** — and
+the other doc is what gets corrected. If the plan itself turns out to be wrong or over-broad, fix
+the plan; do not silently follow the code instead.
+
 ## Documentation map — start here
 
 The **live build docs** are `docs/DECISIONS.md` (authoritative decisions), `docs/IMPLEMENTATION-PLAN.md`
