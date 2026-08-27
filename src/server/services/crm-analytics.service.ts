@@ -1,5 +1,15 @@
 import "server-only";
+import { MS_PER_DAY, systemClock, type Clock } from "@/lib/clock";
 import { statusOrder, type CandidateStatus } from "@/lib/constants";
+import { elapsedMonths } from "@/lib/daily";
+import {
+  add,
+  fromMajorUnits,
+  multiply,
+  percentOf,
+  toMajorUnits,
+  type CurrencyCode,
+} from "@/lib/money";
 import { computeHealthScore } from "@/lib/rules/client-health";
 import type { CompareRowDTO, HealthScoreDTO, RevenueDTO } from "@/lib/validation/crm-analytics";
 import { isoOrNull } from "@/lib/utils/iso";
@@ -14,7 +24,10 @@ import { clientTaskRepository } from "@/server/repositories/client-task.reposito
 import { dealRepository } from "@/server/repositories/deal.repository";
 import { AppError } from "@/server/http/app-error";
 
-const MS_PER_DAY = 86_400_000;
+/** The currency every stored `Int` money column (`monthlyRate`/`avgPlacementFee`) is denominated
+ *  in — whole MAJOR units in the DB, widened to `Money` minor units before any arithmetic. */
+const BILLING_CURRENCY: CurrencyCode = "USD";
+
 /** Legacy's 15-min-per-touch proxy (`index.html:7190`) — applied only to REAL touch tables
  *  (notes/tasks/meetings/deals), never a generic activity-log scan, so it stays accurate once
  *  Gmail sync lands (auto-pulled emails won't silently inflate this unless deliberately added). */
@@ -146,16 +159,17 @@ async function gatherHealthInputsForClients(
 }
 
 export const crmAnalyticsService = {
-  async healthScore(clientId: string): Promise<HealthScoreDTO> {
+  async healthScore(clientId: string, clock: Clock = systemClock): Promise<HealthScoreDTO> {
     await requireClient(clientId);
-    const inputs = await gatherHealthInputs(clientId, new Date());
+    const inputs = await gatherHealthInputs(clientId, clock.now());
     const result = computeHealthScore(inputs);
     return { ...result, daysSinceLastTouch: inputs.daysSinceLastTouch };
   },
 
-  async revenue(clientId: string): Promise<RevenueDTO> {
+  async revenue(clientId: string, clock: Clock = systemClock): Promise<RevenueDTO> {
+    const now = clock.now();
     const client = await requireClient(clientId);
-    const inputs = await gatherHealthInputs(clientId, new Date());
+    const inputs = await gatherHealthInputs(clientId, now);
     const hoursInvested = inputs.touchCount * HOURS_PER_TOUCH;
 
     let placementsPerYear: number | null = null;
@@ -165,20 +179,24 @@ export const crmAnalyticsService = {
     let lifetimeCumulative: number | null = null;
 
     if (client.contractStart) {
-      const now = Date.now();
-      const contractAgeDays = (now - client.contractStart.getTime()) / MS_PER_DAY;
+      const monthlyRate = fromMajorUnits(client.monthlyRate ?? 0, BILLING_CURRENCY);
+      const placementFee = fromMajorUnits(client.avgPlacementFee ?? 0, BILLING_CURRENCY);
+      const contractAgeDays = (now.getTime() - client.contractStart.getTime()) / MS_PER_DAY;
       const durYears = Math.max(contractAgeDays / 365, 0.25); // floor: 3 months (legacy parity)
       placementsPerYear = inputs.placedCount / durYears;
-      const retainerARR = (client.monthlyRate ?? 0) * 12;
-      const placementARR = placementsPerYear * (client.avgPlacementFee ?? 0);
-      annualizedRevenue = retainerARR + placementARR;
+      const annualized = add(multiply(monthlyRate, 12), multiply(placementFee, placementsPerYear));
+      annualizedRevenue = toMajorUnits(annualized);
       if (client.grossMargin != null) {
-        grossProfit = annualizedRevenue * (client.grossMargin / 100);
-        roiPerHour = hoursInvested > 0 ? grossProfit / hoursInvested : null;
+        const profit = percentOf(annualized, client.grossMargin);
+        grossProfit = toMajorUnits(profit);
+        roiPerHour = hoursInvested > 0 ? toMajorUnits(profit) / hoursInvested : null;
       }
-      lifetimeCumulative =
-        inputs.placedCount * (client.avgPlacementFee ?? 0) +
-        (client.monthlyRate ?? 0) * (contractAgeDays / 30);
+      lifetimeCumulative = toMajorUnits(
+        add(
+          multiply(placementFee, inputs.placedCount),
+          multiply(monthlyRate, elapsedMonths(client.contractStart, now)),
+        ),
+      );
     }
 
     return {
@@ -196,8 +214,8 @@ export const crmAnalyticsService = {
     };
   },
 
-  async compare(): Promise<CompareRowDTO[]> {
-    const now = new Date();
+  async compare(clock: Clock = systemClock): Promise<CompareRowDTO[]> {
+    const now = clock.now();
     const clients = await clientRepository.list();
     const inputsByClient = await gatherHealthInputsForClients(
       clients.map((c) => c.id),

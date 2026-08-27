@@ -12,10 +12,7 @@ const MS_PER_HOUR = 3_600_000;
  */
 
 /** Whole days the candidate has been in its current stage. */
-export function getDaysInStage(
-  stageEnteredAt: Date | null | undefined,
-  now: Date = new Date(),
-): number {
+export function getDaysInStage(stageEnteredAt: Date | null | undefined, now: Date): number {
   if (!stageEnteredAt) return 0;
   return Math.floor((now.getTime() - stageEnteredAt.getTime()) / MS_PER_DAY);
 }
@@ -27,7 +24,7 @@ export function getDaysInStage(
 export function isOverdue(
   status: CandidateStatus,
   stageEnteredAt: Date | null | undefined,
-  now: Date = new Date(),
+  now: Date,
 ): boolean {
   const sla = statusSlaDays(status);
   if (sla === null || !stageEnteredAt) return false;
@@ -38,7 +35,7 @@ export function isOverdue(
 /** Stuck = sitting in a stage longer than `thresholdDays` (legacy default: 7). */
 export function isStuck(
   stageEnteredAt: Date | null | undefined,
-  now: Date = new Date(),
+  now: Date,
   thresholdDays = 7,
 ): boolean {
   return getDaysInStage(stageEnteredAt, now) > thresholdDays;

@@ -11,9 +11,12 @@ vi.mock("server-only", () => ({}));
 
 import { toCandidateDTO, toRuleCandidate } from "./candidate.dto";
 import type { CandidateRow } from "@/server/repositories/candidate.repository";
+import { fixedClock } from "@/lib/clock";
 import { scoreCandidate } from "@/lib/rules/scoring";
 import { checkStageGate } from "@/lib/rules/stage-gates";
 import type { ClientRules } from "@/lib/rules/types";
+
+const NOW = fixedClock("2026-08-21T12:00:00Z").now();
 
 const row: CandidateRow = {
   id: "c1",
@@ -94,12 +97,12 @@ describe("toRuleCandidate — feeds the pure rules", () => {
       pops: ["Adult"],
       settings: ["Telehealth"],
     };
-    const result = scoreCandidate(ruleCandidate, clientRules);
+    const result = scoreCandidate(ruleCandidate, clientRules, NOW);
     expect(result.pct).toBe(100);
     expect(result.flags).toHaveLength(0);
   });
 
   it("passes through a stage gate without throwing", () => {
-    expect(checkStageGate(ruleCandidate, "QUALIFIED_PRESCREEN")).toEqual([]);
+    expect(checkStageGate(ruleCandidate, "QUALIFIED_PRESCREEN", NOW)).toEqual([]);
   });
 });

@@ -1,5 +1,6 @@
 import "server-only";
 import { Prisma } from "@/generated/prisma/client";
+import { systemClock, type Clock } from "@/lib/clock";
 import { hasCapability } from "@/lib/constants";
 import {
   businessDaysLeft,
@@ -265,7 +266,12 @@ export const dailyService = {
   },
 
   /** The Daily Log page composite for the SESSION user. */
-  async logView(user: AuthUser, date: string, tz: number): Promise<DailyLogViewDTO> {
+  async logView(
+    user: AuthUser,
+    date: string,
+    tz: number,
+    clock: Clock = systemClock,
+  ): Promise<DailyLogViewDTO> {
     const w = dayWindow(date, tz);
     const [
       log,
@@ -292,7 +298,7 @@ export const dailyService = {
       dailyRepository.feedbackForUser(user.id, 2),
       dailyRepository.goalsForWeek(user.id, mondayOf(date)),
     ]);
-    const weekNum = tenureWeek(userRow?.createdAt ?? new Date(), date);
+    const weekNum = tenureWeek(userRow?.createdAt ?? clock.now(), date);
     const ramp = rampFor(weekNum);
     const logsByDate = new Map(history.map((l) => [l.date, l.sourced]));
 
@@ -309,6 +315,7 @@ export const dailyService = {
       ramp.sourced,
       weekTotals.days,
       businessDaysLeft(date),
+      !!log,
     );
 
     return {

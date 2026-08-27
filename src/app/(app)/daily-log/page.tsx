@@ -1,7 +1,7 @@
-import { cookies } from "next/headers";
 import { hasCapability } from "@/lib/constants";
 import { dateKeyForOffset } from "@/lib/daily";
 import { getVerifiedUser } from "@/server/auth/guards";
+import { viewerTzOffset } from "@/server/http/viewer-tz";
 import { dailyService } from "@/server/services/daily.service";
 import { DailyLogView } from "./daily-log-view";
 
@@ -27,11 +27,7 @@ export default async function DailyLogPage() {
   const user = await getVerifiedUser();
   const canViewTeam = hasCapability(user.role, "viewReports");
 
-  const cookieStore = await cookies();
-  const rawTz = cookieStore.get("app-tz")?.value;
-  const parsedTz = rawTz !== undefined ? Number(rawTz) : NaN;
-  const initialTz =
-    Number.isInteger(parsedTz) && parsedTz >= -840 && parsedTz <= 840 ? parsedTz : undefined;
+  const initialTz = await viewerTzOffset();
 
   const initial =
     initialTz !== undefined

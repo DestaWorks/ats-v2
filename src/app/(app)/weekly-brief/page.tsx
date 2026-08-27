@@ -1,7 +1,7 @@
-import { cookies } from "next/headers";
 import { hasCapability } from "@/lib/constants";
 import { dateKeyForOffset, mondayOf } from "@/lib/daily";
 import { getVerifiedUser } from "@/server/auth/guards";
+import { viewerTzOffset } from "@/server/http/viewer-tz";
 import { briefService } from "@/server/services/brief.service";
 import { ErrorState } from "@/components/ui/error-state";
 import { WeeklyBriefView } from "./weekly-brief-view";
@@ -30,11 +30,7 @@ export default async function WeeklyBriefPage() {
     );
   }
 
-  const cookieStore = await cookies();
-  const rawTz = cookieStore.get("app-tz")?.value;
-  const parsedTz = rawTz !== undefined ? Number(rawTz) : NaN;
-  const initialTz =
-    Number.isInteger(parsedTz) && parsedTz >= -840 && parsedTz <= 840 ? parsedTz : undefined;
+  const initialTz = await viewerTzOffset();
 
   const initialWeekStart =
     initialTz !== undefined ? mondayOf(dateKeyForOffset(initialTz)) : undefined;

@@ -20,7 +20,7 @@ export interface CandidateScore {
 export function scoreCandidate(
   candidate: RuleCandidate,
   clientRules: ClientRules | null | undefined,
-  now: Date = new Date(),
+  now: Date,
 ): CandidateScore {
   if (!clientRules) return { score: 0, max: 0, pct: 0, flags: [] };
 

@@ -67,7 +67,7 @@ const STAGE_REQUIRED: Partial<Record<CandidateStatus, StageValidator>> = {
 export function checkStageGate(
   candidate: RuleCandidate,
   toStatus: CandidateStatus,
-  now: Date = new Date(),
+  now: Date,
 ): string[] {
   const validator = STAGE_REQUIRED[toStatus];
   return validator ? validator(candidate, now) : [];
@@ -77,7 +77,7 @@ export function checkStageGate(
 export function canTransition(
   candidate: RuleCandidate,
   toStatus: CandidateStatus,
-  now: Date = new Date(),
+  now: Date,
 ): boolean {
   return checkStageGate(candidate, toStatus, now).length === 0;
 }

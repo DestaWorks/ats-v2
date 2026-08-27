@@ -108,7 +108,7 @@ export const clientReportsService = {
           (c) => !isTerminalStatus(c.status as CandidateStatus),
         ).length;
         const scores = rows
-          .map((c) => scoreFor(c, cohort.rulesByClient))
+          .map((c) => scoreFor(c, cohort.rulesByClient, now))
           .filter((s): s is number => s !== null);
         const activeDays = rows
           .filter((c) => !isTerminalStatus(c.status as CandidateStatus))

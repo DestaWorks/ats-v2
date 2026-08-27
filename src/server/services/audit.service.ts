@@ -4,6 +4,7 @@ import { auditRepository, type AuditListFilters } from "@/server/repositories/au
 import { candidateRepository } from "@/server/repositories/candidate.repository";
 import { userRepository } from "@/server/repositories/user.repository";
 import { AppError } from "@/server/http/app-error";
+import { utcDayStart, utcNextDayStart } from "@/lib/daily";
 import { encodeCursor, type PageCursor } from "@/lib/validation/cursor";
 import type {
   ActivityActorOption,
@@ -29,16 +30,6 @@ import type {
 
 /** One keyset page of the Activity Log (matches the candidate list's `LIST_PAGE`). */
 const ACTIVITY_PAGE = 50;
-
-/** Widen a date to the START of its UTC day (inclusive `from` bound). */
-function utcDayStart(d: Date): Date {
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 0, 0, 0, 0));
-}
-
-/** Widen a date to the END of its UTC day (inclusive `to` bound, so "to = today" includes today). */
-function utcDayEnd(d: Date): Date {
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 23, 59, 59, 999));
-}
 
 /** The list row shape the repo returns (before/after selected only to derive `hasChanges`). */
 interface AuditListRow {
@@ -107,7 +98,7 @@ export const auditService = {
     const repoFilters: AuditListFilters = {
       ...filters,
       ...(filters.from ? { from: utcDayStart(filters.from) } : {}),
-      ...(filters.to ? { to: utcDayEnd(filters.to) } : {}),
+      ...(filters.to ? { to: utcNextDayStart(filters.to) } : {}),
     };
     const rows = (await auditRepository.list(
       repoFilters,

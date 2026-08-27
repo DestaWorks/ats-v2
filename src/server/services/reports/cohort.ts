@@ -1,6 +1,7 @@
 import "server-only";
 import { scoreCandidate } from "@/lib/rules/scoring";
 import type { ClientRules } from "@/lib/rules/types";
+import { utcDayStart, utcNextDayStart } from "@/lib/daily";
 import type { ReportFilters } from "@/lib/validation/reports";
 import { candidateRepository, type CandidateRow } from "@/server/repositories/candidate.repository";
 import { toClientRules } from "@/server/repositories/client-rules.repository";
@@ -12,15 +13,6 @@ import { cachedClientNameMap, cachedClientRulesList } from "@/server/http/reques
  *  `TRASH_PAGE`-style cap precedent in `candidate.service.ts`), not a silent truncation: reports
  *  built on this cohort should surface a "showing first N" note if `rows.length === REPORT_ROW_CAP`. */
 export const REPORT_ROW_CAP = 3000;
-
-/** Widen a date to the START of its UTC day (inclusive `from` bound; mirrors `candidate.service.ts`). */
-function utcDayStart(d: Date): Date {
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
-}
-/** The start of the NEXT UTC day — an exclusive upper bound that makes the `to` day inclusive. */
-function utcNextDayStart(d: Date): Date {
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1));
-}
 
 export interface ReportCohort {
   candidates: CandidateRow[];
@@ -76,10 +68,11 @@ export async function loadCohort(filters: ReportFilters): Promise<ReportCohort> 
 export function scoreFor(
   row: CandidateRow,
   rulesByClient: Map<string, ClientRules>,
+  now: Date,
 ): number | null {
   if (!row.clientId) return null;
   const rules = rulesByClient.get(row.clientId);
   if (!rules) return null;
-  const { pct, max } = scoreCandidate(toRuleCandidate(row), rules);
+  const { pct, max } = scoreCandidate(toRuleCandidate(row), rules, now);
   return max > 0 ? pct : null;
 }

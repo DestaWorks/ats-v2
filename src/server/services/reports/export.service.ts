@@ -27,7 +27,7 @@ const COLUMNS: CsvColumn<{ row: CandidateRow; cohort: ReportCohort; now: Date }>
   { header: "Days In Stage", value: ({ row, now }) => getDaysInStage(row.stageEnteredAt, now) },
   {
     header: "Score",
-    value: ({ row, cohort }) => scoreFor(row, cohort.rulesByClient) ?? "",
+    value: ({ row, cohort, now }) => scoreFor(row, cohort.rulesByClient, now) ?? "",
   },
 ];
 

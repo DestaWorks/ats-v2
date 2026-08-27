@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { cookies } from "next/headers";
 import { BoltIcon, FlagIcon, UserGroupIcon } from "@heroicons/react/24/outline";
 import { getVerifiedUser } from "@/server/auth/guards";
+import { viewerTzOffset } from "@/server/http/viewer-tz";
 import { candidateService } from "@/server/services/candidate.service";
 import { dailyService } from "@/server/services/daily.service";
 import { dateKeyForOffset } from "@/lib/daily";
@@ -28,11 +28,7 @@ export default async function DashboardPage() {
   // Daily strip's "today" is the USER-LOCAL date (`app-tz` cookie, shared with `/daily-log` and
   // `/weekly-brief` — see those pages' comments) — seed it server-side when the cookie is
   // present so it renders immediately instead of a blank gap while it fetches on mount.
-  const cookieStore = await cookies();
-  const rawTz = cookieStore.get("app-tz")?.value;
-  const parsedTz = rawTz !== undefined ? Number(rawTz) : NaN;
-  const initialTz =
-    Number.isInteger(parsedTz) && parsedTz >= -840 && parsedTz <= 840 ? parsedTz : undefined;
+  const initialTz = await viewerTzOffset();
 
   const [stats, initialDailyOverview] = await Promise.all([
     candidateService.dashboardStats(),

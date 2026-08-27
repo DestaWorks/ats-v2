@@ -1,10 +1,11 @@
 import "server-only";
 import type { Prisma } from "@/generated/prisma/client";
 import { COMPACT_STATES, UNVERIFIED_LICENSE_STATUSES } from "@/lib/constants";
+import { MS_PER_DAY } from "@/lib/clock";
+import { utcDayStart } from "@/lib/daily";
 import { db } from "@/server/db/prisma";
 import { FIRST_TERMINAL_ORDER } from "@/server/repositories/candidate.repository";
 
-const MS_PER_DAY = 86_400_000;
 /** Credentials eligible for NLC (Nurse Licensure Compact) multi-state practice — matches
  *  legacy's `compactHolders` filter (`legacy/index.html:2980`). */
 const NLC_CREDENTIALS = ["NP", "APRN", "PMHNP", "PMHNP-BC"];
@@ -26,7 +27,8 @@ function nlcWhere(): Prisma.CandidateWhereInput {
 export const credentialsIntelligenceRepository = {
   /** The 6 stat-card counts, in one round of parallel queries. */
   async statCounts(now: Date, tx?: Prisma.TransactionClient) {
-    const soon = new Date(now.getTime() + 90 * MS_PER_DAY);
+    const from = utcDayStart(now);
+    const soon = new Date(from.getTime() + 90 * MS_PER_DAY);
     const [total, active, unverified, expired, expiringSoon, nlcCompact] = await Promise.all([
       db(tx).candidate.count({ where: { deletedAt: null } }),
       db(tx).candidate.count({ where: { deletedAt: null, licenseStatus: "Active" } }),
@@ -38,7 +40,7 @@ export const credentialsIntelligenceRepository = {
         where: {
           deletedAt: null,
           licenseStatus: "Active",
-          licenseExpiry: { gt: now, lte: soon },
+          licenseExpiry: { gte: from, lte: soon },
         },
       }),
       db(tx).candidate.count({ where: nlcWhere() }),

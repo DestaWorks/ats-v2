@@ -1,6 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { checkStageGate, canTransition } from "./stage-gates";
+import { fixedClock } from "@/lib/clock";
 import type { RuleCandidate } from "./types";
+
+const NOW = fixedClock("2026-08-21T12:00:00Z").now();
 
 const clinical: RuleCandidate = {
   status: "NEW_CANDIDATE",
@@ -15,13 +18,13 @@ const clinical: RuleCandidate = {
 
 describe("checkStageGate — QUALIFIED_PRESCREEN", () => {
   it("requires credential + license state for clinical", () => {
-    expect(checkStageGate(clinical, "QUALIFIED_PRESCREEN")).toEqual([]);
-    expect(checkStageGate({ ...clinical, credential: null }, "QUALIFIED_PRESCREEN")).toContain(
+    expect(checkStageGate(clinical, "QUALIFIED_PRESCREEN", NOW)).toEqual([]);
+    expect(checkStageGate({ ...clinical, credential: null }, "QUALIFIED_PRESCREEN", NOW)).toContain(
       "Credential required",
     );
-    expect(checkStageGate({ ...clinical, licenseState: null }, "QUALIFIED_PRESCREEN")).toContain(
-      "License state required",
-    );
+    expect(
+      checkStageGate({ ...clinical, licenseState: null }, "QUALIFIED_PRESCREEN", NOW),
+    ).toContain("License state required");
   });
 
   it("requires only contact info for operations", () => {
@@ -33,19 +36,19 @@ describe("checkStageGate — QUALIFIED_PRESCREEN", () => {
       email: "ops@x.com",
       phone: null,
     };
-    expect(checkStageGate(ops, "QUALIFIED_PRESCREEN")).toEqual([]);
-    expect(checkStageGate({ ...ops, email: null, phone: null }, "QUALIFIED_PRESCREEN")).toContain(
-      "Contact info required (email or phone)",
-    );
+    expect(checkStageGate(ops, "QUALIFIED_PRESCREEN", NOW)).toEqual([]);
+    expect(
+      checkStageGate({ ...ops, email: null, phone: null }, "QUALIFIED_PRESCREEN", NOW),
+    ).toContain("Contact info required (email or phone)");
   });
 });
 
 describe("checkStageGate — INITIAL_SCREENING", () => {
   it("blocks clinical when license is Not Verified", () => {
     expect(
-      checkStageGate({ ...clinical, licenseStatus: "Not Verified" }, "INITIAL_SCREENING"),
+      checkStageGate({ ...clinical, licenseStatus: "Not Verified" }, "INITIAL_SCREENING", NOW),
     ).toContain("License must be verified first");
-    expect(checkStageGate(clinical, "INITIAL_SCREENING")).toEqual([]);
+    expect(checkStageGate(clinical, "INITIAL_SCREENING", NOW)).toEqual([]);
   });
 
   it("does not block operations on license", () => {
@@ -55,17 +58,18 @@ describe("checkStageGate — INITIAL_SCREENING", () => {
       licenseStatus: "Not Verified",
       email: "o@x.com",
     };
-    expect(checkStageGate(ops, "INITIAL_SCREENING")).toEqual([]);
+    expect(checkStageGate(ops, "INITIAL_SCREENING", NOW)).toEqual([]);
   });
 });
 
 describe("checkStageGate — SUBMITTED_TO_CLIENT", () => {
   it("requires Active license (clinical), a client, and contact", () => {
-    expect(checkStageGate(clinical, "SUBMITTED_TO_CLIENT")).toEqual([]);
+    expect(checkStageGate(clinical, "SUBMITTED_TO_CLIENT", NOW)).toEqual([]);
 
     const errs = checkStageGate(
       { ...clinical, licenseStatus: "Not Verified", clientId: null, email: null, phone: null },
       "SUBMITTED_TO_CLIENT",
+      NOW,
     );
     expect(errs).toContain("License must be Active");
     expect(errs).toContain("Client assignment required");
@@ -80,8 +84,8 @@ describe("checkStageGate — SUBMITTED_TO_CLIENT", () => {
       clientId: "c1",
       email: "o@x.com",
     };
-    expect(checkStageGate(ops, "SUBMITTED_TO_CLIENT")).toEqual([]);
-    expect(checkStageGate({ ...ops, clientId: null }, "SUBMITTED_TO_CLIENT")).toContain(
+    expect(checkStageGate(ops, "SUBMITTED_TO_CLIENT", NOW)).toEqual([]);
+    expect(checkStageGate({ ...ops, clientId: null }, "SUBMITTED_TO_CLIENT", NOW)).toContain(
       "Client assignment required",
     );
   });
@@ -95,13 +99,15 @@ describe("ungated stages", () => {
       "OFFER_ACCEPTED",
       "STARTED_DAY1",
     ] as const) {
-      expect(checkStageGate({ status: "NEW_CANDIDATE", track: "Clinical" }, s)).toEqual([]);
-      expect(canTransition({ status: "NEW_CANDIDATE", track: "Clinical" }, s)).toBe(true);
+      expect(checkStageGate({ status: "NEW_CANDIDATE", track: "Clinical" }, s, NOW)).toEqual([]);
+      expect(canTransition({ status: "NEW_CANDIDATE", track: "Clinical" }, s, NOW)).toBe(true);
     }
   });
 
   it("canTransition mirrors checkStageGate", () => {
-    expect(canTransition({ ...clinical, credential: null }, "QUALIFIED_PRESCREEN")).toBe(false);
-    expect(canTransition(clinical, "QUALIFIED_PRESCREEN")).toBe(true);
+    expect(canTransition({ ...clinical, credential: null }, "QUALIFIED_PRESCREEN", NOW)).toBe(
+      false,
+    );
+    expect(canTransition(clinical, "QUALIFIED_PRESCREEN", NOW)).toBe(true);
   });
 });

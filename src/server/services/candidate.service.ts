@@ -1,5 +1,7 @@
 import "server-only";
 import type { Prisma } from "@/generated/prisma/client";
+import { systemClock, type Clock } from "@/lib/clock";
+import { utcDayStart, utcNextDayStart } from "@/lib/daily";
 import {
   ACTIVE_STATUS_CODES,
   HOT_SCORE,
@@ -118,16 +120,6 @@ export interface ListFilters extends SharedListFilters {
  * viewer's id server-side (the ONLY place `createdById` is set from a session, never the client).
  * `status` is threaded through separately by each caller (the list keeps it; the board strips it).
  */
-/** Widen a date to the START of its UTC day (inclusive `from` bound; mirrors audit.service). */
-function utcDayStart(d: Date): Date {
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
-}
-
-/** The start of the NEXT UTC day — an exclusive upper bound that makes the `to` day inclusive. */
-function utcNextDayStart(d: Date): Date {
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1));
-}
-
 function toRepoFilters(filters: SharedListFilters, viewer: AuthUser) {
   return {
     track: filters.track,
@@ -228,11 +220,12 @@ function constrainsNothing(rules: ClientRules): boolean {
 function scoreFor(
   row: RuleCandidateSource,
   rulesByClient: Map<string, ClientRules>,
+  now: Date,
 ): number | null {
   if (!row.clientId) return null;
   const rules = rulesByClient.get(row.clientId);
   if (!rules || constrainsNothing(rules)) return null;
-  const { pct, max } = scoreCandidate(toRuleCandidate(row), rules);
+  const { pct, max } = scoreCandidate(toRuleCandidate(row), rules, now);
   return max > 0 ? pct : null;
 }
 
@@ -241,9 +234,13 @@ function scoreFor(
  * scoring block). License-based reasons apply with or without a client; the state-mismatch check
  * needs the assigned client's rules. Display-only — NEVER mutates status (that stays a human move).
  */
-function dqFor(row: RuleCandidateSource, rulesByClient: Map<string, ClientRules>): string[] {
+function dqFor(
+  row: RuleCandidateSource,
+  rulesByClient: Map<string, ClientRules>,
+  now: Date,
+): string[] {
   const rules = row.clientId ? (rulesByClient.get(row.clientId) ?? null) : null;
-  return getAutoDisqualify(toRuleCandidate(row), rules);
+  return getAutoDisqualify(toRuleCandidate(row), rules, now);
 }
 
 /**
@@ -598,7 +595,11 @@ export const candidateService = {
    * omits `licenseNumber`, `toDocumentDTO` omits `extractedText`/`extractedData`, both unless the
    * viewer holds `viewCredentials`; note visibility is `visibleNotes` (server-side, §3.2).
    */
-  async getCandidateDetail(id: string, viewer: AuthUser): Promise<CandidateDetailDTO> {
+  async getCandidateDetail(
+    id: string,
+    viewer: AuthUser,
+    clock: Clock = systemClock,
+  ): Promise<CandidateDetailDTO> {
     // `findById` doesn't gate the other 6 reads — none of them depend on its result, only on the
     // already-known `id` — so all 7 fire in one round trip instead of findById-then-the-rest.
     const [candidate, documents, notes, history, clientNames, rulesRows, outreachRows] =
@@ -624,7 +625,8 @@ export const candidateService = {
     const rulesByClient = buildRulesMap(clientNames, rulesRows);
     const rules = candidate.clientId ? (rulesByClient.get(candidate.clientId) ?? null) : null;
     const ruleCandidate = toRuleCandidate(candidate);
-    const raw = scoreCandidate(ruleCandidate, rules);
+    const now = clock.now();
+    const raw = scoreCandidate(ruleCandidate, rules, now);
     // Non-null only when the client constrains at least one matchable dimension (see `scoreFor`) —
     // a constrains-nothing client offers no client-specific fit to explain.
     const scoring =
@@ -634,7 +636,7 @@ export const candidateService = {
             score: raw.score,
             max: raw.max,
             flags: raw.flags,
-            autoDisqualify: getAutoDisqualify(ruleCandidate, rules),
+            autoDisqualify: getAutoDisqualify(ruleCandidate, rules, now),
           }
         : null;
 
@@ -888,7 +890,13 @@ export const candidateService = {
               now,
             });
       const candidates = rows.map((row) =>
-        toListItem(row, clientNames, now, scoreFor(row, rulesByClient), dqFor(row, rulesByClient)),
+        toListItem(
+          row,
+          clientNames,
+          now,
+          scoreFor(row, rulesByClient, now),
+          dqFor(row, rulesByClient, now),
+        ),
       );
       return { candidates, ...meta };
     }
@@ -900,13 +908,13 @@ export const candidateService = {
       candidateRepository.listCards({ ...repoFilters, orderBy: baseOrder, now }),
     ]);
     const rulesByClient = buildRulesMap(clientNames, rulesRows);
-    let scored = allRows.map((row) => ({ row, score: scoreFor(row, rulesByClient) }));
+    let scored = allRows.map((row) => ({ row, score: scoreFor(row, rulesByClient, now) }));
     if (hot) scored = scored.filter((s) => s.score !== null && s.score >= HOT_SCORE);
     if (sort === "fit") scored = sortByFit(scored);
     const meta = pageMeta(scored.length, requestedPage, LIST_PAGE);
     const pageRows = scored.slice((meta.page - 1) * LIST_PAGE, meta.page * LIST_PAGE);
     const candidates = pageRows.map((s) =>
-      toListItem(s.row, clientNames, now, s.score, dqFor(s.row, rulesByClient)),
+      toListItem(s.row, clientNames, now, s.score, dqFor(s.row, rulesByClient, now)),
     );
     return { candidates, ...meta };
   },
@@ -946,7 +954,13 @@ export const candidateService = {
     const now = new Date();
     const attention = staleRows
       .map((row) =>
-        toCard(row, clientNames, now, scoreFor(row, rulesByClient), dqFor(row, rulesByClient)),
+        toCard(
+          row,
+          clientNames,
+          now,
+          scoreFor(row, rulesByClient, now),
+          dqFor(row, rulesByClient, now),
+        ),
       )
       .filter((c) => c.isOverdue || c.isStuck);
 
@@ -1010,7 +1024,13 @@ export const candidateService = {
 
     const rulesByClient = buildRulesMap(clientNames, rulesRows);
     const cardOf = (row: CandidateCardRow) =>
-      toCard(row, clientNames, now, scoreFor(row, rulesByClient), dqFor(row, rulesByClient));
+      toCard(
+        row,
+        clientNames,
+        now,
+        scoreFor(row, rulesByClient, now),
+        dqFor(row, rulesByClient, now),
+      );
 
     const countByStatus = new Map<string, number>();
     for (const g of grouped) countByStatus.set(g.status, g._count._all);
@@ -1082,7 +1102,13 @@ export const candidateService = {
     const hasMore = rows.length > BOARD_PAGE;
     const pageRows = hasMore ? rows.slice(0, BOARD_PAGE) : rows;
     const items = pageRows.map((row) =>
-      toCard(row, clientNames, now, scoreFor(row, rulesByClient), dqFor(row, rulesByClient)),
+      toCard(
+        row,
+        clientNames,
+        now,
+        scoreFor(row, rulesByClient, now),
+        dqFor(row, rulesByClient, now),
+      ),
     );
     const nextCursor = hasMore
       ? encodeCursor(pageRows[pageRows.length - 1]!, "createdAt_desc")
@@ -1129,7 +1155,7 @@ export const candidateService = {
    * pipeline columns, (2) appends a `stage_history` row, and (3) writes the audit entry — all in
    * one transaction so the trail can never drift from the data.
    */
-  async move(id: string, toStatus: CandidateStatus, user: AuthUser) {
+  async move(id: string, toStatus: CandidateStatus, user: AuthUser, clock: Clock = systemClock) {
     // Defense-in-depth: `toStatus` is typed, but at a route boundary it's whatever the client
     // sent. Reject an unknown code before it reaches `statusOrder()` (which would throw on undefined).
     if (!isCandidateStatus(toStatus)) {
@@ -1138,12 +1164,12 @@ export const candidateService = {
     const existing = await candidateRepository.findById(id);
     if (!existing) throw new AppError("NOT_FOUND", "Candidate not found");
 
-    const blocking = checkStageGate(toRuleCandidate(existing), toStatus);
+    const now = clock.now();
+    const blocking = checkStageGate(toRuleCandidate(existing), toStatus, now);
     if (blocking.length > 0) {
       throw new AppError("STAGE_BLOCKED", blocking.join("; "));
     }
 
-    const now = new Date();
     const toStageOrder = statusOrder(toStatus);
     // placedAt is set once, the first time the candidate reaches "Started (Day 1)".
     const placedAt = toStatus === "STARTED_DAY1" ? (existing.placedAt ?? now) : existing.placedAt;

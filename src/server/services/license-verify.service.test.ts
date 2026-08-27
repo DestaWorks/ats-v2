@@ -1,4 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
+import { fixedClock } from "@/lib/clock";
+import { effectiveLicenseStatus } from "@/lib/rules/license";
 
 /**
  * Proves `licenseVerifyService.dashboard` calls the queue/timeline reads with the right caps,
@@ -26,7 +28,7 @@ vi.mock("@/server/http/request-cache", () => ({
 
 import { licenseVerifyService } from "./license-verify.service";
 
-const NOW = new Date("2026-07-16T00:00:00Z");
+const NOW = fixedClock("2026-07-16T00:00:00Z");
 
 function candidateRow(overrides: Record<string, unknown> = {}) {
   return {
@@ -77,6 +79,39 @@ describe("licenseVerifyService.dashboard", () => {
 
     const out = await licenseVerifyService.dashboard(NOW);
     expect(out.queueTruncated).toBe(true);
+  });
+
+  it("REGRESSION: daysLeft was off by one — it read EXPIRED on a license still valid today", async () => {
+    // Mid-afternoon, not the midnight the old test happened to pin, which hid the bug.
+    const clock = fixedClock("2026-07-16T14:00:00Z");
+    h.licenseVerifyRepo.verificationQueue.mockResolvedValue({ rows: [], hasMore: false });
+    h.licenseVerifyRepo.expiryTimeline.mockResolvedValue([
+      // `licenseExpiry` is date-only at UTC midnight; a license is valid THROUGH its expiry date
+      // (`lib/rules/license.ts`), so today's expiry is still Active — daysLeft must be 0, not -1.
+      candidateRow({ id: "today", licenseExpiry: new Date("2026-07-16T00:00:00Z") }),
+      candidateRow({ id: "tomorrow", licenseExpiry: new Date("2026-07-17T00:00:00Z") }),
+      candidateRow({ id: "yesterday", licenseExpiry: new Date("2026-07-15T00:00:00Z") }),
+    ]);
+    h.clientRepo.nameMap.mockResolvedValue(new Map());
+
+    const out = await licenseVerifyService.dashboard(clock);
+    const byId = new Map(out.timeline.map((r) => [r.id, r.daysLeft]));
+    // OLD: floor((expiry - now)/86_400_000) → -1 / 0 / -2 respectively.
+    expect(byId.get("today")).toBe(0);
+    expect(byId.get("tomorrow")).toBe(1);
+    expect(byId.get("yesterday")).toBe(-1);
+    // The sign agrees with `effectiveLicenseStatus`: expired IFF daysLeft < 0.
+    expect(
+      effectiveLicenseStatus(
+        {
+          status: "NEW_CANDIDATE",
+          track: "Clinical",
+          licenseStatus: "Active",
+          licenseExpiry: new Date("2026-07-16"),
+        },
+        clock.now(),
+      ),
+    ).toBe("Active");
   });
 
   it("computes daysLeft against the given clock, including a negative (expired) value", async () => {

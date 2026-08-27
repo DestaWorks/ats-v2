@@ -1,6 +1,7 @@
-import { DATE_KEY_RE, dateKey } from "@/lib/daily";
+import { DATE_KEY_RE, dateKeyForOffset } from "@/lib/daily";
 import { requireCapability } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
+import { viewerTzOffset } from "@/server/http/viewer-tz";
 import { briefService } from "@/server/services/brief.service";
 
 /**
@@ -13,6 +14,8 @@ export const GET = apiHandler(async (req: Request) => {
   await requireCapability("viewReports");
   const params = new URL(req.url).searchParams;
   const rawDate = params.get("date") ?? "";
-  const date = DATE_KEY_RE.test(rawDate) ? rawDate : dateKey();
+  const date = DATE_KEY_RE.test(rawDate)
+    ? rawDate
+    : dateKeyForOffset((await viewerTzOffset()) ?? 0);
   return json(await briefService.getDaily(date));
 });

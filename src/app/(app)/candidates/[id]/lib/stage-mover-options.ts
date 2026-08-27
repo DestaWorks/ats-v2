@@ -63,11 +63,11 @@ export function toRuleCandidate(c: StageMoverCandidate): RuleCandidate {
  * Build the full option list. The current stage is always `valid` (staying put is a no-op — the
  * mover disables it as the selected value, not as an invalid gate). Every other target is checked.
  */
-export function buildStageMoverOptions(c: StageMoverCandidate): StageMoverOption[] {
+export function buildStageMoverOptions(c: StageMoverCandidate, now: Date): StageMoverOption[] {
   const rule = toRuleCandidate(c);
   return ALL_STATUS_CODES.map((code) => {
     const current = code === c.status;
-    const reasons = current ? [] : checkStageGate(rule, code);
+    const reasons = current ? [] : checkStageGate(rule, code, now);
     return {
       code,
       label: statusLabel(code),

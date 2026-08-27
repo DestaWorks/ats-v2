@@ -131,14 +131,16 @@ describe("auditService.listActivity — filters → repo where (UTC day-bounds)"
     expect(filters).toMatchObject({ action: "purge", entity: "candidate", actor: "u9" });
   });
 
-  it("widens from → UTC start-of-day and to → UTC end-of-day", async () => {
+  it("widens from → UTC start-of-day and to → the EXCLUSIVE start of the next UTC day", async () => {
     await auditService.listActivity(
       { from: new Date("2026-06-01T09:30:00.000Z"), to: new Date("2026-06-30T09:30:00.000Z") },
       null,
     );
     const [filters] = list.mock.calls[0]!;
     expect((filters.from as Date).toISOString()).toBe("2026-06-01T00:00:00.000Z");
-    expect((filters.to as Date).toISOString()).toBe("2026-06-30T23:59:59.999Z");
+    // Was a 23:59:59.999 "inclusive day end" — one of THREE private `utcDayStart` copies with
+    // two different end-of-day rules. Now the one shared half-open `[start, nextDayStart)`.
+    expect((filters.to as Date).toISOString()).toBe("2026-07-01T00:00:00.000Z");
   });
 
   it("passes take = pageSize + 1 (51) and the decoded cursor to the repo", async () => {

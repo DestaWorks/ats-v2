@@ -46,7 +46,7 @@ export const pipelineReportsService = {
       if (AT_CLIENT.includes(status)) atClient++;
       if (isOverdue(status, c.stageEnteredAt, now)) overdue++;
       const rules = c.clientId ? cohort.rulesByClient.get(c.clientId) : undefined;
-      const dq = getAutoDisqualify(toRuleCandidate(c), rules ?? null);
+      const dq = getAutoDisqualify(toRuleCandidate(c), rules ?? null, now);
       if (c.licenseStatus === "Expired" || dq.length > 0) flagged++;
     }
 
@@ -65,7 +65,7 @@ export const pipelineReportsService = {
         id: c.id,
         name: c.name,
         clientName: c.clientId ? (cohort.clientNames.get(c.clientId) ?? null) : null,
-        scorePct: scoreFor(c, cohort.rulesByClient),
+        scorePct: scoreFor(c, cohort.rulesByClient, now),
       }))
       .filter((c): c is typeof c & { scorePct: number } => c.scorePct !== null)
       .sort((a, b) => b.scorePct - a.scorePct)

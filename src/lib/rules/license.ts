@@ -1,4 +1,5 @@
 import type { LicenseStatus } from "@/lib/constants";
+import { utcNextDayStart } from "@/lib/daily";
 import type { RuleCandidate } from "./types";
 
 /**
@@ -11,26 +12,26 @@ import type { RuleCandidate } from "./types";
  * drove the `/license-verify` timeline display and nothing else. Gates, scoring and DQ now all
  * go through here, so an expired license behaves exactly like a manually-set `Expired`.
  *
- * `licenseExpiry` is a DATE-ONLY value stored at UTC midnight (`z.coerce.date()` over an
- * `<input type="date">`), and a license is valid THROUGH its expiry date — so the demotion
+ * `licenseExpiry` is a DATE-ONLY value nominally stored at UTC midnight (`z.coerce.date()` over
+ * an `<input type="date">`), and a license is valid THROUGH its expiry date — so the demotion
  * fires only once the following UTC day has begun, never on the expiry date itself. Erring
  * later is deliberate: a false `Expired` blocks a legitimate submission, which is the more
- * costly mistake.
+ * costly mistake. The boundary is derived with `utcNextDayStart` rather than "+ 24h" so an
+ * imported row that carries a stray time-of-day still gets the whole of its expiry date.
+ *
+ * `now` is REQUIRED — a rule is told the time, it never reads the clock (`lib/clock.ts`).
  */
-const MS_PER_DAY = 86_400_000;
-
 export function effectiveLicenseStatus(
   candidate: RuleCandidate,
-  now: Date = new Date(),
+  now: Date,
 ): LicenseStatus | null | undefined {
   const status = candidate.licenseStatus;
   if (status !== "Active" || !candidate.licenseExpiry) return status;
-  const validThrough = candidate.licenseExpiry.getTime() + MS_PER_DAY;
-  return now.getTime() >= validThrough ? "Expired" : status;
+  return now.getTime() >= utcNextDayStart(candidate.licenseExpiry).getTime() ? "Expired" : status;
 }
 
 /** Has the license lapsed since it was verified? (`Expired` set by hand is NOT "lapsed".) */
-export function isLicenseLapsed(candidate: RuleCandidate, now: Date = new Date()): boolean {
+export function isLicenseLapsed(candidate: RuleCandidate, now: Date): boolean {
   return (
     candidate.licenseStatus === "Active" && effectiveLicenseStatus(candidate, now) === "Expired"
   );

@@ -3,12 +3,39 @@
  * THE one date/week definition (D5 / plan 3.1): day keys are the USER-LOCAL calendar date as a
  * "YYYY-MM-DD" string; weeks are MONDAY-anchored. Legacy had three competing week anchors
  * (Monday for targets, Sunday for logs/journal, a hardcoded tenure epoch) — all consolidated.
+ *
+ * Every instant-reading helper here takes a `Clock` (defaulting to `systemClock`) rather than
+ * calling `new Date()` itself, so "today" is a value a test can pin.
  */
+
+import { MS_PER_DAY, systemClock, type Clock } from "./clock";
 
 export const DATE_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-/** The local calendar-date key for a Date (defaults to now). */
-export function dateKey(d: Date = new Date()): string {
+/** Widest sane `Date.getTimezoneOffset()` values (UTC-14 .. UTC+14), in minutes behind UTC. */
+const TZ_OFFSET_MIN = -840;
+const TZ_OFFSET_MAX = 840;
+
+/**
+ * Parse an `app-tz` cookie / `tz` query value into a `Date.getTimezoneOffset()` offset, or
+ * `undefined` when it is absent or out of range. One shared parser so the pages and the API
+ * routes that both read that cookie cannot drift apart on what counts as valid.
+ */
+export function parseTzOffset(raw: string | null | undefined): number | undefined {
+  if (raw === null || raw === undefined || raw === "") return undefined;
+  const parsed = Number(raw);
+  return Number.isInteger(parsed) && parsed >= TZ_OFFSET_MIN && parsed <= TZ_OFFSET_MAX
+    ? parsed
+    : undefined;
+}
+
+/**
+ * The HOST-local calendar-date key. Correct in the browser (the host IS the user); on the
+ * server the host is UTC, so server code must use `dateKeyForOffset` with the viewer's own
+ * offset instead — see that function.
+ */
+export function dateKey(clock: Clock = systemClock): string {
+  const d = clock.now();
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
@@ -16,14 +43,50 @@ export function dateKey(d: Date = new Date()): string {
 }
 
 /**
- * The user-local calendar-date key for a given tz offset, computed from the CURRENT instant —
- * the server-side equivalent of `dateKey()` when the caller only has the browser's UTC offset
- * minutes (not a real local `Date`), e.g. an RSC render seeded from a client-set tz cookie.
- * Same sign convention as `dayWindow`/`Date.getTimezoneOffset()` (minutes BEHIND UTC).
+ * The USER-LOCAL calendar-date key for a given tz offset — the server-side "today". The server
+ * host runs in UTC, so `dateKey()` there answers the host's question, not the user's: at
+ * 22:30Z a viewer in UTC+3 is already on the next calendar day, and a viewer in UTC-5 is still
+ * on the previous one. Same sign convention as `dayWindow`/`Date.getTimezoneOffset()` (minutes
+ * BEHIND UTC).
  */
-export function dateKeyForOffset(tzOffsetMinutes: number, now: Date = new Date()): string {
-  const local = new Date(now.getTime() - tzOffsetMinutes * 60_000);
+export function dateKeyForOffset(tzOffsetMinutes: number, clock: Clock = systemClock): string {
+  const local = new Date(clock.now().getTime() - tzOffsetMinutes * 60_000);
   return `${local.getUTCFullYear()}-${String(local.getUTCMonth() + 1).padStart(2, "0")}-${String(local.getUTCDate()).padStart(2, "0")}`;
+}
+
+/**
+ * THE UTC day-bound pair. Ranges are HALF-OPEN, `[utcDayStart(from), utcNextDayStart(to))`:
+ * consecutive days tile the timeline with no gap and no overlap (the same `[start, end)`
+ * convention `dayWindow`/`weekWindow` below already use), and the bound stays correct whatever
+ * sub-second precision the column happens to have. The `23:59:59.999` "inclusive end" spelling
+ * this replaces silently dropped anything later in the final second.
+ */
+export function utcDayStart(d: Date): Date {
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+}
+
+/** The start of the NEXT UTC day — the EXCLUSIVE upper bound that makes `to`'s day inclusive. */
+export function utcNextDayStart(d: Date): Date {
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1));
+}
+
+/** Whole UTC calendar days from `from`'s day to `to`'s day — negative once `to` is in the past. */
+export function utcDaysBetween(from: Date, to: Date): number {
+  return Math.round((utcDayStart(to).getTime() - utcDayStart(from).getTime()) / MS_PER_DAY);
+}
+
+/**
+ * Whole calendar months elapsed from `start` to `now`, clamped at 0. Calendar-correct (a month
+ * is 28-31 days, never a flat 30) and never negative for a future-dated `start`.
+ */
+export function elapsedMonths(start: Date, now: Date): number {
+  let months =
+    (now.getUTCFullYear() - start.getUTCFullYear()) * 12 +
+    (now.getUTCMonth() - start.getUTCMonth());
+  const anniversary = new Date(start.getTime());
+  anniversary.setUTCMonth(start.getUTCMonth() + months);
+  if (anniversary.getTime() > now.getTime()) months -= 1;
+  return Math.max(0, months);
 }
 
 /** The Monday of the week containing `key` (Monday-anchored, the ONE week definition). */
@@ -55,7 +118,7 @@ export function daysAfter(key: string, n: number): string {
 export function dayWindow(key: string, tzOffsetMinutes: number): { start: Date; end: Date } {
   const utcMidnight = new Date(`${key}T00:00:00Z`).getTime();
   const start = utcMidnight + tzOffsetMinutes * 60_000;
-  return { start: new Date(start), end: new Date(start + 86_400_000) };
+  return { start: new Date(start), end: new Date(start + MS_PER_DAY) };
 }
 
 /**
@@ -65,7 +128,7 @@ export function dayWindow(key: string, tzOffsetMinutes: number): { start: Date; 
  */
 export function weekWindow(weekStart: string, tzOffsetMinutes: number): { start: Date; end: Date } {
   const { start } = dayWindow(weekStart, tzOffsetMinutes);
-  return { start, end: new Date(start.getTime() + 7 * 86_400_000) };
+  return { start, end: new Date(start.getTime() + 7 * MS_PER_DAY) };
 }
 
 /** Pace status vs a 9am–5pm linear ramp (legacy `expectedByNow`): hit / on pace / behind. */
@@ -120,7 +183,7 @@ export function rampFor(weekNum: number): RampPhase {
 export function tenureWeek(startedAt: Date, key: string): number {
   const days = Math.max(
     0,
-    Math.floor((new Date(`${key}T00:00:00Z`).getTime() - startedAt.getTime()) / 86_400_000),
+    Math.floor((new Date(`${key}T00:00:00Z`).getTime() - startedAt.getTime()) / MS_PER_DAY),
   );
   return Math.floor(days / 7) + 1;
 }
@@ -161,7 +224,10 @@ export interface WeeklyPacing {
  * Legacy "predictive pacing" (Daily Log, `index.html:2208-2210`) — a linear projection of the
  * rolling Monday-anchored week's self-reported sourcing against the daily ramp target (a 5-day
  * work week). `daysLogged` is how many days this week already have a submitted log (drives the
- * average in `projectedTotal`); `daysLeft` is business days remaining (`businessDaysLeft`).
+ * average in `projectedTotal`); `daysLeft` is business days remaining INCLUSIVE of today
+ * (`businessDaysLeft`); `todayAlreadyLogged` says whether today's own log is already among
+ * `weekSourced`/`daysLogged`, in which case today is NOT a day still available to work — it is
+ * counted once, on the "done" side, and dropped from the remaining-days divisor.
  * `neededPerDay` is clamped to 0 (legacy's raw `ceil` can go negative once the week's target is
  * already hit — a negative "needed per day" reads as a bug, not a signal, so it's floored here).
  */
@@ -170,10 +236,12 @@ export function weeklyPacing(
   dailyTarget: number,
   daysLogged: number,
   daysLeft: number,
+  todayAlreadyLogged: boolean,
 ): WeeklyPacing {
   const weeklyTarget = dailyTarget * 5;
+  const daysRemaining = Math.max(0, daysLeft - (todayAlreadyLogged ? 1 : 0));
   const neededPerDay =
-    daysLeft > 0 ? Math.max(0, Math.ceil((weeklyTarget - weekSourced) / daysLeft)) : 0;
+    daysRemaining > 0 ? Math.max(0, Math.ceil((weeklyTarget - weekSourced) / daysRemaining)) : 0;
   const projectedTotal = daysLogged > 0 ? Math.round((weekSourced / daysLogged) * 5) : 0;
   return { neededPerDay, projectedTotal };
 }

@@ -1,6 +1,7 @@
-import { dateKey, mondayOf } from "@/lib/daily";
+import { DATE_KEY_RE, dateKeyForOffset, mondayOf } from "@/lib/daily";
 import { requireCapability } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
+import { viewerTzOffset } from "@/server/http/viewer-tz";
 import { briefService } from "@/server/services/brief.service";
 
 /**
@@ -12,6 +13,8 @@ export const GET = apiHandler(async (req: Request) => {
   await requireCapability("viewReports");
   const params = new URL(req.url).searchParams;
   const raw = params.get("weekStart");
-  const weekStart = mondayOf(raw && /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : dateKey());
+  const weekStart = mondayOf(
+    raw && DATE_KEY_RE.test(raw) ? raw : dateKeyForOffset((await viewerTzOffset()) ?? 0),
+  );
   return json(await briefService.getWeekly(weekStart));
 });

@@ -1,4 +1,5 @@
 import "server-only";
+import { systemClock, type Clock } from "@/lib/clock";
 import { scoreCandidate } from "@/lib/rules/scoring";
 import type { ClientRules, RuleCandidate } from "@/lib/rules/types";
 import type {
@@ -92,7 +93,10 @@ function matchReasons(
  * don't exist yet, Wave 3.5), so this is the closest equivalent until roles land. Only clients with
  * at least one positive match reason are kept; sorted by fit desc, capped at `MAX_CLIENT_MATCHES`.
  */
-async function matchClients(extracted: InboundExtractedDTO): Promise<InboundClientMatchDTO[]> {
+async function matchClients(
+  extracted: InboundExtractedDTO,
+  now: Date,
+): Promise<InboundClientMatchDTO[]> {
   const [clientNames, rulesRows] = await Promise.all([
     cachedClientNameMap(),
     cachedClientRulesList(),
@@ -112,7 +116,7 @@ async function matchClients(extracted: InboundExtractedDTO): Promise<InboundClie
       const clientName = clientNames.get(row.clientId);
       if (!clientName) return null;
       const rules = toClientRules(row, clientName);
-      const score = scoreCandidate(ruleCandidate, rules);
+      const score = scoreCandidate(ruleCandidate, rules, now);
       const reasons = matchReasons(extracted, clientName, rules);
       if (reasons.length === 0) return null;
       return { clientId: row.clientId, clientName, score: score.pct, reasons };
@@ -133,11 +137,11 @@ async function matchClients(extracted: InboundExtractedDTO): Promise<InboundClie
  */
 export const inboundService = {
   /** Extract + dedupe + client-match a pasted message. Read-only (no lead is created here). */
-  async triage(input: TriageInput): Promise<TriageResultDTO> {
+  async triage(input: TriageInput, clock: Clock = systemClock): Promise<TriageResultDTO> {
     const extracted = await extractInbound(input.messageText, input.context ?? null);
     const [existing, clientMatches] = await Promise.all([
       findExisting(extracted),
-      matchClients(extracted),
+      matchClients(extracted, clock.now()),
     ]);
     return { extracted, clientMatches, existing };
   },

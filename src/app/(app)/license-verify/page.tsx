@@ -130,7 +130,11 @@ export default async function LicenseVerifyPage() {
                   <span
                     className={`min-w-[70px] text-right text-xs font-bold ${color.replace("bg-", "text-")}`}
                   >
-                    {c.daysLeft <= 0 ? "EXPIRED" : `${c.daysLeft}d left`}
+                    {c.daysLeft < 0
+                      ? "EXPIRED"
+                      : c.daysLeft === 0
+                        ? "expires today"
+                        : `${c.daysLeft}d left`}
                   </span>
                 </div>
               );

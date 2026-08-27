@@ -12,7 +12,7 @@ import type { ClientRules, RuleCandidate } from "./types";
 export function getAutoDisqualify(
   candidate: RuleCandidate,
   clientRules: ClientRules | null | undefined,
-  now: Date = new Date(),
+  now: Date,
 ): string[] {
   const dq: string[] = [];
 

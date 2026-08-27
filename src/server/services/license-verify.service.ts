@@ -4,6 +4,8 @@ import type {
   LicenseVerifyQueueRowDTO,
   LicenseVerifyTimelineRowDTO,
 } from "@/lib/validation/license-verify";
+import { systemClock, type Clock } from "@/lib/clock";
+import { utcDaysBetween } from "@/lib/daily";
 import { toIso } from "@/lib/utils/iso";
 import { licenseVerifyRepository } from "@/server/repositories/license-verify.repository";
 import { cachedClientNameMap } from "@/server/http/request-cache";
@@ -12,7 +14,6 @@ import { cachedClientNameMap } from "@/server/http/request-cache";
 const QUEUE_CAP = 100;
 /** Timeline row cap — matches legacy's `.slice(0,12)` (`legacy/index.html:3030`). */
 const TIMELINE_CAP = 12;
-const MS_PER_DAY = 86_400_000;
 
 type QueueRow = Awaited<
   ReturnType<typeof licenseVerifyRepository.verificationQueue>
@@ -39,7 +40,7 @@ function toTimelineRowDTO(c: TimelineRow, now: Date): LicenseVerifyTimelineRowDT
     credential: c.credential,
     licenseState: c.licenseState,
     licenseExpiry: toIso(expiry),
-    daysLeft: Math.floor((expiry.getTime() - now.getTime()) / MS_PER_DAY),
+    daysLeft: utcDaysBetween(now, expiry),
   };
 }
 
@@ -51,7 +52,8 @@ function toTimelineRowDTO(c: TimelineRow, now: Date): LicenseVerifyTimelineRowDT
  * This service only derives the two read lists; verification itself happens on `/candidates/:id`.
  */
 export const licenseVerifyService = {
-  async dashboard(now: Date = new Date()): Promise<LicenseVerifyDashboardDTO> {
+  async dashboard(clock: Clock = systemClock): Promise<LicenseVerifyDashboardDTO> {
+    const now = clock.now();
     const [queue, timelineRows, clientNames] = await Promise.all([
       licenseVerifyRepository.verificationQueue(QUEUE_CAP),
       licenseVerifyRepository.expiryTimeline(TIMELINE_CAP),

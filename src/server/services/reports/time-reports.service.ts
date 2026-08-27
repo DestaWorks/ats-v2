@@ -1,4 +1,5 @@
 import "server-only";
+import { systemClock, type Clock } from "@/lib/clock";
 import {
   ACTION_LICENSE_STATUSES,
   ACTIVE_STATUS_CODES,
@@ -45,8 +46,9 @@ export const timeReportsService = {
   },
 
   /** Compliance — license-status breakdown + candidates requiring action (legacy `:8656-8683`). */
-  async compliance(filters: ReportFilters): Promise<ComplianceDTO> {
+  async compliance(filters: ReportFilters, clock: Clock = systemClock): Promise<ComplianceDTO> {
     const cohort = await loadCohort(filters);
+    const now = clock.now();
 
     const countByLicenseStatus = new Map<string, number>();
     for (const c of cohort.candidates) {
@@ -63,7 +65,7 @@ export const timeReportsService = {
     const requiringAction = cohort.candidates
       .map((c) => {
         const rules = c.clientId ? cohort.rulesByClient.get(c.clientId) : undefined;
-        const dq = getAutoDisqualify(toRuleCandidate(c), rules ?? null);
+        const dq = getAutoDisqualify(toRuleCandidate(c), rules ?? null, now);
         const reasons = ACTION_LICENSE_STATUS_SET.has(c.licenseStatus)
           ? [`License ${c.licenseStatus.toLowerCase()}`, ...dq]
           : dq;

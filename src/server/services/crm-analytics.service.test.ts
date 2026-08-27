@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { fixedClock } from "@/lib/clock";
 
 /**
  * `crmAnalyticsService` — Wave 4.2 flex. Covers Revenue's edge cases (no contract yet → nulls,
@@ -104,6 +105,46 @@ describe("crmAnalyticsService.revenue", () => {
     // retainerARR = 1000*12 = 12000; placementsPerYear ≈ 2; placementARR ≈ 2*10000 = 20000
     expect(dto.annualizedRevenue).toBeCloseTo(32000, -2);
     expect(dto.grossProfit).toBeCloseTo(16000, -2); // 50% margin
+  });
+});
+
+describe("crmAnalyticsService.revenue — lifetimeCumulative regressions", () => {
+  it("REGRESSION: accrues the retainer per CALENDAR month, not per flat 30 days", async () => {
+    h.findByIdClient.mockResolvedValue(
+      clientRow({ monthlyRate: 1000, contractStart: new Date("2026-01-01T00:00:00Z") }),
+    );
+    const dto = await crmAnalyticsService.revenue(
+      "c1",
+      fixedClock("2027-01-01T00:00:00Z"), // exactly one year later
+    );
+    // OLD: 365 days / 30 = 12.1667 "months" → 12166.67 for a 12-month contract.
+    expect(dto.lifetimeCumulative).toBe(12_000);
+  });
+
+  it("REGRESSION: a future-dated contract no longer produces NEGATIVE lifetime revenue", async () => {
+    h.findByIdClient.mockResolvedValue(
+      clientRow({
+        monthlyRate: 1000,
+        avgPlacementFee: 10_000,
+        contractStart: new Date("2026-09-01T00:00:00Z"), // starts next month
+      }),
+    );
+    h.groupByStatusFiltered.mockResolvedValue([{ status: "STARTED_DAY1", _count: { _all: 1 } }]);
+
+    const dto = await crmAnalyticsService.revenue("c1", fixedClock("2026-08-01T00:00:00Z"));
+    // OLD: contractAgeDays was -31, so the retainer term was 1000 * (-31/30) = -1033.33,
+    // dragging the one real 10 000 placement down to ~8966 of "lifetime revenue".
+    expect(dto.lifetimeCumulative).toBe(10_000);
+    expect(dto.lifetimeCumulative!).toBeGreaterThanOrEqual(0);
+  });
+
+  it("keeps the retainer on whole minor units — no float drift in the total", async () => {
+    h.findByIdClient.mockResolvedValue(
+      clientRow({ monthlyRate: 3333, contractStart: new Date("2026-01-01T00:00:00Z") }),
+    );
+    const dto = await crmAnalyticsService.revenue("c1", fixedClock("2026-04-01T00:00:00Z"));
+    expect(dto.lifetimeCumulative).toBe(9999);
+    expect(Number.isInteger(dto.lifetimeCumulative! * 100)).toBe(true);
   });
 });
 

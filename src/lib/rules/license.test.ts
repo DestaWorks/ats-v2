@@ -6,6 +6,7 @@ import { scoreCandidate } from "./scoring";
 import type { ClientRules, RuleCandidate } from "./types";
 
 const utc = (y: number, m: number, d: number) => new Date(Date.UTC(y, m - 1, d));
+const NOW = utc(2026, 8, 21);
 
 const clinical: RuleCandidate = {
   status: "INITIAL_SCREENING",
@@ -85,13 +86,15 @@ describe('"Not Found" is treated as unverified, not as a pass', () => {
     const notFound = { ...clinical, licenseStatus: "Not Found" as const };
     const notVerified = { ...clinical, licenseStatus: "Not Verified" as const };
     const expected = ["License must be verified first"];
-    expect(checkStageGate(notFound, "INITIAL_SCREENING")).toEqual(expected);
-    expect(checkStageGate(notVerified, "INITIAL_SCREENING")).toEqual(expected);
+    expect(checkStageGate(notFound, "INITIAL_SCREENING", NOW)).toEqual(expected);
+    expect(checkStageGate(notVerified, "INITIAL_SCREENING", NOW)).toEqual(expected);
   });
 
   it("still blocks the submit gate", () => {
     const notFound = { ...clinical, licenseStatus: "Not Found" as const };
-    expect(checkStageGate(notFound, "SUBMITTED_TO_CLIENT")).toContain("License must be Active");
+    expect(checkStageGate(notFound, "SUBMITTED_TO_CLIENT", NOW)).toContain(
+      "License must be Active",
+    );
   });
 
   it("does not gate the Operations track on any license status", () => {
@@ -101,7 +104,7 @@ describe('"Not Found" is treated as unverified, not as a pass', () => {
       licenseStatus: "Not Found",
       licenseExpiry: utc(2020, 1, 1),
     };
-    expect(checkStageGate(ops, "INITIAL_SCREENING")).toEqual([]);
-    expect(checkStageGate(ops, "SUBMITTED_TO_CLIENT")).toEqual([]);
+    expect(checkStageGate(ops, "INITIAL_SCREENING", NOW)).toEqual([]);
+    expect(checkStageGate(ops, "SUBMITTED_TO_CLIENT", NOW)).toEqual([]);
   });
 });

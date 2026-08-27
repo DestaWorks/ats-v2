@@ -19,9 +19,10 @@ export interface AuditListFilters {
   action?: AuditAction;
   entity?: AuditEntity;
   actor?: string;
-  /** Inclusive lower bound on `at` (UTC day-start, computed in the service). */
+  /** Inclusive lower bound on `at` (`utcDayStart`, computed in the service). */
   from?: Date;
-  /** Inclusive upper bound on `at` (UTC day-end, computed in the service). */
+  /** EXCLUSIVE upper bound on `at` (`utcNextDayStart`, computed in the service) — the same
+   *  half-open `[from, to)` window `candidate.repository`'s `addedFrom`/`addedTo` uses. */
   to?: Date;
 }
 
@@ -35,7 +36,7 @@ function filterWhere(filters: AuditListFilters): Prisma.ActivityLogWhereInput {
       ? {
           at: {
             ...(filters.from ? { gte: filters.from } : {}),
-            ...(filters.to ? { lte: filters.to } : {}),
+            ...(filters.to ? { lt: filters.to } : {}),
           },
         }
       : {}),

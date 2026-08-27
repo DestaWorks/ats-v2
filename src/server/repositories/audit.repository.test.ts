@@ -67,12 +67,14 @@ describe("auditRepository.list — filters + keyset", () => {
     expect(where).toMatchObject({ action: "purge", entity: "candidate", actor: "u9" });
   });
 
-  it("builds a gte/lte range on `at` from from/to", async () => {
+  it("builds a HALF-OPEN [from, to) range on `at` — the same bound the candidate list uses", async () => {
     const from = new Date("2026-06-01T00:00:00.000Z");
-    const to = new Date("2026-06-30T23:59:59.999Z");
+    const to = new Date("2026-07-01T00:00:00.000Z");
     await auditRepository.list({ from, to }, null, 51);
     const { where } = h.findMany.mock.calls[0]![0];
-    expect(where.at).toEqual({ gte: from, lte: to });
+    // Was `lte` against a 23:59:59.999 "day end", which excluded the tail of the final second
+    // and disagreed with `candidate.repository`'s `lt: addedTo` for the same "to = today" filter.
+    expect(where.at).toEqual({ gte: from, lt: to });
   });
 
   it("adds the (at desc, id desc) keyset OR predicate for a cursor", async () => {

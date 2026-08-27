@@ -12,6 +12,7 @@ import {
 import type { CandidateProfileDTO } from "@/lib/validation/candidate";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils/cn";
+import { systemClock } from "@/lib/clock";
 import { buildStageMoverOptions, type StageMoverOption } from "./lib/stage-mover-options";
 import { messageForFailure, postMove, type MovedFields } from "./lib/detail-fetch";
 
@@ -177,19 +178,22 @@ export function StageMover({
     };
   }, [open]);
 
-  const options = buildStageMoverOptions({
-    status: candidate.status as CandidateStatus,
-    track: candidate.track as Track,
-    credential: candidate.credential,
-    licenseState: candidate.licenseState,
-    licenseStatus: candidate.licenseStatus as LicenseStatus,
-    licenseExpiry: candidate.licenseExpiry,
-    population: candidate.population,
-    setting: candidate.setting,
-    clientId: candidate.clientId,
-    email: candidate.email,
-    phone: candidate.phone,
-  });
+  const options = buildStageMoverOptions(
+    {
+      status: candidate.status as CandidateStatus,
+      track: candidate.track as Track,
+      credential: candidate.credential,
+      licenseState: candidate.licenseState,
+      licenseStatus: candidate.licenseStatus as LicenseStatus,
+      licenseExpiry: candidate.licenseExpiry,
+      population: candidate.population,
+      setting: candidate.setting,
+      clientId: candidate.clientId,
+      email: candidate.email,
+      phone: candidate.phone,
+    },
+    systemClock.now(),
+  );
   const pipelineOptions = options.filter((o) => !isTerminalStatus(o.code));
   const outcomeOptions = options.filter((o) => isTerminalStatus(o.code));
   const currentLabel = statusLabel(candidate.status as CandidateStatus);
