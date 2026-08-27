@@ -23,22 +23,122 @@ export interface DtoViewer {
 }
 
 /**
- * Candidate as exposed to a viewer. Everything from the row except `licenseNumber`, which is
- * present only when the viewer holds `viewCredentials` (see `toCandidateDTO` — the PII boundary).
+ * THE PUBLISHED SURFACE: the candidate columns every viewer may see, named one by one. This list
+ * — not the Prisma model — decides what leaves the server, so a column added to `Candidate` is
+ * published to nobody until someone adds it here. Every column must be classified here, in
+ * `CANDIDATE_GATED_FIELDS`, or in `CANDIDATE_WITHHELD_FIELDS`; `dto-published-surface.test.ts`
+ * fails on any column that is in none of them.
  */
-export type CandidateDTO = Omit<CandidateRow, "licenseNumber"> & { licenseNumber?: string | null };
+export const CANDIDATE_PUBLISHED_FIELDS = [
+  "id",
+  "legacyId",
+  "name",
+  "email",
+  "phone",
+  "city",
+  "state",
+  "targetLocation",
+  "employer",
+  "yearsExp",
+  "credential",
+  "population",
+  "setting",
+  "telehealthPref",
+  "track",
+  "source",
+  "tags",
+  "outreachAttempts",
+  "licenseState",
+  "licenseStatus",
+  "licenseExpiry",
+  "licenseVerifiedAt",
+  "licenseVerifiedById",
+  "status",
+  "stageOrder",
+  "stageEnteredAt",
+  "placedAt",
+  "clientId",
+  "filledFromRoleId",
+  "createdById",
+  "createdAt",
+  "updatedAt",
+  "deletedAt",
+  "deletedById",
+] as const satisfies readonly (keyof CandidateRow)[];
+
+/** Columns published ONLY to a viewer holding `viewCredentials` — the gate in `toCandidateDTO`. */
+export const CANDIDATE_GATED_FIELDS = [
+  "licenseNumber",
+] as const satisfies readonly (keyof CandidateRow)[];
+
+/** Columns no viewer ever receives, at any capability. */
+export const CANDIDATE_WITHHELD_FIELDS = [] as const satisfies readonly (keyof CandidateRow)[];
+
+type CandidatePublishedField = (typeof CANDIDATE_PUBLISHED_FIELDS)[number];
+type CandidateGatedField = (typeof CANDIDATE_GATED_FIELDS)[number];
+type CandidateWithheldField = (typeof CANDIDATE_WITHHELD_FIELDS)[number];
+
+/** Resolves to `never` only when every candidate column is classified above; a new, undeclared
+ *  column resolves to its own name and fails the `AssertNoUnclassified` constraint at typecheck. */
+type UnclassifiedCandidateColumn = Exclude<
+  keyof CandidateRow,
+  CandidatePublishedField | CandidateGatedField | CandidateWithheldField
+>;
+type AssertNoUnclassified<T extends never> = T;
+export type CandidateColumnsAllClassified = AssertNoUnclassified<UnclassifiedCandidateColumn>;
 
 /**
- * Map a candidate row to its DTO. THE PII BOUNDARY: `licenseNumber` (sensitive PII) is omitted
- * unless the viewer has `viewCredentials`. Everything server-side above this mapper works on the
- * raw row; nothing below the API returns `licenseNumber` to an unauthorized viewer.
+ * Candidate as exposed to a viewer: exactly `CANDIDATE_PUBLISHED_FIELDS`, plus `licenseNumber`
+ * only when the viewer holds `viewCredentials` (see `toCandidateDTO` — the PII boundary).
+ */
+export type CandidateDTO = Pick<CandidateRow, CandidatePublishedField> &
+  Partial<Pick<CandidateRow, CandidateGatedField>>;
+
+/**
+ * Map a candidate row to its DTO. THE PII BOUNDARY: fields are copied one by one (never spread
+ * off the row), so an unlisted column cannot ride along, and `licenseNumber` (sensitive PII) is
+ * omitted — key absent, not null — unless the viewer has `viewCredentials`. Everything
+ * server-side above this mapper works on the raw row.
  */
 export function toCandidateDTO(row: CandidateRow, viewer: DtoViewer): CandidateDTO {
-  const { licenseNumber, ...rest } = row;
-  if (hasCapability(viewer.role, "viewCredentials")) {
-    return { ...rest, licenseNumber };
-  }
-  return rest;
+  const dto: CandidateDTO = {
+    id: row.id,
+    legacyId: row.legacyId,
+    name: row.name,
+    email: row.email,
+    phone: row.phone,
+    city: row.city,
+    state: row.state,
+    targetLocation: row.targetLocation,
+    employer: row.employer,
+    yearsExp: row.yearsExp,
+    credential: row.credential,
+    population: row.population,
+    setting: row.setting,
+    telehealthPref: row.telehealthPref,
+    track: row.track,
+    source: row.source,
+    tags: row.tags,
+    outreachAttempts: row.outreachAttempts,
+    licenseState: row.licenseState,
+    licenseStatus: row.licenseStatus,
+    licenseExpiry: row.licenseExpiry,
+    licenseVerifiedAt: row.licenseVerifiedAt,
+    licenseVerifiedById: row.licenseVerifiedById,
+    status: row.status,
+    stageOrder: row.stageOrder,
+    stageEnteredAt: row.stageEnteredAt,
+    placedAt: row.placedAt,
+    clientId: row.clientId,
+    filledFromRoleId: row.filledFromRoleId,
+    createdById: row.createdById,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+    deletedAt: row.deletedAt,
+    deletedById: row.deletedById,
+  };
+  if (hasCapability(viewer.role, "viewCredentials")) dto.licenseNumber = row.licenseNumber;
+  return dto;
 }
 
 /** The fields `toRuleCandidate` actually reads — a `Pick`, not the full row, so it accepts either
