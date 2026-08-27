@@ -1,6 +1,6 @@
 import "dotenv/config";
-import { prisma } from "@/server/db/prisma";
-import { BASE_CLIENT_RULES } from "@/lib/constants";
+import { prisma } from "@destaworks/db/prisma";
+import { BASE_CLIENT_RULES } from "@destaworks/domain/constants";
 
 /**
  * Seed the `client_rules` table from `BASE_CLIENT_RULES` (DATA, not code — DECISIONS). Idempotent:

@@ -1,6 +1,6 @@
 import "dotenv/config";
-import { prisma } from "@/server/db/prisma";
-import { BASE_CLIENTS } from "@/lib/constants";
+import { prisma } from "@destaworks/db/prisma";
+import { BASE_CLIENTS } from "@destaworks/domain/constants";
 
 /**
  * Seed the `clients` table from `BASE_CLIENTS` (DATA-MODEL). Idempotent — upserts by the

@@ -1,0 +1,25 @@
+{
+  "name": "@destaworks/domain",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "exports": {
+    "./clock": "./src/clock.ts",
+    "./constants": "./src/constants/index.ts",
+    "./constants/*": "./src/constants/*.ts",
+    "./daily": "./src/daily.ts",
+    "./mentions": "./src/mentions.ts",
+    "./money": "./src/money.ts",
+    "./pagination": "./src/pagination.ts",
+    "./reports/*": "./src/reports/*.ts",
+    "./rules": "./src/rules/index.ts",
+    "./rules/*": "./src/rules/*.ts",
+    "./utils/*": "./src/utils/*.ts"
+  },
+  "devDependencies": {
+    "@destaworks/tsconfig": "workspace:*",
+    "typescript": "catalog:",
+    "vitest": "^2.1.8"
+  }
+}

@@ -23,6 +23,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # One dependency, one version, workspace-wide. Runs before the build gates so a
+      # version split is reported as itself rather than as a downstream type error.
+      - name: Dependency drift
+        run: pnpm deps:check
+
       # The generated Prisma client is gitignored, so CI must generate it before typecheck/test.
       # `generate` only reads the schema — no DB connection — so a placeholder URL satisfies
       # prisma.config.ts (env("DIRECT_URL")) without needing real credentials as CI secrets.

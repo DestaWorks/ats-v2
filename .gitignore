@@ -1,11 +1,11 @@
-# Dependencies
-/node_modules
+# Dependencies (unanchored: every workspace package has its own node_modules)
+node_modules/
 .pnp
 .pnp.*
 
-# Next.js
-/.next/
-/out/
+# Next.js (the app lives in apps/web — unanchored so any app's build output is ignored)
+.next/
+out/
 next-env.d.ts
 
 # Production build
@@ -36,7 +36,7 @@ yarn-error.log*
 .pnpm-debug.log*
 
 # Prisma generated client
-/src/generated/
+/packages/db/src/generated/
 
 # Legacy app (Apps Script backend + monolith client) — LOCAL-ONLY parity reference.
 # Never committed: keep it on the dev machine, not in the shared repo.
@@ -46,3 +46,6 @@ yarn-error.log*
 
 # Internal-only defense-book study reference (chapters + generator + output, all private).
 /internal-docs/
+
+# Turborepo
+.turbo

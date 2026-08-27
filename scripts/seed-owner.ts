@@ -1,6 +1,6 @@
 import "dotenv/config";
-import { auth } from "@/server/auth/auth";
-import { prisma } from "@/server/db/prisma";
+import { auth } from "@destaworks/auth/auth";
+import { prisma } from "@destaworks/db/prisma";
 
 /**
  * Seed the first Owner account. Public signup is disabled (DECISIONS D3), so the first

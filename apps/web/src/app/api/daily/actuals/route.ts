@@ -1,0 +1,19 @@
+import { saveActualsSchema } from "@destaworks/contracts/validation/daily";
+import { requireUser } from "@destaworks/auth/guards";
+import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
+import { dailyService } from "@destaworks/application/daily.service";
+
+/** Response body of `POST /api/daily/actuals`. */
+export type PostDailyActualsResponse = { ok: true };
+
+/**
+ * POST /api/daily/actuals — End of Shift (legacy `ats_actuals_save`): the SESSION user confirms
+ * the day's numbers (pre-filled client-side from live actuals). Upsert keyed (userId, date);
+ * audited. 422 bad body; 401 unauth.
+ */
+export const POST = apiHandler(async (req) => {
+  const user = await requireUser();
+  const input = saveActualsSchema.parse(await req.json());
+  await dailyService.saveActuals(input, user);
+  return json<PostDailyActualsResponse>({ ok: true });
+});

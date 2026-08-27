@@ -1,0 +1,20 @@
+{
+  "extends": "@destaworks/tsconfig/base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/lib/clock": ["./src/clock.ts"],
+      "@/lib/constants": ["./src/constants/index.ts"],
+      "@/lib/constants/*": ["./src/constants/*"],
+      "@/lib/daily": ["./src/daily.ts"],
+      "@/lib/mentions": ["./src/mentions.ts"],
+      "@/lib/money": ["./src/money.ts"],
+      "@/lib/pagination": ["./src/pagination.ts"],
+      "@/lib/rules": ["./src/rules/index.ts"],
+      "@/lib/rules/*": ["./src/rules/*"],
+      "@/lib/utils/*": ["./src/utils/*"]
+    }
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules"]
+}

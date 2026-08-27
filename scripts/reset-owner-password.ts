@@ -1,6 +1,6 @@
 import "dotenv/config";
-import { auth } from "@/server/auth/auth";
-import { prisma } from "@/server/db/prisma";
+import { auth } from "@destaworks/auth/auth";
+import { prisma } from "@destaworks/db/prisma";
 
 /**
  * TEMP dev helper — reset a login account's password (Better Auth's own hasher, so sign-in verifies).

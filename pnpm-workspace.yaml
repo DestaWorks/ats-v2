@@ -1,6 +1,25 @@
-# pnpm settings file (single-package repo). In pnpm 10+, install-time settings
+# pnpm workspace + settings file. In pnpm 10+, install-time settings
 # such as build-script approval live here rather than in package.json / .npmrc.
 #
+# Phase 1 of docs/SAAS-RESTRUCTURE-PLAN.md: the workspace exists and the tooling is shared.
+# `apps/*` and `packages/*` are declared ahead of Phase 2 (package extraction) so the globs
+# do not have to change when the first package lands; today only `tooling/*` is populated.
+packages:
+  - "apps/*"
+  - "packages/*"
+  - "tooling/*"
+
+# One version of the cross-cutting dependencies for the whole workspace. Every package
+# references these as `catalog:` so a version bump happens here, once, and cannot drift
+# between packages (see scripts/check-dependency-drift.mjs).
+catalog:
+  "@types/react": ^19.0.0
+  "@types/react-dom": ^19.0.0
+  react: ^19.0.0
+  react-dom: ^19.0.0
+  typescript: ^5.7.2
+  zod: ^4.4.3
+
 # Native deps whose install/build scripts we explicitly trust and run:
 #   esbuild        — required by Vitest (bundling for tests)
 #   unrs-resolver  — required by eslint-plugin-import's resolver

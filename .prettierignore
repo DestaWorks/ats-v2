@@ -11,4 +11,4 @@ docs/
 **/*.md
 
 # Prisma generated client
-src/generated/
+packages/db/src/generated/

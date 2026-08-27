@@ -1,0 +1,73 @@
+{
+  "$schema": "https://turborepo.com/schema.json",
+  "ui": "stream",
+  "globalDependencies": [
+    "pnpm-workspace.yaml",
+    "tooling/**",
+    "tsconfig.json",
+    "eslint.config.mjs",
+    "prettier.config.mjs",
+    "vitest.config.ts",
+    ".prettierignore"
+  ],
+  "globalEnv": ["CI", "NODE_ENV"],
+  "tasks": {
+    "topo": {
+      "dependsOn": ["^topo"]
+    },
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
+    },
+    "lint": {
+      "dependsOn": ["^topo", "^build"]
+    },
+    "typecheck": {
+      "dependsOn": ["^topo", "^build"],
+      "outputs": ["dist/**", "*.tsbuildinfo"]
+    },
+    "test": {
+      "dependsOn": ["^topo", "^build"]
+    },
+
+    "//#app:build": {
+      "dependsOn": ["^build"],
+      "outputs": ["apps/web/.next/**", "!apps/web/.next/cache/**"],
+      "inputs": [
+        "apps/web/src/**",
+        "apps/web/public/**",
+        "apps/web/next.config.ts",
+        "apps/web/postcss.config.mjs",
+        "apps/web/tsconfig.json",
+        "packages/*/src/**",
+        "prisma.config.ts",
+        "tsconfig.json",
+        "package.json"
+      ],
+      "env": ["ANALYZE", "NEXT_PUBLIC_*", "SENTRY_*", "VERCEL_*"]
+    },
+    "//#app:lint": {
+      "dependsOn": ["^topo", "^build"],
+      "inputs": [
+        "apps/*/src/**",
+        "packages/*/src/**",
+        "scripts/**",
+        "*.ts",
+        "*.mjs",
+        "package.json"
+      ]
+    },
+    "//#app:typecheck": {
+      "dependsOn": ["^topo", "^build"],
+      "inputs": ["apps/*/src/**", "packages/*/src/**", "scripts/**", "*.ts", "package.json"],
+      "outputs": ["*.tsbuildinfo"]
+    },
+    "//#app:test": {
+      "dependsOn": ["^topo", "^build"],
+      "inputs": ["apps/*/src/**", "packages/*/src/**", "package.json"]
+    },
+    "//#app:deps-check": {
+      "inputs": ["package.json", "pnpm-workspace.yaml", "scripts/check-dependency-drift.mjs"]
+    }
+  }
+}

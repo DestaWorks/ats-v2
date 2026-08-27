@@ -1,0 +1,25 @@
+{
+  "name": "@destaworks/ui",
+  "version": "0.0.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "type": "module",
+  "exports": {
+    "./*": "./src/components/*.tsx"
+  },
+  "peerDependencies": {
+    "next": "^15.5.23",
+    "react": "catalog:"
+  },
+  "devDependencies": {
+    "@destaworks/tsconfig": "workspace:*",
+    "@types/react": "catalog:",
+    "next": "^15.5.23",
+    "react": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "^2.1.8"
+  },
+  "dependencies": {
+    "@destaworks/domain": "workspace:*"
+  }
+}

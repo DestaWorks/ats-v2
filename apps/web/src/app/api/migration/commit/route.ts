@@ -1,0 +1,30 @@
+import { importInputSchema, type ImportReport } from "@destaworks/contracts/validation/migration";
+import { requireCapability } from "@destaworks/auth/guards";
+import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
+import { checkRateLimit } from "@destaworks/integrations/http/rate-limit";
+import { migrationService } from "@destaworks/application/migration.service";
+
+/**
+ * Allow the ETL commit up to the platform maximum — a large one-shot import can run for minutes.
+ */
+export const maxDuration = 300;
+
+/** Response body of `POST /api/migration/commit` — the post-upsert report. */
+export type PostMigrationCommitResponse = ImportReport;
+
+/**
+ * POST /api/migration/commit — idempotent upsert of the legacy candidates keyed on `legacy_id`
+ * (per-row continue-on-error; batching the upserts is a future optimization), plus per-candidate +
+ * summary audit. Re-running never duplicates. Guarded by `requireCapability("bulkImport")`. Same
+ * body as /prepare; a `checksum` mismatch is a non-blocking warning in the report (E-7).
+ *
+ * The commit is expensive (a full re-upsert), so it is rate-limited per user (best-effort,
+ * in-memory — see `server/http/rate-limit`).
+ */
+export const POST = apiHandler(async (req: Request) => {
+  const user = await requireCapability("bulkImport");
+  await checkRateLimit(`migration-commit:${user.id}`, { limit: 10, windowMs: 60_000 });
+  const input = importInputSchema.parse(await req.json());
+  const report = await migrationService.commit(input, user);
+  return json<PostMigrationCommitResponse>(report);
+});

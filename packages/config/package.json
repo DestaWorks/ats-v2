@@ -1,0 +1,19 @@
+{
+  "name": "@destaworks/config",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "exports": {
+    "./logger": "./src/logger/index.ts",
+    "./logger/*": "./src/logger/*.ts",
+    "./request-context": "./src/request-context.ts"
+  },
+  "dependencies": {
+    "pino": "^10.3.1"
+  },
+  "devDependencies": {
+    "@destaworks/tsconfig": "workspace:*",
+    "typescript": "catalog:"
+  }
+}

@@ -1,0 +1,65 @@
+import { isLeadStatus, type LeadStatus } from "@destaworks/domain/constants";
+import { defined } from "@destaworks/domain/utils/defined";
+import { leadService } from "@destaworks/application/lead.service";
+import { LeadFilters } from "./lead-filters";
+import { LeadsInventory } from "./leads-inventory";
+import { cachedClientList, cachedUserList } from "@destaworks/integrations/http/request-cache";
+
+/**
+ * Sourcing inventory (RSC, Wave 2.6) — the pre-pipeline source-lead board (Sourced → Outreach →
+ * Responded → Promoted). Guards with `getCurrentUser()` (the `(app)` layout guards too — defence in
+ * depth; sourcing is open to every operator, L-7), SSR-renders page 1 of the filtered list directly
+ * via `leadService.list(filters)` (no fetch flash), and loads the client options for the add-lead
+ * target-client select. Filters are seeded from URL `searchParams` so a shared link lands
+ * pre-filtered; the client `<LeadsInventory>` accumulates further keyset pages (Load more) and is
+ * REMOUNTED (keyed on the filter signature) whenever a server filter changes, re-seeding page 1.
+ */
+export default async function SourcingPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const sp = await searchParams;
+  const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
+
+  const rawStatus = one(sp.status);
+  const status: LeadStatus | undefined =
+    rawStatus && isLeadStatus(rawStatus) ? rawStatus : undefined;
+  const source = one(sp.source)?.trim() || undefined;
+  const clientId = one(sp.clientId)?.trim() || undefined;
+  const ownerId = one(sp.ownerId)?.trim() || undefined;
+  const search = one(sp.search)?.trim() || undefined;
+  const showDeleted = one(sp.deleted) === "1";
+  const rawPage = Number(one(sp.page));
+  const page = Number.isInteger(rawPage) && rawPage > 0 ? rawPage : 1;
+
+  const [list, clientRows, users] = await Promise.all([
+    leadService.list(
+      defined({ status, source, clientId, ownerId, search, includeDeleted: showDeleted, page }),
+    ),
+    cachedClientList(),
+    cachedUserList(), // filter + bulk "Assign owner…" options (id + display name only)
+  ]);
+  const clients = clientRows.map((c) => ({ id: c.id, name: c.name }));
+
+  // Remount the client list whenever the SERVER query changes so it re-seeds cleanly.
+  const listKey = [status, source, clientId, ownerId, search, showDeleted, page].join("|");
+
+  return (
+    <div className="flex flex-col gap-5 px-8 py-6">
+      <header className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-navy">Sourcing</h1>
+          <p className="text-sm text-gray">
+            {list.total} {list.total === 1 ? "lead" : "leads"} — source, chase, and promote into the
+            pipeline.
+          </p>
+        </div>
+      </header>
+
+      <LeadFilters clients={clients} owners={users} />
+
+      <LeadsInventory key={listKey} initial={list} clients={clients} users={users} />
+    </div>
+  );
+}

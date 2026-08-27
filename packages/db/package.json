@@ -1,0 +1,27 @@
+{
+  "name": "@destaworks/db",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./audit": "./src/audit.ts",
+    "./field-crypto": "./src/field-crypto.ts",
+    "./generated/*": "./src/generated/*.ts",
+    "./prisma": "./src/prisma.ts",
+    "./repositories/*": "./src/repositories/*.ts",
+    "./with-transaction": "./src/with-transaction.ts"
+  },
+  "dependencies": {
+    "@destaworks/config": "workspace:*",
+    "@destaworks/contracts": "workspace:*",
+    "@destaworks/domain": "workspace:*",
+    "@prisma/adapter-pg": "^7.8.0",
+    "@prisma/client": "^7.8.0",
+    "server-only": "^0.0.1"
+  },
+  "devDependencies": {
+    "@destaworks/tsconfig": "workspace:*",
+    "prisma": "^7.8.0",
+    "typescript": "catalog:"
+  }
+}

@@ -8,7 +8,7 @@ import { defineConfig, env } from "prisma/config";
  * `src/server/db/prisma.ts`. (DECISIONS D6: migrations run staging first, then prod.)
  */
 export default defineConfig({
-  schema: "prisma/schema.prisma",
-  migrations: { path: "prisma/migrations" },
+  schema: "packages/db/prisma/schema.prisma",
+  migrations: { path: "packages/db/prisma/migrations" },
   datasource: { url: env("DIRECT_URL") },
 });

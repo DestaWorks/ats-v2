@@ -1,0 +1,39 @@
+{
+  "name": "@destaworks/integrations",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "exports": {
+    "./ai/*": "./src/ai/*.ts",
+    "./email/*": "./src/email/*.ts",
+    "./http/*": "./src/http/*.ts",
+    "./apollo": "./src/apollo.ts",
+    "./hunter": "./src/hunter.ts",
+    "./nppes": "./src/nppes.ts",
+    "./storage": "./src/storage.ts"
+  },
+  "dependencies": {
+    "@ai-sdk/anthropic": "^4.0.7",
+    "@ai-sdk/google": "^4.0.8",
+    "@ai-sdk/openai": "^4.0.7",
+    "@aws-sdk/client-s3": "^3.1106.0",
+    "@aws-sdk/s3-request-presigner": "^3.1106.0",
+    "@destaworks/config": "workspace:*",
+    "@destaworks/contracts": "workspace:*",
+    "@destaworks/db": "workspace:*",
+    "@destaworks/domain": "workspace:*",
+    "@sentry/nextjs": "^10.70.0",
+    "@upstash/ratelimit": "^2.0.8",
+    "@upstash/redis": "^1.38.2",
+    "ai": "^7.0.14",
+    "nodemailer": "^9.0.3",
+    "react": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@destaworks/tsconfig": "workspace:*",
+    "@types/nodemailer": "^8.0.1",
+    "typescript": "catalog:"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "name": "@destaworks/auth",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "exports": {
+    "./auth": "./src/auth.ts",
+    "./guards": "./src/guards.ts",
+    "./portal-guards": "./src/portal-guards.ts",
+    "./request-context": "./src/request-context.ts"
+  },
+  "dependencies": {
+    "@destaworks/config": "workspace:*",
+    "@destaworks/db": "workspace:*",
+    "@destaworks/domain": "workspace:*",
+    "@destaworks/integrations": "workspace:*",
+    "better-auth": "^1.6.23",
+    "react": "catalog:"
+  },
+  "devDependencies": {
+    "@destaworks/tsconfig": "workspace:*",
+    "typescript": "catalog:"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "name": "@destaworks/application",
+  "version": "0.0.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "type": "module",
+  "exports": {
+    "./*": "./src/*.ts"
+  },
+  "dependencies": {
+    "@destaworks/auth": "workspace:*",
+    "@destaworks/contracts": "workspace:*",
+    "@destaworks/db": "workspace:*",
+    "@destaworks/domain": "workspace:*",
+    "@destaworks/integrations": "workspace:*",
+    "papaparse": "^5.5.4",
+    "server-only": "^0.0.1"
+  },
+  "devDependencies": {
+    "@destaworks/tsconfig": "workspace:*",
+    "@types/papaparse": "^5.5.2",
+    "typescript": "catalog:",
+    "vitest": "^2.1.8"
+  }
+}
