@@ -682,6 +682,7 @@ move PR contains no logic changes.
 - [ ] Architecture check: Prisma imported only inside `@destaworks/db`
 - [ ] Architecture check: `@destaworks/domain` has no runtime dependencies
 - [ ] Architecture check: packages never import from apps
+- [ ] Architecture check: **`apps/web` and `apps/admin` never import `@destaworks/db` or `@destaworks/application`** — the read path is HTTP only (4.0); without this, Option B leaks back in unnoticed
 - [ ] Every PR runs: format · lint · typecheck · dependency-graph validation · architecture checks · unit tests · integration tests · contract tests · build
 - [ ] Contract check: every endpoint declares request and response types from `@destaworks/contracts`
 - [ ] Contract check: no endpoint returns a raw database row
@@ -702,18 +703,51 @@ the unchanged `@destaworks/application` services.
 This is the highest-risk phase in the plan. It rebuilds the authentication and authorization surface,
 so it ships behind a route-by-route cutover rather than a big-bang switch.
 
-### 4.0 Decide the read path — do this first
+### 4.0 The read path — DECIDED: Option A
 
 Today 39 server-rendered pages read data in-process by calling services directly. Once NestJS owns
-the API, that has to resolve one of two ways, and the choice shapes the rest of the phase:
+the API that has to resolve, and it resolves **one way: everything goes through `apps/api`.**
 
-| Option | Consequence |
-|---|---|
-| **A. `apps/web` calls `apps/api` over HTTP for everything** | One backend, one contract, one audit surface. Adds a network hop to every server render |
-| **B. `apps/web` keeps importing `@destaworks/application` for server-side reads; NestJS serves mutations and external clients** | No added latency; two paths into the same logic, so guards and tenant scoping must be proven in both |
+```
+Browser ──▶ apps/web (RSC render, server-side)
+                │  session forwarded
+                ▼
+            apps/api   AuthGuard → TenantGuard → CapabilityGuard → ZodPipe
+                ▼
+            @destaworks/application   service(ctx, …)
+                ▼
+            @destaworks/db            db(ctx) injects tenantId
+                ▼
+            Postgres                  + RLS as the backstop
+```
 
-- [ ] Decide and record it here; **Option A is the recommendation** — under multi-tenancy, two paths into the data mean two places a tenant filter can be missed
-- **Done-when:** the decision is written down and the isolation strategy for the chosen option is stated
+The browser talks to `apps/web` for HTML and to `apps/api` for data — never to `apps/web` for data.
+The client portal and any future mobile client use the same API, the same guards and the same
+contracts.
+
+**Why not Option B** (`apps/web` keeps importing `@destaworks/application` for reads): it costs no
+latency, but it creates two paths into the same data, so tenant scoping and capability checks must
+be proven correct in both. Under multi-tenancy a missed tenant filter is a reportable breach, not a
+bug. One path is one place to prove isolation, and the portal was always going to use the HTTP path
+anyway — so Option A means one surface to secure instead of two.
+
+**The cost is one network hop per server render**, and it is paid down in this order:
+
+1. **Next's server-side `fetch` cache** on the RSC read. This is the right tool for a
+   server-to-server hop — a browser cache library is not, because nothing about this hop happens in
+   the browser.
+2. Co-locate `apps/web` and `apps/api` in one region.
+3. **Composite reads must become composite endpoints.** `load-detail.ts` today fires three parallel
+   in-process service calls; a naive port turns that into three HTTP round trips. Port each
+   composite loader to one endpoint returning the composite, not N calls.
+
+- [ ] Record the isolation strategy: guards run in `apps/api` only, `db(ctx)` scopes every query,
+      RLS backstops it
+- [ ] **CI check: `apps/web` and `apps/admin` may not depend on `@destaworks/db` or
+      `@destaworks/application`.** Without it Option B leaks back in the first time someone imports
+      a service directly, and there are two paths again with nobody having decided so
+- [ ] Port composite loaders to composite endpoints as their routes migrate (4.3)
+- **Done-when:** the CI dependency check fails on a deliberate `apps/web` → `application` import
 
 ### 4.1 Scaffold
 - [ ] Create `apps/api` — NestJS + TypeScript

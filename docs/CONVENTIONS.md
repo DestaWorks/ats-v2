@@ -194,7 +194,11 @@ unrepresentable, and the major/minor factor comes from the currency's scale — 
 ## 5. State & data
 
 - **Server state = RSC reads + `lib/api/client.ts`'s typed fetch helpers — not TanStack Query
-  or any other client cache library (DECISIONS D7).** The page's `page.tsx` (RSC) calls
+  or any other client cache library (DECISIONS D7, which now carries explicit revisit criteria).**
+  After Phase 4 the RSC read fetches from `apps/api` over HTTP rather than calling a service
+  in-process (`SAAS-RESTRUCTURE-PLAN.md` 4.0, Option A) — that hop is server-to-server, so it is
+  cached with Next's server `fetch` cache, not a browser cache library. Frontend apps must never
+  import `@destaworks/db` or `@destaworks/application`; there is one path to data and it is the API. The page's `page.tsx` (RSC) calls
   `server/services/**` directly and passes DTOs down as props; mutations go through
   `getJson`/`postJson`/`patchJson`/`putJson`/`deleteJson`, which return a discriminated
   `ApiResult<T>` (`{ok:true,data}` / `{ok:false,failure}`). **Never call `fetch()` directly in a

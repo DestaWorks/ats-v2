@@ -65,6 +65,25 @@ gap** — this proven pattern is the standard going forward; do not reach for Ta
 any other client cache library) in new work. Full detail: `STACK-ARCHITECTURE.md` §6, code
 standard rules: `CONVENTIONS.md` §5.
 
+**D7 revisit criteria (added 2026-08-27).** Deferred with conditions rather than closed, so the
+next person neither follows it blindly nor overturns it blindly. The decisive question is **whether
+the browser is doing the fetching** — today it barely is, since reads are RSC and mutations go
+through the `ApiResult<T>` helpers. Adding a client cache now would put a second cache in front of
+state RSC already caches, for a fetching pattern that does not exist.
+
+Note what does **not** trigger it: the Phase 4 move to a NestJS API (`SAAS-RESTRUCTURE-PLAN.md`
+4.0, Option A) makes the **RSC render** an HTTP client, but that hop is server-to-server. The right
+tool there is Next's server-side `fetch` cache, not a browser cache library.
+
+Reconsider when any one of these becomes true:
+
+1. **A mobile client exists** — no RSC at all, so TanStack becomes the obvious answer rather than a
+   competing one.
+2. **The platform-admin console is genuinely interactive** — live tenant health, polling, infinite
+   scroll — rather than the mostly-static reads the operator app has.
+3. **A view needs per-query freshness** that `router.refresh()` cannot express without
+   re-rendering the whole page.
+
 **D8 — No file/image bytes stored in the database; binaries always go to real object storage.**
 Confirmed 2026-07-31 (My Profile avatar-upload review): avatars currently persist a resized
 JPEG as a base64 `data:` URI directly in `User.image` (a Postgres text column) via Better Auth's
