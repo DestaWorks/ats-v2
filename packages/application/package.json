@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@destaworks/auth": "workspace:*",
+    "@destaworks/config": "workspace:*",
     "@destaworks/contracts": "workspace:*",
     "@destaworks/db": "workspace:*",
     "@destaworks/domain": "workspace:*",

@@ -16,7 +16,8 @@
     "@destaworks/domain": "workspace:*",
     "@destaworks/integrations": "workspace:*",
     "better-auth": "^1.6.23",
-    "react": "catalog:"
+    "react": "catalog:",
+    "server-only": "^0.0.1"
   },
   "devDependencies": {
     "@destaworks/tsconfig": "workspace:*",
