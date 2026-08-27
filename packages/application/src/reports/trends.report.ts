@@ -1,4 +1,3 @@
-import "server-only";
 import { dateKey, daysBefore } from "@destaworks/domain/daily";
 import type {
   TrendsAnomalyDTO,

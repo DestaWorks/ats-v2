@@ -1,4 +1,3 @@
-import "server-only";
 import type { Prisma } from "../generated/prisma/client";
 import { prisma } from "../prisma";
 import type { AuditAction, AuditEntity } from "@destaworks/domain/constants";

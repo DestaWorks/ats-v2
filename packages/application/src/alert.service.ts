@@ -1,4 +1,3 @@
-import "server-only";
 import { statusLabel, type CandidateStatus } from "@destaworks/domain/constants";
 import type {
   AlertBucketDTO,

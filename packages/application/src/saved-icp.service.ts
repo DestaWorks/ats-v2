@@ -1,4 +1,3 @@
-import "server-only";
 import type { CreateSavedIcpInput, SavedIcpDTO } from "@destaworks/contracts/validation/saved-icp";
 import type { AuthUser } from "@destaworks/auth/guards";
 import { writeAudit } from "@destaworks/db/audit";

@@ -1,4 +1,3 @@
-import "server-only";
 import { randomBytes } from "node:crypto";
 import {
   PORTAL_TOKEN_TTL_DAYS,

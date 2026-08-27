@@ -1,4 +1,3 @@
-import "server-only";
 import {
   ACTIVE_STATUS_CODES,
   statusLabel,

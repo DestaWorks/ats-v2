@@ -1,4 +1,3 @@
-import "server-only";
 import type { NoteType } from "@destaworks/domain/constants";
 import type {
   MarkMentionReadInput,

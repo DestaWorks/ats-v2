@@ -1,4 +1,3 @@
-import "server-only";
 import { requireCapability } from "@destaworks/auth/guards";
 import {
   auditRepository,

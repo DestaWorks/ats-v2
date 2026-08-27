@@ -1,4 +1,3 @@
-import "server-only";
 import type { Prisma } from "../generated/prisma/client";
 import { COMPACT_STATES, UNVERIFIED_LICENSE_STATUSES } from "@destaworks/domain/constants";
 import { MS_PER_DAY } from "@destaworks/domain/clock";

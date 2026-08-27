@@ -1,4 +1,3 @@
-import "server-only";
 import type { ResumeData, ResumeMatch } from "@destaworks/contracts/validation/resume";
 
 /**

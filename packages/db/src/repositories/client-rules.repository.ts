@@ -1,4 +1,3 @@
-import "server-only";
 import type { ClientRules as ClientRulesModel, Prisma } from "../generated/prisma/client";
 import type { ClientRules } from "@destaworks/domain/rules/types";
 import { db } from "../prisma";

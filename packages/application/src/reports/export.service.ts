@@ -1,4 +1,3 @@
-import "server-only";
 import { statusLabel, type CandidateStatus } from "@destaworks/domain/constants";
 import { toCsv, type CsvColumn } from "@destaworks/domain/reports/csv";
 import { getDaysInStage } from "@destaworks/domain/rules/stage-timing";

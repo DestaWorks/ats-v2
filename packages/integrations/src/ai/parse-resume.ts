@@ -1,4 +1,3 @@
-import "server-only";
 import type { ZodType } from "zod";
 import type { ResumeVariant } from "@destaworks/domain/constants/documents";
 import {

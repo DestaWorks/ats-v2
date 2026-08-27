@@ -1,4 +1,3 @@
-import "server-only";
 import { searchNppes } from "@destaworks/integrations/nppes";
 import { leadRepository } from "@destaworks/db/repositories/lead.repository";
 import { candidateRepository } from "@destaworks/db/repositories/candidate.repository";

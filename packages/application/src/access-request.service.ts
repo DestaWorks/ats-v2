@@ -1,4 +1,3 @@
-import "server-only";
 import { accessRequestRepository } from "@destaworks/db/repositories/access-request.repository";
 import { userRepository } from "@destaworks/db/repositories/user.repository";
 import { adminUserService } from "./admin-user.service";

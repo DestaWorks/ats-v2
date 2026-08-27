@@ -1,4 +1,3 @@
-import "server-only";
 import { randomUUID } from "node:crypto";
 import { APICallError } from "ai";
 import type { ZodType } from "zod";

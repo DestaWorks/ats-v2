@@ -1,4 +1,3 @@
-import "server-only";
 import { portalAccessRequestRepository } from "@destaworks/db/repositories/portal-access-request.repository";
 import { clientContactRepository } from "@destaworks/db/repositories/client-contact.repository";
 import { clientPortalService } from "./client-portal.service";

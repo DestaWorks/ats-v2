@@ -1,4 +1,3 @@
-import "server-only";
 import { statusLabel, type CandidateStatus } from "@destaworks/domain/constants";
 import { median, percentile, timeToFillDays } from "@destaworks/domain/reports/metrics";
 import type {

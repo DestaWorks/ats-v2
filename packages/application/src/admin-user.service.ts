@@ -1,4 +1,3 @@
-import "server-only";
 import { randomBytes } from "node:crypto";
 import { auth } from "@destaworks/auth/auth";
 import { requestContext } from "@destaworks/config/request-context";

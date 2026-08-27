@@ -1,4 +1,3 @@
-import "server-only";
 import { CREDENTIALS, SOURCES } from "@destaworks/domain/constants";
 import type { ReportFilterOptionsDTO } from "@destaworks/contracts/reports/filter-options";
 import { clientRepository } from "@destaworks/db/repositories/client.repository";

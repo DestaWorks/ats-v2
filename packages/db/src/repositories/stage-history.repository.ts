@@ -1,4 +1,3 @@
-import "server-only";
 import type { Prisma, StageHistory } from "../generated/prisma/client";
 import { db } from "../prisma";
 import { FIRST_TERMINAL_ORDER } from "./candidate.repository";

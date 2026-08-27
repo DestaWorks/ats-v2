@@ -1,4 +1,3 @@
-import "server-only";
 import { isClosedDealStage, statusOrder, type CandidateStatus } from "@destaworks/domain/constants";
 import type {
   AddBlockerInput,

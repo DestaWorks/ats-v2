@@ -1,4 +1,3 @@
-import "server-only";
 import { aiSettingsRepository } from "@destaworks/db/repositories/ai-settings.repository";
 import { aiUsageEventRepository } from "@destaworks/db/repositories/ai-usage-event.repository";
 import { writeAudit } from "@destaworks/db/audit";

@@ -1,5 +1,3 @@
-import "server-only";
-
 /**
  * Provider-agnostic email config. Nodemailer talks plain SMTP, so swapping providers (Ethereal for
  * staging → a real SMTP provider for production — Gmail SMTP, SES, Postmark, Resend's SMTP

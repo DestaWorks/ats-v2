@@ -1,4 +1,3 @@
-import "server-only";
 import type { LearnProgressDTO } from "@destaworks/contracts/validation/learn";
 import type { AuthUser } from "@destaworks/auth/guards";
 import { userRepository } from "@destaworks/db/repositories/user.repository";

@@ -1,5 +1,3 @@
-import "server-only";
-
 export interface EmailContent {
   subject: string;
   html: string;

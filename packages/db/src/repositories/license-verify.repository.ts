@@ -1,4 +1,3 @@
-import "server-only";
 import type { Prisma } from "../generated/prisma/client";
 import { UNVERIFIED_LICENSE_STATUSES } from "@destaworks/domain/constants";
 import { db } from "../prisma";

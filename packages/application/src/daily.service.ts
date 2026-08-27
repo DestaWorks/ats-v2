@@ -1,4 +1,3 @@
-import "server-only";
 import { Prisma } from "@destaworks/db/generated/prisma/client";
 import { systemClock, type Clock } from "@destaworks/domain/clock";
 import { hasCapability } from "@destaworks/domain/constants";

@@ -1,4 +1,3 @@
-import "server-only";
 import type { ClientNoteDTO } from "@destaworks/contracts/validation/client-note";
 import type {
   GenerateWorkspaceInput,

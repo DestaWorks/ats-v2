@@ -1,4 +1,3 @@
-import "server-only";
 import {
   SCREENING_ELIGIBLE_STATUSES,
   statusLabel,

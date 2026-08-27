@@ -1,5 +1,3 @@
-import "server-only";
-
 /**
  * The request-scoped inputs the auth layer needs, expressed with no web framework in it
  * (SAAS-RESTRUCTURE-PLAN 0.3). `server/auth` depends on this interface only; the concrete

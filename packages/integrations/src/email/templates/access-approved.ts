@@ -1,4 +1,3 @@
-import "server-only";
 import { emailShell, type EmailContent } from "./shell";
 
 /** First token of a full name ("Leliso Agegnehu" → "Leliso") — falls back to a generic

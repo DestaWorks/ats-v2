@@ -1,4 +1,3 @@
-import "server-only";
 import type { Prisma } from "@destaworks/db/generated/prisma/client";
 import { systemClock, type Clock } from "@destaworks/domain/clock";
 import { utcDayStart, utcNextDayStart } from "@destaworks/domain/daily";

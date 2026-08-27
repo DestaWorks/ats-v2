@@ -1,4 +1,3 @@
-import "server-only";
 import { searchNppes } from "@destaworks/integrations/nppes";
 import { classifyDiscoverRow } from "@destaworks/domain/rules/discover-dedupe";
 import { scoreStateSimilarity } from "@destaworks/domain/rules/similarity";

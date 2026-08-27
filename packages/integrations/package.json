@@ -29,7 +29,6 @@
     "ai": "^7.0.14",
     "nodemailer": "^9.0.3",
     "react": "catalog:",
-    "server-only": "^0.0.1",
     "zod": "catalog:"
   },
   "devDependencies": {

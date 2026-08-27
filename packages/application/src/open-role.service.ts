@@ -1,4 +1,3 @@
-import "server-only";
 import { hasCapability } from "@destaworks/domain/constants";
 import type { LeadStatus, RolePriority, RoleStatus } from "@destaworks/domain/constants";
 import {

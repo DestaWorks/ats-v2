@@ -1,4 +1,3 @@
-import "server-only";
 import { prisma } from "../prisma";
 import { logger } from "@destaworks/config/logger";
 

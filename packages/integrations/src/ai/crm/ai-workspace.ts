@@ -1,4 +1,3 @@
-import "server-only";
 import { z } from "zod";
 import type { AiWorkspacePreset } from "@destaworks/contracts/validation/crm-ai-workspace";
 import { generateAi } from "../shared";

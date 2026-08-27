@@ -1,4 +1,3 @@
-import "server-only";
 import { BRIEF_VOICE_INSTRUCTION } from "@destaworks/domain/constants";
 import {
   targetsSuggestAiSchema,

@@ -1,4 +1,3 @@
-import "server-only";
 import type { DailyBrief, Prisma, WeeklyBrief } from "../generated/prisma/client";
 import { db } from "../prisma";
 

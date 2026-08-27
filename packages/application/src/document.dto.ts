@@ -1,4 +1,3 @@
-import "server-only";
 import { hasCapability, type Role } from "@destaworks/domain/constants";
 import type { DocumentRow } from "@destaworks/db/repositories/document.repository";
 

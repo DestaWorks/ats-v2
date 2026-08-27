@@ -34,6 +34,14 @@ const ALLOWED_DEPENDENCIES = {
   application: ["auth", "config", "contracts", "db", "domain", "integrations"],
   ui: ["domain"],
   web: ["application", "auth", "config", "contracts", "db", "domain", "integrations", "ui"],
+  // Phase 4.1. The plan's graph draws api -> {application, auth, contracts}; `config` (the Logger)
+  // and `domain` (the capability + status vocabularies a guard decides on) are added for the same
+  // reason they were added to `application` above — they are dependency-free leaves every layer
+  // may read. `integrations` is here for `http/app-error`, the error envelope the Phase 4.2
+  // exception filter maps onto, so the API cannot grow a second copy of the code union.
+  // `db` is ABSENT ON PURPOSE and must stay absent: a controller is transport, and the moment it
+  // can reach a repository the "one path to the data" decision of Phase 4.0 is gone.
+  api: ["application", "auth", "config", "contracts", "domain", "integrations"],
 };
 
 const PRISMA_VENDOR = /^(@prisma\/|prisma$)/;
@@ -45,31 +53,40 @@ const UI_PACKAGES = /^(react|react-dom|@destaworks\/ui)(\/|$)/;
 const SERVER_SIDE_PACKAGES = new Set(["db", "application", "auth", "integrations"]);
 
 /** Where `import "server-only"` is allowed to appear at all. See the PERMITTED entry for why. */
-const SERVER_ONLY_ALLOWED = new Set(["db", "application", "auth", "integrations", "config", "web"]);
+const SERVER_ONLY_ALLOWED = new Set(["web"]);
 
-/** Packages that must never see Prisma in any form — browser-reachable or framework-free. */
-const PRISMA_FREE_PACKAGES = new Set(["domain", "contracts", "config", "ui", "web"]);
+/** Packages that must never see Prisma in any form — browser-reachable, framework-free, or
+ *  transport-only. `api` is the last of those: it runs on a server and could technically hold the
+ *  `Prisma` namespace, but a controller has no legitimate use for it, so it is classified here
+ *  rather than in SERVER_SIDE_PACKAGES and the namespace exemption does not reach it. */
+const PRISMA_FREE_PACKAGES = new Set(["domain", "contracts", "config", "ui", "web", "api"]);
 
 /* -------------------------------------------------------------- deliberate exemptions ---- */
 
 const PERMITTED = [
   {
-    id: "server-only-in-server-packages",
+    id: "server-only-in-the-web-app-only",
     rule: "dependency-direction",
     applies: (unit, spec) => SERVER_ONLY_ALLOWED.has(unit.short) && spec === "server-only",
     reason:
-      "`server-only` is a build-time poison pill, not a framework dependency: it has no runtime " +
-      "surface and exports nothing. It is what stops a repository or service being pulled into a " +
-      "browser bundle by an accidental client import, which is a PII exposure in this app. " +
-      `PERMITTED only in: ${[...SERVER_ONLY_ALLOWED].sort().join(", ")}. It FAILS in domain, ` +
-      "contracts and ui, which are isomorphic and browser-reachable.",
+      "`server-only` is a Next.js bundler poison pill, not a portable guard: its `exports` map " +
+      "resolves to an empty module under the `react-server` condition and to a bare `throw` " +
+      "otherwise, so it only means anything inside a bundler that sets that condition. " +
+      `PERMITTED only in: ${[...SERVER_ONLY_ALLOWED].sort().join(", ")} — the one unit that IS a ` +
+      "Next.js bundle, where a client/server boundary genuinely exists and the pill is what stops " +
+      "a server module being pulled into a browser chunk by an accidental client import (a PII " +
+      "exposure in this app). It now FAILS in every `packages/*`: those are plain libraries " +
+      "consumed by more than one runtime, and the boundary there is enforced by the package graph " +
+      "(web cannot import db), `import/no-restricted-paths` in tooling/eslint/base.mjs, and the " +
+      "`web-read-path-is-http-only` and `prisma-only-in-db` rules below.",
     debt:
-      "Phase 4 (NestJS) MUST remove it from `application`: outside a `react-server` bundler " +
-      "condition `server-only` THROWS on import (that is why every `db:seed` script in " +
-      "package.json runs with NODE_OPTIONS=--conditions=react-server). A NestJS process importing " +
-      "`@destaworks/application` will crash at import time until this is replaced by a bundler-level " +
-      "client-boundary check. Tracked count below must not grow.",
-    cap: { application: 47, db: 39, integrations: 26, auth: 3, config: 2 },
+      "Phase 4 removed it from packages/* (117 files across application, db, integrations, auth " +
+      "and config): outside a `react-server` bundler condition `server-only` THROWS on import, so " +
+      "a NestJS process importing `@destaworks/application` crashed at import time. The " +
+      "NODE_OPTIONS=--conditions=react-server prefix on the db:* scripts in package.json is the " +
+      "residue of that and can come off once nothing else depends on it. The cap below is now a " +
+      "ratchet on apps/web, which must not grow without a deliberate decision.",
+    cap: { web: 2 },
   },
   {
     id: "db-reads-cursor-codec-from-contracts",
@@ -389,8 +406,11 @@ check("dependency-direction", "Dependency direction matches the declared graph",
     if (r.specifier !== "server-only") continue;
     if (SERVER_ONLY_ALLOWED.has(r.unit.short)) continue;
     fail(
-      `${r.unit.short} imports \`server-only\` — it is isomorphic/browser-reachable and must stay ` +
-        `framework-free (permitted only in ${[...SERVER_ONLY_ALLOWED].sort().join(", ")})`,
+      `${r.unit.short} imports \`server-only\` — it is a bundler-specific poison pill that THROWS ` +
+        `on import outside a \`react-server\` condition, so it breaks every non-Next consumer ` +
+        `(NestJS, tsx scripts, workers). Packages stay runtime-agnostic; the client/server ` +
+        `boundary is enforced by the package graph, import/no-restricted-paths and the rules in ` +
+        `this file. Permitted only in ${[...SERVER_ONLY_ALLOWED].sort().join(", ")}`,
       r,
     );
   }
@@ -420,6 +440,15 @@ check("forbidden-imports", "Forbidden imports (the --X--> list)", (fail) => {
     }
     if (from === "web" && (PRISMA_VENDOR.test(spec) || PRISMA_GENERATED.test(spec))) {
       fail(`web --X--> Prisma  [${spec}]`, r);
+    }
+    // Phase 4.1: `apps/api` never imports Prisma or `@destaworks/db` directly. Unlike the web rule
+    // there is no test exemption — an API test that needs a repository is asserting the service
+    // layer's job, in the wrong package.
+    if (from === "api" && targetShort === "db") {
+      fail(`api --X--> db  [${spec}]`, r);
+    }
+    if (from === "api" && (PRISMA_VENDOR.test(spec) || PRISMA_GENERATED.test(spec))) {
+      fail(`api --X--> Prisma  [${spec}]`, r);
     }
     if (from === "domain" && (PRISMA_VENDOR.test(spec) || PRISMA_GENERATED.test(spec))) {
       fail(`domain --X--> Prisma  [${spec}]`, r);
@@ -640,7 +669,7 @@ for (const p of PERMITTED) {
   if (p.debt) console.log(`    debt:   ${p.debt}`);
 }
 
-const cap = PERMITTED.find((p) => p.id === "server-only-in-server-packages")?.cap ?? {};
+const cap = PERMITTED.find((p) => p.id === "server-only-in-the-web-app-only")?.cap ?? {};
 const serverOnlyCounts = {};
 for (const r of records) {
   if (r.specifier !== "server-only") continue;
@@ -656,7 +685,7 @@ console.log(
 for (const [pkg, max] of capBreaches) {
   console.error(
     `\nFAIL  server-only spread: ${pkg} now imports \`server-only\` in ${serverOnlyCounts[pkg]} files, cap is ${max}.\n` +
-      `      The exemption is frozen at its Phase 3 size so it cannot grow while Phase 4 owes its removal.\n` +
+      `      The exemption is frozen at the size Phase 4 left it, so the pill cannot spread again.\n` +
       `      Raise the cap deliberately in scripts/check-architecture.mjs, or do not add the import.`,
   );
 }

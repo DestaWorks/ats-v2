@@ -1,4 +1,3 @@
-import "server-only";
 import type { Prisma } from "../generated/prisma/client";
 import type { Role } from "@destaworks/domain/constants";
 import { db } from "../prisma";

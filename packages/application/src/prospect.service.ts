@@ -1,4 +1,3 @@
-import "server-only";
 import { canEditProspect, canManageContacts } from "@destaworks/domain/rules/prospect-lifecycle";
 import { specialtyTaxonomyQuery, type ProspectStatus } from "@destaworks/domain/constants";
 import type {

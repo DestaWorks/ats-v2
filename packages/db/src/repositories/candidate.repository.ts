@@ -1,4 +1,3 @@
-import "server-only";
 import type { Candidate, Prisma } from "../generated/prisma/client";
 import {
   ACTIVE_STATUS_CODES,

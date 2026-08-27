@@ -1,4 +1,3 @@
-import "server-only";
 import type { Prisma, ProspectContact } from "../generated/prisma/client";
 import { db } from "../prisma";
 

@@ -14,8 +14,7 @@
     "@destaworks/db": "workspace:*",
     "@destaworks/domain": "workspace:*",
     "@destaworks/integrations": "workspace:*",
-    "papaparse": "^5.5.4",
-    "server-only": "^0.0.1"
+    "papaparse": "^5.5.4"
   },
   "devDependencies": {
     "@destaworks/tsconfig": "workspace:*",

@@ -1,4 +1,3 @@
-import "server-only";
 import type { ClientNote, Prisma } from "../generated/prisma/client";
 import { db } from "../prisma";
 

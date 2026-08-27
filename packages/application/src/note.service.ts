@@ -1,4 +1,3 @@
-import "server-only";
 import type { NoteDTO } from "@destaworks/contracts/validation/candidate";
 import { hasCapability, type NoteType, type Role } from "@destaworks/domain/constants";
 import { resolveMentions, type MentionTarget } from "@destaworks/domain/mentions";

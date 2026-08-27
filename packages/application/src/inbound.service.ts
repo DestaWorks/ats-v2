@@ -1,4 +1,3 @@
-import "server-only";
 import { systemClock, type Clock } from "@destaworks/domain/clock";
 import { scoreCandidate } from "@destaworks/domain/rules/scoring";
 import type { ClientRules, RuleCandidate } from "@destaworks/domain/rules/types";

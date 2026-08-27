@@ -1,5 +1,3 @@
-import "server-only";
-
 /**
  * Provider-agnostic AI config. The model is a `"provider/model"` string, so we can switch between
  * Claude, OpenAI (GPT), and Google (Gemini) — and add more — with ONE env var, no code change.

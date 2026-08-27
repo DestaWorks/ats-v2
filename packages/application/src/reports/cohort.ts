@@ -1,4 +1,3 @@
-import "server-only";
 import { scoreCandidate } from "@destaworks/domain/rules/scoring";
 import type { ClientRules } from "@destaworks/domain/rules/types";
 import { utcDayStart, utcNextDayStart } from "@destaworks/domain/daily";

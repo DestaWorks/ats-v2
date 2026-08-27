@@ -1,4 +1,3 @@
-import "server-only";
 import { createHash } from "node:crypto";
 import { PORTAL_TOKEN_COOKIE } from "@destaworks/domain/constants";
 import { AppError } from "@destaworks/integrations/http/app-error";

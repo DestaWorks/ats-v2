@@ -1,4 +1,3 @@
-import "server-only";
 import { healthRepository } from "@destaworks/db/repositories/health.repository";
 
 export interface HealthCheckResult {

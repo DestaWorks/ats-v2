@@ -1,4 +1,3 @@
-import "server-only";
 import { splitMentions } from "@destaworks/domain/mentions";
 import { emailShell, type EmailContent } from "./shell";
 

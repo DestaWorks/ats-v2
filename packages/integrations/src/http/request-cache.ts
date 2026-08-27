@@ -1,4 +1,3 @@
-import "server-only";
 import { cache } from "react";
 import { clientRepository } from "@destaworks/db/repositories/client.repository";
 import { clientRulesRepository } from "@destaworks/db/repositories/client-rules.repository";

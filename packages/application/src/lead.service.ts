@@ -1,4 +1,3 @@
-import "server-only";
 import { Prisma } from "@destaworks/db/generated/prisma/client";
 import { normalizeLeadStatus } from "@destaworks/domain/rules/normalize-lead-status";
 import {

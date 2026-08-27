@@ -1,4 +1,3 @@
-import "server-only";
 import { BRIEF_CLIENT_CARD_LIMIT, BRIEF_STUCK_CANDIDATE_LIMIT } from "@destaworks/domain/constants";
 import {
   daysBefore,

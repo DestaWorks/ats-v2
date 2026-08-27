@@ -1,4 +1,3 @@
-import "server-only";
 import type { OutreachAttempt, Prisma, SourceLead } from "../generated/prisma/client";
 import { db } from "../prisma";
 
