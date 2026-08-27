@@ -1,7 +1,7 @@
 import "server-only";
 import { randomBytes } from "node:crypto";
-import { headers } from "next/headers";
 import { auth } from "@/server/auth/auth";
+import { requestContext } from "@/server/auth/request-context";
 import { toIso, isoOrNull } from "@/lib/utils/iso";
 import { writeAudit } from "@/server/db/audit";
 import { withTransaction } from "@/server/db/with-transaction";
@@ -54,7 +54,7 @@ function toDTO(user: BetterAuthUser): AdminUserDTO {
 export const adminUserService = {
   async list(): Promise<AdminUserListDTO> {
     const result = await auth.api.listUsers({
-      headers: await headers(),
+      headers: await requestContext().headers(),
       query: { limit: 500, sortBy: "createdAt", sortDirection: "desc" },
     });
     return { users: result.users.map((u) => toDTO(u)), total: result.total };
@@ -72,7 +72,7 @@ export const adminUserService = {
   async create(input: CreateUserInput, actorId: string): Promise<GeneratedPasswordDTO> {
     const generatedPassword = input.password ? null : generatePassword();
     const result = await auth.api.createUser({
-      headers: await headers(),
+      headers: await requestContext().headers(),
       body: {
         name: input.name,
         email: input.email,
@@ -94,7 +94,10 @@ export const adminUserService = {
   },
 
   async setRole(userId: string, role: Role, actorId: string): Promise<AdminUserDTO> {
-    const result = await auth.api.setRole({ headers: await headers(), body: { userId, role } });
+    const result = await auth.api.setRole({
+      headers: await requestContext().headers(),
+      body: { userId, role },
+    });
     await withTransaction((tx) =>
       writeAudit(tx, {
         entity: "user",
@@ -109,7 +112,7 @@ export const adminUserService = {
 
   async ban(userId: string, input: BanUserInput, actorId: string): Promise<AdminUserDTO> {
     const result = await auth.api.banUser({
-      headers: await headers(),
+      headers: await requestContext().headers(),
       body: {
         userId,
         banReason: input.reason ?? undefined,
@@ -129,7 +132,10 @@ export const adminUserService = {
   },
 
   async unban(userId: string, actorId: string): Promise<AdminUserDTO> {
-    const result = await auth.api.unbanUser({ headers: await headers(), body: { userId } });
+    const result = await auth.api.unbanUser({
+      headers: await requestContext().headers(),
+      body: { userId },
+    });
     await withTransaction((tx) =>
       writeAudit(tx, { entity: "user", entityId: userId, actor: actorId, action: "unban" }),
     );
@@ -141,7 +147,7 @@ export const adminUserService = {
   async resetPassword(userId: string, actorId: string): Promise<{ generatedPassword: string }> {
     const generatedPassword = generatePassword();
     await auth.api.setUserPassword({
-      headers: await headers(),
+      headers: await requestContext().headers(),
       body: { userId, newPassword: generatedPassword },
     });
     await withTransaction((tx) =>
@@ -156,7 +162,7 @@ export const adminUserService = {
   },
 
   async remove(userId: string, actorId: string): Promise<void> {
-    await auth.api.removeUser({ headers: await headers(), body: { userId } });
+    await auth.api.removeUser({ headers: await requestContext().headers(), body: { userId } });
     await withTransaction((tx) =>
       writeAudit(tx, { entity: "user", entityId: userId, actor: actorId, action: "remove" }),
     );

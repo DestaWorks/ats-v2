@@ -1,9 +1,9 @@
 import "server-only";
 import { createHash } from "node:crypto";
-import { cookies } from "next/headers";
 import { PORTAL_TOKEN_COOKIE } from "@/lib/constants";
 import { AppError } from "@/server/http/app-error";
 import { clientPortalTokenRepository } from "@/server/repositories/client-portal-token.repository";
+import { requestContext } from "./request-context";
 
 /**
  * Client Portal auth (Wave 4.3) — completely separate from `server/auth/guards.ts`. Never imports
@@ -73,8 +73,7 @@ export function exchangePortalToken(
 
 /** Resolve the current portal identity from the cookie, or `null` if absent/invalid/expired/revoked. */
 export async function resolvePortalContact(): Promise<PortalContext | null> {
-  const jar = await cookies();
-  const raw = jar.get(PORTAL_TOKEN_COOKIE)?.value;
+  const raw = await requestContext().cookie(PORTAL_TOKEN_COOKIE);
   if (!raw) return null;
   const result = await resolveByRawToken(raw);
   return result?.contact ?? null;

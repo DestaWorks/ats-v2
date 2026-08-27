@@ -4,7 +4,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
  * End-to-end proof of the guarded route path (IMPLEMENTATION-PLAN 0.4 done-when): with no
  * session the route returns 401 JSON (the `AppError("UNAUTHORIZED")` thrown by `requireUser`
  * mapped by `apiHandler`), and with a valid mocked session it returns 200 + the user JSON.
- * Mocks mirror guards.test.ts: neutralize `server-only`, stub `next/headers`, drive the
+ * Mocks mirror guards.test.ts: neutralize `server-only`, stub the request context, drive the
  * Better Auth session — the role always originates from the (mocked) session.
  */
 
@@ -12,8 +12,8 @@ let mockSession: { user: { id: string; email: string; name: string; role?: strin
 
 vi.mock("server-only", () => ({}));
 
-vi.mock("next/headers", () => ({
-  headers: async () => new Headers(),
+vi.mock("@/server/auth/request-context", () => ({
+  requestContext: () => ({ headers: async () => new Headers() }),
 }));
 
 vi.mock("@/server/auth/auth", () => ({

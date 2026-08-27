@@ -19,7 +19,9 @@ const h = vi.hoisted(() => ({
 }));
 
 vi.mock("server-only", () => ({}));
-vi.mock("next/headers", () => ({ headers: async () => new Headers({ cookie: "session=abc" }) }));
+vi.mock("@/server/auth/request-context", () => ({
+  requestContext: () => ({ headers: async () => new Headers({ cookie: "session=abc" }) }),
+}));
 vi.mock("@/server/auth/auth", () => ({
   auth: {
     api: {

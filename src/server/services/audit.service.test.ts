@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 /**
  * Proves the capability gate on audit reads: `activity_log` rows can hold PII/PHI, so only
  * holders of `viewAudit` (admin-only: Owner/Admin) may read the trail. We exercise the REAL guard
- * (`requireCapability`) by mocking the Better Auth session + `next/headers` (same pattern as
+ * (`requireCapability`) by mocking the Better Auth session + the request context (same pattern as
  * `guards.test.ts`) and stub the repositories so no DB is touched — the role always comes from the
  * (mocked) session.
  *
@@ -17,8 +17,8 @@ let mockSession: { user: { id: string; email: string; name: string; role?: strin
 
 vi.mock("server-only", () => ({}));
 
-vi.mock("next/headers", () => ({
-  headers: async () => new Headers(),
+vi.mock("@/server/auth/request-context", () => ({
+  requestContext: () => ({ headers: async () => new Headers() }),
 }));
 
 vi.mock("@/server/auth/auth", () => ({

@@ -2,9 +2,10 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 
 /**
  * Proves server-side authZ (IMPLEMENTATION-PLAN 0.3 done-when: "a non-admin provably
- * can't reach admin"). We mock the Better Auth session + `next/headers` so the test
- * exercises the *guard logic* — role validation + capability/role checks — without a DB
- * or HTTP layer. The role always originates from the (mocked) session, never the caller.
+ * can't reach admin"). We mock the Better Auth session and install a stub `RequestContext`
+ * so the test exercises the *guard logic* — role validation + capability/role checks —
+ * without a DB or HTTP layer. The role always originates from the (mocked) session, never
+ * the caller.
  */
 
 // Controllable session for the mocked Better Auth instance.
@@ -13,15 +14,17 @@ let mockSession: { user: { id: string; email: string; name: string; role?: strin
 // `server-only` throws outside a React Server Component build; neutralize it for the unit test.
 vi.mock("server-only", () => ({}));
 
-vi.mock("next/headers", () => ({
-  headers: async () => new Headers(),
-}));
-
 vi.mock("./auth", () => ({
   auth: { api: { getSession: async () => mockSession } },
 }));
 
+import { installRequestContext } from "./request-context";
 import { getCurrentUser, requireUser, requireCapability } from "./guards";
+
+installRequestContext({
+  headers: async () => new Headers(),
+  cookie: async () => undefined,
+});
 
 function signInAs(role?: string) {
   mockSession = { user: { id: "u1", email: "u@desta.works", name: "Test User", role } };

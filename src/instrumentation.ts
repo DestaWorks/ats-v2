@@ -13,6 +13,10 @@ import { scrubBreadcrumb, scrubEvent } from "@/lib/monitoring/sentry-scrub";
  * file for why this is mandatory in an app carrying candidate PII/PHI, not optional hardening.
  */
 export async function register(): Promise<void> {
+  if (process.env.NEXT_RUNTIME === "nodejs") {
+    await import("@/app/request-context");
+  }
+
   const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN;
   if (!dsn) return;
 

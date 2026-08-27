@@ -9,7 +9,9 @@ const h = vi.hoisted(() => ({
 }));
 
 vi.mock("server-only", () => ({}));
-vi.mock("next/headers", () => ({ headers: async () => new Headers() }));
+vi.mock("@/server/auth/request-context", () => ({
+  requestContext: () => ({ headers: async () => new Headers() }),
+}));
 vi.mock("@/server/auth/auth", () => ({ auth: { api: { getSession: async () => h.session } } }));
 vi.mock("@/server/services/client-note.service", () => ({
   clientNoteService: { list: h.list, create: h.create },

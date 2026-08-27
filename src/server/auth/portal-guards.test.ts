@@ -1,17 +1,14 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
 /**
- * Portal token resolution (Wave 4.3). Mirrors `guards.test.ts`'s approach: mock the repository +
- * `next/headers` so the test exercises the *guard predicates* without a DB. Every case here is a
- * reason a live, unexpired, unrevoked token must still be refused — audit 2026-08-21 found a
- * contact marked `left` in the CRM kept 30 days of access to the client's candidate roster.
+ * Portal token resolution (Wave 4.3). Mirrors `guards.test.ts`'s approach: mock the repository and
+ * install a stub `RequestContext` so the test exercises the *guard predicates* without a DB. Every
+ * case here is a reason a live, unexpired, unrevoked token must still be refused — audit
+ * 2026-08-21 found a contact marked `left` in the CRM kept 30 days of access to the client's
+ * candidate roster.
  */
 
 vi.mock("server-only", () => ({}));
-
-vi.mock("next/headers", () => ({
-  cookies: async () => ({ get: () => undefined }),
-}));
 
 type ContactRow = {
   id: string;
@@ -40,7 +37,16 @@ vi.mock("@/server/repositories/client-portal-token.repository", () => ({
   },
 }));
 
-import { exchangePortalToken, hashPortalToken } from "./portal-guards";
+import { PORTAL_TOKEN_COOKIE } from "@/lib/constants";
+import { installRequestContext } from "./request-context";
+import { exchangePortalToken, resolvePortalContact, hashPortalToken } from "./portal-guards";
+
+let mockCookie: string | undefined;
+
+installRequestContext({
+  headers: async () => new Headers(),
+  cookie: async (name) => (name === PORTAL_TOKEN_COOKIE ? mockCookie : undefined),
+});
 
 function tokenFor(contact: Partial<ContactRow> = {}, token: Partial<TokenRow> = {}): TokenRow {
   return {
@@ -63,6 +69,7 @@ function tokenFor(contact: Partial<ContactRow> = {}, token: Partial<TokenRow> = 
 
 beforeEach(() => {
   mockToken = null;
+  mockCookie = undefined;
   touchLastUsed.mockClear();
 });
 
@@ -101,6 +108,25 @@ describe("exchangePortalToken", () => {
 
     mockToken = null;
     expect(await exchangePortalToken("raw-token")).toBeNull();
+  });
+});
+
+describe("resolvePortalContact", () => {
+  it("resolves identity from the portal cookie only", async () => {
+    mockToken = tokenFor();
+    mockCookie = "raw-token";
+    expect(await resolvePortalContact()).toMatchObject({ contactId: "contact_1" });
+  });
+
+  it("is null when the portal cookie is absent", async () => {
+    mockToken = tokenFor();
+    expect(await resolvePortalContact()).toBeNull();
+  });
+
+  it("refuses a departed contact who still holds the cookie", async () => {
+    mockToken = tokenFor({ status: "left" });
+    mockCookie = "raw-token";
+    expect(await resolvePortalContact()).toBeNull();
   });
 });
 

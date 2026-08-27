@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Toaster } from "sonner";
+import "./request-context";
 import "./globals.css";
 
 export const metadata: Metadata = {

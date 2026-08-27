@@ -1,7 +1,7 @@
 import "server-only";
 import { cache } from "react";
-import { headers } from "next/headers";
 import { auth } from "./auth";
+import { requestContext } from "./request-context";
 import { AppError } from "@/server/http/app-error";
 import { hasCapability, isRole, type Capability, type Role } from "@/lib/constants";
 
@@ -27,7 +27,7 @@ export interface AuthUser {
  * requests.
  */
 export const getCurrentUser = cache(async (): Promise<AuthUser | null> => {
-  const session = await auth.api.getSession({ headers: await headers() });
+  const session = await auth.api.getSession({ headers: await requestContext().headers() });
   if (!session) return null;
   const rawRole = (session.user as { role?: string }).role ?? "Associate";
   const role: Role = isRole(rawRole) ? rawRole : "Associate";
