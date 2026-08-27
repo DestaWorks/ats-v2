@@ -20,5 +20,5 @@
     "packages/*/src/**/*.ts",
     "packages/*/src/**/*.tsx"
   ],
-  "exclude": ["node_modules", "index.html"]
+  "exclude": ["node_modules", "index.html", "apps/api"]
 }

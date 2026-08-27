@@ -46,6 +46,18 @@
       ],
       "env": ["ANALYZE", "NEXT_PUBLIC_*", "SENTRY_*", "VERCEL_*"]
     },
+    "//#api:build": {
+      "dependsOn": ["^topo", "^build"],
+      "inputs": [
+        "apps/api/src/**",
+        "apps/api/tsconfig.json",
+        "apps/api/package.json",
+        "packages/*/src/**",
+        "packages/*/package.json",
+        "package.json"
+      ],
+      "outputs": ["apps/api/.tsbuildinfo"]
+    },
     "//#app:lint": {
       "dependsOn": ["^topo", "^build"],
       "inputs": [

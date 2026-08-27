@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "@destaworks/tsconfig/base.json",
+  "compilerOptions": {
+    // NestJS is built on the STAGE-2 (legacy) decorator semantics. Without this flag TypeScript
+    // applies the ES standard decorators instead, and `@Module` / `@Controller` stop type-checking
+    // at all — and esbuild emits `__decorateElement`, which crashes Nest at boot with
+    // "Cannot read properties of undefined (reading 'value')". It is set here, in this app's own
+    // project, rather than in the shared base, so it cannot change how any other package compiles.
+    // THIS FILE IS THE ONLY REASON `apps/api` HAS ITS OWN tsconfig, and the reason the root
+    // `tsconfig.json` excludes `apps/api` and the `dev:api`/`start:api` scripts pass
+    // `tsx --tsconfig apps/api/tsconfig.json` explicitly instead of letting tsx discover one.
+    "experimentalDecorators": true,
+
+    // `emitDecoratorMetadata` is deliberately OFF. The API runs through `tsx` (esbuild), which
+    // cannot emit `design:paramtypes` — so Nest's implicit, type-inferred injection would compile
+    // and lint cleanly and then fail at runtime with "Nest can't resolve dependencies". Every
+    // injection in this app must therefore name its token explicitly: `@Inject(SOME_TOKEN)`,
+    // including for class providers such as `@Inject(Reflector)`.
+
+    "types": ["node"],
+    "tsBuildInfoFile": "./.tsbuildinfo"
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
+}
