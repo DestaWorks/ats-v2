@@ -1,7 +1,13 @@
-import { updateDealSchema } from "@/lib/validation/client";
+import { updateDealSchema, type DealDTO } from "@/lib/validation/client";
 import { requireCapability } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { clientService } from "@/server/services/client.service";
+
+/** Wire shape of `PATCH /api/crm/clients/:id/deals/:dealId`. */
+export type PatchCrmDealResponse = { deal: DealDTO };
+
+/** Wire shape of `DELETE /api/crm/clients/:id/deals/:dealId`. */
+export type DeleteCrmDealResponse = { ok: true; id: string };
 
 /**
  * PATCH /api/crm/clients/:id/deals/:dealId — edit a deal (incl. moving its kanban stage and
@@ -14,7 +20,7 @@ export const PATCH = apiHandler<{ params: Promise<{ id: string; dealId: string }
     const { id, dealId } = await ctx.params;
     const input = updateDealSchema.parse(await req.json());
     const deal = await clientService.updateDeal(id, dealId, input, user);
-    return json({ deal });
+    return json<PatchCrmDealResponse>({ deal });
   },
 );
 
@@ -23,6 +29,6 @@ export const DELETE = apiHandler<{ params: Promise<{ id: string; dealId: string 
     const user = await requireCapability("viewCrm");
     const { id, dealId } = await ctx.params;
     await clientService.removeDeal(id, dealId, user);
-    return json({ ok: true, id: dealId });
+    return json<DeleteCrmDealResponse>({ ok: true, id: dealId });
   },
 );

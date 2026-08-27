@@ -1,7 +1,13 @@
-import { createSavedIcpSchema } from "@/lib/validation/saved-icp";
+import { createSavedIcpSchema, type SavedIcpDTO } from "@/lib/validation/saved-icp";
 import { requireCapability } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { savedIcpService } from "@/server/services/saved-icp.service";
+
+/** Response body of `GET /api/saved-icps`. */
+export type GetSavedIcpsResponse = { savedIcps: SavedIcpDTO[] };
+
+/** Response body of `POST /api/saved-icps` (201). */
+export type PostSavedIcpResponse = { savedIcp: SavedIcpDTO };
 
 /**
  * GET /api/saved-icps — every ICP visible to the caller: all team-shared ones + the caller's own
@@ -11,7 +17,7 @@ import { savedIcpService } from "@/server/services/saved-icp.service";
 export const GET = apiHandler(async () => {
   const user = await requireCapability("viewClientDiscovery");
   const savedIcps = await savedIcpService.list(user);
-  return json({ savedIcps });
+  return json<GetSavedIcpsResponse>({ savedIcps });
 });
 
 /**
@@ -22,5 +28,5 @@ export const POST = apiHandler(async (req: Request) => {
   const user = await requireCapability("viewClientDiscovery");
   const input = createSavedIcpSchema.parse(await req.json());
   const savedIcp = await savedIcpService.create(input, user);
-  return json({ savedIcp }, 201);
+  return json<PostSavedIcpResponse>({ savedIcp }, 201);
 });

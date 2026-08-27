@@ -3,6 +3,11 @@ import { requireUser } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { mentionService } from "@/server/services/mention.service";
 
+/** Wire shape of `POST /api/mentions/read` — the viewer's fresh unread badge count. */
+export interface PostMentionsReadResponse {
+  unread: number;
+}
+
 /**
  * POST /api/mentions/read — mark one mention (`{ mentionId }`) or all of the session user's
  * mentions (`{ all: true }`) read (`ats_mark_mention_read` parity). Recipient scoping is the
@@ -12,5 +17,5 @@ import { mentionService } from "@/server/services/mention.service";
 export const POST = apiHandler(async (req) => {
   const user = await requireUser();
   const input = markMentionReadSchema.parse(await req.json());
-  return json(await mentionService.markRead(input, user));
+  return json<PostMentionsReadResponse>(await mentionService.markRead(input, user));
 });

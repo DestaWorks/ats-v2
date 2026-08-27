@@ -1,7 +1,10 @@
-import { leadListQuerySchema } from "@/lib/validation/lead";
+import { leadListQuerySchema, type LeadListDTO } from "@/lib/validation/lead";
 import { requireUser } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { leadService } from "@/server/services/lead.service";
+
+/** Response body of `GET /api/leads/list`. */
+export type GetLeadListResponse = LeadListDTO;
 
 /**
  * GET /api/leads/list — one server OFFSET page of the `/sourcing` inventory (the RSC renders the
@@ -21,5 +24,5 @@ export const GET = apiHandler(async (req: Request) => {
     deleted: params.get("deleted") ?? undefined,
     page: params.get("page") ?? undefined,
   });
-  return json(await leadService.list({ ...filters, includeDeleted: deleted }));
+  return json<GetLeadListResponse>(await leadService.list({ ...filters, includeDeleted: deleted }));
 });

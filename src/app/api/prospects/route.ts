@@ -1,7 +1,10 @@
-import { addProspectSchema } from "@/lib/validation/prospect";
+import { addProspectSchema, type ProspectDetailDTO } from "@/lib/validation/prospect";
 import { requireCapability } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { prospectService } from "@/server/services/prospect.service";
+
+/** Response body of `POST /api/prospects`. */
+export type PostProspectResponse = { prospect: ProspectDetailDTO };
 
 /**
  * POST /api/prospects — add a prospect manually (Client Discovery). Leadership-gated
@@ -13,5 +16,5 @@ export const POST = apiHandler(async (req: Request) => {
   const user = await requireCapability("viewClientDiscovery");
   const input = addProspectSchema.parse(await req.json());
   const prospect = await prospectService.create(input, user);
-  return json({ prospect }, 201);
+  return json<PostProspectResponse>({ prospect }, 201);
 });

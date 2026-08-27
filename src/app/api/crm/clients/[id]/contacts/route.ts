@@ -1,7 +1,10 @@
-import { addContactSchema } from "@/lib/validation/client";
+import { addContactSchema, type ClientContactDTO } from "@/lib/validation/client";
 import { requireCapability } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { clientService } from "@/server/services/client.service";
+
+/** Wire shape of `POST /api/crm/clients/:id/contacts`. */
+export type PostCrmClientContactResponse = { contact: ClientContactDTO };
 
 /** POST /api/crm/clients/:id/contacts — add a contact to this client. Gated `viewCrm`. */
 export const POST = apiHandler<{ params: Promise<{ id: string }> }>(async (req, ctx) => {
@@ -9,5 +12,5 @@ export const POST = apiHandler<{ params: Promise<{ id: string }> }>(async (req, 
   const { id } = await ctx.params;
   const input = addContactSchema.parse(await req.json());
   const contact = await clientService.addContact(id, input, user);
-  return json({ contact }, 201);
+  return json<PostCrmClientContactResponse>({ contact }, 201);
 });

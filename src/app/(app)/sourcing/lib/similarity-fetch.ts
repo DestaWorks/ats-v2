@@ -3,11 +3,11 @@
  * /api/sourcing/similar`, reusing the shared `postJson` envelope helper from `@/lib/api/client`.
  */
 import { postJson, type ApiResult } from "@/lib/api/client";
-import type { FindSimilarResultDTO } from "@/lib/validation/similarity";
+import type { PostSourcingSimilarResponse } from "@/app/api/sourcing/similar/route";
 
 export function postFindSimilar(
   credential: string | null,
   state: string | null,
-): Promise<ApiResult<FindSimilarResultDTO>> {
+): Promise<ApiResult<PostSourcingSimilarResponse>> {
   return postJson("/api/sourcing/similar", { credential, state });
 }

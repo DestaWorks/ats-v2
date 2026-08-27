@@ -3,6 +3,9 @@ import { requireUser } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { discoverService } from "@/server/services/discover.service";
 
+/** Wire shape of `POST /api/discover/add`. */
+export type PostDiscoverAddResponse = { added: number; skipped: number };
+
 /**
  * POST /api/discover/add — bulk-add the caller's selected NPPES search results to Sourcing
  * (Wave 2.7). Open to any signed-in operator (matches `POST /api/leads`/`POST /api/leads/import`
@@ -13,5 +16,5 @@ import { discoverService } from "@/server/services/discover.service";
 export const POST = apiHandler(async (req) => {
   const user = await requireUser();
   const input = discoverAddToSourcingSchema.parse(await req.json());
-  return json(await discoverService.addToSourcing(input, user));
+  return json<PostDiscoverAddResponse>(await discoverService.addToSourcing(input, user));
 });

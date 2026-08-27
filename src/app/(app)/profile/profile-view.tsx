@@ -5,6 +5,8 @@ import { toast } from "sonner";
 import { z } from "zod";
 import { updateUser, changePassword } from "@/lib/auth-client";
 import type { UserPreferencesDTO } from "@/lib/validation/user-preferences";
+import type { PatchMePreferencesResponse } from "@/app/api/me/preferences/route";
+import type { PostMeAvatarResponse } from "@/app/api/me/avatar/route";
 import { useApiForm } from "@/lib/forms/use-api-form";
 import { emptyToNull } from "@/lib/forms/empty-to-null";
 import { messageForFailure, patchJson, postJson } from "@/lib/api/client";
@@ -81,7 +83,7 @@ export function ProfileView({
       const dataUrl = await resizeToDataUrl(file);
       // Wave 6 (D8): upload to object storage server-side instead of persisting the base64 data
       // URI itself — User.image ends up holding a small stable URL, not the image bytes.
-      const uploadResult = await postJson<{ url: string }>("/api/me/avatar", { dataUrl });
+      const uploadResult = await postJson<PostMeAvatarResponse>("/api/me/avatar", { dataUrl });
       if (!uploadResult.ok) {
         toast.error(messageForFailure(uploadResult.failure));
         return;
@@ -108,7 +110,7 @@ export function ProfileView({
       phone: preferences.phone,
       location: preferences.location,
     },
-    submit: (values) => patchJson<UserPreferencesDTO>("/api/me/preferences", values),
+    submit: (values) => patchJson<PatchMePreferencesResponse>("/api/me/preferences", values),
     onSuccess: () => toast.success("Profile updated"),
     onFailure: setServerError,
   });

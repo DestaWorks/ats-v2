@@ -14,12 +14,13 @@ import { OUTREACH_CHANNELS, type OutreachChannel } from "@/lib/constants/lead-st
 import { fillTemplate, type TemplateFillContext } from "@/lib/rules/fill-template";
 import { adaptCandidateToRecipient, adaptLeadToRecipient } from "@/lib/rules/adapt-recipient";
 import { getJson, postJson, messageForFailure } from "@/lib/api/client";
-import type {
-  CandidateListDTO,
-  CandidateListItemDTO,
-  CandidateProfileDTO,
-} from "@/lib/validation/candidate";
-import type { LeadListDTO, LeadListItemDTO } from "@/lib/validation/lead";
+import type { GetLeadListResponse } from "@/app/api/leads/list/route";
+import type { PostLeadOutreachResponse } from "@/app/api/leads/[id]/outreach/route";
+import type { GetCandidateResponse } from "@/app/api/candidates/[id]/route";
+import type { PostCandidateOutreachResponse } from "@/app/api/candidates/[id]/outreach/route";
+import type { GetCandidateListResponse } from "@/app/api/candidates/list/route";
+import type { CandidateListItemDTO, CandidateProfileDTO } from "@/lib/validation/candidate";
+import type { LeadListItemDTO } from "@/lib/validation/lead";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -107,7 +108,7 @@ export function TemplatesWorkspace({
     }
     const handle = setTimeout(async () => {
       const params = new URLSearchParams({ search: candSearch, page: "1" });
-      const res = await getJson<CandidateListDTO>(`/api/candidates/list?${params}`);
+      const res = await getJson<GetCandidateListResponse>(`/api/candidates/list?${params}`);
       if (res.ok) setCandResults(res.data.candidates);
     }, 300);
     return () => clearTimeout(handle);
@@ -121,7 +122,7 @@ export function TemplatesWorkspace({
     }
     const handle = setTimeout(async () => {
       const params = new URLSearchParams({ search: leadSearch, page: "1" });
-      const res = await getJson<LeadListDTO>(`/api/leads/list?${params}`);
+      const res = await getJson<GetLeadListResponse>(`/api/leads/list?${params}`);
       if (res.ok) {
         setLeadResults(
           res.data.leads.filter((l) => l.status !== "Promoted" && l.status !== "Bad Fit"),
@@ -134,7 +135,7 @@ export function TemplatesWorkspace({
   async function pickCandidate(item: CandidateListItemDTO) {
     setCandSearch(`${item.name} (${item.credential ?? "?"})`);
     setCandResults([]);
-    const res = await getJson<{ candidate: CandidateProfileDTO }>(`/api/candidates/${item.id}`);
+    const res = await getJson<GetCandidateResponse>(`/api/candidates/${item.id}`);
     if (res.ok) setCandidate(res.data.candidate);
     else toast.error(messageForFailure(res.failure));
   }
@@ -157,18 +158,21 @@ export function TemplatesWorkspace({
     setSending(true);
     try {
       if (recipientType === "lead" && lead) {
-        const res = await postJson(`/api/leads/${lead.id}/outreach`, {
+        const res = await postJson<PostLeadOutreachResponse>(`/api/leads/${lead.id}/outreach`, {
           channel,
           note: `Template sent: ${selTpl.name} (${TEMPLATE_CATEGORIES.find((c) => c.id === selTpl.category)?.name})`,
           templateId: selTpl.id,
         });
         if (!res.ok) toast.error(messageForFailure(res.failure));
       } else if (recipientType === "candidate" && candidate) {
-        const res = await postJson(`/api/candidates/${candidate.id}/outreach`, {
-          channel: "email",
-          note: `Template sent: ${selTpl.name} (${TEMPLATE_CATEGORIES.find((c) => c.id === selTpl.category)?.name}) — ${filledSubject}`,
-          templateId: selTpl.id,
-        });
+        const res = await postJson<PostCandidateOutreachResponse>(
+          `/api/candidates/${candidate.id}/outreach`,
+          {
+            channel: "email",
+            note: `Template sent: ${selTpl.name} (${TEMPLATE_CATEGORIES.find((c) => c.id === selTpl.category)?.name}) — ${filledSubject}`,
+            templateId: selTpl.id,
+          },
+        );
         if (!res.ok) toast.error(messageForFailure(res.failure));
       }
     } finally {

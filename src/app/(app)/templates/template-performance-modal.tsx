@@ -3,10 +3,8 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { getJson, messageForFailure } from "@/lib/api/client";
-import type {
-  TemplatePerformanceDTO,
-  TemplatePerformanceRowDTO,
-} from "@/lib/validation/template-performance";
+import type { GetTemplatePerformanceResponse } from "@/app/api/templates/performance/route";
+import type { TemplatePerformanceRowDTO } from "@/lib/validation/template-performance";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Modal } from "@/components/ui/modal";
@@ -42,7 +40,7 @@ function TemplatePerformanceModal({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const res = await getJson<TemplatePerformanceDTO>("/api/templates/performance");
+      const res = await getJson<GetTemplatePerformanceResponse>("/api/templates/performance");
       if (cancelled) return;
       setLoading(false);
       if (!res.ok) {

@@ -3,6 +3,9 @@ import { requireUser } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { leadService } from "@/server/services/lead.service";
 
+/** Response body of `POST /api/leads/import` — per-chunk counts only. */
+export type PostLeadImportResponse = { added: number; skipped: number };
+
 /**
  * POST /api/leads/import — one ≤200-row chunk of the lead CSV import
  * (`source_lead_bulk_import` parity; the client chunks sequentially, legacy-style). Open to any
@@ -13,5 +16,5 @@ import { leadService } from "@/server/services/lead.service";
 export const POST = apiHandler(async (req) => {
   const user = await requireUser();
   const input = importLeadsSchema.parse(await req.json());
-  return json(await leadService.importLeads(input, user));
+  return json<PostLeadImportResponse>(await leadService.importLeads(input, user));
 });

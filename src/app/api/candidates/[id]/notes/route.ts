@@ -2,6 +2,17 @@ import { addNoteSchema } from "@/lib/validation/candidate";
 import { requireUser } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { noteService } from "@/server/services/note.service";
+import type { NoteDTO } from "@/lib/validation/candidate";
+
+/** Wire shape of `POST /api/candidates/:id/notes` — the created note (author from the session). */
+export interface PostCandidateNoteResponse {
+  note: NoteDTO;
+}
+
+/** Wire shape of `GET /api/candidates/:id/notes` — the viewer-scoped notes for one candidate. */
+export interface GetCandidateNotesResponse {
+  notes: NoteDTO[];
+}
 
 /**
  * POST /api/candidates/:id/notes — add a note. Guarded by `requireUser()`. `authorId`/`authorName`
@@ -15,7 +26,7 @@ export const POST = apiHandler<{ params: Promise<{ id: string }> }>(async (req, 
   const { id } = await ctx.params;
   const input = addNoteSchema.parse(await req.json());
   const note = await noteService.add(id, input, user);
-  return json({ note }, 201);
+  return json<PostCandidateNoteResponse>({ note }, 201);
 });
 
 /**
@@ -25,5 +36,5 @@ export const POST = apiHandler<{ params: Promise<{ id: string }> }>(async (req, 
 export const GET = apiHandler<{ params: Promise<{ id: string }> }>(async (req, ctx) => {
   const user = await requireUser();
   const { id } = await ctx.params;
-  return json({ notes: await noteService.listByCandidate(id, user) });
+  return json<GetCandidateNotesResponse>({ notes: await noteService.listByCandidate(id, user) });
 });

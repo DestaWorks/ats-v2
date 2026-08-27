@@ -4,6 +4,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { CLOSED_DEAL_STAGES, OPEN_DEAL_STAGES } from "@/lib/constants";
 import { createDealSchema, type DealDTO } from "@/lib/validation/client";
+import type { PostCrmDealResponse } from "@/app/api/crm/clients/[id]/deals/route";
 import { useApiForm } from "@/lib/forms/use-api-form";
 import { emptyToNull } from "@/lib/forms/empty-to-null";
 import { postJson } from "@/lib/api/client";
@@ -175,7 +176,7 @@ function AddDealForm({
   const [serverError, setServerError] = useState<string | null>(null);
   const { form, pending, onSubmit } = useApiForm(createDealSchema, {
     defaultValues: { name: "" },
-    submit: (values) => postJson<{ deal: DealDTO }>(`/api/crm/clients/${clientId}/deals`, values),
+    submit: (values) => postJson<PostCrmDealResponse>(`/api/crm/clients/${clientId}/deals`, values),
     onSuccess: (data) => {
       toast.success("Deal added");
       onSaved(data.deal);

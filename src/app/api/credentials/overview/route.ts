@@ -1,6 +1,10 @@
 import { requireCapability } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { credentialsIntelligenceService } from "@/server/services/credentials-intelligence.service";
+import type { CredentialsOverviewDTO } from "@/lib/validation/credentials";
+
+/** Wire shape of `GET /api/credentials/overview` — the Credentials Intelligence snapshot. */
+export type GetCredentialsOverviewResponse = CredentialsOverviewDTO;
 
 /**
  * GET /api/credentials/overview — the Credentials Intelligence leadership dashboard (Wave 3.6).
@@ -10,5 +14,5 @@ import { credentialsIntelligenceService } from "@/server/services/credentials-in
  */
 export const GET = apiHandler(async () => {
   await requireCapability("viewCredentials");
-  return json(await credentialsIntelligenceService.overview());
+  return json<GetCredentialsOverviewResponse>(await credentialsIntelligenceService.overview());
 });

@@ -1,7 +1,10 @@
-import { coverageGapSupplyQuerySchema } from "@/lib/validation/discover";
+import { coverageGapSupplyQuerySchema, type CoverageGapSupplyDTO } from "@/lib/validation/discover";
 import { requireUser } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { discoverService } from "@/server/services/discover.service";
+
+/** Wire shape of `GET /api/discover/coverage-gaps/supply`. */
+export type GetDiscoverCoverageGapSupplyResponse = CoverageGapSupplyDTO;
 
 /**
  * GET /api/discover/coverage-gaps/supply — live NPPES supply for one (credential, state) combo
@@ -15,5 +18,7 @@ export const GET = apiHandler(async (req: Request) => {
   const parsed = coverageGapSupplyQuerySchema.parse(
     Object.fromEntries(new URL(req.url).searchParams),
   );
-  return json(await discoverService.supplyForCombo(parsed, user));
+  return json<GetDiscoverCoverageGapSupplyResponse>(
+    await discoverService.supplyForCombo(parsed, user),
+  );
 });

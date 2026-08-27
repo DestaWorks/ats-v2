@@ -11,6 +11,7 @@ import {
 import { useApiForm } from "@/lib/forms/use-api-form";
 import { emptyToNull } from "@/lib/forms/empty-to-null";
 import { postJson } from "@/lib/api/client";
+import type { PostPortalRoleResponse } from "@/app/api/portal/roles/route";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DetailTabs, type TabDef } from "@/components/ui/tabs";
@@ -143,7 +144,7 @@ function PostRoleForm({
   const [serverError, setServerError] = useState<string | null>(null);
   const { form, pending, onSubmit } = useApiForm(postPortalRoleSchema, {
     defaultValues: { title: "", priority: "P2" },
-    submit: (values) => postJson<{ role: { id: string } }>("/api/portal/roles", values),
+    submit: (values) => postJson<PostPortalRoleResponse>("/api/portal/roles", values),
     onSuccess: (data, values) => {
       toast.success("Role posted");
       onSaved({

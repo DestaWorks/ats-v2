@@ -1,13 +1,22 @@
-import { updateOpenRoleSchema } from "@/lib/validation/open-role";
+import { updateOpenRoleSchema, type OpenRoleDetailDTO } from "@/lib/validation/open-role";
 import { requireUser, requireCapability } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { openRoleService } from "@/server/services/open-role.service";
+
+/** Response body of `GET /api/roles/:id`. */
+export type GetRoleResponse = { role: OpenRoleDetailDTO };
+
+/** Response body of `PATCH /api/roles/:id`. */
+export type PatchRoleResponse = { role: OpenRoleDetailDTO };
+
+/** Response body of `DELETE /api/roles/:id` — the hard-deleted role's id only. */
+export type DeleteRoleResponse = { id: string };
 
 /** GET /api/roles/:id — one role's detail (role + notes). 404 if missing. */
 export const GET = apiHandler<{ params: Promise<{ id: string }> }>(async (_req, ctx) => {
   await requireUser();
   const { id } = await ctx.params;
-  return json({ role: await openRoleService.detail(id) });
+  return json<GetRoleResponse>({ role: await openRoleService.detail(id) });
 });
 
 /**
@@ -19,7 +28,7 @@ export const PATCH = apiHandler<{ params: Promise<{ id: string }> }>(async (req,
   const user = await requireUser();
   const { id } = await ctx.params;
   const input = updateOpenRoleSchema.parse(await req.json());
-  return json({ role: await openRoleService.update(id, input, user) });
+  return json<PatchRoleResponse>({ role: await openRoleService.update(id, input, user) });
 });
 
 /**
@@ -30,5 +39,5 @@ export const PATCH = apiHandler<{ params: Promise<{ id: string }> }>(async (req,
 export const DELETE = apiHandler<{ params: Promise<{ id: string }> }>(async (_req, ctx) => {
   const user = await requireCapability("deleteOpenRole");
   const { id } = await ctx.params;
-  return json(await openRoleService.remove(id, user));
+  return json<DeleteRoleResponse>(await openRoleService.remove(id, user));
 });

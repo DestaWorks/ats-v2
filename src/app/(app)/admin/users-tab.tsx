@@ -3,12 +3,13 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { ROLES } from "@/lib/constants";
-import {
-  banUserSchema,
-  createUserSchema,
-  type AdminUserDTO,
-  type GeneratedPasswordDTO,
-} from "@/lib/validation/admin";
+import { banUserSchema, createUserSchema, type AdminUserDTO } from "@/lib/validation/admin";
+import type { PostAdminUserResponse } from "@/app/api/admin/users/route";
+import type { DeleteAdminUserResponse } from "@/app/api/admin/users/[id]/route";
+import type { PostAdminUserBanResponse } from "@/app/api/admin/users/[id]/ban/route";
+import type { PostAdminUserUnbanResponse } from "@/app/api/admin/users/[id]/unban/route";
+import type { PatchAdminUserRoleResponse } from "@/app/api/admin/users/[id]/role/route";
+import type { PostAdminUserResetPasswordResponse } from "@/app/api/admin/users/[id]/reset-password/route";
 import { useApiForm } from "@/lib/forms/use-api-form";
 import { emptyToNull } from "@/lib/forms/empty-to-null";
 import { deleteJson, messageForFailure, patchJson, postJson } from "@/lib/api/client";
@@ -68,7 +69,7 @@ export function UsersTab({
 
   async function handleRoleChange(user: AdminUserDTO, role: string) {
     setBusyId(user.id);
-    const res = await patchJson<{ user: AdminUserDTO }>(`/api/admin/users/${user.id}/role`, {
+    const res = await patchJson<PatchAdminUserRoleResponse>(`/api/admin/users/${user.id}/role`, {
       role,
     });
     setBusyId(null);
@@ -82,7 +83,7 @@ export function UsersTab({
 
   async function handleUnban(user: AdminUserDTO) {
     setBusyId(user.id);
-    const res = await postJson<{ user: AdminUserDTO }>(`/api/admin/users/${user.id}/unban`, {});
+    const res = await postJson<PostAdminUserUnbanResponse>(`/api/admin/users/${user.id}/unban`, {});
     setBusyId(null);
     if (res.ok) {
       toast.success(`${user.name} unbanned`);
@@ -97,7 +98,7 @@ export function UsersTab({
       return;
     }
     setBusyId(user.id);
-    const res = await postJson<{ generatedPassword: string }>(
+    const res = await postJson<PostAdminUserResetPasswordResponse>(
       `/api/admin/users/${user.id}/reset-password`,
       {},
     );
@@ -113,7 +114,7 @@ export function UsersTab({
   async function handleRemove(user: AdminUserDTO) {
     if (!window.confirm(`Remove ${user.name}'s account? This cannot be undone.`)) return;
     setBusyId(user.id);
-    const res = await deleteJson(`/api/admin/users/${user.id}`);
+    const res = await deleteJson<DeleteAdminUserResponse>(`/api/admin/users/${user.id}`);
     setBusyId(null);
     if (res.ok) {
       toast.success("Account removed");
@@ -249,13 +250,13 @@ function AddUserForm({
   onSaved,
   onCancel,
 }: {
-  onSaved: (result: GeneratedPasswordDTO) => void;
+  onSaved: (result: PostAdminUserResponse) => void;
   onCancel: () => void;
 }) {
   const [serverError, setServerError] = useState<string | null>(null);
   const { form, pending, onSubmit } = useApiForm(createUserSchema, {
     defaultValues: { name: "", email: "", role: "Associate" },
-    submit: (values) => postJson<GeneratedPasswordDTO>("/api/admin/users", values),
+    submit: (values) => postJson<PostAdminUserResponse>("/api/admin/users", values),
     onSuccess: (data) => {
       toast.success("User added");
       onSaved(data);
@@ -313,7 +314,8 @@ function BanForm({
   const [serverError, setServerError] = useState<string | null>(null);
   const { form, pending, onSubmit } = useApiForm(banUserSchema, {
     defaultValues: {},
-    submit: (values) => postJson<{ user: AdminUserDTO }>(`/api/admin/users/${user.id}/ban`, values),
+    submit: (values) =>
+      postJson<PostAdminUserBanResponse>(`/api/admin/users/${user.id}/ban`, values),
     onSuccess: (data) => {
       toast.success(`${user.name} blocked`);
       onSaved(data.user);

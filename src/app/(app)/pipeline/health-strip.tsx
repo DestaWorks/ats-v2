@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { PipelineHealthDTO } from "@/lib/validation/pipeline-health";
 import { postJson, messageForFailure } from "@/lib/api/client";
+import type { PostPipelineHealthResponse } from "@/app/api/pipeline/health/route";
 import { Badge, type BadgeTone } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -28,7 +29,7 @@ export function HealthStrip() {
   async function refresh() {
     setPending(true);
     setError(null);
-    const res = await postJson<PipelineHealthDTO>("/api/pipeline/health", {});
+    const res = await postJson<PostPipelineHealthResponse>("/api/pipeline/health", {});
     setPending(false);
     if (res.ok) setHealth(res.data);
     else setError(messageForFailure(res.failure));

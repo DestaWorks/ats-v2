@@ -1,4 +1,4 @@
-import { importInputSchema } from "@/lib/validation/migration";
+import { importInputSchema, type ImportReport } from "@/lib/validation/migration";
 import { requireCapability } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { checkRateLimit } from "@/server/http/rate-limit";
@@ -8,6 +8,9 @@ import { migrationService } from "@/server/services/migration.service";
  * Allow the ETL commit up to the platform maximum — a large one-shot import can run for minutes.
  */
 export const maxDuration = 300;
+
+/** Response body of `POST /api/migration/commit` — the post-upsert report. */
+export type PostMigrationCommitResponse = ImportReport;
 
 /**
  * POST /api/migration/commit — idempotent upsert of the legacy candidates keyed on `legacy_id`
@@ -23,5 +26,5 @@ export const POST = apiHandler(async (req: Request) => {
   await checkRateLimit(`migration-commit:${user.id}`, { limit: 10, windowMs: 60_000 });
   const input = importInputSchema.parse(await req.json());
   const report = await migrationService.commit(input, user);
-  return json(report);
+  return json<PostMigrationCommitResponse>(report);
 });

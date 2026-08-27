@@ -8,17 +8,28 @@
 import type {
   BulkLeadActionInput,
   ImportLeadRow,
-  LeadDetailDTO,
   LogOutreachInput,
   UpdateOutreachInput,
 } from "@/lib/validation/lead";
 import { type ApiResult, deleteJson, getJson, patchJson, postJson } from "@/lib/api/client";
+import type { DeleteLeadResponse, GetLeadResponse } from "@/app/api/leads/[id]/route";
+import type { PostLeadOutreachResponse } from "@/app/api/leads/[id]/outreach/route";
+import type {
+  DeleteLeadOutreachAttemptResponse,
+  PatchLeadOutreachAttemptResponse,
+} from "@/app/api/leads/[id]/outreach/[attemptId]/route";
+import type { PostLeadPromoteResponse } from "@/app/api/leads/[id]/promote/route";
+import type { PostLeadRespondResponse } from "@/app/api/leads/[id]/respond/route";
+import type { PostLeadRestoreResponse } from "@/app/api/leads/[id]/restore/route";
+import type { PostLeadSnoozeResponse } from "@/app/api/leads/[id]/snooze/route";
+import type { PostLeadBulkResponse } from "@/app/api/leads/bulk/route";
+import type { PostLeadImportResponse } from "@/app/api/leads/import/route";
 
 /** Log an outreach attempt (advances the lead's status server-side). Returns the fresh detail. */
 export function postOutreach(
   id: string,
   body: LogOutreachInput,
-): Promise<ApiResult<{ lead: LeadDetailDTO }>> {
+): Promise<ApiResult<PostLeadOutreachResponse>> {
   return postJson(`/api/leads/${id}/outreach`, body);
 }
 
@@ -26,27 +37,27 @@ export function postOutreach(
 export function postRespond(
   id: string,
   kind: "hot" | "cold",
-): Promise<ApiResult<{ lead: LeadDetailDTO }>> {
+): Promise<ApiResult<PostLeadRespondResponse>> {
   return postJson(`/api/leads/${id}/respond`, { kind });
 }
 
 /** Promote the lead into the pipeline. Returns the new candidate's id on success. */
-export function postPromote(id: string): Promise<ApiResult<{ candidateId: string }>> {
+export function postPromote(id: string): Promise<ApiResult<PostLeadPromoteResponse>> {
   return postJson(`/api/leads/${id}/promote`, {});
 }
 
 /** Restore a soft-deleted lead (clears the delete markers). Returns the fresh detail. */
-export function postRestore(id: string): Promise<ApiResult<{ lead: LeadDetailDTO }>> {
+export function postRestore(id: string): Promise<ApiResult<PostLeadRestoreResponse>> {
   return postJson(`/api/leads/${id}/restore`, {});
 }
 
 /** Soft-delete the lead (→ reversible trash). Returns `{ ok, id }` or an `ApiFailure`. */
-export function deleteLead(id: string): Promise<ApiResult<{ ok: true; id: string }>> {
+export function deleteLead(id: string): Promise<ApiResult<DeleteLeadResponse>> {
   return deleteJson(`/api/leads/${id}`);
 }
 
 /** Load one lead's full detail (the outreach-history modal seeds from this). */
-export function getLeadDetail(id: string): Promise<ApiResult<{ lead: LeadDetailDTO }>> {
+export function getLeadDetail(id: string): Promise<ApiResult<GetLeadResponse>> {
   return getJson(`/api/leads/${id}`);
 }
 
@@ -54,7 +65,7 @@ export function getLeadDetail(id: string): Promise<ApiResult<{ lead: LeadDetailD
 export function postSnooze(
   id: string,
   until: string | null,
-): Promise<ApiResult<{ lead: LeadDetailDTO }>> {
+): Promise<ApiResult<PostLeadSnoozeResponse>> {
   return postJson(`/api/leads/${id}/snooze`, { until });
 }
 
@@ -63,7 +74,7 @@ export function patchOutreachAttempt(
   id: string,
   attemptId: string,
   body: UpdateOutreachInput,
-): Promise<ApiResult<{ lead: LeadDetailDTO }>> {
+): Promise<ApiResult<PatchLeadOutreachAttemptResponse>> {
   return patchJson(`/api/leads/${id}/outreach/${attemptId}`, body);
 }
 
@@ -71,20 +82,18 @@ export function patchOutreachAttempt(
 export function deleteOutreachAttempt(
   id: string,
   attemptId: string,
-): Promise<ApiResult<{ lead: LeadDetailDTO }>> {
+): Promise<ApiResult<DeleteLeadOutreachAttemptResponse>> {
   return deleteJson(`/api/leads/${id}/outreach/${attemptId}`);
 }
 
 /** Run one bulk action over the selected ids. Returns `{ affected, skipped }`. */
 export function postBulkAction(
   body: BulkLeadActionInput,
-): Promise<ApiResult<{ affected: number; skipped: number }>> {
+): Promise<ApiResult<PostLeadBulkResponse>> {
   return postJson("/api/leads/bulk", body);
 }
 
 /** Import one ≤200-row chunk. Returns the per-chunk `{ added, skipped }` tallies. */
-export function postImportChunk(
-  rows: ImportLeadRow[],
-): Promise<ApiResult<{ added: number; skipped: number }>> {
+export function postImportChunk(rows: ImportLeadRow[]): Promise<ApiResult<PostLeadImportResponse>> {
   return postJson("/api/leads/import", { rows });
 }

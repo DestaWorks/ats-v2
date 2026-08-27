@@ -2,6 +2,8 @@
 
 import { useRef, useState, type DragEvent } from "react";
 import { toast } from "sonner";
+import type { GetDocumentDownloadUrlResponse } from "@/app/api/documents/[id]/download-url/route";
+import type { PostResumeUploadUrlResponse } from "@/app/api/resume/upload-url/route";
 import type { DocumentSummaryDTO } from "@/lib/validation/candidate";
 import { getJson, messageForFailure } from "@/lib/api/client";
 import { Modal } from "@/components/ui/modal";
@@ -37,7 +39,9 @@ function ResumeRow({ doc, canDownload }: { doc: DocumentSummaryDTO; canDownload:
   async function handleClick() {
     if (canPreview) {
       setLoading(true);
-      const res = await getJson<{ url: string }>(`/api/documents/${doc.id}/download-url`);
+      const res = await getJson<GetDocumentDownloadUrlResponse>(
+        `/api/documents/${doc.id}/download-url`,
+      );
       setLoading(false);
       if (res.ok) setPreviewUrl(res.data.url);
       else toast.error("Couldn't get a preview link for this file.");
@@ -128,10 +132,7 @@ function UploadResumeButton({
         body: JSON.stringify({ filename: file.name, mimeType: file.type || "application/pdf" }),
       });
       if (!res.ok) return undefined;
-      const { signedUrl, storageKey } = (await res.json()) as {
-        signedUrl: string;
-        storageKey: string;
-      };
+      const { signedUrl, storageKey } = (await res.json()) as PostResumeUploadUrlResponse;
       const upload = await fetch(signedUrl, {
         method: "PUT",
         headers: { "Content-Type": file.type || "application/pdf" },

@@ -2,6 +2,9 @@ import { requireUser } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { leadService } from "@/server/services/lead.service";
 
+/** Response body of `POST /api/leads/:id/promote` — the new candidate's id only. */
+export type PostLeadPromoteResponse = { candidateId: string };
+
 /**
  * POST /api/leads/:id/promote — promote a lead into the candidate pipeline (creates a real Candidate
  * in Postgres, D2). Guarded by `requireUser()` (L-7); no body. Terminal + idempotent: an
@@ -12,5 +15,5 @@ export const POST = apiHandler<{ params: Promise<{ id: string }> }>(async (_req,
   const user = await requireUser();
   const { id } = await ctx.params;
   const { candidateId } = await leadService.promote(id, user);
-  return json({ candidateId });
+  return json<PostLeadPromoteResponse>({ candidateId });
 });

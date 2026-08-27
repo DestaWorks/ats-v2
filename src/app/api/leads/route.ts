@@ -1,7 +1,10 @@
-import { addLeadSchema } from "@/lib/validation/lead";
+import { addLeadSchema, type LeadDetailDTO } from "@/lib/validation/lead";
 import { requireUser } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { leadService } from "@/server/services/lead.service";
+
+/** Response body of `POST /api/leads`. */
+export type PostLeadResponse = { lead: LeadDetailDTO };
 
 /**
  * POST /api/leads — add a source lead (Wave 2.6). Guarded by `requireUser()` (sourcing is open to
@@ -13,5 +16,5 @@ export const POST = apiHandler(async (req: Request) => {
   const user = await requireUser();
   const input = addLeadSchema.parse(await req.json());
   const lead = await leadService.create(input, user);
-  return json({ lead }, 201);
+  return json<PostLeadResponse>({ lead }, 201);
 });

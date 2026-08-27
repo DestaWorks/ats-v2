@@ -15,6 +15,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { StatCard } from "../dashboard/stat-card";
 import { Bar, ReportTabShell } from "./lib/report-tab-shell";
 import { buildReportQuery, useReportFetch, type ReportFilterState } from "./lib/use-report-fetch";
+import type { GetReportsExecutiveResponse } from "@/app/api/reports/executive/route";
 
 // recharts is heavy — load it only once this tab actually renders (perf audit 2026-08-05).
 const TopCandidatesChart = dynamic(() =>
@@ -28,7 +29,7 @@ export function ExecutiveTab({
   filters: ReportFilterState;
   initial?: ExecutiveSummaryDTO;
 }) {
-  const data = useReportFetch<ExecutiveSummaryDTO>(
+  const data = useReportFetch<GetReportsExecutiveResponse>(
     "/api/reports/executive",
     buildReportQuery(filters),
     initial,

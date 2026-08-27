@@ -11,6 +11,7 @@ import {
   type ClientProfileDTO,
   type UpdateClientInput,
 } from "@/lib/validation/client";
+import type { PatchCrmClientResponse } from "@/app/api/crm/clients/[id]/route";
 import { useApiForm } from "@/lib/forms/use-api-form";
 import { emptyToNull } from "@/lib/forms/empty-to-null";
 import { patchJson } from "@/lib/api/client";
@@ -268,8 +269,7 @@ function EditClientForm({
       avgPlacementFee: client.avgPlacementFee,
       grossMargin: client.grossMargin,
     },
-    submit: (values) =>
-      patchJson<{ client: ClientProfileDTO }>(`/api/crm/clients/${client.id}`, values),
+    submit: (values) => patchJson<PatchCrmClientResponse>(`/api/crm/clients/${client.id}`, values),
     onSuccess: (data) => {
       toast.success("Client updated");
       onSaved(data.client);

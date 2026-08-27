@@ -4,7 +4,24 @@ import { requireUser } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { AppError } from "@/server/http/app-error";
 import { candidateService } from "@/server/services/candidate.service";
-import { toCandidateDTO } from "@/server/services/candidate.dto";
+import { toCandidateDTO, type CandidateDTO } from "@/server/services/candidate.dto";
+import type { CandidateProfileDTO } from "@/lib/validation/candidate";
+
+/** Wire shape of `GET /api/candidates/:id` — the lighter profile projection (ISO date strings). */
+export interface GetCandidateResponse {
+  candidate: CandidateProfileDTO;
+}
+
+/** Wire shape of `PATCH /api/candidates/:id` — the PII-re-gated candidate after the edit. */
+export interface PatchCandidateResponse {
+  candidate: CandidateDTO;
+}
+
+/** Wire shape of `DELETE /api/candidates/:id` — a soft-delete ack; never candidate PII. */
+export interface DeleteCandidateResponse {
+  ok: true;
+  id: string;
+}
 
 /**
  * GET /api/candidates/:id — one candidate's PROFILE fields (Wave 4.1, Templates — the recipient
@@ -15,7 +32,7 @@ import { toCandidateDTO } from "@/server/services/candidate.dto";
 export const GET = apiHandler<{ params: Promise<{ id: string }> }>(async (_req, ctx) => {
   const user = await requireUser();
   const { id } = await ctx.params;
-  return json({ candidate: await candidateService.getProfile(id, user) });
+  return json<GetCandidateResponse>({ candidate: await candidateService.getProfile(id, user) });
 });
 
 /**
@@ -34,7 +51,7 @@ export const PATCH = apiHandler<{ params: Promise<{ id: string }> }>(async (req,
     throw new AppError("FORBIDDEN", "You don't have permission to edit the license number");
   }
   const updated = await candidateService.update(id, input, user);
-  return json({ candidate: toCandidateDTO(updated, user) });
+  return json<PatchCandidateResponse>({ candidate: toCandidateDTO(updated, user) });
 });
 
 /**
@@ -48,5 +65,5 @@ export const DELETE = apiHandler<{ params: Promise<{ id: string }> }>(async (_re
   await requireUser();
   const { id } = await ctx.params;
   await candidateService.softDelete(id);
-  return json({ ok: true, id });
+  return json<DeleteCandidateResponse>({ ok: true, id });
 });

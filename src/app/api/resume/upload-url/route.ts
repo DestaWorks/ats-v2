@@ -3,6 +3,10 @@ import { requireUser } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { checkRateLimit } from "@/server/http/rate-limit";
 import { resumeService } from "@/server/services/resume.service";
+import type { ResumeUploadUrlDTO } from "@/lib/validation/resume";
+
+/** Wire shape of `POST /api/resume/upload-url` — the short-lived signed PUT target + its key. */
+export type PostResumeUploadUrlResponse = ResumeUploadUrlDTO;
 
 /**
  * POST /api/resume/upload-url — a short-lived Supabase Storage URL the browser PUTs the raw
@@ -14,5 +18,5 @@ export const POST = apiHandler(async (req: Request) => {
   const user = await requireUser();
   await checkRateLimit(`resume-upload-url:${user.id}`, { limit: 20, windowMs: 60_000 });
   const input = requestResumeUploadUrlSchema.parse(await req.json());
-  return json(await resumeService.requestUploadUrl(input));
+  return json<PostResumeUploadUrlResponse>(await resumeService.requestUploadUrl(input));
 });

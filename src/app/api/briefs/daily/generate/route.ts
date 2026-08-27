@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { generateDailyBriefSchema } from "@/lib/validation/briefs";
+import { generateDailyBriefSchema, type DailyBriefAiOutput } from "@/lib/validation/briefs";
 import { requireCapability } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { checkRateLimit } from "@/server/http/rate-limit";
@@ -11,6 +11,9 @@ const requestSchema = generateDailyBriefSchema.extend({
   shiftB: z.string().trim().max(2000).nullish(),
   watchItems: z.string().trim().max(2000).nullish(),
 });
+
+/** Response body of `POST /api/briefs/daily/generate` — the unsaved AI draft. */
+export type PostBriefsDailyGenerateResponse = DailyBriefAiOutput;
 
 /**
  * POST /api/briefs/daily/generate — assemble live context + call the AI (legacy
@@ -32,5 +35,5 @@ export const POST = apiHandler(async (req: Request) => {
       watchItems: input.watchItems ?? null,
     },
   );
-  return json(draft);
+  return json<PostBriefsDailyGenerateResponse>(draft);
 });

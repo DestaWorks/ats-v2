@@ -1,6 +1,10 @@
+import type { TrendsDTO } from "@/lib/validation/reports";
 import { requireCapability } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { trendsReport } from "@/server/services/reports/trends.report";
+
+/** Response body of `GET /api/reports/trends`. */
+export type GetReportsTrendsResponse = TrendsDTO;
 
 /**
  * GET /api/reports/trends — rolling W/M/Q Anomalies + Funnel + Trends (legacy `index.html:6379-
@@ -8,5 +12,5 @@ import { trendsReport } from "@/server/services/reports/trends.report";
  */
 export const GET = apiHandler(async () => {
   await requireCapability("viewReports");
-  return json(await trendsReport.trends());
+  return json<GetReportsTrendsResponse>(await trendsReport.trends());
 });

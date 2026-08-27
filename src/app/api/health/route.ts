@@ -1,4 +1,7 @@
-import { healthService } from "@/server/services/health.service";
+import { healthService, type HealthCheckResult } from "@/server/services/health.service";
+
+/** Response body of `GET /api/health` — deliberately not the usual error envelope. */
+export type GetHealthResponse = HealthCheckResult;
 
 /**
  * GET /api/health — public, unauthenticated (an uptime monitor can't sign in). Point Better
@@ -15,6 +18,6 @@ import { healthService } from "@/server/services/health.service";
 export const dynamic = "force-dynamic";
 
 export async function GET(): Promise<Response> {
-  const result = await healthService.check();
+  const result: GetHealthResponse = await healthService.check();
   return Response.json(result, { status: result.ok ? 200 : 503 });
 }

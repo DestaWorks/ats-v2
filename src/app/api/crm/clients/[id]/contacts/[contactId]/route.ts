@@ -1,7 +1,13 @@
-import { updateContactSchema } from "@/lib/validation/client";
+import { updateContactSchema, type ClientContactDTO } from "@/lib/validation/client";
 import { requireCapability } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { clientService } from "@/server/services/client.service";
+
+/** Wire shape of `PATCH /api/crm/clients/:id/contacts/:contactId`. */
+export type PatchCrmClientContactResponse = { contact: ClientContactDTO };
+
+/** Wire shape of `DELETE /api/crm/clients/:id/contacts/:contactId`. */
+export type DeleteCrmClientContactResponse = { ok: true; id: string };
 
 /**
  * PATCH /api/crm/clients/:id/contacts/:contactId — edit a contact (incl. marking "left"). DELETE
@@ -13,7 +19,7 @@ export const PATCH = apiHandler<{ params: Promise<{ id: string; contactId: strin
     const { id, contactId } = await ctx.params;
     const input = updateContactSchema.parse(await req.json());
     const contact = await clientService.updateContact(id, contactId, input, user);
-    return json({ contact });
+    return json<PatchCrmClientContactResponse>({ contact });
   },
 );
 
@@ -22,6 +28,6 @@ export const DELETE = apiHandler<{ params: Promise<{ id: string; contactId: stri
     const user = await requireCapability("viewCrm");
     const { id, contactId } = await ctx.params;
     await clientService.removeContact(id, contactId, user);
-    return json({ ok: true, id: contactId });
+    return json<DeleteCrmClientContactResponse>({ ok: true, id: contactId });
   },
 );

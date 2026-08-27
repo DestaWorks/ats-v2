@@ -6,35 +6,34 @@
  * The detail DTO carries PII (email/phone, gated licenseNumber), so these responses stay on the
  * authenticated detail page only.
  */
+import type { PatchCandidateResponse } from "@/app/api/candidates/[id]/route";
+import type { PostCandidateMoveResponse } from "@/app/api/candidates/[id]/move/route";
+import type { PostCandidateNoteResponse } from "@/app/api/candidates/[id]/notes/route";
+import type { PostCandidateOutreachResponse } from "@/app/api/candidates/[id]/outreach/route";
+import type { PostCandidateResumeResponse } from "@/app/api/candidates/[id]/resume/route";
+import type { PostCandidateVerifyLicenseResponse } from "@/app/api/candidates/[id]/verify-license/route";
 import type { CandidateStatus } from "@/lib/constants";
 import type {
   AddNoteInput,
-  DocumentSummaryDTO,
-  NoteDTO,
   UpdateCandidateInput,
   UploadCandidateResumeInput,
   VerifyLicenseInput,
 } from "@/lib/validation/candidate";
-import type { LogOutreachInput, OutreachAttemptDTO } from "@/lib/validation/lead";
+import type { LogOutreachInput } from "@/lib/validation/lead";
 import { patchJson, postJson, type ApiResult } from "@/lib/api/client";
 
 export { messageForFailure } from "@/lib/api/client";
 export type { ApiFailure, FieldIssue } from "@/lib/api/client";
 
 /** Persisted pipeline fields returned by the move route (never candidate PII). */
-export interface MovedFields {
-  id: string;
-  status: CandidateStatus;
-  stageOrder: number;
-  stageEnteredAt: string;
-}
+export type MovedFields = PostCandidateMoveResponse["candidate"];
 
 /** POST a gated stage move. Returns the persisted pipeline fields on success. */
 export async function postMove(
   id: string,
   toStatus: CandidateStatus,
 ): Promise<ApiResult<MovedFields>> {
-  const res = await postJson<{ candidate: MovedFields }>(`/api/candidates/${id}/move`, {
+  const res = await postJson<PostCandidateMoveResponse>(`/api/candidates/${id}/move`, {
     toStatus,
   });
   return res.ok ? { ok: true, data: res.data.candidate } : res;
@@ -44,11 +43,8 @@ export async function postMove(
 export async function patchCandidate(
   id: string,
   input: UpdateCandidateInput,
-): Promise<ApiResult<Record<string, unknown>>> {
-  const res = await patchJson<{ candidate: Record<string, unknown> }>(
-    `/api/candidates/${id}`,
-    input,
-  );
+): Promise<ApiResult<PatchCandidateResponse["candidate"]>> {
+  const res = await patchJson<PatchCandidateResponse>(`/api/candidates/${id}`, input);
   return res.ok ? { ok: true, data: res.data.candidate } : res;
 }
 
@@ -56,8 +52,8 @@ export async function patchCandidate(
 export async function postVerifyLicense(
   id: string,
   input: VerifyLicenseInput,
-): Promise<ApiResult<Record<string, unknown>>> {
-  const res = await postJson<{ candidate: Record<string, unknown> }>(
+): Promise<ApiResult<PostCandidateVerifyLicenseResponse["candidate"]>> {
+  const res = await postJson<PostCandidateVerifyLicenseResponse>(
     `/api/candidates/${id}/verify-license`,
     input,
   );
@@ -65,8 +61,11 @@ export async function postVerifyLicense(
 }
 
 /** POST a new note. Returns the created `NoteDTO` (author from the server session). */
-export async function postNote(id: string, input: AddNoteInput): Promise<ApiResult<NoteDTO>> {
-  const res = await postJson<{ note: NoteDTO }>(`/api/candidates/${id}/notes`, input);
+export async function postNote(
+  id: string,
+  input: AddNoteInput,
+): Promise<ApiResult<PostCandidateNoteResponse["note"]>> {
+  const res = await postJson<PostCandidateNoteResponse>(`/api/candidates/${id}/notes`, input);
   return res.ok ? { ok: true, data: res.data.note } : res;
 }
 
@@ -75,11 +74,8 @@ export async function postNote(id: string, input: AddNoteInput): Promise<ApiResu
 export async function postResumeUpload(
   id: string,
   input: UploadCandidateResumeInput,
-): Promise<ApiResult<DocumentSummaryDTO>> {
-  const res = await postJson<{ document: DocumentSummaryDTO }>(
-    `/api/candidates/${id}/resume`,
-    input,
-  );
+): Promise<ApiResult<PostCandidateResumeResponse["document"]>> {
+  const res = await postJson<PostCandidateResumeResponse>(`/api/candidates/${id}/resume`, input);
   return res.ok ? { ok: true, data: res.data.document } : res;
 }
 
@@ -87,8 +83,8 @@ export async function postResumeUpload(
 export async function postOutreach(
   id: string,
   input: LogOutreachInput,
-): Promise<ApiResult<OutreachAttemptDTO>> {
-  const res = await postJson<{ attempt: OutreachAttemptDTO }>(
+): Promise<ApiResult<PostCandidateOutreachResponse["attempt"]>> {
+  const res = await postJson<PostCandidateOutreachResponse>(
     `/api/candidates/${id}/outreach`,
     input,
   );

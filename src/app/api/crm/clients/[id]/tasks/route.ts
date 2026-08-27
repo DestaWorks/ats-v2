@@ -1,7 +1,10 @@
-import { addTaskSchema } from "@/lib/validation/client";
+import { addTaskSchema, type ClientTaskDTO } from "@/lib/validation/client";
 import { requireCapability } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { clientService } from "@/server/services/client.service";
+
+/** Wire shape of `POST /api/crm/clients/:id/tasks`. */
+export type PostCrmClientTaskResponse = { task: ClientTaskDTO };
 
 /** POST /api/crm/clients/:id/tasks — add a follow-up task for this client. Gated `viewCrm`. */
 export const POST = apiHandler<{ params: Promise<{ id: string }> }>(async (req, ctx) => {
@@ -9,5 +12,5 @@ export const POST = apiHandler<{ params: Promise<{ id: string }> }>(async (req, 
   const { id } = await ctx.params;
   const input = addTaskSchema.parse(await req.json());
   const task = await clientService.addTask(id, input, user);
-  return json({ task }, 201);
+  return json<PostCrmClientTaskResponse>({ task }, 201);
 });

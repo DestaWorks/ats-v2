@@ -1,6 +1,13 @@
+import type { LeadDetailDTO } from "@/lib/validation/lead";
 import { requireUser } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { leadService } from "@/server/services/lead.service";
+
+/** Response body of `GET /api/leads/:id`. */
+export type GetLeadResponse = { lead: LeadDetailDTO };
+
+/** Response body of `DELETE /api/leads/:id` — the soft-deleted id only, never lead PII. */
+export type DeleteLeadResponse = { ok: true; id: string };
 
 /**
  * GET /api/leads/:id — the full lead detail (list item + sourcing context + attempt log). The
@@ -10,7 +17,7 @@ import { leadService } from "@/server/services/lead.service";
 export const GET = apiHandler<{ params: Promise<{ id: string }> }>(async (_req, ctx) => {
   await requireUser();
   const { id } = await ctx.params;
-  return json({ lead: await leadService.detail(id) });
+  return json<GetLeadResponse>({ lead: await leadService.detail(id) });
 });
 
 /**
@@ -23,5 +30,5 @@ export const DELETE = apiHandler<{ params: Promise<{ id: string }> }>(async (_re
   const user = await requireUser();
   const { id } = await ctx.params;
   const result = await leadService.softDelete(id, user);
-  return json({ ok: true, id: result.id });
+  return json<DeleteLeadResponse>({ ok: true, id: result.id });
 });

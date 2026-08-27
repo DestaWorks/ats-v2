@@ -1,6 +1,10 @@
 import { requireCapability } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { auditService } from "@/server/services/audit.service";
+import type { ActivityDetailDTO } from "@/lib/validation/activity";
+
+/** Wire shape of `GET /api/activity/:id` — one row's whole-entity before/after snapshots. */
+export type GetActivityDetailResponse = ActivityDetailDTO;
 
 /**
  * GET /api/activity/:id — the Activity Log's ON-DEMAND detail (Wave 2.5). Returns the ONE row's
@@ -14,5 +18,5 @@ export const GET = apiHandler<{ params: Promise<{ id: string }> }>(async (_req, 
   await requireCapability("viewAudit");
   const { id } = await ctx.params;
   const detail = await auditService.getActivityDetail(id);
-  return json(detail);
+  return json<GetActivityDetailResponse>(detail);
 });

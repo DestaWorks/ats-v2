@@ -1,7 +1,16 @@
-import { updateProspectSchema } from "@/lib/validation/prospect";
+import { updateProspectSchema, type ProspectDetailDTO } from "@/lib/validation/prospect";
 import { requireCapability } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { prospectService } from "@/server/services/prospect.service";
+
+/** Response body of `GET /api/prospects/:id`. */
+export type GetProspectResponse = { prospect: ProspectDetailDTO };
+
+/** Response body of `PATCH /api/prospects/:id`. */
+export type PatchProspectResponse = { prospect: ProspectDetailDTO };
+
+/** Response body of `DELETE /api/prospects/:id` — the soft-deleted id only, never prospect PII. */
+export type DeleteProspectResponse = { ok: true; id: string };
 
 /**
  * GET /api/prospects/:id — the full prospect detail (list item + notes + contacts). Includes
@@ -11,7 +20,7 @@ import { prospectService } from "@/server/services/prospect.service";
 export const GET = apiHandler<{ params: Promise<{ id: string }> }>(async (_req, ctx) => {
   await requireCapability("viewClientDiscovery");
   const { id } = await ctx.params;
-  return json({ prospect: await prospectService.detail(id) });
+  return json<GetProspectResponse>({ prospect: await prospectService.detail(id) });
 });
 
 /**
@@ -23,7 +32,7 @@ export const PATCH = apiHandler<{ params: Promise<{ id: string }> }>(async (req,
   const { id } = await ctx.params;
   const input = updateProspectSchema.parse(await req.json());
   const prospect = await prospectService.update(id, input, user);
-  return json({ prospect });
+  return json<PatchProspectResponse>({ prospect });
 });
 
 /**
@@ -34,5 +43,5 @@ export const DELETE = apiHandler<{ params: Promise<{ id: string }> }>(async (_re
   const user = await requireCapability("viewClientDiscovery");
   const { id } = await ctx.params;
   const result = await prospectService.softDelete(id, user);
-  return json({ ok: true, id: result.id });
+  return json<DeleteProspectResponse>({ ok: true, id: result.id });
 });

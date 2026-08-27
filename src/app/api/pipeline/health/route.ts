@@ -1,7 +1,11 @@
+import type { PipelineHealthDTO } from "@/lib/validation/pipeline-health";
 import { requireUser } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { checkRateLimit } from "@/server/http/rate-limit";
 import { pipelineHealthService } from "@/server/services/pipeline-health.service";
+
+/** Response body of `POST /api/pipeline/health`. */
+export type PostPipelineHealthResponse = PipelineHealthDTO;
 
 /**
  * POST /api/pipeline/health — AI Pipeline Health strip (Wave 5.5 backlog, legacy
@@ -11,5 +15,5 @@ import { pipelineHealthService } from "@/server/services/pipeline-health.service
 export const POST = apiHandler(async () => {
   const user = await requireUser();
   await checkRateLimit(`pipeline-health:${user.id}`, { limit: 20, windowMs: 60_000 });
-  return json(await pipelineHealthService.generate());
+  return json<PostPipelineHealthResponse>(await pipelineHealthService.generate());
 });

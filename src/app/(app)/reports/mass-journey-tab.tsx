@@ -1,12 +1,12 @@
 "use client";
 
 import { ChartBarIcon, ClockIcon, EyeIcon, UserGroupIcon } from "@heroicons/react/24/outline";
-import type { MassJourneyDTO } from "@/lib/validation/reports";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { StatCard } from "../dashboard/stat-card";
 import { ReportTabShell } from "./lib/report-tab-shell";
 import { buildReportQuery, useReportFetch, type ReportFilterState } from "./lib/use-report-fetch";
+import type { GetReportsMassJourneyResponse } from "@/app/api/reports/mass-journey/route";
 
 /** One accent per active stage (order 0-8), cycling — a fixed, readable palette for the Gantt bars. */
 const SEGMENT_COLORS = [
@@ -28,7 +28,7 @@ function windowDaysBetween(startIso: string, endIso: string): number {
 }
 
 export function MassJourneyTab({ filters }: { filters: ReportFilterState }) {
-  const data = useReportFetch<MassJourneyDTO>(
+  const data = useReportFetch<GetReportsMassJourneyResponse>(
     "/api/reports/mass-journey",
     buildReportQuery(filters),
   );

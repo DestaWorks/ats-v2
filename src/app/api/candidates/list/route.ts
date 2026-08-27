@@ -2,6 +2,10 @@ import { listQuerySchema } from "@/lib/validation/pipeline";
 import { requireUser } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { candidateService } from "@/server/services/candidate.service";
+import type { CandidateListDTO } from "@/lib/validation/candidate";
+
+/** Wire shape of `GET /api/candidates/list` — one OFFSET page of the flat browse list. */
+export type GetCandidateListResponse = CandidateListDTO;
 
 /**
  * GET /api/candidates/list — JSON parity for the flat `/candidates` browse list (the RSC renders the
@@ -36,5 +40,5 @@ export const GET = apiHandler(async (req: Request) => {
   });
 
   const list = await candidateService.listCandidates(query, user);
-  return json(list);
+  return json<GetCandidateListResponse>(list);
 });

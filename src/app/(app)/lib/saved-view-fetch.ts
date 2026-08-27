@@ -5,14 +5,16 @@
  * candidates-list follow-up can reuse this without duplicating it.
  */
 import { deleteJson, postJson, type ApiResult } from "@/lib/api/client";
-import type { CreateSavedViewInput, SavedViewDTO } from "@/lib/validation/saved-view";
+import type { CreateSavedViewInput } from "@/lib/validation/saved-view";
+import type { PostSavedViewResponse } from "@/app/api/saved-views/route";
+import type { DeleteSavedViewResponse } from "@/app/api/saved-views/[id]/route";
 
 export function createSavedView(
   input: CreateSavedViewInput,
-): Promise<ApiResult<{ savedView: SavedViewDTO }>> {
-  return postJson("/api/saved-views", input);
+): Promise<ApiResult<PostSavedViewResponse>> {
+  return postJson<PostSavedViewResponse>("/api/saved-views", input);
 }
 
-export function deleteSavedView(id: string): Promise<ApiResult<{ id: string }>> {
-  return deleteJson(`/api/saved-views/${id}`);
+export function deleteSavedView(id: string): Promise<ApiResult<DeleteSavedViewResponse>> {
+  return deleteJson<DeleteSavedViewResponse>(`/api/saved-views/${id}`);
 }

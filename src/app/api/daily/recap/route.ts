@@ -1,9 +1,13 @@
 import { z } from "zod";
+import type { RecapDTO } from "@/lib/validation/daily";
 import { requireUser } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { dailyService } from "@/server/services/daily.service";
 
 const sinceSchema = z.coerce.date();
+
+/** Response body of `GET /api/daily/recap`. */
+export type GetDailyRecapResponse = RecapDTO;
 
 /**
  * GET /api/daily/recap?since=<ISO> — the "Since you closed" buckets (candidates added, stage
@@ -15,5 +19,5 @@ export const GET = apiHandler(async (req: Request) => {
   const raw = sinceSchema.parse(new URL(req.url).searchParams.get("since"));
   const floor = Date.now() - 14 * 86_400_000;
   const since = raw.getTime() < floor ? new Date(floor) : raw;
-  return json(await dailyService.recap(since));
+  return json<GetDailyRecapResponse>(await dailyService.recap(since));
 });

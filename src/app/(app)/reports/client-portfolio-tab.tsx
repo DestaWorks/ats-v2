@@ -1,13 +1,13 @@
 "use client";
 
-import type { ClientPortfolioDTO } from "@/lib/validation/reports";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ReportTabShell } from "./lib/report-tab-shell";
 import { buildReportQuery, useReportFetch, type ReportFilterState } from "./lib/use-report-fetch";
+import type { GetReportsClientPortfolioResponse } from "@/app/api/reports/client-portfolio/route";
 
 export function ClientPortfolioTab({ filters }: { filters: ReportFilterState }) {
-  const data = useReportFetch<ClientPortfolioDTO>(
+  const data = useReportFetch<GetReportsClientPortfolioResponse>(
     "/api/reports/client-portfolio",
     buildReportQuery(filters),
   );

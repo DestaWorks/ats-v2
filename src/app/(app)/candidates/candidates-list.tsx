@@ -5,7 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { CandidateListDTO } from "@/lib/validation/candidate";
-import type { BulkMoveResponse, ListSort } from "@/lib/validation/pipeline";
+import type { PostCandidatesBulkMoveResponse } from "@/app/api/candidates/bulk-move/route";
+import type { ListSort } from "@/lib/validation/pipeline";
 import {
   ALL_STATUS_CODES,
   statusLabel,
@@ -116,7 +117,7 @@ export function CandidatesList({
     const toStatus = bulkStatus as CandidateStatus;
     if (ids.length === 0 || !bulkStatus) return;
     startMoving(async () => {
-      const result = await postJson<BulkMoveResponse>("/api/candidates/bulk-move", {
+      const result = await postJson<PostCandidatesBulkMoveResponse>("/api/candidates/bulk-move", {
         ids,
         toStatus,
       });

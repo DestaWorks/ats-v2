@@ -1,8 +1,19 @@
-import { submitLogSchema, tzOffsetSchema } from "@/lib/validation/daily";
+import {
+  submitLogSchema,
+  tzOffsetSchema,
+  type DailyLogDTO,
+  type DailyLogViewDTO,
+} from "@/lib/validation/daily";
 import { DATE_KEY_RE, dateKeyForOffset } from "@/lib/daily";
 import { requireUser } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { dailyService } from "@/server/services/daily.service";
+
+/** Response body of `GET /api/daily/log`. */
+export type GetDailyLogResponse = DailyLogViewDTO;
+
+/** Response body of `POST /api/daily/log`. */
+export type PostDailyLogResponse = { log: DailyLogDTO };
 
 /**
  * GET /api/daily/log?date&tz — the Daily Log page composite for the SESSION user (today's log
@@ -14,7 +25,7 @@ export const GET = apiHandler(async (req: Request) => {
   const rawDate = params.get("date") ?? "";
   const tz = tzOffsetSchema.parse(params.get("tz") ?? undefined);
   const date = DATE_KEY_RE.test(rawDate) ? rawDate : dateKeyForOffset(tz);
-  return json(await dailyService.logView(user, date, tz));
+  return json<GetDailyLogResponse>(await dailyService.logView(user, date, tz));
 });
 
 /**
@@ -24,5 +35,5 @@ export const GET = apiHandler(async (req: Request) => {
 export const POST = apiHandler(async (req) => {
   const user = await requireUser();
   const input = submitLogSchema.parse(await req.json());
-  return json({ log: await dailyService.submitLog(input, user) }, 201);
+  return json<PostDailyLogResponse>({ log: await dailyService.submitLog(input, user) }, 201);
 });

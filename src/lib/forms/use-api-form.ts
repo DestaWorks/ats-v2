@@ -14,7 +14,7 @@ import { messageForFailure, type ApiFailure, type ApiResult } from "@/lib/api/cl
  *
  *   const { form, pending, onSubmit } = useApiForm(createClientSchema, {
  *     defaultValues: { name: "" },
- *     submit: (values) => postJson<{ client: ClientProfileDTO }>("/api/crm/clients", values),
+ *     submit: (values) => postJson<PostCrmClientResponse>("/api/crm/clients", values),
  *     onSuccess: (data) => { toast.success("Client added"); router.push(`/crm/${data.client.id}`); },
  *   });
  *   <form onSubmit={onSubmit} noValidate> ... </form>

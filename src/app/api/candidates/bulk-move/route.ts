@@ -2,6 +2,10 @@ import { bulkMoveInputSchema } from "@/lib/validation/pipeline";
 import { requireUser } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { candidateService } from "@/server/services/candidate.service";
+import type { BulkMoveResponse } from "@/lib/validation/pipeline";
+
+/** Wire shape of `POST /api/candidates/bulk-move` — the partial-success summary. */
+export type PostCandidatesBulkMoveResponse = BulkMoveResponse;
 
 /**
  * POST /api/candidates/bulk-move — move many candidates at once. Guarded by `requireUser()`.
@@ -13,5 +17,5 @@ export const POST = apiHandler(async (req: Request) => {
   const user = await requireUser();
   const { ids, toStatus } = bulkMoveInputSchema.parse(await req.json());
   const result = await candidateService.bulkMove(ids, toStatus, user);
-  return json(result);
+  return json<PostCandidatesBulkMoveResponse>(result);
 });

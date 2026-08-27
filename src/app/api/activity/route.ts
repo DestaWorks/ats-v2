@@ -4,6 +4,10 @@ import { requireCapability } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { AppError } from "@/server/http/app-error";
 import { auditService } from "@/server/services/audit.service";
+import type { ActivityListDTO } from "@/lib/validation/activity";
+
+/** Wire shape of `GET /api/activity` — one keyset page of the Activity Log (no raw snapshots). */
+export type GetActivityResponse = ActivityListDTO;
 
 /**
  * GET /api/activity — the Activity Log's LOAD-MORE endpoint (Wave 2.5). The `/activity` RSC renders
@@ -35,5 +39,5 @@ export const GET = apiHandler(async (req: Request) => {
   }
 
   const list = await auditService.listActivity(filters, decoded);
-  return json(list);
+  return json<GetActivityResponse>(list);
 });

@@ -6,6 +6,10 @@ import { dateKey } from "@/lib/daily";
 import type { DailyBriefDTO } from "@/lib/validation/briefs";
 import type { DailyOverviewDTO } from "@/lib/validation/daily";
 import { getJson, messageForFailure, postJson } from "@/lib/api/client";
+import type { GetBriefsDailyResponse } from "@/app/api/briefs/daily/route";
+import type { PostBriefsDailyGenerateResponse } from "@/app/api/briefs/daily/generate/route";
+import type { PostBriefsDailySaveResponse } from "@/app/api/briefs/daily/save/route";
+import type { GetDailyOverviewResponse } from "@/app/api/daily/overview/route";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Field } from "@/components/ui/field";
@@ -13,7 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 
 /** The editable draft — the AI output fields, held client-side between generate → save. */
-type Draft = Omit<DailyBriefDTO, "priorityClientId" | "savedByName" | "savedAt">;
+type Draft = PostBriefsDailyGenerateResponse & { date: string };
 
 /** Plain-text export (legacy's Slack/email-friendly format — Copy button, no fake integration). */
 function toPlainText(draft: Draft): string {
@@ -70,8 +74,8 @@ export function TeamBriefSection() {
     setSaved(undefined);
     setDraft(null);
     const [ov, res] = await Promise.all([
-      getJson<DailyOverviewDTO>(`/api/daily/overview?date=${date}&tz=${tz}`),
-      getJson<DailyBriefDTO | null>(`/api/briefs/daily?date=${date}`),
+      getJson<GetDailyOverviewResponse>(`/api/daily/overview?date=${date}&tz=${tz}`),
+      getJson<GetBriefsDailyResponse>(`/api/briefs/daily?date=${date}`),
     ]);
     if (ov.ok) setOverview(ov.data);
     if (res.ok) {
@@ -94,7 +98,7 @@ export function TeamBriefSection() {
 
   async function generate() {
     setGenerating(true);
-    const res = await postJson<Draft>("/api/briefs/daily/generate", {
+    const res = await postJson<PostBriefsDailyGenerateResponse>("/api/briefs/daily/generate", {
       date,
       tz,
       priorityClientId: manual.priorityClientId || null,
@@ -110,7 +114,7 @@ export function TeamBriefSection() {
   async function save() {
     if (!draft) return;
     setSavingBrief(true);
-    const res = await postJson<DailyBriefDTO>("/api/briefs/daily/save", {
+    const res = await postJson<PostBriefsDailySaveResponse>("/api/briefs/daily/save", {
       ...draft,
       date,
       priorityClientId: manual.priorityClientId || null,

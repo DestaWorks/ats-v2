@@ -1,8 +1,11 @@
-import { triageSchema } from "@/lib/validation/inbound";
+import { triageSchema, type TriageResultDTO } from "@/lib/validation/inbound";
 import { requireUser } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { checkRateLimit } from "@/server/http/rate-limit";
 import { inboundService } from "@/server/services/inbound.service";
+
+/** Response body of `POST /api/inbound/triage`. */
+export type PostInboundTriageResponse = TriageResultDTO;
 
 /**
  * POST /api/inbound/triage — extract + dedupe + client-match a pasted inbound reply (Wave 2.8).
@@ -19,5 +22,5 @@ export const POST = apiHandler(async (req: Request) => {
   await checkRateLimit(`inbound-triage:${user.id}`, { limit: 20, windowMs: 60_000 });
   const input = triageSchema.parse(await req.json());
   const result = await inboundService.triage(input);
-  return json(result);
+  return json<PostInboundTriageResponse>(result);
 });

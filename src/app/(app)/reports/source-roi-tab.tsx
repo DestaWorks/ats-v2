@@ -1,18 +1,21 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import type { SourceRoiDTO } from "@/lib/validation/reports";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Table, Td } from "@/components/ui/table";
 import { ReportTabShell } from "./lib/report-tab-shell";
 import { buildReportQuery, useReportFetch, type ReportFilterState } from "./lib/use-report-fetch";
+import type { GetReportsSourceRoiResponse } from "@/app/api/reports/source-roi/route";
 
 // recharts is heavy — load it only once this tab actually renders (perf audit 2026-08-05).
 const SourceRoiChart = dynamic(() => import("./source-roi-chart").then((m) => m.SourceRoiChart));
 
 export function SourceRoiTab({ filters }: { filters: ReportFilterState }) {
-  const data = useReportFetch<SourceRoiDTO>("/api/reports/source-roi", buildReportQuery(filters));
+  const data = useReportFetch<GetReportsSourceRoiResponse>(
+    "/api/reports/source-roi",
+    buildReportQuery(filters),
+  );
 
   return (
     <ReportTabShell data={data}>

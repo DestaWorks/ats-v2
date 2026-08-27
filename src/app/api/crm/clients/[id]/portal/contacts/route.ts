@@ -1,6 +1,10 @@
+import type { AdminPortalContactDTO } from "@/lib/validation/portal";
 import { requireCapability } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { clientPortalService } from "@/server/services/client-portal.service";
+
+/** Wire shape of `GET /api/crm/clients/:id/portal/contacts`. */
+export type GetCrmPortalContactsResponse = { contacts: AdminPortalContactDTO[] };
 
 /**
  * GET /api/crm/clients/:id/portal/contacts — this client's contacts + their portal-link status,
@@ -12,5 +16,5 @@ export const GET = apiHandler<{ params: Promise<{ id: string }> }>(async (_req, 
   await requireCapability("configureClientPortal");
   const { id } = await ctx.params;
   const contacts = await clientPortalService.listContactsForClient(id);
-  return json({ contacts });
+  return json<GetCrmPortalContactsResponse>({ contacts });
 });

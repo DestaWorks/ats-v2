@@ -1,6 +1,10 @@
+import type { GeneratedPortalLinkDTO } from "@/lib/validation/portal";
 import { requireCapability } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { clientPortalService } from "@/server/services/client-portal.service";
+
+/** Wire shape of `POST /api/crm/clients/:id/portal/contacts/:contactId/tokens`. */
+export type PostCrmPortalTokenResponse = GeneratedPortalLinkDTO;
 
 /**
  * POST /api/crm/clients/:id/portal/contacts/:contactId/tokens — generate a portal link for this
@@ -12,6 +16,6 @@ export const POST = apiHandler<{ params: Promise<{ id: string; contactId: string
     const user = await requireCapability("configureClientPortal");
     const { id, contactId } = await ctx.params;
     const result = await clientPortalService.generateLink(id, contactId, user);
-    return json(result, 201);
+    return json<PostCrmPortalTokenResponse>(result, 201);
   },
 );

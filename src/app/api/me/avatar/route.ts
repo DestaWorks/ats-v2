@@ -3,6 +3,9 @@ import { requireUser } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { userPreferencesService } from "@/server/services/user-preferences.service";
 
+/** Response body of `POST /api/me/avatar` — the public URL of the stored avatar. */
+export type PostMeAvatarResponse = { url: string };
+
 /**
  * POST /api/me/avatar (Wave 6) — uploads a client-resized avatar image to Storage and returns its
  * public URL. `requireUser()`, own-record only (no id param — always "me", same posture as
@@ -12,5 +15,5 @@ import { userPreferencesService } from "@/server/services/user-preferences.servi
 export const POST = apiHandler(async (req: Request) => {
   const user = await requireUser();
   const input = uploadAvatarSchema.parse(await req.json());
-  return json(await userPreferencesService.uploadAvatar(user, input));
+  return json<PostMeAvatarResponse>(await userPreferencesService.uploadAvatar(user, input));
 });

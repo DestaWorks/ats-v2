@@ -4,6 +4,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { MEETING_TYPES } from "@/lib/constants";
 import { addMeetingSchema, type ClientMeetingDTO } from "@/lib/validation/client";
+import type { PostCrmClientMeetingResponse } from "@/app/api/crm/clients/[id]/meetings/route";
 import { useApiForm } from "@/lib/forms/use-api-form";
 import { emptyToNull } from "@/lib/forms/empty-to-null";
 import { deleteJson, postJson } from "@/lib/api/client";
@@ -126,7 +127,7 @@ function MeetingForm({
   const { form, pending, onSubmit } = useApiForm(addMeetingSchema, {
     defaultValues: { type: "adhoc" },
     submit: (values) =>
-      postJson<{ meeting: ClientMeetingDTO }>(`/api/crm/clients/${clientId}/meetings`, values),
+      postJson<PostCrmClientMeetingResponse>(`/api/crm/clients/${clientId}/meetings`, values),
     onSuccess: (data) => {
       toast.success("Meeting logged");
       onSaved(data.meeting);

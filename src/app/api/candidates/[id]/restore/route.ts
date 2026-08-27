@@ -1,7 +1,12 @@
 import { requireUser } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { candidateService } from "@/server/services/candidate.service";
-import { toCandidateDTO } from "@/server/services/candidate.dto";
+import { toCandidateDTO, type CandidateDTO } from "@/server/services/candidate.dto";
+
+/** Wire shape of `POST /api/candidates/:id/restore` — the PII-re-gated candidate. */
+export interface PostCandidateRestoreResponse {
+  candidate: CandidateDTO;
+}
 
 /**
  * POST /api/candidates/:id/restore — restore a soft-deleted candidate from Trash back into its
@@ -13,5 +18,5 @@ export const POST = apiHandler<{ params: Promise<{ id: string }> }>(async (_req,
   const user = await requireUser();
   const { id } = await ctx.params;
   const restored = await candidateService.restore(id, user);
-  return json({ candidate: toCandidateDTO(restored, user) });
+  return json<PostCandidateRestoreResponse>({ candidate: toCandidateDTO(restored, user) });
 });

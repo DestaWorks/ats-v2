@@ -22,6 +22,7 @@ import {
   type SaveMatchProfileInput,
   type UpdateOpenRoleInput,
 } from "@/lib/validation/open-role";
+import type { GetClientMatchProfileResponse } from "@/app/api/client-match-profiles/[clientId]/route";
 import { useApiForm } from "@/lib/forms/use-api-form";
 import { emptyToNull } from "@/lib/forms/empty-to-null";
 import {
@@ -32,6 +33,10 @@ import {
   postJson,
   putJson,
 } from "@/lib/api/client";
+import type { DeleteRoleResponse, PatchRoleResponse } from "@/app/api/roles/[id]/route";
+import type { PostRolePromoteResponse } from "@/app/api/roles/[id]/promote/route";
+import type { PostRoleNoteResponse } from "@/app/api/roles/[id]/notes/route";
+import type { DeleteRoleNoteResponse } from "@/app/api/roles/[id]/notes/[noteId]/route";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DetailTabs, type TabDef } from "@/components/ui/tabs";
@@ -68,7 +73,7 @@ export function RoleDetail({
   function handleDelete() {
     if (!window.confirm(`Permanently delete "${role.title}"? This cannot be undone.`)) return;
     startDelete(async () => {
-      const res = await deleteJson(`/api/roles/${role.id}`);
+      const res = await deleteJson<DeleteRoleResponse>(`/api/roles/${role.id}`);
       if (res.ok) {
         toast.success("Role deleted");
         router.push("/roles");
@@ -230,7 +235,7 @@ function EditRoleForm({
       status: role.status,
       clientId: role.clientId,
     },
-    submit: (values) => patchJson<{ role: OpenRoleDetailDTO }>(`/api/roles/${role.id}`, values),
+    submit: (values) => patchJson<PatchRoleResponse>(`/api/roles/${role.id}`, values),
     onSuccess: (data) => {
       toast.success("Role updated");
       onSaved(data.role);
@@ -372,7 +377,7 @@ function MatchesPanel({
 
   async function handlePromote(leadId: string) {
     setPromotingId(leadId);
-    const result = await postJson<{ candidateId: string }>(`/api/roles/${roleId}/promote`, {
+    const result = await postJson<PostRolePromoteResponse>(`/api/roles/${roleId}/promote`, {
       leadId,
     });
     setPromotingId(null);
@@ -433,7 +438,7 @@ function MatchProfileEditor({ clientId, onClose }: { clientId: string; onClose: 
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    getJson<ClientMatchProfileDTO>(`/api/client-match-profiles/${clientId}`).then((res) => {
+    getJson<GetClientMatchProfileResponse>(`/api/client-match-profiles/${clientId}`).then((res) => {
       if (res.ok) setProfile(res.data);
       setLoading(false);
     });
@@ -520,8 +525,7 @@ function NotesPanel({
 }) {
   const { form, pending, onSubmit } = useApiForm(addRoleNoteSchema, {
     defaultValues: { body: "", category: "General" },
-    submit: (values) =>
-      postJson<{ role: OpenRoleDetailDTO }>(`/api/roles/${role.id}/notes`, values),
+    submit: (values) => postJson<PostRoleNoteResponse>(`/api/roles/${role.id}/notes`, values),
     onSuccess: (data) => {
       onChanged(data.role);
       form.reset({ body: "", category: "General" });
@@ -529,9 +533,7 @@ function NotesPanel({
   });
 
   async function handleDelete(noteId: string) {
-    const res = await deleteJson<{ role: OpenRoleDetailDTO }>(
-      `/api/roles/${role.id}/notes/${noteId}`,
-    );
+    const res = await deleteJson<DeleteRoleNoteResponse>(`/api/roles/${role.id}/notes/${noteId}`);
     if (res.ok) {
       onChanged(res.data.role);
     } else {

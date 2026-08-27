@@ -3,11 +3,9 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { ROLES } from "@/lib/constants";
-import {
-  approveRequestSchema,
-  type AccessRequestDTO,
-  type GeneratedPasswordDTO,
-} from "@/lib/validation/admin";
+import { approveRequestSchema, type AccessRequestDTO } from "@/lib/validation/admin";
+import type { PostAdminAccessRequestApproveResponse } from "@/app/api/admin/access-requests/[id]/approve/route";
+import type { PostAdminAccessRequestDeclineResponse } from "@/app/api/admin/access-requests/[id]/decline/route";
 import { useApiForm } from "@/lib/forms/use-api-form";
 import { messageForFailure, postJson } from "@/lib/api/client";
 import { Badge } from "@/components/ui/badge";
@@ -36,7 +34,7 @@ export function AccessRequestsTab({
   async function handleDecline(request: AccessRequestDTO) {
     if (!window.confirm(`Decline the request from ${request.name}?`)) return;
     setBusyId(request.id);
-    const res = await postJson<{ ok: true }>(
+    const res = await postJson<PostAdminAccessRequestDeclineResponse>(
       `/api/admin/access-requests/${request.id}/decline`,
       {},
     );
@@ -135,14 +133,17 @@ function ApproveForm({
   onCancel,
 }: {
   request: AccessRequestDTO;
-  onSaved: (request: AccessRequestDTO, result: GeneratedPasswordDTO) => void;
+  onSaved: (request: AccessRequestDTO, result: PostAdminAccessRequestApproveResponse) => void;
   onCancel: () => void;
 }) {
   const [serverError, setServerError] = useState<string | null>(null);
   const { form, pending, onSubmit } = useApiForm(approveRequestSchema, {
     defaultValues: { role: "Associate" },
     submit: (values) =>
-      postJson<GeneratedPasswordDTO>(`/api/admin/access-requests/${request.id}/approve`, values),
+      postJson<PostAdminAccessRequestApproveResponse>(
+        `/api/admin/access-requests/${request.id}/approve`,
+        values,
+      ),
     onSuccess: (data) => {
       toast.success(`${request.name} approved`);
       onSaved({ ...request, status: "approved" }, data);

@@ -2,6 +2,12 @@ import { saveScreeningSchema } from "@/lib/validation/screening";
 import { requireUser } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { screeningService } from "@/server/services/screening.service";
+import type { ScreeningScorecardDTO } from "@/lib/validation/screening";
+
+/** Wire shape of `POST /api/screening/:candidateId` — the persisted scorecard. */
+export interface PostScreeningResponse {
+  scorecard: ScreeningScorecardDTO;
+}
 
 /**
  * POST /api/screening/:candidateId — score a candidate and persist the scorecard; if `action` is
@@ -14,5 +20,5 @@ export const POST = apiHandler<{ params: Promise<{ candidateId: string }> }>(asy
   const { candidateId } = await ctx.params;
   const input = saveScreeningSchema.parse(await req.json());
   const scorecard = await screeningService.saveAndMaybeMove(candidateId, input, user);
-  return json({ scorecard });
+  return json<PostScreeningResponse>({ scorecard });
 });

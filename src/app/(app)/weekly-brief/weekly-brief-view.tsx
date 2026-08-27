@@ -4,14 +4,18 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { dateKey, mondayOf } from "@/lib/daily";
 import { useTzCookieSync } from "@/lib/use-tz-cookie-sync";
-import type { WeeklyBriefDTO, WeeklyPatternsAiOutput } from "@/lib/validation/briefs";
+import type { WeeklyBriefDTO } from "@/lib/validation/briefs";
 import { getJson, messageForFailure, postJson } from "@/lib/api/client";
+import type { GetBriefsWeeklyResponse } from "@/app/api/briefs/weekly/route";
+import type { PostBriefsWeeklyGenerateResponse } from "@/app/api/briefs/weekly/generate/route";
+import type { PostBriefsWeeklyPatternsResponse } from "@/app/api/briefs/weekly/patterns/route";
+import type { PostBriefsWeeklySaveResponse } from "@/app/api/briefs/weekly/save/route";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 
-type Draft = Omit<WeeklyBriefDTO, "savedByName" | "savedAt">;
+type Draft = PostBriefsWeeklyGenerateResponse & { weekStart: string };
 
 /**
  * Weekly Brief (Wave 5.1, legacy `weekly_brief_generate`/`weekly_brief_save`/`weekly_brief_patterns`).
@@ -39,7 +43,7 @@ export function WeeklyBriefView({
     initialWeekStart !== undefined ? (initial ?? null) : undefined,
   );
   const [draft, setDraft] = useState<Draft | null>(initial ? { ...initial } : null);
-  const [patterns, setPatterns] = useState<WeeklyPatternsAiOutput | null>(null);
+  const [patterns, setPatterns] = useState<PostBriefsWeeklyPatternsResponse | null>(null);
   const [generating, setGenerating] = useState(false);
   const [findingPatterns, setFindingPatterns] = useState(false);
   const [savingBrief, setSavingBrief] = useState(false);
@@ -50,7 +54,7 @@ export function WeeklyBriefView({
     setSaved(undefined);
     setDraft(null);
     setPatterns(null);
-    const res = await getJson<WeeklyBriefDTO | null>(`/api/briefs/weekly?weekStart=${weekStart}`);
+    const res = await getJson<GetBriefsWeeklyResponse>(`/api/briefs/weekly?weekStart=${weekStart}`);
     if (res.ok) {
       setSaved(res.data);
       if (res.data) setDraft({ ...res.data });
@@ -69,7 +73,10 @@ export function WeeklyBriefView({
 
   async function generate() {
     setGenerating(true);
-    const res = await postJson<Draft>("/api/briefs/weekly/generate", { weekStart, tz });
+    const res = await postJson<PostBriefsWeeklyGenerateResponse>("/api/briefs/weekly/generate", {
+      weekStart,
+      tz,
+    });
     setGenerating(false);
     if (res.ok) setDraft({ ...res.data, weekStart });
     else toast.error(messageForFailure(res.failure));
@@ -77,7 +84,7 @@ export function WeeklyBriefView({
 
   async function findPatterns() {
     setFindingPatterns(true);
-    const res = await postJson<WeeklyPatternsAiOutput>("/api/briefs/weekly/patterns", {
+    const res = await postJson<PostBriefsWeeklyPatternsResponse>("/api/briefs/weekly/patterns", {
       weekStart,
       tz,
     });
@@ -89,7 +96,10 @@ export function WeeklyBriefView({
   async function save() {
     if (!draft) return;
     setSavingBrief(true);
-    const res = await postJson<WeeklyBriefDTO>("/api/briefs/weekly/save", { ...draft, weekStart });
+    const res = await postJson<PostBriefsWeeklySaveResponse>("/api/briefs/weekly/save", {
+      ...draft,
+      weekStart,
+    });
     setSavingBrief(false);
     if (res.ok) {
       toast.success("Weekly Brief saved");

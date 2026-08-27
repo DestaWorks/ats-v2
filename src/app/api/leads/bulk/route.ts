@@ -3,6 +3,9 @@ import { requireUser } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { leadService } from "@/server/services/lead.service";
 
+/** Response body of `POST /api/leads/bulk` — counts only, never lead PII. */
+export type PostLeadBulkResponse = { affected: number; skipped: number };
+
 /**
  * POST /api/leads/bulk — one dispatcher for the sourcing bulk toolbar
  * (`source_lead_bulk_action` / `source_lead_undelete` / `source_lead_bulk_log_outreach` parity):
@@ -14,5 +17,5 @@ import { leadService } from "@/server/services/lead.service";
 export const POST = apiHandler(async (req) => {
   const user = await requireUser();
   const input = bulkLeadActionSchema.parse(await req.json());
-  return json(await leadService.bulkAction(input, user));
+  return json<PostLeadBulkResponse>(await leadService.bulkAction(input, user));
 });

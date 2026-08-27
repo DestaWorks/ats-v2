@@ -7,6 +7,7 @@ import {
   type AiSettingsDTO,
   type AiUsageOverviewDTO,
 } from "@/lib/validation/ai-ops";
+import type { PatchAdminAiSettingsResponse } from "@/app/api/admin/ai/settings/route";
 import { messageForFailure, patchJson } from "@/lib/api/client";
 import { useApiForm } from "@/lib/forms/use-api-form";
 import { Badge } from "@/components/ui/badge";
@@ -43,7 +44,9 @@ export function AiOpsTab({
   async function enable() {
     if (!window.confirm("Re-enable AI features for everyone?")) return;
     setPending(true);
-    const res = await patchJson<AiSettingsDTO>("/api/admin/ai/settings", { disabled: false });
+    const res = await patchJson<PatchAdminAiSettingsResponse>("/api/admin/ai/settings", {
+      disabled: false,
+    });
     setPending(false);
     if (res.ok) {
       setSettings(res.data);
@@ -144,7 +147,7 @@ function DisableAiForm({
   const [serverError, setServerError] = useState<string | null>(null);
   const { form, pending, onSubmit } = useApiForm(setAiDisabledSchema, {
     defaultValues: { disabled: true, reason: "" },
-    submit: (values) => patchJson<AiSettingsDTO>("/api/admin/ai/settings", values),
+    submit: (values) => patchJson<PatchAdminAiSettingsResponse>("/api/admin/ai/settings", values),
     onSuccess: (data) => {
       toast.success("AI features disabled");
       onSaved(data);

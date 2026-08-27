@@ -1,7 +1,11 @@
 import { saveInboundLeadSchema } from "@/lib/validation/inbound";
+import type { LeadDetailDTO } from "@/lib/validation/lead";
 import { requireUser } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { inboundService } from "@/server/services/inbound.service";
+
+/** Response body of `POST /api/inbound/save`. */
+export type PostInboundSaveResponse = { lead: LeadDetailDTO };
 
 /**
  * POST /api/inbound/save — save the (possibly reviewer-edited) triage extraction as a fresh Source
@@ -12,5 +16,5 @@ export const POST = apiHandler(async (req: Request) => {
   const user = await requireUser();
   const input = saveInboundLeadSchema.parse(await req.json());
   const lead = await inboundService.saveAsLead(input, user);
-  return json({ lead }, 201);
+  return json<PostInboundSaveResponse>({ lead }, 201);
 });

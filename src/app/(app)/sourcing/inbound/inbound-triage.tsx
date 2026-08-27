@@ -11,6 +11,9 @@ import {
 } from "@/lib/validation/inbound";
 import type { LeadDetailDTO } from "@/lib/validation/lead";
 import { messageForFailure, postJson } from "@/lib/api/client";
+import type { PostInboundTriageResponse } from "@/app/api/inbound/triage/route";
+import type { PostInboundSaveResponse } from "@/app/api/inbound/save/route";
+import type { PostInboundAttachResponse } from "@/app/api/inbound/attach/route";
 import { Button } from "@/components/ui/button";
 import { ErrorState } from "@/components/ui/error-state";
 import { Field } from "@/components/ui/field";
@@ -40,7 +43,7 @@ export function InboundTriage({ clients }: { clients: { id: string; name: string
   function handleTriage() {
     setTriageError(null);
     startTriage(async () => {
-      const res = await postJson<TriageResultDTO>("/api/inbound/triage", {
+      const res = await postJson<PostInboundTriageResponse>("/api/inbound/triage", {
         messageText,
         context: context.trim() || null,
       });
@@ -74,7 +77,7 @@ export function InboundTriage({ clients }: { clients: { id: string; name: string
     }
     setSaveError(null);
     startSave(async () => {
-      const res = await postJson<{ lead: LeadDetailDTO }>("/api/inbound/save", {
+      const res = await postJson<PostInboundSaveResponse>("/api/inbound/save", {
         name: extracted.name,
         email: extracted.email,
         phone: extracted.phone,
@@ -106,7 +109,7 @@ export function InboundTriage({ clients }: { clients: { id: string; name: string
       // re-runs its own dedupe match against them and refuses to attach if the edited identity no
       // longer points at this lead, since the "Attach to this lead" match ran once, before any
       // edits, and could otherwise silently log the reply to the wrong person.
-      const res = await postJson<{ lead: LeadDetailDTO }>("/api/inbound/attach", {
+      const res = await postJson<PostInboundAttachResponse>("/api/inbound/attach", {
         leadId,
         name: extracted.name,
         email: extracted.email,

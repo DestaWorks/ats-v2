@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import type { CoverageGapRowDTO, CoverageGapSupplyDTO } from "@/lib/validation/discover";
+import type { CoverageGapRowDTO } from "@/lib/validation/discover";
+import type { GetDiscoverCoverageGapSupplyResponse } from "@/app/api/discover/coverage-gaps/supply/route";
 import { taxonomyForCredential } from "@/lib/constants";
 import { getJson } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
@@ -31,7 +32,7 @@ export function CoverageGaps({ rows }: { rows: CoverageGapRowDTO[] }) {
   async function checkSupply(row: CoverageGapRowDTO) {
     const k = rowKey(row);
     setSupply((s) => ({ ...s, [k]: { status: "loading" } }));
-    const res = await getJson<CoverageGapSupplyDTO>(
+    const res = await getJson<GetDiscoverCoverageGapSupplyResponse>(
       `/api/discover/coverage-gaps/supply?credential=${encodeURIComponent(row.credential)}&state=${encodeURIComponent(row.state)}`,
     );
     setSupply((s) => ({

@@ -4,15 +4,12 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { CREDENTIALS, POPULATIONS, ROLE_PRIORITIES, SETTINGS, US_STATES } from "@/lib/constants";
-import {
-  createOpenRoleSchema,
-  type CreateOpenRoleInput,
-  type ParsedJdDTO,
-} from "@/lib/validation/open-role";
-import type { OpenRoleDetailDTO } from "@/lib/validation/open-role";
+import { createOpenRoleSchema, type CreateOpenRoleInput } from "@/lib/validation/open-role";
 import { useApiForm } from "@/lib/forms/use-api-form";
 import { emptyToNull } from "@/lib/forms/empty-to-null";
 import { messageForFailure, postJson } from "@/lib/api/client";
+import type { PostRoleResponse } from "@/app/api/roles/route";
+import type { PostRoleParseJdResponse } from "@/app/api/roles/parse-jd/route";
 import { Button, type ButtonProps } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -62,7 +59,7 @@ function AddRoleForm({ clients, onCancel }: { clients: ClientOption[]; onCancel:
 
   const { form, pending, onSubmit } = useApiForm(createOpenRoleSchema, {
     defaultValues: { title: "", priority: "P2" },
-    submit: (values) => postJson<{ role: OpenRoleDetailDTO }>("/api/roles", values),
+    submit: (values) => postJson<PostRoleResponse>("/api/roles", values),
     onSuccess: (data) => {
       toast.success("Role added");
       router.push(`/roles/${data.role.id}`);
@@ -72,7 +69,9 @@ function AddRoleForm({ clients, onCancel }: { clients: ClientOption[]; onCancel:
 
   function handleAutofill() {
     startJdTransition(async () => {
-      const result = await postJson<ParsedJdDTO>("/api/roles/parse-jd", { text: jdText });
+      const result = await postJson<PostRoleParseJdResponse>("/api/roles/parse-jd", {
+        text: jdText,
+      });
       if (result.ok) {
         const jd = result.data;
         if (jd.title) form.setValue("title", jd.title);

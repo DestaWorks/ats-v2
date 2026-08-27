@@ -1,8 +1,12 @@
 import { DATE_KEY_RE, dateKeyForOffset } from "@/lib/daily";
+import type { DailyBriefDTO } from "@/lib/validation/briefs";
 import { requireCapability } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { viewerTzOffset } from "@/server/http/viewer-tz";
 import { briefService } from "@/server/services/brief.service";
+
+/** Response body of `GET /api/briefs/daily` — `null` when no brief is saved for that day. */
+export type GetBriefsDailyResponse = DailyBriefDTO | null;
 
 /**
  * GET /api/briefs/daily?date=YYYY-MM-DD — the saved brief for that day, or `null`. LEADERSHIP
@@ -17,5 +21,5 @@ export const GET = apiHandler(async (req: Request) => {
   const date = DATE_KEY_RE.test(rawDate)
     ? rawDate
     : dateKeyForOffset((await viewerTzOffset()) ?? 0);
-  return json(await briefService.getDaily(date));
+  return json<GetBriefsDailyResponse>(await briefService.getDaily(date));
 });

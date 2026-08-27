@@ -6,8 +6,8 @@ import {
   AI_WORKSPACE_PRESETS,
   AI_WORKSPACE_PRESET_LABELS,
   type AiWorkspacePreset,
-  type WorkspaceResultDTO,
 } from "@/lib/validation/crm-ai-workspace";
+import type { PostCrmAiWorkspaceResponse } from "@/app/api/crm/clients/[id]/ai-workspace/route";
 import { messageForFailure, postJson } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,7 +23,7 @@ export function AiWorkspaceTab({ clientId }: { clientId: string }) {
   async function generate(input: { preset?: AiWorkspacePreset; customPrompt?: string }) {
     setPending(true);
     setResult(null);
-    const res = await postJson<WorkspaceResultDTO>(
+    const res = await postJson<PostCrmAiWorkspaceResponse>(
       `/api/crm/clients/${clientId}/ai-workspace`,
       input,
     );

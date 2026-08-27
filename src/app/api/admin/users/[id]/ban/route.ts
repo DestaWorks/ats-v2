@@ -1,7 +1,10 @@
-import { banUserSchema } from "@/lib/validation/admin";
+import { banUserSchema, type AdminUserDTO } from "@/lib/validation/admin";
 import { requireCapability } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { adminUserService } from "@/server/services/admin-user.service";
+
+/** Response body of `POST /api/admin/users/:id/ban` — the account in its banned state. */
+export type PostAdminUserBanResponse = { user: AdminUserDTO };
 
 /**
  * POST /api/admin/users/:id/ban — ban an account (real DB-level enforcement at sign-in, unlike
@@ -12,5 +15,5 @@ export const POST = apiHandler<{ params: Promise<{ id: string }> }>(async (req, 
   const { id } = await ctx.params;
   const input = banUserSchema.parse(await req.json());
   const user = await adminUserService.ban(id, input, actor.id);
-  return json({ user });
+  return json<PostAdminUserBanResponse>({ user });
 });

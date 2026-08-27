@@ -3,9 +3,15 @@
  * uniform `{ error: { code, message } }` envelope into something the UI can render. Mirrors the
  * resume flow's `messageForError` pattern. No PII ever crosses these (the board DTO omits it).
  */
+import type { GetCandidatesResponse } from "@/app/api/candidates/route";
 import type { CandidateStatus } from "@/lib/constants";
-import type { BoardResponse, ColumnPageDTO } from "@/lib/validation/pipeline";
 import type { ApiErrorBody } from "@/lib/api/client";
+
+/** The board arm of `GET /api/candidates` (no `column` param). */
+type BoardPayload = Extract<GetCandidatesResponse, { columns: unknown }>;
+
+/** The single-column load-more arm of `GET /api/candidates` (`column` + `cursor`). */
+type ColumnPayload = Extract<GetCandidatesResponse, { items: unknown }>;
 
 export interface MoveFailure {
   code: string;
@@ -17,12 +23,12 @@ export interface MoveFailure {
 export type MoveResult = { ok: true } | { ok: false; failure: MoveFailure };
 
 /** Re-fetch the funnel-grouped board for the given filters (client re-fetch on filter change). */
-export async function fetchBoard(params: URLSearchParams): Promise<BoardResponse> {
+export async function fetchBoard(params: URLSearchParams): Promise<BoardPayload> {
   const res = await fetch(`/api/candidates?${params.toString()}`, {
     headers: { Accept: "application/json" },
   });
   if (!res.ok) throw new Error("Failed to load the pipeline board.");
-  return (await res.json()) as BoardResponse;
+  return (await res.json()) as BoardPayload;
 }
 
 /**
@@ -34,7 +40,7 @@ export async function fetchColumnPage(
   params: URLSearchParams,
   column: CandidateStatus,
   cursor: string,
-): Promise<ColumnPageDTO> {
+): Promise<ColumnPayload> {
   const out = new URLSearchParams(params.toString());
   out.set("column", column);
   out.set("cursor", cursor);
@@ -42,7 +48,7 @@ export async function fetchColumnPage(
     headers: { Accept: "application/json" },
   });
   if (!res.ok) throw new Error("Failed to load more candidates for this column.");
-  return (await res.json()) as ColumnPageDTO;
+  return (await res.json()) as ColumnPayload;
 }
 
 /** POST a single gated move. On `422 STAGE_BLOCKED` the reasons come back split for a list. */

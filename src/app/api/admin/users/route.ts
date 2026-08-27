@@ -1,7 +1,17 @@
-import { createUserSchema } from "@/lib/validation/admin";
+import {
+  createUserSchema,
+  type AdminUserListDTO,
+  type GeneratedPasswordDTO,
+} from "@/lib/validation/admin";
 import { requireCapability } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { adminUserService } from "@/server/services/admin-user.service";
+
+/** Response body of `GET /api/admin/users`. */
+export type GetAdminUsersResponse = AdminUserListDTO;
+
+/** Response body of `POST /api/admin/users` (201) — the one-time generated password. */
+export type PostAdminUserResponse = GeneratedPasswordDTO;
 
 /**
  * GET /api/admin/users — list every account (Better Auth's admin plugin owns storage; this route
@@ -11,12 +21,12 @@ import { adminUserService } from "@/server/services/admin-user.service";
  */
 export const GET = apiHandler(async () => {
   await requireCapability("manageUsers");
-  return json(await adminUserService.list());
+  return json<GetAdminUsersResponse>(await adminUserService.list());
 });
 
 export const POST = apiHandler(async (req: Request) => {
   const actor = await requireCapability("manageUsers");
   const input = createUserSchema.parse(await req.json());
   const result = await adminUserService.create(input, actor.id);
-  return json(result, 201);
+  return json<PostAdminUserResponse>(result, 201);
 });

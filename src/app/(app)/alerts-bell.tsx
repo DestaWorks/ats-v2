@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { AlertsDTO, AlertBucketDTO, AlertCandidateDTO } from "@/lib/validation/alerts";
+import type { GetAlertsResponse } from "@/app/api/alerts/route";
+import type { PostMentionsReadResponse } from "@/app/api/mentions/read/route";
 import type { MentionDTO } from "@/lib/validation/mention";
 import { getJson, postJson } from "@/lib/api/client";
 import { cn } from "@/lib/utils/cn";
@@ -27,7 +29,7 @@ export function AlertsBell({ viewerFirstName }: { viewerFirstName: string }) {
   const [alerts, setAlerts] = useState<AlertsDTO | null>(null);
 
   const refresh = useCallback(async () => {
-    const res = await getJson<AlertsDTO>("/api/alerts");
+    const res = await getJson<GetAlertsResponse>("/api/alerts");
     if (res.ok) setAlerts(res.data);
   }, []);
 
@@ -41,7 +43,9 @@ export function AlertsBell({ viewerFirstName }: { viewerFirstName: string }) {
 
   function openMention(mention: MentionDTO, close: () => void) {
     // Navigate immediately; the mark-read + refresh settle in the background (legacy re-fetched).
-    void postJson("/api/mentions/read", { mentionId: mention.id }).then(() => refresh());
+    void postJson<PostMentionsReadResponse>("/api/mentions/read", {
+      mentionId: mention.id,
+    }).then(() => refresh());
     close();
     router.push(`/candidates/${mention.candidateId}?tab=notes`);
   }
@@ -52,7 +56,9 @@ export function AlertsBell({ viewerFirstName }: { viewerFirstName: string }) {
   }
 
   function markAllRead() {
-    void postJson("/api/mentions/read", { all: true }).then(() => refresh());
+    void postJson<PostMentionsReadResponse>("/api/mentions/read", { all: true }).then(() =>
+      refresh(),
+    );
   }
 
   return (

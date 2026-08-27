@@ -1,6 +1,10 @@
+import type { ProspectDetailDTO } from "@/lib/validation/prospect";
 import { requireCapability } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { prospectService } from "@/server/services/prospect.service";
+
+/** Response body of `POST /api/prospects/:id/enrich`. */
+export type PostProspectEnrichResponse = { prospect: ProspectDetailDTO };
 
 /**
  * POST /api/prospects/:id/enrich — find contacts at this prospect via Apollo. Rate-limited inside
@@ -11,5 +15,5 @@ export const POST = apiHandler<{ params: Promise<{ id: string }> }>(async (_req,
   const user = await requireCapability("viewClientDiscovery");
   const { id } = await ctx.params;
   const prospect = await prospectService.enrichContacts(id, user);
-  return json({ prospect });
+  return json<PostProspectEnrichResponse>({ prospect });
 });

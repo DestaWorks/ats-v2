@@ -2,11 +2,9 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import {
-  approvePortalRequestSchema,
-  type GeneratedPortalLinkDTO,
-  type PortalAccessRequestDTO,
-} from "@/lib/validation/portal";
+import { approvePortalRequestSchema, type PortalAccessRequestDTO } from "@/lib/validation/portal";
+import type { PostAdminPortalRequestApproveResponse } from "@/app/api/admin/portal/requests/[id]/approve/route";
+import type { PostAdminPortalRequestDeclineResponse } from "@/app/api/admin/portal/requests/[id]/decline/route";
 import { useApiForm } from "@/lib/forms/use-api-form";
 import { messageForFailure, postJson } from "@/lib/api/client";
 import { Badge } from "@/components/ui/badge";
@@ -63,7 +61,7 @@ export function PortalRequestsTab({
   async function handleDecline(request: PortalAccessRequestDTO) {
     if (!window.confirm(`Decline the request from ${request.name}?`)) return;
     setBusyId(request.id);
-    const res = await postJson<{ ok: true }>(
+    const res = await postJson<PostAdminPortalRequestDeclineResponse>(
       `/api/admin/portal/requests/${request.id}/decline`,
       {},
     );
@@ -174,7 +172,10 @@ function ApprovePortalRequestForm({
   const [serverError, setServerError] = useState<string | null>(null);
   const { form, pending, onSubmit } = useApiForm(approvePortalRequestSchema, {
     submit: (values) =>
-      postJson<GeneratedPortalLinkDTO>(`/api/admin/portal/requests/${request.id}/approve`, values),
+      postJson<PostAdminPortalRequestApproveResponse>(
+        `/api/admin/portal/requests/${request.id}/approve`,
+        values,
+      ),
     onSuccess: (data) => {
       toast.success(`${request.name} approved`);
       onSaved(

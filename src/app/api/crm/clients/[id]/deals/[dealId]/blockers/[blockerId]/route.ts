@@ -1,7 +1,13 @@
-import { updateBlockerSchema } from "@/lib/validation/client";
+import { updateBlockerSchema, type DealBlockerDTO } from "@/lib/validation/client";
 import { requireCapability } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { clientService } from "@/server/services/client.service";
+
+/** Wire shape of `PATCH /api/crm/clients/:id/deals/:dealId/blockers/:blockerId`. */
+export type PatchCrmDealBlockerResponse = { blocker: DealBlockerDTO };
+
+/** Wire shape of `DELETE /api/crm/clients/:id/deals/:dealId/blockers/:blockerId`. */
+export type DeleteCrmDealBlockerResponse = { ok: true; id: string };
 
 /**
  * PATCH /api/crm/clients/:id/deals/:dealId/blockers/:blockerId — toggle `resolved` (stamps/clears
@@ -14,7 +20,7 @@ export const PATCH = apiHandler<{
   const { id, dealId, blockerId } = await ctx.params;
   const input = updateBlockerSchema.parse(await req.json());
   const blocker = await clientService.updateBlocker(id, dealId, blockerId, input, user);
-  return json({ blocker });
+  return json<PatchCrmDealBlockerResponse>({ blocker });
 });
 
 export const DELETE = apiHandler<{
@@ -23,5 +29,5 @@ export const DELETE = apiHandler<{
   const user = await requireCapability("viewCrm");
   const { id, dealId, blockerId } = await ctx.params;
   await clientService.removeBlocker(id, dealId, blockerId, user);
-  return json({ ok: true, id: blockerId });
+  return json<DeleteCrmDealBlockerResponse>({ ok: true, id: blockerId });
 });

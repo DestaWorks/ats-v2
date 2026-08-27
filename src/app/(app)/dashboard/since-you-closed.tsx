@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import type { RecapDTO } from "@/lib/validation/daily";
 import { getJson } from "@/lib/api/client";
+import type { GetDailyRecapResponse } from "@/app/api/daily/recap/route";
 
 /**
  * "Since you closed" (legacy Overview recap). Last-seen lives in localStorage per user (legacy
@@ -13,7 +13,7 @@ import { getJson } from "@/lib/api/client";
  * Alerts bell, not here.
  */
 export function SinceYouClosed({ userId }: { userId: string }) {
-  const [recap, setRecap] = useState<RecapDTO | null>(null);
+  const [recap, setRecap] = useState<GetDailyRecapResponse | null>(null);
   const [label, setLabel] = useState("");
 
   useEffect(() => {
@@ -27,7 +27,9 @@ export function SinceYouClosed({ userId }: { userId: string }) {
       const hours = Math.round((Date.now() - since.getTime()) / 3_600_000);
       if (hours >= 1) {
         setLabel(hours < 24 ? `${hours}h ago` : `${Math.round(hours / 24)}d ago`);
-        void getJson<RecapDTO>(`/api/daily/recap?since=${encodeURIComponent(prev)}`).then((res) => {
+        void getJson<GetDailyRecapResponse>(
+          `/api/daily/recap?since=${encodeURIComponent(prev)}`,
+        ).then((res) => {
           if (res.ok) setRecap(res.data);
         });
       }

@@ -4,10 +4,14 @@
  */
 import { postJson, type ApiResult } from "@/lib/api/client";
 import type { DiscoverAddRow } from "@/lib/validation/discover";
+import type { PostDiscoverAddResponse } from "@/app/api/discover/add/route";
 
 export function postDiscoverAdd(
   rows: DiscoverAddRow[],
   clientId: string | null,
-): Promise<ApiResult<{ added: number; skipped: number }>> {
-  return postJson("/api/discover/add", { rows, clientId: clientId || undefined });
+): Promise<ApiResult<PostDiscoverAddResponse>> {
+  return postJson<PostDiscoverAddResponse>("/api/discover/add", {
+    rows,
+    clientId: clientId || undefined,
+  });
 }

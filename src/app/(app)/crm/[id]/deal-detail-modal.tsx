@@ -10,6 +10,9 @@ import {
   type DealDTO,
   type UpdateDealInput,
 } from "@/lib/validation/client";
+import type { PatchCrmDealResponse } from "@/app/api/crm/clients/[id]/deals/[dealId]/route";
+import type { PostCrmDealBlockerResponse } from "@/app/api/crm/clients/[id]/deals/[dealId]/blockers/route";
+import type { PatchCrmDealBlockerResponse } from "@/app/api/crm/clients/[id]/deals/[dealId]/blockers/[blockerId]/route";
 import { useZodForm } from "@/lib/forms/use-zod-form";
 import { deleteJson, messageForFailure, patchJson, postJson } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
@@ -51,7 +54,7 @@ export function DealDetailModal({
   });
 
   async function patchDeal(values: UpdateDealInput) {
-    const res = await patchJson<{ deal: DealDTO }>(
+    const res = await patchJson<PatchCrmDealResponse>(
       `/api/crm/clients/${clientId}/deals/${deal.id}`,
       values,
     );
@@ -107,7 +110,7 @@ export function DealDetailModal({
   async function handleAddBlocker() {
     if (!blockerText.trim() || blockerPending) return;
     setBlockerPending(true);
-    const res = await postJson<{ blocker: DealBlockerDTO }>(
+    const res = await postJson<PostCrmDealBlockerResponse>(
       `/api/crm/clients/${clientId}/deals/${deal.id}/blockers`,
       { text: blockerText.trim() } satisfies AddBlockerInput,
     );
@@ -121,7 +124,7 @@ export function DealDetailModal({
   }
 
   async function handleToggleBlocker(blocker: DealBlockerDTO) {
-    const res = await patchJson<{ blocker: DealBlockerDTO }>(
+    const res = await patchJson<PatchCrmDealBlockerResponse>(
       `/api/crm/clients/${clientId}/deals/${deal.id}/blockers/${blocker.id}`,
       { resolved: !blocker.resolved },
     );

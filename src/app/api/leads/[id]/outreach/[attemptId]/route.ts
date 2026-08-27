@@ -1,7 +1,13 @@
-import { updateOutreachSchema } from "@/lib/validation/lead";
+import { updateOutreachSchema, type LeadDetailDTO } from "@/lib/validation/lead";
 import { requireUser } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { leadService } from "@/server/services/lead.service";
+
+/** Response body of `PATCH /api/leads/:id/outreach/:attemptId`. */
+export type PatchLeadOutreachAttemptResponse = { lead: LeadDetailDTO };
+
+/** Response body of `DELETE /api/leads/:id/outreach/:attemptId`. */
+export type DeleteLeadOutreachAttemptResponse = { lead: LeadDetailDTO };
 
 /**
  * PATCH /api/leads/:id/outreach/:attemptId — edit one logged attempt
@@ -14,7 +20,9 @@ export const PATCH = apiHandler<{ params: Promise<{ id: string; attemptId: strin
     const user = await requireUser();
     const { id, attemptId } = await ctx.params;
     const input = updateOutreachSchema.parse(await req.json());
-    return json({ lead: await leadService.updateOutreach(id, attemptId, input, user) });
+    return json<PatchLeadOutreachAttemptResponse>({
+      lead: await leadService.updateOutreach(id, attemptId, input, user),
+    });
   },
 );
 
@@ -27,6 +35,8 @@ export const DELETE = apiHandler<{ params: Promise<{ id: string; attemptId: stri
   async (_req, ctx) => {
     const user = await requireUser();
     const { id, attemptId } = await ctx.params;
-    return json({ lead: await leadService.deleteOutreach(id, attemptId, user) });
+    return json<DeleteLeadOutreachAttemptResponse>({
+      lead: await leadService.deleteOutreach(id, attemptId, user),
+    });
   },
 );

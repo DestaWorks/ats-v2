@@ -2,6 +2,12 @@ import { logOutreachSchema } from "@/lib/validation/lead";
 import { requireUser } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { candidateService } from "@/server/services/candidate.service";
+import type { OutreachAttemptDTO } from "@/lib/validation/lead";
+
+/** Wire shape of `POST /api/candidates/:id/outreach` — the freshly logged attempt. */
+export interface PostCandidateOutreachResponse {
+  attempt: OutreachAttemptDTO;
+}
 
 /**
  * POST /api/candidates/:id/outreach — log one outreach attempt on a candidate
@@ -15,5 +21,5 @@ export const POST = apiHandler<{ params: Promise<{ id: string }> }>(async (req, 
   const { id } = await ctx.params;
   const input = logOutreachSchema.parse(await req.json());
   const attempt = await candidateService.logOutreach(id, input, user);
-  return json({ attempt }, 201);
+  return json<PostCandidateOutreachResponse>({ attempt }, 201);
 });

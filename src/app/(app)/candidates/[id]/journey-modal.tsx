@@ -2,7 +2,8 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { toast } from "sonner";
-import type { JourneyDTO, JourneyEventDTO } from "@/lib/validation/journey";
+import type { GetCandidateJourneyResponse } from "@/app/api/candidates/[id]/journey/route";
+import type { JourneyEventDTO } from "@/lib/validation/journey";
 import { getJson, messageForFailure } from "@/lib/api/client";
 import { cn } from "@/lib/utils/cn";
 import { Button } from "@/components/ui/button";
@@ -176,20 +177,22 @@ function JourneyTimeline({
   candidateName: string;
   subtitle?: string;
 }) {
-  const [journey, setJourney] = useState<JourneyDTO | null>(null);
+  const [journey, setJourney] = useState<GetCandidateJourneyResponse | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     setJourney(null);
     setLoadError(false);
-    void getJson<JourneyDTO>(`/api/candidates/${candidateId}/journey`).then((res) => {
-      if (res.ok) setJourney(res.data);
-      else {
-        setLoadError(true);
-        toast.error(messageForFailure(res.failure));
-      }
-    });
+    void getJson<GetCandidateJourneyResponse>(`/api/candidates/${candidateId}/journey`).then(
+      (res) => {
+        if (res.ok) setJourney(res.data);
+        else {
+          setLoadError(true);
+          toast.error(messageForFailure(res.failure));
+        }
+      },
+    );
   }, [candidateId, reloadKey]);
 
   return (

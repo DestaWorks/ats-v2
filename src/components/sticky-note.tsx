@@ -2,7 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { getJson, patchJson } from "@/lib/api/client";
-import type { UserPreferencesDTO } from "@/lib/validation/user-preferences";
+import type {
+  GetMePreferencesResponse,
+  PatchMePreferencesResponse,
+} from "@/app/api/me/preferences/route";
 
 /**
  * Global per-user scratchpad (Wave 4.1, legacy `index.html:594-597,8696-8712`) — a floating FAB,
@@ -20,7 +23,7 @@ export function StickyNote() {
 
   useEffect(() => {
     (async () => {
-      const res = await getJson<UserPreferencesDTO>("/api/me/preferences");
+      const res = await getJson<GetMePreferencesResponse>("/api/me/preferences");
       if (res.ok) setText(res.data.stickyNote ?? "");
       setLoaded(true);
     })();
@@ -33,7 +36,9 @@ export function StickyNote() {
       return;
     }
     const handle = setTimeout(() => {
-      void patchJson("/api/me/preferences", { stickyNote: text || null });
+      void patchJson<PatchMePreferencesResponse>("/api/me/preferences", {
+        stickyNote: text || null,
+      });
     }, 500);
     return () => clearTimeout(handle);
   }, [text, loaded]);

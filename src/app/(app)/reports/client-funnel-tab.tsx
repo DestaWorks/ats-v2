@@ -1,14 +1,14 @@
 "use client";
 
-import type { ClientFunnelDTO } from "@/lib/validation/reports";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { cn } from "@/lib/utils/cn";
 import { ReportTabShell } from "./lib/report-tab-shell";
 import { buildReportQuery, useReportFetch, type ReportFilterState } from "./lib/use-report-fetch";
+import type { GetReportsClientFunnelResponse } from "@/app/api/reports/client-funnel/route";
 
 export function ClientFunnelTab({ filters }: { filters: ReportFilterState }) {
-  const data = useReportFetch<ClientFunnelDTO>(
+  const data = useReportFetch<GetReportsClientFunnelResponse>(
     "/api/reports/client-funnel",
     buildReportQuery(filters),
   );

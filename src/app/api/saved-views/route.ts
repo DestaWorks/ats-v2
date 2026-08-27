@@ -1,7 +1,17 @@
-import { createSavedViewSchema, savedViewListQuerySchema } from "@/lib/validation/saved-view";
+import {
+  createSavedViewSchema,
+  savedViewListQuerySchema,
+  type SavedViewDTO,
+} from "@/lib/validation/saved-view";
 import { requireUser } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { savedViewService } from "@/server/services/saved-view.service";
+
+/** Response body of `GET /api/saved-views`. */
+export type GetSavedViewsResponse = { savedViews: SavedViewDTO[] };
+
+/** Response body of `POST /api/saved-views` (201). */
+export type PostSavedViewResponse = { savedView: SavedViewDTO };
 
 /**
  * GET /api/saved-views?scope=pipeline|candidates — the caller's saved views for that scope
@@ -14,7 +24,7 @@ export const GET = apiHandler(async (req: Request) => {
     scope: new URL(req.url).searchParams.get("scope") ?? undefined,
   });
   const savedViews = await savedViewService.list(scope, user);
-  return json({ savedViews });
+  return json<GetSavedViewsResponse>({ savedViews });
 });
 
 /**
@@ -26,5 +36,5 @@ export const POST = apiHandler(async (req: Request) => {
   const user = await requireUser();
   const input = createSavedViewSchema.parse(await req.json());
   const savedView = await savedViewService.create(input, user);
-  return json({ savedView }, 201);
+  return json<PostSavedViewResponse>({ savedView }, 201);
 });

@@ -1,11 +1,11 @@
 "use client";
 
-import type { ClientCapacityDTO } from "@/lib/validation/reports";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { cn } from "@/lib/utils/cn";
 import { Bar, ReportTabShell } from "./lib/report-tab-shell";
 import { useReportFetch } from "./lib/use-report-fetch";
+import type { GetReportsClientCapacityResponse } from "@/app/api/reports/client-capacity/route";
 
 const TONE_BAR: Record<"red" | "orange" | "green", string> = {
   red: "bg-red",
@@ -19,7 +19,7 @@ const TONE_BAR: Record<"red" | "orange" | "green", string> = {
  * filter bar.
  */
 export function ClientCapacityTab() {
-  const data = useReportFetch<ClientCapacityDTO>("/api/reports/client-capacity", "");
+  const data = useReportFetch<GetReportsClientCapacityResponse>("/api/reports/client-capacity", "");
 
   return (
     <ReportTabShell data={data}>

@@ -2,6 +2,17 @@ import { moveInputSchema } from "@/lib/validation/pipeline";
 import { requireUser } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { candidateService } from "@/server/services/candidate.service";
+import { toIso } from "@/lib/utils/iso";
+
+/** Wire shape of `POST /api/candidates/:id/move` — the persisted pipeline fields only, never PII. */
+export interface PostCandidateMoveResponse {
+  candidate: {
+    id: string;
+    status: string;
+    stageOrder: number;
+    stageEnteredAt: string;
+  };
+}
 
 /**
  * POST /api/candidates/:id/move — a single server-authoritative move. Guarded by `requireUser()`;
@@ -18,12 +29,12 @@ export const POST = apiHandler<{ params: Promise<{ id: string }> }>(async (req, 
   const { id } = await ctx.params;
   const { toStatus } = moveInputSchema.parse(await req.json());
   const updated = await candidateService.move(id, toStatus, user);
-  return json({
+  return json<PostCandidateMoveResponse>({
     candidate: {
       id: updated.id,
       status: updated.status,
       stageOrder: updated.stageOrder,
-      stageEnteredAt: updated.stageEnteredAt,
+      stageEnteredAt: toIso(updated.stageEnteredAt),
     },
   });
 });

@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import type { HealthScoreDTO, RevenueDTO } from "@/lib/validation/crm-analytics";
+import type { GetCrmClientHealthResponse } from "@/app/api/crm/clients/[id]/health/route";
+import type { GetCrmClientRevenueResponse } from "@/app/api/crm/clients/[id]/revenue/route";
 import type { ClientHealthTier } from "@/lib/rules/client-health";
 import { getJson } from "@/lib/api/client";
 import { Badge, type BadgeTone } from "@/components/ui/badge";
@@ -26,12 +28,14 @@ export function HealthTab({ clientId }: { clientId: string }) {
 
   useEffect(() => {
     let cancelled = false;
-    void getJson<HealthScoreDTO>(`/api/crm/clients/${clientId}/health`).then((res) => {
+    void getJson<GetCrmClientHealthResponse>(`/api/crm/clients/${clientId}/health`).then((res) => {
       if (!cancelled) setHealth(res.ok ? res.data : null);
     });
-    void getJson<RevenueDTO>(`/api/crm/clients/${clientId}/revenue`).then((res) => {
-      if (!cancelled) setRevenue(res.ok ? res.data : null);
-    });
+    void getJson<GetCrmClientRevenueResponse>(`/api/crm/clients/${clientId}/revenue`).then(
+      (res) => {
+        if (!cancelled) setRevenue(res.ok ? res.data : null);
+      },
+    );
     return () => {
       cancelled = true;
     };

@@ -2,11 +2,11 @@
 
 import dynamic from "next/dynamic";
 import { CalendarIcon, CheckBadgeIcon, ClockIcon } from "@heroicons/react/24/outline";
-import type { TimeAnalysisDTO } from "@/lib/validation/reports";
 import { Card } from "@/components/ui/card";
 import { StatCard } from "../dashboard/stat-card";
 import { ReportTabShell } from "./lib/report-tab-shell";
 import { buildReportQuery, useReportFetch, type ReportFilterState } from "./lib/use-report-fetch";
+import type { GetReportsTimeAnalysisResponse } from "@/app/api/reports/time-analysis/route";
 
 // recharts is heavy — load it only once this tab actually renders (perf audit 2026-08-05).
 const TimeInStageChart = dynamic(() =>
@@ -14,7 +14,7 @@ const TimeInStageChart = dynamic(() =>
 );
 
 export function TimeAnalysisTab({ filters }: { filters: ReportFilterState }) {
-  const data = useReportFetch<TimeAnalysisDTO>(
+  const data = useReportFetch<GetReportsTimeAnalysisResponse>(
     "/api/reports/time-analysis",
     buildReportQuery(filters),
   );

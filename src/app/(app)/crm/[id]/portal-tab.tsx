@@ -2,7 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import type { AdminPortalContactDTO, GeneratedPortalLinkDTO } from "@/lib/validation/portal";
+import type { AdminPortalContactDTO } from "@/lib/validation/portal";
+import type { GetCrmPortalContactsResponse } from "@/app/api/crm/clients/[id]/portal/contacts/route";
+import type { PostCrmPortalTokenResponse } from "@/app/api/crm/clients/[id]/portal/contacts/[contactId]/tokens/route";
+import type { PostCrmPortalTokenRevokeResponse } from "@/app/api/crm/clients/[id]/portal/tokens/[tokenId]/revoke/route";
 import { getJson, messageForFailure, postJson } from "@/lib/api/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -49,13 +52,13 @@ export function PortalAccessTab({ clientId }: { clientId: string }) {
     let cancelled = false;
     setContacts(null);
     setLoadError(false);
-    void getJson<{ contacts: AdminPortalContactDTO[] }>(
-      `/api/crm/clients/${clientId}/portal/contacts`,
-    ).then((res) => {
-      if (cancelled) return;
-      if (res.ok) setContacts(res.data.contacts);
-      else setLoadError(true);
-    });
+    void getJson<GetCrmPortalContactsResponse>(`/api/crm/clients/${clientId}/portal/contacts`).then(
+      (res) => {
+        if (cancelled) return;
+        if (res.ok) setContacts(res.data.contacts);
+        else setLoadError(true);
+      },
+    );
     return () => {
       cancelled = true;
     };
@@ -78,7 +81,7 @@ export function PortalAccessTab({ clientId }: { clientId: string }) {
       return;
     }
     setBusyId(contact.id);
-    const res = await postJson<GeneratedPortalLinkDTO>(
+    const res = await postJson<PostCrmPortalTokenResponse>(
       `/api/crm/clients/${clientId}/portal/contacts/${contact.id}/tokens`,
       {},
     );
@@ -100,7 +103,7 @@ export function PortalAccessTab({ clientId }: { clientId: string }) {
       return;
     }
     setBusyId(contact.id);
-    const res = await postJson<{ ok: true }>(
+    const res = await postJson<PostCrmPortalTokenRevokeResponse>(
       `/api/crm/clients/${clientId}/portal/tokens/${contact.activeToken.id}/revoke`,
       {},
     );

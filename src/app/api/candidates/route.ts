@@ -6,7 +6,16 @@ import { requireUser } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { AppError } from "@/server/http/app-error";
 import { candidateService } from "@/server/services/candidate.service";
-import { toCandidateDTO } from "@/server/services/candidate.dto";
+import { toCandidateDTO, type CandidateDTO } from "@/server/services/candidate.dto";
+import type { BoardResponse, ColumnPageDTO } from "@/lib/validation/pipeline";
+
+/** Wire shape of `GET /api/candidates` — the full board, or one column page when `column` is set. */
+export type GetCandidatesResponse = BoardResponse | ColumnPageDTO;
+
+/** Wire shape of `POST /api/candidates` — the PII-re-gated newly created candidate. */
+export interface PostCandidateResponse {
+  candidate: CandidateDTO;
+}
 
 /**
  * GET /api/candidates — funnel-grouped pipeline board data (+ per-column load-more). Guarded by
@@ -45,11 +54,11 @@ export const GET = apiHandler(async (req: Request) => {
       if (!decoded) throw new AppError("BAD_REQUEST", "Invalid cursor");
     }
     const page = await candidateService.listColumn(column, filters, user, decoded);
-    return json(page);
+    return json<GetCandidatesResponse>(page);
   }
 
   const board = await candidateService.listBoard(filters, user, { includeTerminal });
-  return json(board);
+  return json<GetCandidatesResponse>(board);
 });
 
 /**
@@ -67,5 +76,5 @@ export const POST = apiHandler(async (req: Request) => {
     throw new AppError("FORBIDDEN", "You don't have permission to set the license number");
   }
   const created = await candidateService.create(input);
-  return json({ candidate: toCandidateDTO(created, user) }, 201);
+  return json<PostCandidateResponse>({ candidate: toCandidateDTO(created, user) }, 201);
 });

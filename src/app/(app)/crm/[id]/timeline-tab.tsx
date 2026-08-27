@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import type { ClientNoteDTO } from "@/lib/validation/client-note";
 import type { ClientTimelineEntryDTO } from "@/lib/validation/client";
+import type { PostCrmClientNoteResponse } from "@/app/api/crm/clients/[id]/notes/route";
 import { messageForFailure, postJson } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -37,7 +37,7 @@ export function TimelineTab({
   async function addNote() {
     if (!text.trim()) return;
     setPending(true);
-    const res = await postJson<{ note: ClientNoteDTO }>(`/api/crm/clients/${clientId}/notes`, {
+    const res = await postJson<PostCrmClientNoteResponse>(`/api/crm/clients/${clientId}/notes`, {
       text: text.trim(),
     });
     setPending(false);

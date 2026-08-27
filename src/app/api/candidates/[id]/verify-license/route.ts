@@ -4,7 +4,12 @@ import { requireUser } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { AppError } from "@/server/http/app-error";
 import { candidateService } from "@/server/services/candidate.service";
-import { toCandidateDTO } from "@/server/services/candidate.dto";
+import { toCandidateDTO, type CandidateDTO } from "@/server/services/candidate.dto";
+
+/** Wire shape of `POST /api/candidates/:id/verify-license` — the PII-re-gated candidate. */
+export interface PostCandidateVerifyLicenseResponse {
+  candidate: CandidateDTO;
+}
 
 /**
  * POST /api/candidates/:id/verify-license — record a license verification. OPEN TO OPERATORS
@@ -22,5 +27,5 @@ export const POST = apiHandler<{ params: Promise<{ id: string }> }>(async (req, 
     throw new AppError("FORBIDDEN", "You don't have permission to edit the license number");
   }
   const updated = await candidateService.verifyLicense(id, input, user);
-  return json({ candidate: toCandidateDTO(updated, user) });
+  return json<PostCandidateVerifyLicenseResponse>({ candidate: toCandidateDTO(updated, user) });
 });

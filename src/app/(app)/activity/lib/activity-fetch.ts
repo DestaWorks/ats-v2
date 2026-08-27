@@ -5,27 +5,28 @@
  * the list hop — the list DTO omits the raw snapshots (AL-3); the detail hop is fetched only on
  * expand, by a `viewAudit` holder.
  */
-import type { ActivityDetailDTO, ActivityListDTO } from "@/lib/validation/activity";
+import type { GetActivityResponse } from "@/app/api/activity/route";
+import type { GetActivityDetailResponse } from "@/app/api/activity/[id]/route";
 import { buildActivityQuery } from "./activity-query";
 
 /** Fetch the next keyset page for the current filters. Throws on a non-OK response. */
 export async function fetchActivityPage(
   searchParams: URLSearchParams,
   cursor: string,
-): Promise<ActivityListDTO> {
+): Promise<GetActivityResponse> {
   const query = buildActivityQuery(searchParams, cursor);
   const res = await fetch(`/api/activity?${query}`, {
     headers: { Accept: "application/json" },
   });
   if (!res.ok) throw new Error("Failed to load more activity.");
-  return (await res.json()) as ActivityListDTO;
+  return (await res.json()) as GetActivityResponse;
 }
 
 /** Fetch one row's before/after snapshots (the expander detail). Throws on a non-OK response. */
-export async function fetchActivityDetail(id: string): Promise<ActivityDetailDTO> {
+export async function fetchActivityDetail(id: string): Promise<GetActivityDetailResponse> {
   const res = await fetch(`/api/activity/${encodeURIComponent(id)}`, {
     headers: { Accept: "application/json" },
   });
   if (!res.ok) throw new Error("Failed to load activity detail.");
-  return (await res.json()) as ActivityDetailDTO;
+  return (await res.json()) as GetActivityDetailResponse;
 }

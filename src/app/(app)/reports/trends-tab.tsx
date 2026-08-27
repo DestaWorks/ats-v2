@@ -2,11 +2,11 @@
 
 import { Fragment } from "react";
 import dynamic from "next/dynamic";
-import type { TrendsDTO } from "@/lib/validation/reports";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils/cn";
 import { ReportTabShell } from "./lib/report-tab-shell";
 import { useReportFetch } from "./lib/use-report-fetch";
+import type { GetReportsTrendsResponse } from "@/app/api/reports/trends/route";
 
 // recharts is heavy — load it only once this tab actually renders (perf audit 2026-08-05).
 const TrendsChart = dynamic(() => import("./trends-chart").then((m) => m.TrendsChart));
@@ -36,7 +36,7 @@ function DeltaCell({ curr, prev }: { curr: number; prev: number }) {
  * tab ignores the page's filter bar (matches legacy's own scope for this section).
  */
 export function TrendsTab() {
-  const data = useReportFetch<TrendsDTO>("/api/reports/trends", "");
+  const data = useReportFetch<GetReportsTrendsResponse>("/api/reports/trends", "");
 
   return (
     <ReportTabShell data={data}>

@@ -8,6 +8,7 @@ import { useApiForm } from "@/lib/forms/use-api-form";
 import { emptyToNull } from "@/lib/forms/empty-to-null";
 import { postJson } from "@/lib/api/client";
 import type { LeadDetailDTO } from "@/lib/validation/lead";
+import type { PostLeadResponse } from "@/app/api/leads/route";
 import { Button, type ButtonProps } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -83,7 +84,7 @@ function AddLeadForm({
 
   const { form, pending, onSubmit } = useApiForm(addLeadSchema, {
     defaultValues: { name: "", tags: [] },
-    submit: (values) => postJson<{ lead: LeadDetailDTO }>("/api/leads", values),
+    submit: (values) => postJson<PostLeadResponse>("/api/leads", values),
     onSuccess: (data) => {
       toast.success("Lead added");
       onAdded?.(data.lead);

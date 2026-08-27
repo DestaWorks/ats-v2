@@ -1,7 +1,10 @@
-import { saveDailyBriefSchema } from "@/lib/validation/briefs";
+import { saveDailyBriefSchema, type DailyBriefDTO } from "@/lib/validation/briefs";
 import { requireCapability } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { briefService } from "@/server/services/brief.service";
+
+/** Response body of `POST /api/briefs/daily/save` — the persisted brief. */
+export type PostBriefsDailySaveResponse = DailyBriefDTO;
 
 /**
  * POST /api/briefs/daily/save — persist the (possibly edited) draft (legacy `daily_brief_save`).
@@ -10,5 +13,5 @@ import { briefService } from "@/server/services/brief.service";
 export const POST = apiHandler(async (req: Request) => {
   const user = await requireCapability("viewReports");
   const input = saveDailyBriefSchema.parse(await req.json());
-  return json(await briefService.saveDaily(input, user));
+  return json<PostBriefsDailySaveResponse>(await briefService.saveDaily(input, user));
 });

@@ -2,6 +2,12 @@ import { requireCapability } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { candidateService } from "@/server/services/candidate.service";
 
+/** Wire shape of `POST /api/candidates/:id/purge` — an ack only; the record is gone. */
+export interface PostCandidatePurgeResponse {
+  ok: true;
+  id: string;
+}
+
 /**
  * POST /api/candidates/:id/purge — PERMANENTLY delete a trashed candidate (cascades documents,
  * notes, stage history). Irreversible + destructive, so guarded by `requireCapability("purgeCandidate")`
@@ -14,5 +20,5 @@ export const POST = apiHandler<{ params: Promise<{ id: string }> }>(async (_req,
   const user = await requireCapability("purgeCandidate");
   const { id } = await ctx.params;
   await candidateService.purge(id, user);
-  return json({ ok: true, id });
+  return json<PostCandidatePurgeResponse>({ ok: true, id });
 });

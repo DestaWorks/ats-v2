@@ -1,6 +1,10 @@
+import type { ProspectDetailDTO } from "@/lib/validation/prospect";
 import { requireCapability } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { prospectService } from "@/server/services/prospect.service";
+
+/** Response body of `DELETE /api/prospects/:id/contacts/:contactId` — the fresh prospect detail. */
+export type DeleteProspectContactResponse = { prospect: ProspectDetailDTO };
 
 /**
  * DELETE /api/prospects/:id/contacts/:contactId — remove one contact, scoped to its prospect (a
@@ -11,6 +15,6 @@ export const DELETE = apiHandler<{ params: Promise<{ id: string; contactId: stri
     const user = await requireCapability("viewClientDiscovery");
     const { id, contactId } = await ctx.params;
     const prospect = await prospectService.deleteContact(id, contactId, user);
-    return json({ prospect });
+    return json<DeleteProspectContactResponse>({ prospect });
   },
 );

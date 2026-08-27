@@ -1,7 +1,10 @@
-import { respondSchema } from "@/lib/validation/lead";
+import { respondSchema, type LeadDetailDTO } from "@/lib/validation/lead";
 import { requireUser } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { leadService } from "@/server/services/lead.service";
+
+/** Response body of `POST /api/leads/:id/respond`. */
+export type PostLeadRespondResponse = { lead: LeadDetailDTO };
 
 /**
  * POST /api/leads/:id/respond — mark a lead Responded (Hot/Cold). Guarded by `requireUser()` (L-7).
@@ -13,5 +16,5 @@ export const POST = apiHandler<{ params: Promise<{ id: string }> }>(async (req, 
   const { id } = await ctx.params;
   const { kind } = respondSchema.parse(await req.json());
   const lead = await leadService.respond(id, kind, user);
-  return json({ lead });
+  return json<PostLeadRespondResponse>({ lead });
 });

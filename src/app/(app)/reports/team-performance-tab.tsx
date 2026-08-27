@@ -1,12 +1,12 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import type { TeamPerformanceDTO } from "@/lib/validation/reports";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Table, Td } from "@/components/ui/table";
 import { ReportTabShell } from "./lib/report-tab-shell";
 import { buildReportQuery, useReportFetch, type ReportFilterState } from "./lib/use-report-fetch";
+import type { GetReportsTeamPerformanceResponse } from "@/app/api/reports/team-performance/route";
 
 // recharts is heavy — load it only once this tab actually renders (perf audit 2026-08-05).
 const TeamPerformanceChart = dynamic(() =>
@@ -14,7 +14,7 @@ const TeamPerformanceChart = dynamic(() =>
 );
 
 export function TeamPerformanceTab({ filters }: { filters: ReportFilterState }) {
-  const data = useReportFetch<TeamPerformanceDTO>(
+  const data = useReportFetch<GetReportsTeamPerformanceResponse>(
     "/api/reports/team-performance",
     buildReportQuery(filters),
   );

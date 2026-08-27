@@ -2,6 +2,9 @@ import { requireCapability } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { savedIcpService } from "@/server/services/saved-icp.service";
 
+/** Response body of `DELETE /api/saved-icps/:id` — the id that was removed. */
+export type DeleteSavedIcpResponse = { id: string };
+
 /**
  * DELETE /api/saved-icps/:id — permanently remove one of the caller's saved ICPs (hard delete,
  * no undo — matches `DELETE /api/saved-views/:id`). 404 if the id doesn't exist or belongs to
@@ -10,5 +13,5 @@ import { savedIcpService } from "@/server/services/saved-icp.service";
 export const DELETE = apiHandler<{ params: Promise<{ id: string }> }>(async (_req, ctx) => {
   const user = await requireCapability("viewClientDiscovery");
   const { id } = await ctx.params;
-  return json(await savedIcpService.remove(id, user));
+  return json<DeleteSavedIcpResponse>(await savedIcpService.remove(id, user));
 });

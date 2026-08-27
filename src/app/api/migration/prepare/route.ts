@@ -1,4 +1,4 @@
-import { importInputSchema } from "@/lib/validation/migration";
+import { importInputSchema, type ImportReport } from "@/lib/validation/migration";
 import { requireCapability } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { migrationService } from "@/server/services/migration.service";
@@ -7,6 +7,9 @@ import { migrationService } from "@/server/services/migration.service";
  * Allow the ETL prepare (parse + transform + dedupe of a large export) up to the platform maximum.
  */
 export const maxDuration = 300;
+
+/** Response body of `POST /api/migration/prepare` — the diffable dry-run report. */
+export type PostMigrationPrepareResponse = ImportReport;
 
 /**
  * POST /api/migration/prepare — parse + transform + dedupe the legacy Sheet export into a diffable
@@ -17,5 +20,5 @@ export const POST = apiHandler(async (req: Request) => {
   const user = await requireCapability("bulkImport");
   const input = importInputSchema.parse(await req.json());
   const report = await migrationService.prepare(input, user);
-  return json(report);
+  return json<PostMigrationPrepareResponse>(report);
 });

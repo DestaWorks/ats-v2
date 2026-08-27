@@ -1,6 +1,10 @@
 import { requireCapability } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { templatePerformanceService } from "@/server/services/template-performance.service";
+import type { TemplatePerformanceDTO } from "@/lib/validation/template-performance";
+
+/** Wire shape of `GET /api/templates/performance` — usage + response-rate per template. */
+export type GetTemplatePerformanceResponse = TemplatePerformanceDTO;
 
 /**
  * GET /api/templates/performance — usage + response-rate per template (Wave 4.1). Gated behind
@@ -10,5 +14,5 @@ import { templatePerformanceService } from "@/server/services/template-performan
  */
 export const GET = apiHandler(async () => {
   await requireCapability("viewAnalytics");
-  return json(await templatePerformanceService.overview());
+  return json<GetTemplatePerformanceResponse>(await templatePerformanceService.overview());
 });

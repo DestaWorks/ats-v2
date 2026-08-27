@@ -1,6 +1,10 @@
+import type { TriageRoleDTO } from "@/lib/validation/open-role";
 import { requireUser } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { openRoleService } from "@/server/services/open-role.service";
+
+/** Response body of `GET /api/roles/triage`. */
+export type GetRoleTriageResponse = { roles: TriageRoleDTO[] };
 
 /**
  * GET /api/roles/triage — the top 3 "roles to work now" across every active (non-Filled/Closed)
@@ -8,5 +12,5 @@ import { openRoleService } from "@/server/services/open-role.service";
  */
 export const GET = apiHandler(async () => {
   await requireUser();
-  return json({ roles: await openRoleService.triage() });
+  return json<GetRoleTriageResponse>({ roles: await openRoleService.triage() });
 });

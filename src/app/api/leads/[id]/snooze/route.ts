@@ -1,7 +1,10 @@
-import { snoozeLeadSchema } from "@/lib/validation/lead";
+import { snoozeLeadSchema, type LeadDetailDTO } from "@/lib/validation/lead";
 import { requireUser } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { leadService } from "@/server/services/lead.service";
+
+/** Response body of `POST /api/leads/:id/snooze`. */
+export type PostLeadSnoozeResponse = { lead: LeadDetailDTO };
 
 /**
  * POST /api/leads/:id/snooze — snooze (`{ until: date }`) or wake (`{ until: null }`) a lead
@@ -12,5 +15,5 @@ export const POST = apiHandler<{ params: Promise<{ id: string }> }>(async (req, 
   const user = await requireUser();
   const { id } = await ctx.params;
   const input = snoozeLeadSchema.parse(await req.json());
-  return json({ lead: await leadService.snooze(id, input.until, user) });
+  return json<PostLeadSnoozeResponse>({ lead: await leadService.snooze(id, input.until, user) });
 });

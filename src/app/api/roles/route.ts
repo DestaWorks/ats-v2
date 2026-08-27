@@ -1,7 +1,18 @@
-import { createOpenRoleSchema, roleListQuerySchema } from "@/lib/validation/open-role";
+import {
+  createOpenRoleSchema,
+  roleListQuerySchema,
+  type OpenRoleDetailDTO,
+  type OpenRoleListDTO,
+} from "@/lib/validation/open-role";
 import { requireUser } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { openRoleService } from "@/server/services/open-role.service";
+
+/** Response body of `POST /api/roles`. */
+export type PostRoleResponse = { role: OpenRoleDetailDTO };
+
+/** Response body of `GET /api/roles`. */
+export type GetRoleListResponse = OpenRoleListDTO;
 
 /**
  * POST /api/roles — add an Open Role (Wave 3.5). Guarded by `requireUser()` (open to any signed-in
@@ -12,7 +23,7 @@ export const POST = apiHandler(async (req: Request) => {
   const user = await requireUser();
   const input = createOpenRoleSchema.parse(await req.json());
   const role = await openRoleService.create(input, user);
-  return json({ role }, 201);
+  return json<PostRoleResponse>({ role }, 201);
 });
 
 /**
@@ -29,5 +40,5 @@ export const GET = apiHandler(async (req: Request) => {
     search: params.get("search") ?? undefined,
     page: params.get("page") ?? undefined,
   });
-  return json(await openRoleService.list(filters));
+  return json<GetRoleListResponse>(await openRoleService.list(filters));
 });

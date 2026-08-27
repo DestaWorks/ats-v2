@@ -8,6 +8,7 @@ import { CLIENT_DISCOVERY_SPECIALTY_GROUPS } from "@/lib/constants";
 import { useApiForm } from "@/lib/forms/use-api-form";
 import { emptyToNull } from "@/lib/forms/empty-to-null";
 import { postJson } from "@/lib/api/client";
+import type { PostProspectResponse } from "@/app/api/prospects/route";
 import { Button, type ButtonProps } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -54,7 +55,7 @@ function AddProspectForm({
 
   const { form, pending, onSubmit } = useApiForm(addProspectSchema, {
     defaultValues: { practiceName: "" },
-    submit: (values) => postJson<{ prospect: ProspectDetailDTO }>("/api/prospects", values),
+    submit: (values) => postJson<PostProspectResponse>("/api/prospects", values),
     onSuccess: (data) => {
       toast.success("Prospect added");
       onAdded?.(data.prospect);

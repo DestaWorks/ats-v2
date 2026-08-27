@@ -1,7 +1,10 @@
-import { approveRequestSchema } from "@/lib/validation/admin";
+import { approveRequestSchema, type GeneratedPasswordDTO } from "@/lib/validation/admin";
 import { requireCapability } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { accessRequestService } from "@/server/services/access-request.service";
+
+/** Response body of `POST /api/admin/access-requests/:id/approve` — the new account's one-time password. */
+export type PostAdminAccessRequestApproveResponse = GeneratedPasswordDTO;
 
 /**
  * POST /api/admin/access-requests/:id/approve — picks a role (legacy never had this step),
@@ -13,5 +16,5 @@ export const POST = apiHandler<{ params: Promise<{ id: string }> }>(async (req, 
   const { id } = await ctx.params;
   const input = approveRequestSchema.parse(await req.json());
   const result = await accessRequestService.approve(id, input.role, actor.id);
-  return json(result);
+  return json<PostAdminAccessRequestApproveResponse>(result);
 });

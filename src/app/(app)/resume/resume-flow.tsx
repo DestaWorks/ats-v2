@@ -3,12 +3,10 @@
 import { useState } from "react";
 import type { ResumeVariant } from "@/lib/constants/documents";
 import { RESUME_VARIANT_LABELS } from "@/lib/constants/documents";
-import type {
-  ExtractResumeResponse,
-  ResumeData,
-  ResumeMatch,
-  SaveResumeInput,
-} from "@/lib/validation/resume";
+import type { PostResumeExtractResponse } from "@/app/api/resume/extract/route";
+import type { PostResumeSaveResponse } from "@/app/api/resume/save/route";
+import type { PostResumeUploadUrlResponse } from "@/app/api/resume/upload-url/route";
+import type { ResumeData, ResumeMatch, SaveResumeInput } from "@/lib/validation/resume";
 import { Spinner } from "@/components/ui/spinner";
 import { ErrorState } from "@/components/ui/error-state";
 import { Button } from "@/components/ui/button";
@@ -60,7 +58,7 @@ export function ResumeFlow({
   const [reading, setReading] = useState(false);
   const [fileText, setFileText] = useState("");
   const [extractedText, setExtractedText] = useState("");
-  const [result, setResult] = useState<ExtractResumeResponse | null>(null);
+  const [result, setResult] = useState<PostResumeExtractResponse | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [savedName, setSavedName] = useState<string | null>(null);
   // The reviewed data as saved — feeds the branded resume render on the saved step.
@@ -126,7 +124,7 @@ export function ResumeFlow({
         setStep("upload");
         return;
       }
-      const data = (await res.json()) as ExtractResumeResponse;
+      const data = (await res.json()) as PostResumeExtractResponse;
       setExtractedText(text);
       setResult(data);
       setStep("review");
@@ -148,10 +146,7 @@ export function ResumeFlow({
         body: JSON.stringify({ filename: originalFilename, mimeType }),
       });
       if (!res.ok) return undefined;
-      const { signedUrl, storageKey } = (await res.json()) as {
-        signedUrl: string;
-        storageKey: string;
-      };
+      const { signedUrl, storageKey } = (await res.json()) as PostResumeUploadUrlResponse;
       const upload = await fetch(signedUrl, {
         method: "PUT",
         headers: { "Content-Type": mimeType },
@@ -190,8 +185,8 @@ export function ResumeFlow({
         setError(messageForError(body, "Could not save this candidate. Please try again."));
         return;
       }
-      const body = (await res.json()) as { candidate?: { name?: string } };
-      setSavedName(body.candidate?.name ?? "Candidate");
+      const body = (await res.json()) as PostResumeSaveResponse;
+      setSavedName(body.candidate.name);
       setSavedData(data);
       setStep("saved");
     } catch {

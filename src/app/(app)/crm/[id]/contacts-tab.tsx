@@ -10,6 +10,8 @@ import {
   type ClientContactDTO,
   type UpdateContactInput,
 } from "@/lib/validation/client";
+import type { PostCrmClientContactResponse } from "@/app/api/crm/clients/[id]/contacts/route";
+import type { PatchCrmClientContactResponse } from "@/app/api/crm/clients/[id]/contacts/[contactId]/route";
 import { useApiForm } from "@/lib/forms/use-api-form";
 import { emptyToNull } from "@/lib/forms/empty-to-null";
 import { deleteJson, messageForFailure, patchJson, postJson } from "@/lib/api/client";
@@ -64,7 +66,7 @@ export function ContactsTab({
 
   async function handleMarkLeft(contact: ClientContactDTO) {
     setMarkingLeftId(contact.id);
-    const res = await patchJson<{ contact: ClientContactDTO }>(
+    const res = await patchJson<PatchCrmClientContactResponse>(
       `/api/crm/clients/${clientId}/contacts/${contact.id}`,
       { status: "left" },
     );
@@ -247,8 +249,8 @@ function ContactForm({
         ? `/api/crm/clients/${clientId}/contacts/${existing.id}`
         : `/api/crm/clients/${clientId}/contacts`;
       return existing
-        ? patchJson<{ contact: ClientContactDTO }>(url, values)
-        : postJson<{ contact: ClientContactDTO }>(url, values);
+        ? patchJson<PatchCrmClientContactResponse>(url, values)
+        : postJson<PostCrmClientContactResponse>(url, values);
     },
     onSuccess: (data) => {
       toast.success(existing ? "Contact updated" : "Contact added");

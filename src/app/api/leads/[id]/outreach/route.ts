@@ -1,7 +1,10 @@
-import { logOutreachSchema } from "@/lib/validation/lead";
+import { logOutreachSchema, type LeadDetailDTO } from "@/lib/validation/lead";
 import { requireUser } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { leadService } from "@/server/services/lead.service";
+
+/** Response body of `POST /api/leads/:id/outreach`. */
+export type PostLeadOutreachResponse = { lead: LeadDetailDTO };
 
 /**
  * POST /api/leads/:id/outreach — log an outreach attempt (advances the lead through the outreach
@@ -14,5 +17,5 @@ export const POST = apiHandler<{ params: Promise<{ id: string }> }>(async (req, 
   const { id } = await ctx.params;
   const input = logOutreachSchema.parse(await req.json());
   const lead = await leadService.logOutreach(id, input, user);
-  return json({ lead });
+  return json<PostLeadOutreachResponse>({ lead });
 });

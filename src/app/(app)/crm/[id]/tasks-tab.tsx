@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { addTaskSchema, type ClientTaskDTO } from "@/lib/validation/client";
+import type { PostCrmClientTaskResponse } from "@/app/api/crm/clients/[id]/tasks/route";
+import type { PatchCrmClientTaskResponse } from "@/app/api/crm/clients/[id]/tasks/[taskId]/route";
 import { useApiForm } from "@/lib/forms/use-api-form";
 import { emptyToNull } from "@/lib/forms/empty-to-null";
 import { deleteJson, messageForFailure, patchJson, postJson } from "@/lib/api/client";
@@ -37,7 +39,7 @@ export function TasksTab({
 
   async function handleToggle(task: ClientTaskDTO) {
     setPendingId(task.id);
-    const res = await patchJson<{ task: ClientTaskDTO }>(
+    const res = await patchJson<PatchCrmClientTaskResponse>(
       `/api/crm/clients/${clientId}/tasks/${task.id}`,
       { status: task.status === "open" ? "done" : "open" },
     );
@@ -182,7 +184,7 @@ function TaskForm({
   const { form, pending, onSubmit } = useApiForm(addTaskSchema, {
     defaultValues: { title: "" },
     submit: (values) =>
-      postJson<{ task: ClientTaskDTO }>(`/api/crm/clients/${clientId}/tasks`, values),
+      postJson<PostCrmClientTaskResponse>(`/api/crm/clients/${clientId}/tasks`, values),
     onSuccess: (data) => {
       toast.success("Task added");
       onSaved(data.task);

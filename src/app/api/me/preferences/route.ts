@@ -1,7 +1,16 @@
-import { updatePreferencesSchema } from "@/lib/validation/user-preferences";
+import {
+  updatePreferencesSchema,
+  type UserPreferencesDTO,
+} from "@/lib/validation/user-preferences";
 import { requireUser } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { userPreferencesService } from "@/server/services/user-preferences.service";
+
+/** Response body of `GET /api/me/preferences`. */
+export type GetMePreferencesResponse = UserPreferencesDTO;
+
+/** Response body of `PATCH /api/me/preferences`. */
+export type PatchMePreferencesResponse = UserPreferencesDTO;
 
 /**
  * GET /api/me/preferences — the signed-in user's own email signature + sticky note (Wave 4.1,
@@ -9,11 +18,11 @@ import { userPreferencesService } from "@/server/services/user-preferences.servi
  */
 export const GET = apiHandler(async () => {
   const user = await requireUser();
-  return json(await userPreferencesService.getMine(user));
+  return json<GetMePreferencesResponse>(await userPreferencesService.getMine(user));
 });
 
 export const PATCH = apiHandler(async (req: Request) => {
   const user = await requireUser();
   const input = updatePreferencesSchema.parse(await req.json());
-  return json(await userPreferencesService.updateMine(user, input));
+  return json<PatchMePreferencesResponse>(await userPreferencesService.updateMine(user, input));
 });

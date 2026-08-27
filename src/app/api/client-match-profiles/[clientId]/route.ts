@@ -1,13 +1,22 @@
-import { saveMatchProfileSchema } from "@/lib/validation/open-role";
+import { saveMatchProfileSchema, type ClientMatchProfileDTO } from "@/lib/validation/open-role";
 import { requireUser } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { openRoleService } from "@/server/services/open-role.service";
+
+/** Wire shape of `GET /api/client-match-profiles/:clientId`. */
+export type GetClientMatchProfileResponse = ClientMatchProfileDTO;
+
+/** Wire shape of `PUT /api/client-match-profiles/:clientId`. */
+export type PutClientMatchProfileResponse = ClientMatchProfileDTO;
+
+/** Wire shape of `DELETE /api/client-match-profiles/:clientId`. */
+export type DeleteClientMatchProfileResponse = ClientMatchProfileDTO;
 
 /** GET /api/client-match-profiles/:clientId — this client's weights, or the system default (`isDefault`). */
 export const GET = apiHandler<{ params: Promise<{ clientId: string }> }>(async (_req, ctx) => {
   await requireUser();
   const { clientId } = await ctx.params;
-  return json(await openRoleService.getMatchProfile(clientId));
+  return json<GetClientMatchProfileResponse>(await openRoleService.getMatchProfile(clientId));
 });
 
 /**
@@ -18,7 +27,9 @@ export const PUT = apiHandler<{ params: Promise<{ clientId: string }> }>(async (
   const user = await requireUser();
   const { clientId } = await ctx.params;
   const input = saveMatchProfileSchema.parse(await req.json());
-  return json(await openRoleService.saveMatchProfile(clientId, input, user));
+  return json<PutClientMatchProfileResponse>(
+    await openRoleService.saveMatchProfile(clientId, input, user),
+  );
 });
 
 /**
@@ -28,5 +39,7 @@ export const PUT = apiHandler<{ params: Promise<{ clientId: string }> }>(async (
 export const DELETE = apiHandler<{ params: Promise<{ clientId: string }> }>(async (_req, ctx) => {
   const user = await requireUser();
   const { clientId } = await ctx.params;
-  return json(await openRoleService.deleteMatchProfile(clientId, user));
+  return json<DeleteClientMatchProfileResponse>(
+    await openRoleService.deleteMatchProfile(clientId, user),
+  );
 });

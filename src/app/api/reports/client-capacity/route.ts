@@ -1,6 +1,10 @@
+import type { ClientCapacityDTO } from "@/lib/validation/reports";
 import { requireCapability } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { clientReportsService } from "@/server/services/reports/client-reports.service";
+
+/** Response body of `GET /api/reports/client-capacity`. */
+export type GetReportsClientCapacityResponse = ClientCapacityDTO;
 
 /**
  * GET /api/reports/client-capacity — per-client capacity limits + "approaching capacity" alert
@@ -9,5 +13,5 @@ import { clientReportsService } from "@/server/services/reports/client-reports.s
  */
 export const GET = apiHandler(async () => {
   await requireCapability("viewReports");
-  return json(await clientReportsService.clientCapacity());
+  return json<GetReportsClientCapacityResponse>(await clientReportsService.clientCapacity());
 });

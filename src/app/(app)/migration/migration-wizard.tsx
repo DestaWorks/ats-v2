@@ -9,8 +9,11 @@ import type {
   ImportReport,
   ImportResume,
 } from "@/lib/validation/migration";
+import type { PostResumeUploadUrlResponse } from "@/app/api/resume/upload-url/route";
 import { MAX_IMPORT_RESUMES } from "@/lib/validation/migration";
 import { messageForFailure, postJson } from "@/lib/api/client";
+import type { PostMigrationCommitResponse } from "@/app/api/migration/commit/route";
+import type { PostMigrationPrepareResponse } from "@/app/api/migration/prepare/route";
 import { logger } from "@/lib/logger";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -317,11 +320,11 @@ export function MigrationWizard({ storageEnabled }: { storageEnabled: boolean })
     };
   }
 
-  async function post(url: string, body: ImportInput): Promise<ImportReport | null> {
+  async function post<T extends ImportReport>(url: string, body: ImportInput): Promise<T | null> {
     setLoading(true);
     setError(null);
     try {
-      const result = await postJson<ImportReport>(url, body);
+      const result = await postJson<T>(url, body);
       if (!result.ok) {
         setError(messageForFailure(result.failure));
         return null;
@@ -364,10 +367,7 @@ export function MigrationWizard({ storageEnabled }: { storageEnabled: boolean })
             failures.push(`${r.originalFilename}: upload-url ${res.status}`);
             return r;
           }
-          const { signedUrl, storageKey } = (await res.json()) as {
-            signedUrl: string;
-            storageKey: string;
-          };
+          const { signedUrl, storageKey } = (await res.json()) as PostResumeUploadUrlResponse;
           const upload = await fetch(signedUrl, {
             method: "PUT",
             headers: { "Content-Type": "application/pdf" },
@@ -398,7 +398,10 @@ export function MigrationWizard({ storageEnabled }: { storageEnabled: boolean })
 
   async function handlePreview() {
     if (!file) return;
-    const report = await post("/api/migration/prepare", bodyFor(file));
+    const report = await post<PostMigrationPrepareResponse>(
+      "/api/migration/prepare",
+      bodyFor(file),
+    );
     if (report) {
       setPreview(report);
       setStep("preview");
@@ -409,7 +412,10 @@ export function MigrationWizard({ storageEnabled }: { storageEnabled: boolean })
     if (!file) return;
     setLoading(true);
     const enrichedResumes = await uploadMatchedResumesToStorage();
-    const report = await post("/api/migration/commit", bodyFor(file, enrichedResumes));
+    const report = await post<PostMigrationCommitResponse>(
+      "/api/migration/commit",
+      bodyFor(file, enrichedResumes),
+    );
     if (report) {
       setCommitted(report);
       setStep("commit");

@@ -1,8 +1,11 @@
-import { parseJdSchema } from "@/lib/validation/open-role";
+import { parseJdSchema, type ParsedJdDTO } from "@/lib/validation/open-role";
 import { requireUser } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { checkRateLimit } from "@/server/http/rate-limit";
 import { openRoleService } from "@/server/services/open-role.service";
+
+/** Response body of `POST /api/roles/parse-jd` — the AI-extracted role fields. */
+export type PostRoleParseJdResponse = ParsedJdDTO;
 
 /**
  * POST /api/roles/parse-jd — paste a job description, AI extracts the role fields (legacy
@@ -16,5 +19,5 @@ export const POST = apiHandler(async (req: Request) => {
   const user = await requireUser();
   await checkRateLimit(`roles-parse-jd:${user.id}`, { limit: 20, windowMs: 60_000 });
   const input = parseJdSchema.parse(await req.json());
-  return json(await openRoleService.parseJd(input));
+  return json<PostRoleParseJdResponse>(await openRoleService.parseJd(input));
 });

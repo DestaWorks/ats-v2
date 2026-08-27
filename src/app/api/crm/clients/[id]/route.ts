@@ -1,7 +1,17 @@
-import { updateClientSchema } from "@/lib/validation/client";
+import {
+  updateClientSchema,
+  type ClientDetailDTO,
+  type ClientProfileDTO,
+} from "@/lib/validation/client";
 import { requireCapability } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { clientService } from "@/server/services/client.service";
+
+/** Wire shape of `GET /api/crm/clients/:id`. */
+export type GetCrmClientResponse = ClientDetailDTO;
+
+/** Wire shape of `PATCH /api/crm/clients/:id`. */
+export type PatchCrmClientResponse = { client: ClientProfileDTO };
 
 /**
  * GET /api/crm/clients/:id — one client's full detail (profile + contacts + pipeline snapshot).
@@ -10,7 +20,7 @@ import { clientService } from "@/server/services/client.service";
 export const GET = apiHandler<{ params: Promise<{ id: string }> }>(async (_req, ctx) => {
   await requireCapability("viewCrm");
   const { id } = await ctx.params;
-  return json(await clientService.detail(id));
+  return json<GetCrmClientResponse>(await clientService.detail(id));
 });
 
 export const PATCH = apiHandler<{ params: Promise<{ id: string }> }>(async (req, ctx) => {
@@ -18,5 +28,5 @@ export const PATCH = apiHandler<{ params: Promise<{ id: string }> }>(async (req,
   const { id } = await ctx.params;
   const input = updateClientSchema.parse(await req.json());
   const client = await clientService.update(id, input, user);
-  return json({ client });
+  return json<PatchCrmClientResponse>({ client });
 });

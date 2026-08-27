@@ -1,7 +1,10 @@
-import { prospectListQuerySchema } from "@/lib/validation/prospect";
+import { prospectListQuerySchema, type ProspectListDTO } from "@/lib/validation/prospect";
 import { requireCapability } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { prospectService } from "@/server/services/prospect.service";
+
+/** Response body of `GET /api/prospects/list`. */
+export type GetProspectListResponse = ProspectListDTO;
 
 /**
  * GET /api/prospects/list — one server OFFSET page of the `/client-discovery` inventory (the RSC
@@ -20,5 +23,7 @@ export const GET = apiHandler(async (req: Request) => {
     deleted: params.get("deleted") ?? undefined,
     page: params.get("page") ?? undefined,
   });
-  return json(await prospectService.list({ ...filters, includeDeleted: deleted }));
+  return json<GetProspectListResponse>(
+    await prospectService.list({ ...filters, includeDeleted: deleted }),
+  );
 });

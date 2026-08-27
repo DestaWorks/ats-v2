@@ -1,7 +1,11 @@
 import { attachInboundSchema } from "@/lib/validation/inbound";
+import type { LeadDetailDTO } from "@/lib/validation/lead";
 import { requireUser } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { inboundService } from "@/server/services/inbound.service";
+
+/** Response body of `POST /api/inbound/attach`. */
+export type PostInboundAttachResponse = { lead: LeadDetailDTO };
 
 /**
  * POST /api/inbound/attach — the reply belongs to an EXISTING lead (dedupe match, reviewer
@@ -12,5 +16,5 @@ export const POST = apiHandler(async (req: Request) => {
   const user = await requireUser();
   const input = attachInboundSchema.parse(await req.json());
   const lead = await inboundService.attach(input, user);
-  return json({ lead });
+  return json<PostInboundAttachResponse>({ lead });
 });

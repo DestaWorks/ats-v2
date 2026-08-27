@@ -3,6 +3,10 @@ import { requireUser } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { checkRateLimit } from "@/server/http/rate-limit";
 import { resumeService } from "@/server/services/resume.service";
+import type { ExtractResumeResponse } from "@/lib/validation/resume";
+
+/** Wire shape of `POST /api/resume/extract` — structured data + the server-computed match. */
+export type PostResumeExtractResponse = ExtractResumeResponse;
 
 /**
  * POST /api/resume/extract — Claude structured extraction of a pasted/pdf.js-extracted resume.
@@ -18,5 +22,5 @@ export const POST = apiHandler(async (req: Request) => {
   await checkRateLimit(`resume-extract:${user.id}`, { limit: 20, windowMs: 60_000 });
   const input = parseResumeInputSchema.parse(await req.json());
   const result = await resumeService.extract(input);
-  return json(result);
+  return json<PostResumeExtractResponse>(result);
 });

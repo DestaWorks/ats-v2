@@ -1,6 +1,10 @@
+import type { LeadDetailDTO } from "@/lib/validation/lead";
 import { requireUser } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { leadService } from "@/server/services/lead.service";
+
+/** Response body of `POST /api/leads/:id/restore`. */
+export type PostLeadRestoreResponse = { lead: LeadDetailDTO };
 
 /**
  * POST /api/leads/:id/restore — restore a soft-deleted lead (clears the delete markers; status and
@@ -12,5 +16,5 @@ export const POST = apiHandler<{ params: Promise<{ id: string }> }>(async (_req,
   const user = await requireUser();
   const { id } = await ctx.params;
   const lead = await leadService.restore(id, user);
-  return json({ lead });
+  return json<PostLeadRestoreResponse>({ lead });
 });

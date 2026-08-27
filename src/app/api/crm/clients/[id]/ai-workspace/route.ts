@@ -1,8 +1,14 @@
-import { generateWorkspaceSchema } from "@/lib/validation/crm-ai-workspace";
+import {
+  generateWorkspaceSchema,
+  type WorkspaceResultDTO,
+} from "@/lib/validation/crm-ai-workspace";
 import { requireCapability } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { checkRateLimit } from "@/server/http/rate-limit";
 import { crmAiWorkspaceService } from "@/server/services/crm-ai-workspace.service";
+
+/** Wire shape of `POST /api/crm/clients/:id/ai-workspace`. */
+export type PostCrmAiWorkspaceResponse = WorkspaceResultDTO;
 
 /**
  * POST /api/crm/clients/:id/ai-workspace — AI Client Workspace (legacy `crm_ai_workspace`).
@@ -14,5 +20,5 @@ export const POST = apiHandler<{ params: Promise<{ id: string }> }>(async (req, 
   const { id } = await ctx.params;
   const input = generateWorkspaceSchema.parse(await req.json());
   const result = await crmAiWorkspaceService.generate(id, input);
-  return json(result);
+  return json<PostCrmAiWorkspaceResponse>(result);
 });

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { SIGNATURE_PRESETS, defaultSignature } from "@/lib/constants/templates";
 import { patchJson, messageForFailure } from "@/lib/api/client";
-import type { UserPreferencesDTO } from "@/lib/validation/user-preferences";
+import type { PatchMePreferencesResponse } from "@/app/api/me/preferences/route";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -35,7 +35,7 @@ export function SignatureEditor({
 
   async function save(value: string) {
     setSaving(true);
-    const res = await patchJson<UserPreferencesDTO>("/api/me/preferences", {
+    const res = await patchJson<PatchMePreferencesResponse>("/api/me/preferences", {
       emailSignature: value || null,
     });
     setSaving(false);

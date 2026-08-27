@@ -1,12 +1,12 @@
 "use client";
 
-import type { PipelineFunnelDTO } from "@/lib/validation/reports";
 import { Card } from "@/components/ui/card";
 import { Bar, ReportTabShell } from "./lib/report-tab-shell";
 import { buildReportQuery, useReportFetch, type ReportFilterState } from "./lib/use-report-fetch";
+import type { GetReportsPipelineFunnelResponse } from "@/app/api/reports/pipeline-funnel/route";
 
 export function PipelineFunnelTab({ filters }: { filters: ReportFilterState }) {
-  const data = useReportFetch<PipelineFunnelDTO>(
+  const data = useReportFetch<GetReportsPipelineFunnelResponse>(
     "/api/reports/pipeline-funnel",
     buildReportQuery(filters),
   );

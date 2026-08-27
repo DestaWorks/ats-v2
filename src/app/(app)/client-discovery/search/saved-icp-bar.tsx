@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { SavedIcpDTO } from "@/lib/validation/saved-icp";
+import type { PostSavedIcpResponse } from "@/app/api/saved-icps/route";
+import type { DeleteSavedIcpResponse } from "@/app/api/saved-icps/[id]/route";
 import type { SearchProspectsQuery } from "@/lib/validation/prospect";
 import { messageForFailure } from "@/lib/api/client";
 import { postJson, deleteJson, type ApiResult } from "@/lib/api/client";
@@ -46,7 +48,7 @@ export function SavedIcpBar({
     const trimmed = name.trim();
     if (!trimmed || !currentFilters) return;
     setSaving(true);
-    const result: ApiResult<{ savedIcp: SavedIcpDTO }> = await postJson("/api/saved-icps", {
+    const result: ApiResult<PostSavedIcpResponse> = await postJson("/api/saved-icps", {
       name: trimmed,
       taxonomy: currentFilters.taxonomy ?? null,
       state: currentFilters.state ?? null,
@@ -66,7 +68,7 @@ export function SavedIcpBar({
 
   async function handleDelete(icp: SavedIcpDTO) {
     if (!window.confirm(`Delete the "${icp.name}" ICP? This cannot be undone.`)) return;
-    const result = await deleteJson(`/api/saved-icps/${icp.id}`);
+    const result = await deleteJson<DeleteSavedIcpResponse>(`/api/saved-icps/${icp.id}`);
     if (!result.ok) {
       toast.error(messageForFailure(result.failure));
       return;

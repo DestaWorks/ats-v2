@@ -4,6 +4,12 @@ import { apiHandler, json } from "@/server/http/api-handler";
 import { checkRateLimit } from "@/server/http/rate-limit";
 import { resumeService } from "@/server/services/resume.service";
 import { toDocumentSummaryDTO } from "@/server/services/candidate.dto";
+import type { DocumentSummaryDTO } from "@/lib/validation/candidate";
+
+/** Wire shape of `POST /api/candidates/:id/resume` — the newly attached document summary. */
+export interface PostCandidateResumeResponse {
+  document: DocumentSummaryDTO;
+}
 
 /**
  * POST /api/candidates/:id/resume — attach a resume directly to this ALREADY-KNOWN candidate (the
@@ -18,5 +24,5 @@ export const POST = apiHandler<{ params: Promise<{ id: string }> }>(async (req, 
   const { id } = await ctx.params;
   const input = uploadCandidateResumeSchema.parse(await req.json());
   const document = await resumeService.attachToCandidate(id, input, user);
-  return json({ document: toDocumentSummaryDTO(document) }, 201);
+  return json<PostCandidateResumeResponse>({ document: toDocumentSummaryDTO(document) }, 201);
 });

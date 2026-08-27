@@ -1,8 +1,11 @@
-import { tzOffsetSchema } from "@/lib/validation/daily";
+import { tzOffsetSchema, type DailyOverviewDTO } from "@/lib/validation/daily";
 import { DATE_KEY_RE, dateKeyForOffset } from "@/lib/daily";
 import { requireUser } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { dailyService } from "@/server/services/daily.service";
+
+/** Response body of `GET /api/daily/overview`. */
+export type GetDailyOverviewResponse = DailyOverviewDTO;
 
 /**
  * GET /api/daily/overview?date=YYYY-MM-DD&tz=<getTimezoneOffset()> — the Overview strip
@@ -16,5 +19,5 @@ export const GET = apiHandler(async (req: Request) => {
   const rawDate = params.get("date") ?? "";
   const tz = tzOffsetSchema.parse(params.get("tz") ?? undefined);
   const date = DATE_KEY_RE.test(rawDate) ? rawDate : dateKeyForOffset(tz);
-  return json(await dailyService.overview(user, date, tz));
+  return json<GetDailyOverviewResponse>(await dailyService.overview(user, date, tz));
 });

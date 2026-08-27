@@ -4,7 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { CLIENT_PRIORITIES } from "@/lib/constants";
-import { createClientSchema, type ClientProfileDTO } from "@/lib/validation/client";
+import { createClientSchema } from "@/lib/validation/client";
+import type { PostCrmClientResponse } from "@/app/api/crm/clients/route";
 import { useApiForm } from "@/lib/forms/use-api-form";
 import { emptyToNull } from "@/lib/forms/empty-to-null";
 import { postJson } from "@/lib/api/client";
@@ -43,7 +44,7 @@ function AddClientForm({ onCancel }: { onCancel: () => void }) {
   const [serverError, setServerError] = useState<string | null>(null);
   const { form, pending, onSubmit } = useApiForm(createClientSchema, {
     defaultValues: { name: "" },
-    submit: (values) => postJson<{ client: ClientProfileDTO }>("/api/crm/clients", values),
+    submit: (values) => postJson<PostCrmClientResponse>("/api/crm/clients", values),
     onSuccess: (data) => {
       toast.success("Client added");
       router.push(`/crm/${data.client.id}`);

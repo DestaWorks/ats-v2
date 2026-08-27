@@ -1,6 +1,10 @@
+import type { RoleMatchDTO } from "@/lib/validation/open-role";
 import { requireUser } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { openRoleService } from "@/server/services/open-role.service";
+
+/** Response body of `GET /api/roles/:id/dormant-matches`. */
+export type GetRoleDormantMatchesResponse = { matches: RoleMatchDTO[] };
 
 /**
  * GET /api/roles/:id/dormant-matches — fixed-weight re-engagement candidates for this role
@@ -9,5 +13,5 @@ import { openRoleService } from "@/server/services/open-role.service";
 export const GET = apiHandler<{ params: Promise<{ id: string }> }>(async (_req, ctx) => {
   await requireUser();
   const { id } = await ctx.params;
-  return json({ matches: await openRoleService.dormantMatches(id) });
+  return json<GetRoleDormantMatchesResponse>({ matches: await openRoleService.dormantMatches(id) });
 });

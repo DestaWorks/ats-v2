@@ -1,14 +1,17 @@
 "use client";
 
-import type { ComplianceDTO } from "@/lib/validation/reports";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Table, Td } from "@/components/ui/table";
 import { ReportTabShell } from "./lib/report-tab-shell";
 import { buildReportQuery, useReportFetch, type ReportFilterState } from "./lib/use-report-fetch";
+import type { GetReportsComplianceResponse } from "@/app/api/reports/compliance/route";
 
 export function ComplianceTab({ filters }: { filters: ReportFilterState }) {
-  const data = useReportFetch<ComplianceDTO>("/api/reports/compliance", buildReportQuery(filters));
+  const data = useReportFetch<GetReportsComplianceResponse>(
+    "/api/reports/compliance",
+    buildReportQuery(filters),
+  );
 
   return (
     <ReportTabShell data={data}>

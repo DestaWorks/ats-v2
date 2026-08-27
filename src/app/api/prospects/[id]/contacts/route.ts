@@ -1,7 +1,10 @@
-import { addProspectContactSchema } from "@/lib/validation/prospect";
+import { addProspectContactSchema, type ProspectDetailDTO } from "@/lib/validation/prospect";
 import { requireCapability } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { prospectService } from "@/server/services/prospect.service";
+
+/** Response body of `POST /api/prospects/:id/contacts` — the fresh prospect detail. */
+export type PostProspectContactResponse = { prospect: ProspectDetailDTO };
 
 /**
  * POST /api/prospects/:id/contacts — add a contact manually. A converted ("Client") prospect is
@@ -12,5 +15,5 @@ export const POST = apiHandler<{ params: Promise<{ id: string }> }>(async (req, 
   const { id } = await ctx.params;
   const input = addProspectContactSchema.parse(await req.json());
   const prospect = await prospectService.addContactManual(id, input, user);
-  return json({ prospect }, 201);
+  return json<PostProspectContactResponse>({ prospect }, 201);
 });
