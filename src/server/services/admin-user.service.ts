@@ -19,15 +19,20 @@ function generatePassword(): string {
   return randomBytes(12).toString("base64url");
 }
 
+/**
+ * Structural mirror of Better Auth's `UserWithRole` (the admin plugin owns that type, and its
+ * optional fields are declared `| undefined`) — so the optionals here carry `| undefined` too,
+ * to describe the foreign shape faithfully rather than force every call site to reshape it.
+ */
 interface BetterAuthUser {
   id: string;
   name: string;
   email: string;
-  image?: string | null;
-  role?: string | string[] | null;
-  banned?: boolean | null;
-  banReason?: string | null;
-  banExpires?: Date | null;
+  image?: string | null | undefined;
+  role?: string | string[] | null | undefined;
+  banned?: boolean | null | undefined;
+  banReason?: string | null | undefined;
+  banExpires?: Date | null | undefined;
   createdAt: Date;
 }
 

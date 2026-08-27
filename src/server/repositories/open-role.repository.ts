@@ -55,8 +55,8 @@ export const openRoleRepository = {
     return db(tx).openRole.findMany({
       where: buildWhere(filters),
       orderBy: { createdAt: "desc" },
-      skip: filters.skip,
-      take: filters.take,
+      ...(filters.skip !== undefined && { skip: filters.skip }),
+      ...(filters.take !== undefined && { take: filters.take }),
     });
   },
 

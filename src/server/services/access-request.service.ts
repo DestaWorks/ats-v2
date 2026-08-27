@@ -6,6 +6,7 @@ import { AppError } from "@/server/http/app-error";
 import { sendEmail } from "@/server/email/provider";
 import { accessApprovedEmail } from "@/server/email/templates/access-approved";
 import { toIso } from "@/lib/utils/iso";
+import { defined } from "@/lib/utils/defined";
 import type { AccessRequestInput } from "@/lib/validation/auth";
 import type { AccessRequestDTO, GeneratedPasswordDTO } from "@/lib/validation/admin";
 import type { Role } from "@/lib/constants";
@@ -50,12 +51,14 @@ export const accessRequestService = {
         "You already have a pending access request — an admin will review it soon.",
       );
     }
-    return accessRequestRepository.create({
-      name: input.name,
-      email: input.email,
-      organization: input.organization,
-      message: input.message,
-    });
+    return accessRequestRepository.create(
+      defined({
+        name: input.name,
+        email: input.email,
+        organization: input.organization,
+        message: input.message,
+      }),
+    );
   },
 
   async list(): Promise<AccessRequestDTO[]> {

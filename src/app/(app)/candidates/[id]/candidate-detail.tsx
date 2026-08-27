@@ -223,10 +223,14 @@ export function CandidateDetail({
         onMoved={onMoved}
         onSaved={onSaved}
         announce={announce}
-        inModal={inModal}
+        {...(inModal !== undefined && { inModal })}
       />
 
-      <DetailTabs tabs={tabs} initialKey={initialTab} ariaLabel="Candidate detail" />
+      <DetailTabs
+        tabs={tabs}
+        {...(initialTab !== undefined && { initialKey: initialTab })}
+        ariaLabel="Candidate detail"
+      />
     </div>
   );
 }

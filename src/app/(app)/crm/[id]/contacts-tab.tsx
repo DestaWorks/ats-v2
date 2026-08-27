@@ -23,7 +23,7 @@ import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { Select } from "@/components/ui/select";
-import { fieldError } from "../../candidates/[id]/lib/form-error";
+import { fieldErrorProps } from "../../lib/field-error-props";
 
 // --- Contacts tab (Wave 4.2 slice 1) -----------------------------------------
 
@@ -266,16 +266,16 @@ function ContactForm({
         <Field
           label="Full name"
           htmlFor="cc-name"
-          error={fieldError(form, "fullName")}
+          {...fieldErrorProps(form, "fullName")}
           required
           className="sm:col-span-2"
         >
           <Input id="cc-name" autoFocus {...form.register("fullName")} />
         </Field>
-        <Field label="Title" htmlFor="cc-title" error={fieldError(form, "title")}>
+        <Field label="Title" htmlFor="cc-title" {...fieldErrorProps(form, "title")}>
           <Input id="cc-title" {...form.register("title", { setValueAs: emptyToNull })} />
         </Field>
-        <Field label="Role" htmlFor="cc-role" error={fieldError(form, "role")}>
+        <Field label="Role" htmlFor="cc-role" {...fieldErrorProps(form, "role")}>
           <Select id="cc-role" {...form.register("role")}>
             {CONTACT_ROLES.map((r) => (
               <option key={r} value={r}>
@@ -284,24 +284,24 @@ function ContactForm({
             ))}
           </Select>
         </Field>
-        <Field label="Email" htmlFor="cc-email" error={fieldError(form, "email")}>
+        <Field label="Email" htmlFor="cc-email" {...fieldErrorProps(form, "email")}>
           <Input
             id="cc-email"
             type="email"
             {...form.register("email", { setValueAs: emptyToNull })}
           />
         </Field>
-        <Field label="Phone" htmlFor="cc-phone" error={fieldError(form, "phone")}>
+        <Field label="Phone" htmlFor="cc-phone" {...fieldErrorProps(form, "phone")}>
           <Input id="cc-phone" {...form.register("phone", { setValueAs: emptyToNull })} />
         </Field>
-        <Field label="LinkedIn" htmlFor="cc-linkedin" error={fieldError(form, "linkedin")}>
+        <Field label="LinkedIn" htmlFor="cc-linkedin" {...fieldErrorProps(form, "linkedin")}>
           <Input id="cc-linkedin" {...form.register("linkedin", { setValueAs: emptyToNull })} />
         </Field>
-        <Field label="Reports to" htmlFor="cc-reports-to" error={fieldError(form, "reportsTo")}>
+        <Field label="Reports to" htmlFor="cc-reports-to" {...fieldErrorProps(form, "reportsTo")}>
           <Input id="cc-reports-to" {...form.register("reportsTo", { setValueAs: emptyToNull })} />
         </Field>
         {existing ? (
-          <Field label="Status" htmlFor="cc-status" error={fieldError(form, "status")}>
+          <Field label="Status" htmlFor="cc-status" {...fieldErrorProps(form, "status")}>
             <Select id="cc-status" {...form.register("status")}>
               {CONTACT_STATUSES.map((s) => (
                 <option key={s} value={s}>
@@ -314,7 +314,7 @@ function ContactForm({
         <Field
           label="Notes"
           htmlFor="cc-notes"
-          error={fieldError(form, "notes")}
+          {...fieldErrorProps(form, "notes")}
           className="sm:col-span-2"
         >
           <Input id="cc-notes" {...form.register("notes", { setValueAs: emptyToNull })} />

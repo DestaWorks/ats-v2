@@ -28,7 +28,7 @@ export default async function InterceptedCandidateDetail({
         clients={clients}
         taggable={taggable}
         canEditCredential={detail.canVerifyCredentials}
-        initialTab={tab}
+        {...(tab !== undefined && { initialTab: tab })}
         storageEnabled={storageEnabled}
         inModal
       />

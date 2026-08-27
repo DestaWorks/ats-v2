@@ -4,6 +4,7 @@ import type {
   UpdatePreferencesInput,
   UploadAvatarInput,
 } from "@/lib/validation/user-preferences";
+import { defined } from "@/lib/utils/defined";
 import { userRepository } from "@/server/repositories/user.repository";
 import type { AuthUser } from "@/server/auth/guards";
 import { AppError } from "@/server/http/app-error";
@@ -29,7 +30,7 @@ export const userPreferencesService = {
   },
 
   async updateMine(user: AuthUser, input: UpdatePreferencesInput): Promise<UserPreferencesDTO> {
-    return userRepository.updatePreferences(user.id, input);
+    return userRepository.updatePreferences(user.id, defined(input));
   },
 
   /**

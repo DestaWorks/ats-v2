@@ -14,23 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { confirmedCandidateIdFor } from "../lib/confirm-gate";
-
-/** Resolve a possibly-nested react-hook-form error message by dotted path. */
-export function fieldError<T extends FieldValues>(
-  form: UseFormReturn<T>,
-  name: Path<T>,
-): string | undefined {
-  let cursor: unknown = form.formState.errors;
-  for (const part of (name as string).split(".")) {
-    if (cursor && typeof cursor === "object") {
-      cursor = (cursor as Record<string, unknown>)[part];
-    } else {
-      return undefined;
-    }
-  }
-  const message = (cursor as { message?: unknown } | undefined)?.message;
-  return typeof message === "string" ? message : undefined;
-}
+import { fieldErrorProps } from "../../lib/field-error-props";
 
 /** A profile section with the branded header rule (ports the legacy `Section`). */
 export function Section({ title, children }: { title: string; children: ReactNode }) {
@@ -58,7 +42,12 @@ export function TextField<T extends FieldValues>({
 }) {
   const id = `f-${name}`;
   return (
-    <Field label={label} htmlFor={id} error={fieldError(form, name)} className={className}>
+    <Field
+      label={label}
+      htmlFor={id}
+      {...fieldErrorProps(form, name)}
+      {...(className !== undefined && { className })}
+    >
       <Input id={id} {...form.register(name)} />
     </Field>
   );
@@ -78,7 +67,7 @@ export function TextArea<T extends FieldValues>({
 }) {
   const id = `f-${name}`;
   return (
-    <Field label={label} htmlFor={id} error={fieldError(form, name)}>
+    <Field label={label} htmlFor={id} {...fieldErrorProps(form, name)}>
       <Textarea id={id} rows={rows} {...form.register(name)} className="resize-y" />
     </Field>
   );

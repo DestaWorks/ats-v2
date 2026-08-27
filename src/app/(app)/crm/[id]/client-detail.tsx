@@ -23,7 +23,7 @@ import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { fieldError } from "../../candidates/[id]/lib/form-error";
+import { fieldErrorProps } from "../../lib/field-error-props";
 
 // Perf audit 2026-08-03: DetailTabs only ever mounts the selected panel, but a static import
 // still bundles all eight tabs into the initial page chunk. Loading each on demand keeps first
@@ -298,16 +298,16 @@ function EditClientForm({
     >
       {serverError ? <ErrorState message={serverError} /> : null}
       <div className="grid gap-4 sm:grid-cols-3">
-        <Field label="Name" htmlFor="ec-name" error={fieldError(form, "name")} required>
+        <Field label="Name" htmlFor="ec-name" {...fieldErrorProps(form, "name")} required>
           <Input id="ec-name" {...form.register("name")} />
         </Field>
-        <Field label="Primary contact" htmlFor="ec-contact" error={fieldError(form, "contact")}>
+        <Field label="Primary contact" htmlFor="ec-contact" {...fieldErrorProps(form, "contact")}>
           <Input id="ec-contact" {...form.register("contact", { setValueAs: emptyToNull })} />
         </Field>
-        <Field label="Location" htmlFor="ec-location" error={fieldError(form, "location")}>
+        <Field label="Location" htmlFor="ec-location" {...fieldErrorProps(form, "location")}>
           <Input id="ec-location" {...form.register("location", { setValueAs: emptyToNull })} />
         </Field>
-        <Field label="Priority" htmlFor="ec-priority" error={fieldError(form, "priority")}>
+        <Field label="Priority" htmlFor="ec-priority" {...fieldErrorProps(form, "priority")}>
           <Select id="ec-priority" {...form.register("priority", { setValueAs: emptyToNull })}>
             <option value="">Select…</option>
             {CLIENT_PRIORITIES.map((p) => (
@@ -317,7 +317,7 @@ function EditClientForm({
             ))}
           </Select>
         </Field>
-        <Field label="Cadence" htmlFor="ec-cadence" error={fieldError(form, "cadence")}>
+        <Field label="Cadence" htmlFor="ec-cadence" {...fieldErrorProps(form, "cadence")}>
           <Select id="ec-cadence" {...form.register("cadence", { setValueAs: emptyToNull })}>
             <option value="">Select…</option>
             {CLIENT_CADENCES.map((c) => (
@@ -327,13 +327,13 @@ function EditClientForm({
             ))}
           </Select>
         </Field>
-        <Field label="Schedule" htmlFor="ec-schedule" error={fieldError(form, "schedule")}>
+        <Field label="Schedule" htmlFor="ec-schedule" {...fieldErrorProps(form, "schedule")}>
           <Input id="ec-schedule" {...form.register("schedule", { setValueAs: emptyToNull })} />
         </Field>
         <Field
           label="Contract start"
           htmlFor="ec-contract-start"
-          error={fieldError(form, "contractStart")}
+          {...fieldErrorProps(form, "contractStart")}
         >
           <Input
             id="ec-contract-start"
@@ -342,7 +342,7 @@ function EditClientForm({
             {...form.register("contractStart", { setValueAs: emptyToNull })}
           />
         </Field>
-        <Field label="Renewal date" htmlFor="ec-renewal" error={fieldError(form, "renewalDate")}>
+        <Field label="Renewal date" htmlFor="ec-renewal" {...fieldErrorProps(form, "renewalDate")}>
           <Input
             id="ec-renewal"
             type="date"
@@ -350,7 +350,7 @@ function EditClientForm({
             {...form.register("renewalDate", { setValueAs: emptyToNull })}
           />
         </Field>
-        <Field label="Capacity" htmlFor="ec-capacity" error={fieldError(form, "capacity")}>
+        <Field label="Capacity" htmlFor="ec-capacity" {...fieldErrorProps(form, "capacity")}>
           <Input
             id="ec-capacity"
             type="number"
@@ -362,7 +362,7 @@ function EditClientForm({
         <Field
           label="Monthly rate ($)"
           htmlFor="ec-monthly-rate"
-          error={fieldError(form, "monthlyRate")}
+          {...fieldErrorProps(form, "monthlyRate")}
         >
           <Input
             id="ec-monthly-rate"
@@ -375,7 +375,7 @@ function EditClientForm({
         <Field
           label="Avg placement fee ($)"
           htmlFor="ec-placement-fee"
-          error={fieldError(form, "avgPlacementFee")}
+          {...fieldErrorProps(form, "avgPlacementFee")}
         >
           <Input
             id="ec-placement-fee"
@@ -388,7 +388,7 @@ function EditClientForm({
         <Field
           label="Gross margin (%)"
           htmlFor="ec-gross-margin"
-          error={fieldError(form, "grossMargin")}
+          {...fieldErrorProps(form, "grossMargin")}
         >
           <Input
             id="ec-gross-margin"
@@ -401,7 +401,7 @@ function EditClientForm({
         <Field
           label="License states (comma-separated)"
           htmlFor="ec-states"
-          error={fieldError(form, "states")}
+          {...fieldErrorProps(form, "states")}
           className="sm:col-span-3"
         >
           <Input id="ec-states" defaultValue={client.states.join(", ")} {...listField("states")} />
@@ -409,7 +409,7 @@ function EditClientForm({
         <Field
           label="Specialties (comma-separated)"
           htmlFor="ec-specialties"
-          error={fieldError(form, "specialties")}
+          {...fieldErrorProps(form, "specialties")}
           className="sm:col-span-3"
         >
           <Input
@@ -421,7 +421,7 @@ function EditClientForm({
         <Field
           label="Services (comma-separated)"
           htmlFor="ec-services"
-          error={fieldError(form, "services")}
+          {...fieldErrorProps(form, "services")}
           className="sm:col-span-3"
         >
           <Input

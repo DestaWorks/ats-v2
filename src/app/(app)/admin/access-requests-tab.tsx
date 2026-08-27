@@ -15,7 +15,7 @@ import { ErrorState } from "@/components/ui/error-state";
 import { Field } from "@/components/ui/field";
 import { Modal } from "@/components/ui/modal";
 import { Select } from "@/components/ui/select";
-import { fieldError } from "../candidates/[id]/lib/form-error";
+import { fieldErrorProps } from "../lib/field-error-props";
 
 export function AccessRequestsTab({
   pending,
@@ -158,7 +158,7 @@ function ApproveForm({
         Creates an account for <span className="font-semibold text-charcoal">{request.email}</span>{" "}
         with the role below and generates a one-time password.
       </p>
-      <Field label="Role" htmlFor="ar-role" error={fieldError(form, "role")} required>
+      <Field label="Role" htmlFor="ar-role" {...fieldErrorProps(form, "role")} required>
         <Select id="ar-role" {...form.register("role")}>
           {ROLES.map((r) => (
             <option key={r} value={r}>

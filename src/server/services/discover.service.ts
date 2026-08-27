@@ -5,6 +5,7 @@ import { candidateRepository } from "@/server/repositories/candidate.repository"
 import { openRoleRepository } from "@/server/repositories/open-role.repository";
 import { classifyDiscoverRow, type DupCandidateSets } from "@/lib/rules/discover-dedupe";
 import { TAXONOMY_OPTIONS, taxonomyForCredential } from "@/lib/constants";
+import { defined } from "@/lib/utils/defined";
 import { writeAudit } from "@/server/db/audit";
 import { withTransaction } from "@/server/db/with-transaction";
 import { checkRateLimit } from "@/server/http/rate-limit";
@@ -92,13 +93,15 @@ export const discoverService = {
     await checkRateLimit(`discover-search:${user.id}`, { limit: 20, windowMs: 60_000 });
 
     const taxonomyOpt = TAXONOMY_OPTIONS.find((t) => t.value === query.taxonomy);
-    const { resultCount, results } = await searchNppes({
-      taxonomyDescription: taxonomyOpt?.query,
-      state: query.state,
-      city: query.city,
-      firstName: query.firstName,
-      lastName: query.lastName,
-    });
+    const { resultCount, results } = await searchNppes(
+      defined({
+        taxonomyDescription: taxonomyOpt?.query,
+        state: query.state,
+        city: query.city,
+        firstName: query.firstName,
+        lastName: query.lastName,
+      }),
+    );
 
     const mapped = results.map((r) => mapResult(r, taxonomyOpt?.credential ?? null));
     // NPPES's own taxonomy_description match is loose (e.g. "Clinical" also surfaces

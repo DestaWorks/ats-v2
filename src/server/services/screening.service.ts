@@ -62,7 +62,7 @@ export const screeningService = {
     const [rows, clientNames, rulesRows] = await Promise.all([
       candidateRepository.list({
         statuses: [...SCREENING_ELIGIBLE_STATUSES],
-        search,
+        ...(search !== undefined && { search }),
         take: 20,
       }),
       cachedClientNameMap(),

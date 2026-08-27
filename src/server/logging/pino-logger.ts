@@ -27,7 +27,7 @@ export function createPinoLogger(options: PinoLoggerOptions = {}): Logger {
     level:
       options.level ??
       resolveLevel({ LOG_LEVEL: process.env.LOG_LEVEL, NODE_ENV: process.env.NODE_ENV }),
-    base: undefined,
+    base: null,
     timestamp: pino.stdTimeFunctions.isoTime,
     redact: { paths: [...PINO_REDACT_PATHS], censor: REDACTED },
     serializers: {

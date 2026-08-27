@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { ErrorState } from "@/components/ui/error-state";
 import { Modal } from "@/components/ui/modal";
-import { fieldError } from "../candidates/[id]/lib/form-error";
+import { fieldErrorProps } from "../lib/field-error-props";
 
 export interface ClientOption {
   id: string;
@@ -64,7 +64,11 @@ export function AddLeadButton({
       </Button>
       <Modal open={open} onClose={() => setOpen(false)} title="Add lead">
         {open ? (
-          <AddLeadForm clients={clients} onAdded={onAdded} onDone={() => setOpen(false)} />
+          <AddLeadForm
+            clients={clients}
+            {...(onAdded !== undefined && { onAdded })}
+            onDone={() => setOpen(false)}
+          />
         ) : null}
       </Modal>
     </>
@@ -98,37 +102,37 @@ function AddLeadForm({
       {serverError ? <ErrorState message={serverError} /> : null}
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Name" htmlFor="al-name" error={fieldError(form, "name")} required>
+        <Field label="Name" htmlFor="al-name" {...fieldErrorProps(form, "name")} required>
           <Input id="al-name" autoFocus {...form.register("name")} />
         </Field>
-        <Field label="Email" htmlFor="al-email" error={fieldError(form, "email")}>
+        <Field label="Email" htmlFor="al-email" {...fieldErrorProps(form, "email")}>
           <Input
             id="al-email"
             type="email"
             {...form.register("email", { setValueAs: emptyToNull })}
           />
         </Field>
-        <Field label="Phone" htmlFor="al-phone" error={fieldError(form, "phone")}>
+        <Field label="Phone" htmlFor="al-phone" {...fieldErrorProps(form, "phone")}>
           <Input id="al-phone" {...form.register("phone", { setValueAs: emptyToNull })} />
         </Field>
-        <Field label="LinkedIn URL" htmlFor="al-linkedin" error={fieldError(form, "linkedinUrl")}>
+        <Field label="LinkedIn URL" htmlFor="al-linkedin" {...fieldErrorProps(form, "linkedinUrl")}>
           <Input
             id="al-linkedin"
             type="url"
             {...form.register("linkedinUrl", { setValueAs: emptyToNull })}
           />
         </Field>
-        <Field label="Credential" htmlFor="al-cred" error={fieldError(form, "credential")}>
+        <Field label="Credential" htmlFor="al-cred" {...fieldErrorProps(form, "credential")}>
           <Input
             id="al-cred"
             placeholder="e.g. PMHNP"
             {...form.register("credential", { setValueAs: emptyToNull })}
           />
         </Field>
-        <Field label="State" htmlFor="al-state" error={fieldError(form, "state")}>
+        <Field label="State" htmlFor="al-state" {...fieldErrorProps(form, "state")}>
           <Input id="al-state" {...form.register("state", { setValueAs: emptyToNull })} />
         </Field>
-        <Field label="Source" htmlFor="al-source" error={fieldError(form, "source")}>
+        <Field label="Source" htmlFor="al-source" {...fieldErrorProps(form, "source")}>
           <Select id="al-source" {...form.register("source", { setValueAs: emptyToNull })}>
             <option value="">Select source…</option>
             {SOURCES.map((s) => (
@@ -138,7 +142,7 @@ function AddLeadForm({
             ))}
           </Select>
         </Field>
-        <Field label="Target client" htmlFor="al-client" error={fieldError(form, "clientId")}>
+        <Field label="Target client" htmlFor="al-client" {...fieldErrorProps(form, "clientId")}>
           <Select id="al-client" {...form.register("clientId", { setValueAs: emptyToNull })}>
             <option value="">Unassigned</option>
             {clients.map((c) => (
@@ -151,7 +155,7 @@ function AddLeadForm({
         <Field
           label="Tags"
           htmlFor="al-tags"
-          error={fieldError(form, "tags")}
+          {...fieldErrorProps(form, "tags")}
           hint="Comma-separated"
           className="sm:col-span-2"
         >
@@ -164,7 +168,7 @@ function AddLeadForm({
         <Field
           label="Notes"
           htmlFor="al-notes"
-          error={fieldError(form, "notes")}
+          {...fieldErrorProps(form, "notes")}
           className="sm:col-span-2"
         >
           <textarea

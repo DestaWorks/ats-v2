@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { useZodForm } from "@/lib/forms/use-zod-form";
 import { portalAccessRequestSchema, type PortalAccessRequestInput } from "@/lib/validation/portal";
 import { Field } from "@/components/ui/field";
+import { fieldErrorProps } from "@/app/(app)/lib/field-error-props";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
 import { controlClass } from "@/components/ui/input";
@@ -21,11 +22,12 @@ export function RequestAccessForm() {
   const [sent, setSent] = useState(false);
   const searchParams = useSearchParams();
   const linkError = searchParams.get("error");
+  const form = useZodForm(portalAccessRequestSchema);
   const {
     register,
     handleSubmit,
-    formState: { errors, isSubmitting },
-  } = useZodForm(portalAccessRequestSchema);
+    formState: { isSubmitting },
+  } = form;
 
   async function onSubmit(values: PortalAccessRequestInput) {
     const res = await submitPortalAccessRequest(values);
@@ -66,17 +68,17 @@ export function RequestAccessForm() {
         className="flex flex-col gap-3"
         noValidate
       >
-        <Field label="Name" htmlFor="name" required error={errors.name?.message}>
+        <Field label="Name" htmlFor="name" required {...fieldErrorProps(form, "name")}>
           <input id="name" {...register("name")} className={inputClass} />
         </Field>
-        <Field label="Email" htmlFor="email" required error={errors.email?.message}>
+        <Field label="Email" htmlFor="email" required {...fieldErrorProps(form, "email")}>
           <input id="email" type="email" {...register("email")} className={inputClass} />
         </Field>
         <Field
           label="Which client are you with?"
           htmlFor="requestedClientName"
           required
-          error={errors.requestedClientName?.message}
+          {...fieldErrorProps(form, "requestedClientName")}
         >
           <input
             id="requestedClientName"
@@ -84,7 +86,7 @@ export function RequestAccessForm() {
             className={inputClass}
           />
         </Field>
-        <Field label="Note" htmlFor="note" error={errors.note?.message}>
+        <Field label="Note" htmlFor="note" {...fieldErrorProps(form, "note")}>
           <textarea id="note" rows={3} {...register("note")} className={inputClass} />
         </Field>
         <Button type="submit" disabled={isSubmitting}>

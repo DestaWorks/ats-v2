@@ -2,6 +2,7 @@ import "server-only";
 import { scoreCandidate } from "@/lib/rules/scoring";
 import type { ClientRules } from "@/lib/rules/types";
 import { utcDayStart, utcNextDayStart } from "@/lib/daily";
+import { defined } from "@/lib/utils/defined";
 import type { ReportFilters } from "@/lib/validation/reports";
 import { candidateRepository, type CandidateRow } from "@/server/repositories/candidate.repository";
 import { toClientRules } from "@/server/repositories/client-rules.repository";
@@ -31,15 +32,17 @@ export interface ReportCohort {
  */
 export async function loadCohort(filters: ReportFilters): Promise<ReportCohort> {
   const [candidates, clientNames, rulesRows] = await Promise.all([
-    candidateRepository.list({
-      clientId: filters.clientId,
-      createdById: filters.createdById,
-      source: filters.source,
-      credential: filters.credential,
-      addedFrom: filters.addedFrom ? utcDayStart(filters.addedFrom) : undefined,
-      addedTo: filters.addedTo ? utcNextDayStart(filters.addedTo) : undefined,
-      take: REPORT_ROW_CAP,
-    }),
+    candidateRepository.list(
+      defined({
+        clientId: filters.clientId,
+        createdById: filters.createdById,
+        source: filters.source,
+        credential: filters.credential,
+        addedFrom: filters.addedFrom ? utcDayStart(filters.addedFrom) : undefined,
+        addedTo: filters.addedTo ? utcNextDayStart(filters.addedTo) : undefined,
+        take: REPORT_ROW_CAP,
+      }),
+    ),
     cachedClientNameMap(),
     cachedClientRulesList(),
   ]);

@@ -1,5 +1,6 @@
 import { activityQuerySchema } from "@/lib/validation/activity";
 import { decodeCursor } from "@/lib/validation/cursor";
+import { defined } from "@/lib/utils/defined";
 import { requireCapability } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { AppError } from "@/server/http/app-error";
@@ -38,6 +39,6 @@ export const GET = apiHandler(async (req: Request) => {
     if (!decoded) throw new AppError("BAD_REQUEST", "Invalid cursor");
   }
 
-  const list = await auditService.listActivity(filters, decoded);
+  const list = await auditService.listActivity(defined(filters), decoded);
   return json<GetActivityResponse>(list);
 });

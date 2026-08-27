@@ -1,4 +1,5 @@
 import { listQuerySchema } from "@/lib/validation/pipeline";
+import { defined } from "@/lib/utils/defined";
 import { requireUser } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { candidateService } from "@/server/services/candidate.service";
@@ -39,6 +40,6 @@ export const GET = apiHandler(async (req: Request) => {
     page: params.get("page") ?? undefined,
   });
 
-  const list = await candidateService.listCandidates(query, user);
+  const list = await candidateService.listCandidates(defined(query), user);
   return json<GetCandidateListResponse>(list);
 });

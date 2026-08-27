@@ -12,6 +12,7 @@ import type {
   PostPortalRoleInput,
 } from "@/lib/validation/portal";
 import { toIso, isoOrNull } from "@/lib/utils/iso";
+import { defined } from "@/lib/utils/defined";
 import type { AuthUser } from "@/server/auth/guards";
 import type { PortalContext } from "@/server/auth/portal-guards";
 import { hashPortalToken } from "@/server/auth/portal-guards";
@@ -199,7 +200,7 @@ export const clientPortalService = {
           clientId: ctx.clientId,
           postedByContactId: ctx.contactId,
           status: "Open",
-          ...input,
+          ...defined(input),
         },
         tx,
       );

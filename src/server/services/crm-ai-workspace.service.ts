@@ -1,6 +1,7 @@
 import "server-only";
 import type { ClientNoteDTO } from "@/lib/validation/client-note";
 import type { GenerateWorkspaceInput, WorkspaceResultDTO } from "@/lib/validation/crm-ai-workspace";
+import { defined } from "@/lib/utils/defined";
 import type { AuthUser } from "@/server/auth/guards";
 import { generateWorkspaceText, type WorkspaceContext } from "@/server/ai/crm/ai-workspace";
 import { clientRepository } from "@/server/repositories/client.repository";
@@ -59,7 +60,7 @@ async function buildContext(clientId: string): Promise<WorkspaceContext> {
 export const crmAiWorkspaceService = {
   async generate(clientId: string, input: GenerateWorkspaceInput): Promise<WorkspaceResultDTO> {
     const ctx = await buildContext(clientId);
-    return generateWorkspaceText(ctx, input);
+    return generateWorkspaceText(ctx, defined(input));
   },
 
   async logNote(clientId: string, text: string, user: AuthUser): Promise<ClientNoteDTO> {

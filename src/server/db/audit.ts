@@ -54,14 +54,16 @@ function redactSensitive(value: unknown): unknown {
  * single `prisma.$transaction(...)`.
  */
 export function writeAudit(tx: Prisma.TransactionClient, params: WriteAuditParams) {
+  const before = redactSensitive(params.before) as Prisma.InputJsonValue | undefined;
+  const after = redactSensitive(params.after) as Prisma.InputJsonValue | undefined;
   return tx.activityLog.create({
     data: {
       entity: params.entity,
       entityId: params.entityId,
       actor: params.actor,
       action: params.action,
-      before: redactSensitive(params.before) as Prisma.InputJsonValue | undefined,
-      after: redactSensitive(params.after) as Prisma.InputJsonValue | undefined,
+      ...(before !== undefined && { before }),
+      ...(after !== undefined && { after }),
     },
   });
 }

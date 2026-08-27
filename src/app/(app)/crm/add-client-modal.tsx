@@ -15,7 +15,7 @@ import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Modal } from "@/components/ui/modal";
-import { fieldError } from "../candidates/[id]/lib/form-error";
+import { fieldErrorProps } from "../lib/field-error-props";
 
 /**
  * Add-client trigger + modal (Wave 4.2, CRM slice 1) — mirrors `AddRoleButton` exactly: a
@@ -59,19 +59,19 @@ function AddClientForm({ onCancel }: { onCancel: () => void }) {
         <Field
           label="Name"
           htmlFor="ac-name"
-          error={fieldError(form, "name")}
+          {...fieldErrorProps(form, "name")}
           required
           className="sm:col-span-2"
         >
           <Input id="ac-name" autoFocus {...form.register("name")} />
         </Field>
-        <Field label="Primary contact" htmlFor="ac-contact" error={fieldError(form, "contact")}>
+        <Field label="Primary contact" htmlFor="ac-contact" {...fieldErrorProps(form, "contact")}>
           <Input id="ac-contact" {...form.register("contact", { setValueAs: emptyToNull })} />
         </Field>
-        <Field label="Location" htmlFor="ac-location" error={fieldError(form, "location")}>
+        <Field label="Location" htmlFor="ac-location" {...fieldErrorProps(form, "location")}>
           <Input id="ac-location" {...form.register("location", { setValueAs: emptyToNull })} />
         </Field>
-        <Field label="Priority" htmlFor="ac-priority" error={fieldError(form, "priority")}>
+        <Field label="Priority" htmlFor="ac-priority" {...fieldErrorProps(form, "priority")}>
           <Select id="ac-priority" {...form.register("priority", { setValueAs: emptyToNull })}>
             <option value="">Select…</option>
             {CLIENT_PRIORITIES.map((p) => (

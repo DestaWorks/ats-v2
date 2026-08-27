@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { ErrorState } from "@/components/ui/error-state";
 import { Modal } from "@/components/ui/modal";
-import { fieldError } from "../candidates/[id]/lib/form-error";
+import { fieldErrorProps } from "../lib/field-error-props";
 
 /**
  * Add-prospect trigger + modal — mirrors `sourcing/add-lead-modal.tsx`. A header `Button` opens
@@ -38,7 +38,12 @@ export function AddProspectButton({
         {label}
       </Button>
       <Modal open={open} onClose={() => setOpen(false)} title="Add prospect">
-        {open ? <AddProspectForm onAdded={onAdded} onDone={() => setOpen(false)} /> : null}
+        {open ? (
+          <AddProspectForm
+            {...(onAdded !== undefined && { onAdded })}
+            onDone={() => setOpen(false)}
+          />
+        ) : null}
       </Modal>
     </>
   );
@@ -72,13 +77,13 @@ function AddProspectForm({
         <Field
           label="Practice name"
           htmlFor="ap-name"
-          error={fieldError(form, "practiceName")}
+          {...fieldErrorProps(form, "practiceName")}
           required
           className="sm:col-span-2"
         >
           <Input id="ap-name" autoFocus {...form.register("practiceName")} />
         </Field>
-        <Field label="Specialty" htmlFor="ap-taxonomy" error={fieldError(form, "taxonomy")}>
+        <Field label="Specialty" htmlFor="ap-taxonomy" {...fieldErrorProps(form, "taxonomy")}>
           <Select id="ap-taxonomy" {...form.register("taxonomy", { setValueAs: emptyToNull })}>
             <option value="">— Any —</option>
             {CLIENT_DISCOVERY_SPECIALTY_GROUPS.map((group) => (
@@ -92,19 +97,19 @@ function AddProspectForm({
             ))}
           </Select>
         </Field>
-        <Field label="Phone" htmlFor="ap-phone" error={fieldError(form, "phone")}>
+        <Field label="Phone" htmlFor="ap-phone" {...fieldErrorProps(form, "phone")}>
           <Input id="ap-phone" {...form.register("phone", { setValueAs: emptyToNull })} />
         </Field>
-        <Field label="City" htmlFor="ap-city" error={fieldError(form, "city")}>
+        <Field label="City" htmlFor="ap-city" {...fieldErrorProps(form, "city")}>
           <Input id="ap-city" {...form.register("city", { setValueAs: emptyToNull })} />
         </Field>
-        <Field label="State" htmlFor="ap-state" error={fieldError(form, "state")}>
+        <Field label="State" htmlFor="ap-state" {...fieldErrorProps(form, "state")}>
           <Input id="ap-state" {...form.register("state", { setValueAs: emptyToNull })} />
         </Field>
-        <Field label="Zip" htmlFor="ap-zip" error={fieldError(form, "zip")}>
+        <Field label="Zip" htmlFor="ap-zip" {...fieldErrorProps(form, "zip")}>
           <Input id="ap-zip" {...form.register("zip", { setValueAs: emptyToNull })} />
         </Field>
-        <Field label="Website" htmlFor="ap-website" error={fieldError(form, "website")}>
+        <Field label="Website" htmlFor="ap-website" {...fieldErrorProps(form, "website")}>
           <Input
             id="ap-website"
             type="url"
@@ -114,7 +119,7 @@ function AddProspectForm({
         <Field
           label="Notes"
           htmlFor="ap-notes"
-          error={fieldError(form, "notes")}
+          {...fieldErrorProps(form, "notes")}
           className="sm:col-span-2"
         >
           <textarea

@@ -2,6 +2,7 @@ import { hasCapability } from "@/lib/constants";
 import { createCandidateSchema } from "@/lib/validation/candidate";
 import { boardQuerySchema } from "@/lib/validation/pipeline";
 import { decodeCursor } from "@/lib/validation/cursor";
+import { defined } from "@/lib/utils/defined";
 import { requireUser } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { AppError } from "@/server/http/app-error";
@@ -53,11 +54,15 @@ export const GET = apiHandler(async (req: Request) => {
       decoded = decodeCursor(cursor, "createdAt_desc");
       if (!decoded) throw new AppError("BAD_REQUEST", "Invalid cursor");
     }
-    const page = await candidateService.listColumn(column, filters, user, decoded);
+    const page = await candidateService.listColumn(column, defined(filters), user, decoded);
     return json<GetCandidatesResponse>(page);
   }
 
-  const board = await candidateService.listBoard(filters, user, { includeTerminal });
+  const board = await candidateService.listBoard(
+    defined(filters),
+    user,
+    defined({ includeTerminal }),
+  );
   return json<GetCandidatesResponse>(board);
 });
 
@@ -75,6 +80,6 @@ export const POST = apiHandler(async (req: Request) => {
   if (input.licenseNumber !== undefined && !hasCapability(user.role, "viewCredentials")) {
     throw new AppError("FORBIDDEN", "You don't have permission to set the license number");
   }
-  const created = await candidateService.create(input);
+  const created = await candidateService.create(defined(input));
   return json<PostCandidateResponse>({ candidate: toCandidateDTO(created, user) }, 201);
 });

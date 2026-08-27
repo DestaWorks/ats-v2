@@ -27,7 +27,14 @@ installRequestContext({
 });
 
 function signInAs(role?: string) {
-  mockSession = { user: { id: "u1", email: "u@desta.works", name: "Test User", role } };
+  mockSession = {
+    user: {
+      id: "u1",
+      email: "u@desta.works",
+      name: "Test User",
+      ...(role !== undefined && { role }),
+    },
+  };
 }
 
 beforeEach(() => {

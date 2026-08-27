@@ -31,8 +31,9 @@ function getClient(): S3Client {
     throw new AppError("FEATURE_DISABLED", "Object storage is not configured");
   }
   if (!client) {
+    const endpoint = process.env.S3_ENDPOINT;
     client = new S3Client({
-      endpoint: process.env.S3_ENDPOINT,
+      ...(endpoint !== undefined && { endpoint }),
       region: process.env.S3_REGION || "us-east-1",
       credentials: {
         accessKeyId: process.env.S3_ACCESS_KEY_ID!,

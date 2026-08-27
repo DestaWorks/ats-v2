@@ -297,7 +297,7 @@ export function transformRow(
     createdAt,
     create,
     update,
-    document,
+    ...(document !== undefined && { document }),
     flags,
     errors,
     notes,

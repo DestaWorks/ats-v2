@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
-import { fieldError } from "./lib/form-error";
+import { fieldErrorProps } from "../../lib/field-error-props";
 import { Textarea } from "@/components/ui/textarea";
 import { formatRelativeTime, noteTypeLabel, noteTypeTone } from "./lib/notes-format";
 import { postNote } from "./lib/detail-fetch";
@@ -153,7 +153,7 @@ export function NotesTab({
         </fieldset>
 
         <div className="relative">
-          <Field label="Add a note" htmlFor="note-body" error={fieldError(form, "body")}>
+          <Field label="Add a note" htmlFor="note-body" {...fieldErrorProps(form, "body")}>
             <Textarea
               id="note-body"
               rows={3}

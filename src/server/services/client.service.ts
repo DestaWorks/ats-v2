@@ -25,6 +25,7 @@ import type {
   UpdateTaskInput,
 } from "@/lib/validation/client";
 import { toIso, isoOrNull } from "@/lib/utils/iso";
+import { defined } from "@/lib/utils/defined";
 import type { AuthUser } from "@/server/auth/guards";
 import { writeAudit } from "@/server/db/audit";
 import { withTransaction } from "@/server/db/with-transaction";
@@ -309,7 +310,7 @@ export const clientService = {
 
   async create(input: CreateClientInput, user: AuthUser): Promise<ClientProfileDTO> {
     const created = await withTransaction(async (tx) => {
-      const row = await clientRepository.create(input, tx);
+      const row = await clientRepository.create(defined(input), tx);
       await writeAudit(tx, {
         entity: "client",
         entityId: row.id,
@@ -325,7 +326,7 @@ export const clientService = {
   async update(id: string, input: UpdateClientInput, user: AuthUser): Promise<ClientProfileDTO> {
     const existing = await requireClient(id);
     const updated = await withTransaction(async (tx) => {
-      const row = await clientRepository.update(id, input, tx);
+      const row = await clientRepository.update(id, defined(input), tx);
       await writeAudit(tx, {
         entity: "client",
         entityId: id,
@@ -347,7 +348,7 @@ export const clientService = {
     await requireClient(clientId);
     const created = await withTransaction(async (tx) => {
       const row = await clientContactRepository.create(
-        { ...input, clientId, addedById: user.id },
+        { ...defined(input), clientId, addedById: user.id },
         tx,
       );
       await writeAudit(tx, {
@@ -371,7 +372,7 @@ export const clientService = {
   ): Promise<ClientContactDTO> {
     await requireClient(clientId);
     const updated = await withTransaction(async (tx) => {
-      const count = await clientContactRepository.update(clientId, contactId, input, tx);
+      const count = await clientContactRepository.update(clientId, contactId, defined(input), tx);
       if (count === 0) throw new AppError("NOT_FOUND", "Contact not found");
       const row = await clientContactRepository.findById(contactId, tx);
       if (!row) throw new AppError("NOT_FOUND", "Contact not found");
@@ -409,7 +410,7 @@ export const clientService = {
     await requireClient(clientId);
     const created = await withTransaction(async (tx) => {
       const row = await clientTaskRepository.create(
-        { ...input, clientId, createdById: user.id },
+        { ...defined(input), clientId, createdById: user.id },
         tx,
       );
       await writeAudit(tx, {
@@ -436,7 +437,7 @@ export const clientService = {
   ): Promise<ClientTaskDTO> {
     await requireClient(clientId);
     const updated = await withTransaction(async (tx) => {
-      const data: Parameters<typeof clientTaskRepository.update>[2] = { ...input };
+      const data: Parameters<typeof clientTaskRepository.update>[2] = { ...defined(input) };
       if (input.status === "done") data.completedAt = new Date();
       else if (input.status === "open") data.completedAt = null;
       const count = await clientTaskRepository.update(clientId, taskId, data, tx);
@@ -480,7 +481,7 @@ export const clientService = {
     await requireClient(clientId);
     const created = await withTransaction(async (tx) => {
       const row = await clientMeetingRepository.create(
-        { ...input, clientId, loggedById: user.id },
+        { ...defined(input), clientId, loggedById: user.id },
         tx,
       );
       await writeAudit(tx, {
@@ -515,7 +516,10 @@ export const clientService = {
   async addDeal(clientId: string, input: CreateDealInput, user: AuthUser): Promise<DealDTO> {
     await requireClient(clientId);
     const created = await withTransaction(async (tx) => {
-      const row = await dealRepository.create({ ...input, clientId, createdById: user.id }, tx);
+      const row = await dealRepository.create(
+        { ...defined(input), clientId, createdById: user.id },
+        tx,
+      );
       await writeAudit(tx, {
         entity: "deal",
         entityId: row.id,
@@ -540,7 +544,7 @@ export const clientService = {
   ): Promise<DealDTO> {
     await requireClient(clientId);
     const updated = await withTransaction(async (tx) => {
-      const data: Parameters<typeof dealRepository.update>[2] = { ...input };
+      const data: Parameters<typeof dealRepository.update>[2] = { ...defined(input) };
       if (input.stage) data.closedAt = isClosedDealStage(input.stage) ? new Date() : null;
       const count = await dealRepository.update(clientId, dealId, data, tx);
       if (count === 0) throw new AppError("NOT_FOUND", "Deal not found");

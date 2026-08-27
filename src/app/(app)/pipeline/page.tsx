@@ -25,13 +25,17 @@ export default async function PipelinePage({
   const rawTrack = one(sp.track);
   const track = TRACKS.includes(rawTrack as Track) ? (rawTrack as Track) : undefined;
 
+  const clientId = one(sp.clientId);
+  const search = one(sp.search);
+  const ownerId = one(sp.ownerId);
+
   const [board, clientRows, userRows, savedViews] = await Promise.all([
     candidateService.listBoard(
       {
-        track,
-        clientId: one(sp.clientId),
-        search: one(sp.search),
-        ownerId: one(sp.ownerId),
+        ...(track !== undefined && { track }),
+        ...(clientId !== undefined && { clientId }),
+        ...(search !== undefined && { search }),
+        ...(ownerId !== undefined && { ownerId }),
       },
       user,
     ),

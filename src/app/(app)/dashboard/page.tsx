@@ -63,7 +63,10 @@ export default async function DashboardPage() {
       </header>
 
       {/* Daily accountability loop (Wave 3.1): targets/pace + End of Shift, then the recap. */}
-      <DailyStrip initial={initialDailyOverview} initialTz={initialTz} />
+      <DailyStrip
+        {...(initialDailyOverview !== undefined && { initial: initialDailyOverview })}
+        {...(initialTz !== undefined && { initialTz })}
+      />
       <SinceYouClosed userId={user.id} />
 
       {/* Main (stats + distribution) + a sidebar (needs attention) — fills the width on wide

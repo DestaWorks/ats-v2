@@ -19,7 +19,7 @@ import { Field } from "@/components/ui/field";
 import { Modal } from "@/components/ui/modal";
 import { Table, Td } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { fieldError } from "../candidates/[id]/lib/form-error";
+import { fieldErrorProps } from "../lib/field-error-props";
 
 function StatTile({ label, value }: { label: string; value: string }) {
   return (
@@ -162,7 +162,7 @@ function DisableAiForm({
         Every AI-gated call (resume/JD/inbound extraction, briefs) returns 503 until this is turned
         back on.
       </p>
-      <Field label="Reason (optional)" htmlFor="dai-reason" error={fieldError(form, "reason")}>
+      <Field label="Reason (optional)" htmlFor="dai-reason" {...fieldErrorProps(form, "reason")}>
         <Textarea id="dai-reason" rows={3} {...form.register("reason")} />
       </Field>
       <div className="flex items-center justify-end gap-2 border-t border-black/5 pt-4">

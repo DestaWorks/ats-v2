@@ -54,14 +54,15 @@ export function scrubEvent(event: ErrorEvent): ErrorEvent {
     const { url, method, headers } = event.request;
     const userAgent = headers?.["user-agent"] ?? headers?.["User-Agent"];
     event.request = {
-      url,
-      method,
-      headers: userAgent ? { "user-agent": userAgent } : undefined,
+      ...(url !== undefined && { url }),
+      ...(method !== undefined && { method }),
+      ...(userAgent ? { headers: { "user-agent": userAgent } } : {}),
       // Explicitly omitted: data (POST body), query_string, cookies, env.
     };
   }
   if (event.user) {
-    event.user = event.user.id ? { id: event.user.id } : undefined;
+    if (event.user.id) event.user = { id: event.user.id };
+    else delete event.user;
   }
   if (event.extra) event.extra = scrubDeep(event.extra);
   if (event.contexts) event.contexts = scrubDeep(event.contexts);

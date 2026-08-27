@@ -423,6 +423,10 @@ export function MigrationWizard({ storageEnabled }: { storageEnabled: boolean })
   }
 
   const willImport = preview ? importableCount(preview) : 0;
+  const sourceProps = {
+    ...(file !== null && { csvContent: file.content, csvFormat: file.format }),
+    ...(resumes !== null && { resumes }),
+  };
 
   return (
     <div className="flex flex-col gap-6">
@@ -542,12 +546,7 @@ export function MigrationWizard({ storageEnabled }: { storageEnabled: boolean })
             dry-run preview of {file?.name ?? "the export"}. Review the report, then commit.
           </div>
 
-          <ReportView
-            report={preview}
-            csvContent={file?.content}
-            csvFormat={file?.format}
-            resumes={resumes ?? undefined}
-          />
+          <ReportView report={preview} {...sourceProps} />
 
           <div className="flex flex-wrap items-center gap-2">
             <Button
@@ -594,12 +593,7 @@ export function MigrationWizard({ storageEnabled }: { storageEnabled: boolean })
             </span>
           </div>
 
-          <ReportView
-            report={committed}
-            csvContent={file?.content}
-            csvFormat={file?.format}
-            resumes={resumes ?? undefined}
-          />
+          <ReportView report={committed} {...sourceProps} />
 
           <div className="flex flex-wrap items-center gap-2">
             <Link

@@ -19,7 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { fieldError } from "../../candidates/[id]/lib/form-error";
+import { fieldErrorProps } from "../../lib/field-error-props";
 
 // --- Deal detail modal (Wave 4.2 slice 3) — form + stage move + blockers ----
 
@@ -157,11 +157,11 @@ export function DealDetailModal({
         noValidate
         className="flex flex-col gap-4"
       >
-        <Field label="Name" htmlFor="dd-name" error={fieldError(form, "name")} required>
+        <Field label="Name" htmlFor="dd-name" {...fieldErrorProps(form, "name")} required>
           <Input id="dd-name" {...form.register("name")} />
         </Field>
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Est. value ($)" htmlFor="dd-value" error={fieldError(form, "estValue")}>
+          <Field label="Est. value ($)" htmlFor="dd-value" {...fieldErrorProps(form, "estValue")}>
             <Input
               id="dd-value"
               type="number"
@@ -173,7 +173,7 @@ export function DealDetailModal({
           <Field
             label="Probability override (%)"
             htmlFor="dd-prob"
-            error={fieldError(form, "probabilityOverride")}
+            {...fieldErrorProps(form, "probabilityOverride")}
           >
             <Input
               id="dd-prob"

@@ -4,6 +4,7 @@ import {
   type OpenRoleDetailDTO,
   type OpenRoleListDTO,
 } from "@/lib/validation/open-role";
+import { defined } from "@/lib/utils/defined";
 import { requireUser } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { openRoleService } from "@/server/services/open-role.service";
@@ -40,5 +41,5 @@ export const GET = apiHandler(async (req: Request) => {
     search: params.get("search") ?? undefined,
     page: params.get("page") ?? undefined,
   });
-  return json<GetRoleListResponse>(await openRoleService.list(filters));
+  return json<GetRoleListResponse>(await openRoleService.list(defined(filters)));
 });

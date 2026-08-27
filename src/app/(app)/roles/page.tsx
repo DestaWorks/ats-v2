@@ -31,7 +31,13 @@ export default async function RolesPage({
   const page = Number.isInteger(rawPage) && rawPage > 0 ? rawPage : 1;
 
   const [list, triage, clientRows] = await Promise.all([
-    openRoleService.list({ clientId, status, priority, search, page }),
+    openRoleService.list({
+      ...(clientId !== undefined && { clientId }),
+      ...(status !== undefined && { status }),
+      ...(priority !== undefined && { priority }),
+      ...(search !== undefined && { search }),
+      page,
+    }),
     openRoleService.triage(),
     cachedClientList(),
   ]);

@@ -177,7 +177,7 @@ export const dailyService = {
       live,
       actualSubmitted: actual !== null,
       canSetTargets,
-      teammates,
+      ...(teammates !== undefined && { teammates }),
       clients: clients.map((c) => ({ id: c.id, name: c.name })),
     };
   },

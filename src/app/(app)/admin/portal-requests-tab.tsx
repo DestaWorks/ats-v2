@@ -14,7 +14,7 @@ import { ErrorState } from "@/components/ui/error-state";
 import { Field } from "@/components/ui/field";
 import { Modal } from "@/components/ui/modal";
 import { Select } from "@/components/ui/select";
-import { fieldError } from "../candidates/[id]/lib/form-error";
+import { fieldErrorProps } from "../lib/field-error-props";
 
 /** Shown once after generating a portal link — the plaintext token is never re-fetchable. */
 export function GeneratedPortalLinkBanner({
@@ -195,7 +195,7 @@ function ApprovePortalRequestForm({
         and generates them a one-time portal link. They requested:{" "}
         <span className="font-medium text-charcoal">{request.requestedClientName}</span>.
       </p>
-      <Field label="Client" htmlFor="apr-client" error={fieldError(form, "clientId")} required>
+      <Field label="Client" htmlFor="apr-client" {...fieldErrorProps(form, "clientId")} required>
         <Select id="apr-client" {...form.register("clientId")}>
           <option value="">Select…</option>
           {clients.map((c) => (

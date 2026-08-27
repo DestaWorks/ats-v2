@@ -11,8 +11,15 @@ async function main() {
   for (const client of BASE_CLIENTS) {
     await prisma.client.upsert({
       where: { legacyId: client.legacyId },
-      create: { legacyId: client.legacyId, name: client.name, capacity: client.capacity },
-      update: { name: client.name, capacity: client.capacity },
+      create: {
+        legacyId: client.legacyId,
+        name: client.name,
+        ...(client.capacity !== undefined && { capacity: client.capacity }),
+      },
+      update: {
+        name: client.name,
+        ...(client.capacity !== undefined && { capacity: client.capacity }),
+      },
     });
     console.log(`✓ Seeded client: ${client.name}`);
   }

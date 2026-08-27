@@ -34,8 +34,14 @@ export default async function WeeklyBriefPage() {
 
   const initialWeekStart =
     initialTz !== undefined ? mondayOf(dateKeyForOffset(initialTz)) : undefined;
-  const initial =
-    initialWeekStart !== undefined ? await briefService.getWeekly(initialWeekStart) : undefined;
+  const seed =
+    initialTz !== undefined && initialWeekStart !== undefined
+      ? {
+          initial: await briefService.getWeekly(initialWeekStart),
+          initialWeekStart,
+          initialTz,
+        }
+      : {};
 
   return (
     <div className="flex flex-col gap-6 px-8 py-6 print:px-0 print:py-0">
@@ -45,11 +51,7 @@ export default async function WeeklyBriefPage() {
           KPI deltas, per-client and per-associate rollups, accountability, and patterns.
         </p>
       </header>
-      <WeeklyBriefView
-        initial={initial}
-        initialWeekStart={initialWeekStart}
-        initialTz={initialTz}
-      />
+      <WeeklyBriefView {...seed} />
     </div>
   );
 }

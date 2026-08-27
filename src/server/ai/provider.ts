@@ -47,13 +47,14 @@ async function attempt<T>(
   opts: { schema: ZodType<T>; system: string; prompt: string; maxOutputTokens?: number },
 ) {
   const { provider, modelId } = parseModel(modelString);
+  const providerOptions = providerOptionsFor(provider);
   const { object, usage } = await generateObject({
     model: resolveModel(provider, modelId),
     schema: opts.schema,
     system: opts.system,
     prompt: opts.prompt,
     maxOutputTokens: opts.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
-    providerOptions: providerOptionsFor(provider),
+    ...(providerOptions !== undefined && { providerOptions }),
   });
   return { object, provider, modelId, usage };
 }
@@ -73,11 +74,17 @@ function logUsage(
     model,
     latencyMs: Date.now() - startedAt,
     ...(outcome.status === "success"
-      ? { status: "success", inputTokens: outcome.inputTokens, outputTokens: outcome.outputTokens }
+      ? {
+          status: "success" as const,
+          ...(outcome.inputTokens !== undefined && { inputTokens: outcome.inputTokens }),
+          ...(outcome.outputTokens !== undefined && { outputTokens: outcome.outputTokens }),
+        }
       : {
-          status: "error",
-          errorName: outcome.errorName,
-          errorStatusCode: outcome.errorStatusCode,
+          status: "error" as const,
+          ...(outcome.errorName !== undefined && { errorName: outcome.errorName }),
+          ...(outcome.errorStatusCode !== undefined && {
+            errorStatusCode: outcome.errorStatusCode,
+          }),
         }),
   });
 }
@@ -109,15 +116,14 @@ export async function generateStructured<T>(opts: {
     const result = await attempt(primaryModel, opts);
     logUsage(opts.operation, result.provider, result.modelId, startedAt, {
       status: "success",
-      inputTokens: result.usage.inputTokens,
-      outputTokens: result.usage.outputTokens,
+      ...usageTokens(result.usage),
     });
     return result.object;
   } catch (primaryErr) {
     logUsage(opts.operation, primaryProvider, primaryModelId, startedAt, {
       status: "error",
       errorName: primaryErr instanceof Error ? primaryErr.name : "UnknownError",
-      errorStatusCode: statusCodeOf(primaryErr),
+      ...errorStatus(primaryErr),
     });
 
     const fallback = parseFallbackModel(primaryModel);
@@ -128,15 +134,14 @@ export async function generateStructured<T>(opts: {
       const result = await attempt(AI_MODEL_FALLBACK!, opts);
       logUsage(opts.operation, result.provider, result.modelId, fallbackStartedAt, {
         status: "success",
-        inputTokens: result.usage.inputTokens,
-        outputTokens: result.usage.outputTokens,
+        ...usageTokens(result.usage),
       });
       return result.object;
     } catch (fallbackErr) {
       logUsage(opts.operation, fallback.provider, fallback.modelId, fallbackStartedAt, {
         status: "error",
         errorName: fallbackErr instanceof Error ? fallbackErr.name : "UnknownError",
-        errorStatusCode: statusCodeOf(fallbackErr),
+        ...errorStatus(fallbackErr),
       });
       throw fallbackErr;
     }
@@ -147,4 +152,19 @@ function statusCodeOf(err: unknown): number | undefined {
   return typeof err === "object" && err !== null && "statusCode" in err
     ? (err as { statusCode?: number }).statusCode
     : undefined;
+}
+
+function errorStatus(err: unknown): { errorStatusCode?: number } {
+  const errorStatusCode = statusCodeOf(err);
+  return errorStatusCode === undefined ? {} : { errorStatusCode };
+}
+
+function usageTokens(usage: {
+  inputTokens?: number | undefined;
+  outputTokens?: number | undefined;
+}) {
+  return {
+    ...(usage.inputTokens !== undefined && { inputTokens: usage.inputTokens }),
+    ...(usage.outputTokens !== undefined && { outputTokens: usage.outputTokens }),
+  };
 }

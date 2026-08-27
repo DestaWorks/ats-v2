@@ -1,4 +1,5 @@
 import { leadListQuerySchema, type LeadListDTO } from "@/lib/validation/lead";
+import { defined } from "@/lib/utils/defined";
 import { requireUser } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { leadService } from "@/server/services/lead.service";
@@ -24,5 +25,7 @@ export const GET = apiHandler(async (req: Request) => {
     deleted: params.get("deleted") ?? undefined,
     page: params.get("page") ?? undefined,
   });
-  return json<GetLeadListResponse>(await leadService.list({ ...filters, includeDeleted: deleted }));
+  return json<GetLeadListResponse>(
+    await leadService.list(defined({ ...filters, includeDeleted: deleted })),
+  );
 });

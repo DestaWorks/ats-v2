@@ -615,7 +615,7 @@ export function DailyLogView({
                     )
                   }
                   htmlFor={`dl-${key}`}
-                  hint={autoFilled ? `Auto: ${auto.added} from ATS` : undefined}
+                  {...(autoFilled && { hint: `Auto: ${auto.added} from ATS` })}
                 >
                   <Input
                     id={`dl-${key}`}

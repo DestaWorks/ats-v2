@@ -94,15 +94,16 @@ const nextConfig: NextConfig = {
 // warning, it never fails the build.
 export default process.env.NEXT_PUBLIC_SENTRY_DSN
   ? withSentryConfig(nextConfig, {
-      org: process.env.SENTRY_ORG,
-      project: process.env.SENTRY_PROJECT,
-      authToken: process.env.SENTRY_AUTH_TOKEN,
+      ...(process.env.SENTRY_ORG !== undefined && { org: process.env.SENTRY_ORG }),
+      ...(process.env.SENTRY_PROJECT !== undefined && { project: process.env.SENTRY_PROJECT }),
+      ...(process.env.SENTRY_AUTH_TOKEN !== undefined && {
+        authToken: process.env.SENTRY_AUTH_TOKEN,
+      }),
       silent: true,
       widenClientFileUpload: true,
       webpack: { treeshake: { removeDebugLogging: true } },
-      // No PII/PHI belongs in a stack trace or transaction name (see lib/monitoring/sentry-scrub.ts)
-      // — tunneling through our own domain isn't needed for a data-sensitivity reason, only for
-      // dodging ad-blockers, which isn't a goal here.
-      tunnelRoute: undefined,
+      // `tunnelRoute` is deliberately NOT set. No PII/PHI belongs in a stack trace or transaction
+      // name (see lib/monitoring/sentry-scrub.ts) — tunneling through our own domain isn't needed
+      // for a data-sensitivity reason, only for dodging ad-blockers, which isn't a goal here.
     })
   : nextConfig;

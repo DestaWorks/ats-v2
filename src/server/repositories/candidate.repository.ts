@@ -398,9 +398,11 @@ export const candidateRepository = {
   groupByStatusFiltered(filters: CandidateListFilters = {}, tx?: Prisma.TransactionClient) {
     const now = filters.now ?? new Date();
     // Drop `status` — the board groups ACROSS statuses; every other filter still counts.
+    const acrossStatuses = { ...filters };
+    delete acrossStatuses.status;
     return db(tx).candidate.groupBy({
       by: ["status"],
-      where: buildCandidateWhere({ ...filters, status: undefined }, now),
+      where: buildCandidateWhere(acrossStatuses, now),
       _count: { _all: true },
     });
   },

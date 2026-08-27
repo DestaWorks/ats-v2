@@ -22,7 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { Select } from "@/components/ui/select";
 import { Table, Td } from "@/components/ui/table";
-import { fieldError } from "../candidates/[id]/lib/form-error";
+import { fieldErrorProps } from "../lib/field-error-props";
 
 /** Shown once after any action that mints a plaintext password — never re-fetchable. */
 export function GeneratedPasswordBanner({
@@ -267,13 +267,13 @@ function AddUserForm({
   return (
     <form method="post" onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
       {serverError ? <ErrorState message={serverError} /> : null}
-      <Field label="Name" htmlFor="au-name" error={fieldError(form, "name")} required>
+      <Field label="Name" htmlFor="au-name" {...fieldErrorProps(form, "name")} required>
         <Input id="au-name" autoFocus {...form.register("name")} />
       </Field>
-      <Field label="Email" htmlFor="au-email" error={fieldError(form, "email")} required>
+      <Field label="Email" htmlFor="au-email" {...fieldErrorProps(form, "email")} required>
         <Input id="au-email" type="email" {...form.register("email")} />
       </Field>
-      <Field label="Role" htmlFor="au-role" error={fieldError(form, "role")} required>
+      <Field label="Role" htmlFor="au-role" {...fieldErrorProps(form, "role")} required>
         <Select id="au-role" {...form.register("role")}>
           {ROLES.map((r) => (
             <option key={r} value={r}>
@@ -282,7 +282,11 @@ function AddUserForm({
           ))}
         </Select>
       </Field>
-      <Field label="Password (optional)" htmlFor="au-password" error={fieldError(form, "password")}>
+      <Field
+        label="Password (optional)"
+        htmlFor="au-password"
+        {...fieldErrorProps(form, "password")}
+      >
         <Input
           id="au-password"
           type="text"
@@ -330,13 +334,13 @@ function BanForm({
         Blocking <span className="font-semibold text-charcoal">{user.name}</span> immediately
         revokes their sessions and prevents sign-in.
       </p>
-      <Field label="Reason (optional)" htmlFor="bf-reason" error={fieldError(form, "reason")}>
+      <Field label="Reason (optional)" htmlFor="bf-reason" {...fieldErrorProps(form, "reason")}>
         <Input id="bf-reason" {...form.register("reason", { setValueAs: emptyToNull })} />
       </Field>
       <Field
         label="Expires in (days, optional)"
         htmlFor="bf-expires"
-        error={fieldError(form, "expiresInDays")}
+        {...fieldErrorProps(form, "expiresInDays")}
       >
         <Input
           id="bf-expires"

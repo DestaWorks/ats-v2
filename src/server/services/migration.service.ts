@@ -259,7 +259,7 @@ async function attachResumeWithAi(
         type: "resume",
         originalFilename: plan.resumeFilename ?? `${plan.name}.pdf`,
         mimeType: "application/pdf",
-        extractedText: plan.resumeText,
+        ...(plan.resumeText !== undefined && { extractedText: plan.resumeText }),
         extractedData: data ?? undefined,
         storageKey: plan.resumeStorageKey ?? null,
         uploadedById: user.id,

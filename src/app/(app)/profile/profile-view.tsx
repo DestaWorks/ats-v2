@@ -17,7 +17,7 @@ import { ErrorState } from "@/components/ui/error-state";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { fieldError } from "../candidates/[id]/lib/form-error";
+import { fieldErrorProps } from "../lib/field-error-props";
 import { SignatureEditor } from "../templates/signature-editor";
 
 /** Square avatar, resized client-side before upload — mirrors legacy's `resizeImage` intent
@@ -161,7 +161,7 @@ export function ProfileView({
 
           <form method="post" onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
             {serverError ? <ErrorState message={serverError} /> : null}
-            <Field label="Bio" htmlFor="pf-bio" error={fieldError(form, "bio")}>
+            <Field label="Bio" htmlFor="pf-bio" {...fieldErrorProps(form, "bio")}>
               <Textarea
                 id="pf-bio"
                 rows={3}
@@ -171,14 +171,14 @@ export function ProfileView({
               />
             </Field>
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Phone" htmlFor="pf-phone" error={fieldError(form, "phone")}>
+              <Field label="Phone" htmlFor="pf-phone" {...fieldErrorProps(form, "phone")}>
                 <Input
                   id="pf-phone"
                   placeholder="+251 9XX XXX XXXX"
                   {...form.register("phone", { setValueAs: emptyToNull })}
                 />
               </Field>
-              <Field label="Location" htmlFor="pf-location" error={fieldError(form, "location")}>
+              <Field label="Location" htmlFor="pf-location" {...fieldErrorProps(form, "location")}>
                 <Input
                   id="pf-location"
                   placeholder="Addis Ababa, Ethiopia"

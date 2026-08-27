@@ -106,7 +106,7 @@ export function applyBoardMove(
         ? {
             ...t,
             count: t.count + 1,
-            candidates: t.candidates ? [moved, ...t.candidates] : t.candidates,
+            ...(t.candidates !== undefined && { candidates: [moved, ...t.candidates] }),
           }
         : t,
     );

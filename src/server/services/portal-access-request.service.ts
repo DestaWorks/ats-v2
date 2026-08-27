@@ -4,6 +4,7 @@ import { clientContactRepository } from "@/server/repositories/client-contact.re
 import { clientPortalService } from "@/server/services/client-portal.service";
 import { AppError } from "@/server/http/app-error";
 import { toIso } from "@/lib/utils/iso";
+import { defined } from "@/lib/utils/defined";
 import type { AuthUser } from "@/server/auth/guards";
 import type {
   ApprovePortalRequestInput,
@@ -39,12 +40,14 @@ function toDTO(row: {
  */
 export const portalAccessRequestService = {
   submit(input: PortalAccessRequestInput) {
-    return portalAccessRequestRepository.create({
-      name: input.name,
-      email: input.email,
-      requestedClientName: input.requestedClientName,
-      note: input.note,
-    });
+    return portalAccessRequestRepository.create(
+      defined({
+        name: input.name,
+        email: input.email,
+        requestedClientName: input.requestedClientName,
+        note: input.note,
+      }),
+    );
   },
 
   async list(): Promise<PortalAccessRequestDTO[]> {

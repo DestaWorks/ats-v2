@@ -21,6 +21,7 @@ import type {
   UpdateOutreachInput,
 } from "@/lib/validation/lead";
 import { toIso, isoOrNull } from "@/lib/utils/iso";
+import { defined } from "@/lib/utils/defined";
 import { pageMeta } from "@/lib/pagination";
 import type { AuthUser } from "@/server/auth/guards";
 import { writeAudit } from "@/server/db/audit";
@@ -191,14 +192,14 @@ export const leadService = {
    * numbered pager. `targetClientName`/`ownerName` resolve from one-shot batch maps (no N+1).
    */
   async list(filters: LeadListFilters = {}): Promise<LeadListDTO> {
-    const repoFilters = {
+    const repoFilters = defined({
       status: filters.status,
       source: filters.source,
       clientId: filters.clientId,
       createdById: filters.ownerId,
       search: filters.search,
       includeDeleted: filters.includeDeleted,
-    };
+    });
     const [total, clientNames] = await Promise.all([
       leadRepository.count(repoFilters),
       cachedClientNameMap(),
@@ -234,11 +235,11 @@ export const leadService = {
         {
           leadId: id,
           channel: input.channel,
-          note: input.note,
+          ...(input.note !== undefined && { note: input.note }),
           at,
           actorId: user.id,
           status: next,
-          templateId: input.templateId,
+          ...(input.templateId !== undefined && { templateId: input.templateId }),
         },
         tx,
       );

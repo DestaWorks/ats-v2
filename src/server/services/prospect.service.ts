@@ -16,6 +16,7 @@ import type {
   UpdateProspectInput,
 } from "@/lib/validation/prospect";
 import { toIso, isoOrNull } from "@/lib/utils/iso";
+import { defined } from "@/lib/utils/defined";
 import { pageMeta } from "@/lib/pagination";
 import type { AuthUser } from "@/server/auth/guards";
 import { writeAudit } from "@/server/db/audit";
@@ -170,13 +171,15 @@ export const prospectService = {
   async search(query: SearchProspectsQuery, user: AuthUser): Promise<ProspectSearchResultDTO> {
     await checkRateLimit(`client-discovery-search:${user.id}`, { limit: 20, windowMs: 60_000 });
 
-    const { resultCount, results } = await searchNppes({
-      enumerationType: "NPI-2",
-      taxonomyDescription: query.taxonomy ? specialtyTaxonomyQuery(query.taxonomy) : undefined,
-      state: query.state,
-      city: query.city,
-      zip: query.zip,
-    });
+    const { resultCount, results } = await searchNppes(
+      defined({
+        enumerationType: "NPI-2" as const,
+        taxonomyDescription: query.taxonomy ? specialtyTaxonomyQuery(query.taxonomy) : undefined,
+        state: query.state,
+        city: query.city,
+        zip: query.zip,
+      }),
+    );
 
     const npis = results.map((r) => r.number);
     const tracked = await prospectRepository.findManyByNpis(npis);
@@ -289,13 +292,13 @@ export const prospectService = {
 
   /** The `/client-discovery` inventory — one server OFFSET page (Newest-first). */
   async list(filters: ProspectListFilters = {}): Promise<ProspectListDTO> {
-    const repoFilters = {
+    const repoFilters = defined({
       status: filters.status,
       ownerId: filters.ownerId,
       source: filters.source,
       search: filters.search,
       includeDeleted: filters.includeDeleted,
-    };
+    });
     const total = await prospectRepository.count(repoFilters);
     const meta = pageMeta(total, filters.page ?? 1, LIST_PAGE);
     const rows = await prospectRepository.list({
@@ -357,9 +360,10 @@ export const prospectService = {
     }
     await checkRateLimit(`client-discovery-enrich:${user.id}`, { limit: 20, windowMs: 60_000 });
 
+    const domain = extractDomain(existing.website);
     const found = await findApolloContacts({
       organizationName: existing.practiceName,
-      domain: extractDomain(existing.website) ?? undefined,
+      ...(domain !== null && { domain }),
     });
     await persistFoundContacts(id, found, "Apollo", "enrich_apollo", user);
     return toProspectDetail(existing);

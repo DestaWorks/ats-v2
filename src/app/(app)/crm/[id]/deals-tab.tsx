@@ -14,7 +14,7 @@ import { ErrorState } from "@/components/ui/error-state";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
-import { fieldError } from "../../candidates/[id]/lib/form-error";
+import { fieldErrorProps } from "../../lib/field-error-props";
 import { DealDetailModal } from "./deal-detail-modal";
 
 // --- Deals tab (Wave 4.2 slice 3) — kanban ----------------------------------
@@ -187,11 +187,11 @@ function AddDealForm({
   return (
     <form method="post" onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
       {serverError ? <ErrorState message={serverError} /> : null}
-      <Field label="Name" htmlFor="cd-name" error={fieldError(form, "name")} required>
+      <Field label="Name" htmlFor="cd-name" {...fieldErrorProps(form, "name")} required>
         <Input id="cd-name" autoFocus {...form.register("name")} />
       </Field>
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Est. value ($)" htmlFor="cd-value" error={fieldError(form, "estValue")}>
+        <Field label="Est. value ($)" htmlFor="cd-value" {...fieldErrorProps(form, "estValue")}>
           <Input
             id="cd-value"
             type="number"
@@ -203,7 +203,7 @@ function AddDealForm({
         <Field
           label="Expected close"
           htmlFor="cd-close-date"
-          error={fieldError(form, "expectedCloseDate")}
+          {...fieldErrorProps(form, "expectedCloseDate")}
         >
           <Input
             id="cd-close-date"

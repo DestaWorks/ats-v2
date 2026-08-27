@@ -42,7 +42,11 @@ export default async function DailyLogPage() {
           Self-report today&apos;s numbers, track your ramp, and keep your journal.
         </p>
       </header>
-      <DailyLogView canViewTeam={canViewTeam} initial={initial} initialTz={initialTz} />
+      <DailyLogView
+        canViewTeam={canViewTeam}
+        {...(initial !== undefined && { initial })}
+        {...(initialTz !== undefined && { initialTz })}
+      />
     </div>
   );
 }

@@ -11,7 +11,7 @@ const h = vi.hoisted(() => {
     statusCode?: number;
     constructor(message: string, statusCode?: number) {
       super(message);
-      this.statusCode = statusCode;
+      if (statusCode !== undefined) this.statusCode = statusCode;
     }
     static isInstance(e: unknown): e is APICallError {
       return e instanceof APICallError;

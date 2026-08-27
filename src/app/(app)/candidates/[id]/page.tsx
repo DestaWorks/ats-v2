@@ -25,7 +25,7 @@ export default async function CandidateDetailPage({
       clients={clients}
       taggable={taggable}
       canEditCredential={detail.canVerifyCredentials}
-      initialTab={tab}
+      {...(tab !== undefined && { initialTab: tab })}
       storageEnabled={storageEnabled}
     />
   );

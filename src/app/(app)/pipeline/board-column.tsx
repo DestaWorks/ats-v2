@@ -80,7 +80,12 @@ export function BoardColumn({
           </li>
         ) : (
           cards.map((card) => (
-            <CandidateCard key={card.id} card={card} onMove={onMove} busy={busy} />
+            <CandidateCard
+              key={card.id}
+              card={card}
+              onMove={onMove}
+              {...(busy !== undefined && { busy })}
+            />
           ))
         )}
       </ul>

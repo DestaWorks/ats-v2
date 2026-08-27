@@ -27,6 +27,7 @@ import type {
   UpdateOpenRoleInput,
 } from "@/lib/validation/open-role";
 import { toIso, isoOrNull } from "@/lib/utils/iso";
+import { defined } from "@/lib/utils/defined";
 import { pageMeta } from "@/lib/pagination";
 import type { AuthUser } from "@/server/auth/guards";
 import { writeAudit } from "@/server/db/audit";
@@ -177,12 +178,12 @@ export const openRoleService = {
   },
 
   async list(filters: OpenRoleListFilters = {}): Promise<OpenRoleListDTO> {
-    const repoFilters = {
+    const repoFilters = defined({
       clientId: filters.clientId,
       status: filters.status,
       priority: filters.priority,
       search: filters.search,
-    };
+    });
     const [total, clientNames] = await Promise.all([
       openRoleRepository.count(repoFilters),
       cachedClientNameMap(),
@@ -273,7 +274,7 @@ export const openRoleService = {
       const updated = await openRoleRepository.update(
         id,
         {
-          ...input,
+          ...defined(input),
           ...(closingNow ? { closedAt: new Date() } : {}),
           ...(reopeningNow ? { closedAt: null } : {}),
         },

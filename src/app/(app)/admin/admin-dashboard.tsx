@@ -215,7 +215,12 @@ export function AdminDashboard({
         />
       ) : null}
 
-      <DetailTabs key={jumpTo} tabs={tabs} initialKey={jumpTo} ariaLabel="Admin" />
+      <DetailTabs
+        key={jumpTo}
+        tabs={tabs}
+        {...(jumpTo !== undefined && { initialKey: jumpTo })}
+        ariaLabel="Admin"
+      />
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { hasCapability, isProspectStatus } from "@/lib/constants";
+import { defined } from "@/lib/utils/defined";
 import { getVerifiedUser } from "@/server/auth/guards";
 import { prospectService } from "@/server/services/prospect.service";
 import { ErrorState } from "@/components/ui/error-state";
@@ -44,7 +45,7 @@ export default async function ClientDiscoveryPage({
   const page = Number.isInteger(rawPage) && rawPage > 0 ? rawPage : 1;
 
   const [list, userRows] = await Promise.all([
-    prospectService.list({ status, ownerId, search, includeDeleted: showDeleted, page }),
+    prospectService.list(defined({ status, ownerId, search, includeDeleted: showDeleted, page })),
     cachedUserList(),
   ]);
   const owners = userRows.map((u) => ({ id: u.id, name: u.name }));

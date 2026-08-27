@@ -36,6 +36,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
 import { Field } from "@/components/ui/field";
+import { fieldErrorProps } from "@/app/(app)/lib/field-error-props";
 import { Button } from "@/components/ui/button";
 import { Input, controlClass } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -85,7 +86,7 @@ export default function StyleguidePage() {
   const {
     register,
     handleSubmit,
-    formState: { errors, isSubmitting },
+    formState: { isSubmitting },
   } = form;
   const onSubmit = (data: SignInInput) => toast.success(`Valid form → ${data.email}`);
 
@@ -289,7 +290,7 @@ export default function StyleguidePage() {
           className="flex flex-col gap-3"
           noValidate
         >
-          <Field label="Email" htmlFor="sg-email" required error={errors.email?.message}>
+          <Field label="Email" htmlFor="sg-email" required {...fieldErrorProps(form, "email")}>
             <input
               id="sg-email"
               type="email"
@@ -297,7 +298,12 @@ export default function StyleguidePage() {
               className={cn(controlClass, "px-3 py-2 text-sm")}
             />
           </Field>
-          <Field label="Password" htmlFor="sg-password" required error={errors.password?.message}>
+          <Field
+            label="Password"
+            htmlFor="sg-password"
+            required
+            {...fieldErrorProps(form, "password")}
+          >
             <input
               id="sg-password"
               type="password"

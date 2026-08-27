@@ -1,4 +1,5 @@
 import { prospectListQuerySchema, type ProspectListDTO } from "@/lib/validation/prospect";
+import { defined } from "@/lib/utils/defined";
 import { requireCapability } from "@/server/auth/guards";
 import { apiHandler, json } from "@/server/http/api-handler";
 import { prospectService } from "@/server/services/prospect.service";
@@ -24,6 +25,6 @@ export const GET = apiHandler(async (req: Request) => {
     page: params.get("page") ?? undefined,
   });
   return json<GetProspectListResponse>(
-    await prospectService.list({ ...filters, includeDeleted: deleted }),
+    await prospectService.list(defined({ ...filters, includeDeleted: deleted })),
   );
 });

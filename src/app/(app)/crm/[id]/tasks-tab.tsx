@@ -14,7 +14,7 @@ import { ErrorState } from "@/components/ui/error-state";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
-import { fieldError } from "../../candidates/[id]/lib/form-error";
+import { fieldErrorProps } from "../../lib/field-error-props";
 
 // --- Tasks tab (Wave 4.2 slice 2) -------------------------------------------
 
@@ -195,18 +195,18 @@ function TaskForm({
   return (
     <form method="post" onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
       {serverError ? <ErrorState message={serverError} /> : null}
-      <Field label="Title" htmlFor="ct-title" error={fieldError(form, "title")} required>
+      <Field label="Title" htmlFor="ct-title" {...fieldErrorProps(form, "title")} required>
         <Input id="ct-title" autoFocus {...form.register("title")} />
       </Field>
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Due date" htmlFor="ct-due" error={fieldError(form, "dueDate")}>
+        <Field label="Due date" htmlFor="ct-due" {...fieldErrorProps(form, "dueDate")}>
           <Input
             id="ct-due"
             type="date"
             {...form.register("dueDate", { setValueAs: emptyToNull })}
           />
         </Field>
-        <Field label="Assignee" htmlFor="ct-assignee" error={fieldError(form, "assignedToId")}>
+        <Field label="Assignee" htmlFor="ct-assignee" {...fieldErrorProps(form, "assignedToId")}>
           <Input
             id="ct-assignee"
             placeholder="Name"

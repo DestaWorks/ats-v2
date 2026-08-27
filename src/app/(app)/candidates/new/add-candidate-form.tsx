@@ -20,7 +20,7 @@ import { emptyToNull, emptyToNullNumber } from "@/lib/forms/empty-to-null";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { ErrorState } from "@/components/ui/error-state";
-import { fieldError } from "../[id]/lib/form-error";
+import { fieldErrorProps } from "../../lib/field-error-props";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { postCandidate } from "./lib/create-fetch";
@@ -96,10 +96,10 @@ export function AddCandidateForm({
           elsewhere); legacy's Contact Source (write-only duplicate of Source) and Target
           Locations (needs client_locations — ports with Open Roles 3.5) are omitted. */}
       <div className="grid gap-x-6 gap-y-5 sm:grid-cols-2">
-        <Field label="Full Name" htmlFor="ac-name" error={fieldError(form, "name")} required>
+        <Field label="Full Name" htmlFor="ac-name" {...fieldErrorProps(form, "name")} required>
           <Input id="ac-name" autoFocus {...form.register("name")} />
         </Field>
-        <Field label="Track" htmlFor="ac-track" error={fieldError(form, "track")} required>
+        <Field label="Track" htmlFor="ac-track" {...fieldErrorProps(form, "track")} required>
           <Select id="ac-track" {...form.register("track")}>
             {TRACKS.map((t) => (
               <option key={t} value={t}>
@@ -109,7 +109,7 @@ export function AddCandidateForm({
           </Select>
         </Field>
         {showCredential ? (
-          <Field label="Credential" htmlFor="ac-cred" error={fieldError(form, "credential")}>
+          <Field label="Credential" htmlFor="ac-cred" {...fieldErrorProps(form, "credential")}>
             <Select id="ac-cred" {...form.register("credential", { setValueAs: emptyToNull })}>
               <option value="">Select…</option>
               {CREDENTIALS.map((c) => (
@@ -124,7 +124,7 @@ export function AddCandidateForm({
           <Field
             label="License State"
             htmlFor="ac-licstate"
-            error={fieldError(form, "licenseState")}
+            {...fieldErrorProps(form, "licenseState")}
           >
             <Select
               id="ac-licstate"
@@ -143,7 +143,7 @@ export function AddCandidateForm({
           <Field
             label="License #"
             htmlFor="ac-licnum"
-            error={fieldError(form, "licenseNumber")}
+            {...fieldErrorProps(form, "licenseNumber")}
             hint="Only visible to credential-cleared roles"
           >
             <Input
@@ -152,7 +152,7 @@ export function AddCandidateForm({
             />
           </Field>
         ) : null}
-        <Field label="Client" htmlFor="ac-client" error={fieldError(form, "clientId")}>
+        <Field label="Client" htmlFor="ac-client" {...fieldErrorProps(form, "clientId")}>
           <Select id="ac-client" {...form.register("clientId", { setValueAs: emptyToNull })}>
             <option value="">Unassigned</option>
             {clients.map((c) => (
@@ -162,7 +162,7 @@ export function AddCandidateForm({
             ))}
           </Select>
         </Field>
-        <Field label="Source" htmlFor="ac-source" error={fieldError(form, "source")}>
+        <Field label="Source" htmlFor="ac-source" {...fieldErrorProps(form, "source")}>
           <Select id="ac-source" {...form.register("source", { setValueAs: emptyToNull })}>
             <option value="">Select…</option>
             {SOURCES.map((s) => (
@@ -172,20 +172,20 @@ export function AddCandidateForm({
             ))}
           </Select>
         </Field>
-        <Field label="Email" htmlFor="ac-email" error={fieldError(form, "email")}>
+        <Field label="Email" htmlFor="ac-email" {...fieldErrorProps(form, "email")}>
           <Input
             id="ac-email"
             type="email"
             {...form.register("email", { setValueAs: emptyToNull })}
           />
         </Field>
-        <Field label="Phone" htmlFor="ac-phone" error={fieldError(form, "phone")}>
+        <Field label="Phone" htmlFor="ac-phone" {...fieldErrorProps(form, "phone")}>
           <Input id="ac-phone" {...form.register("phone", { setValueAs: emptyToNull })} />
         </Field>
-        <Field label="City" htmlFor="ac-city" error={fieldError(form, "city")}>
+        <Field label="City" htmlFor="ac-city" {...fieldErrorProps(form, "city")}>
           <Input id="ac-city" {...form.register("city", { setValueAs: emptyToNull })} />
         </Field>
-        <Field label="State" htmlFor="ac-state" error={fieldError(form, "state")}>
+        <Field label="State" htmlFor="ac-state" {...fieldErrorProps(form, "state")}>
           <Select id="ac-state" {...form.register("state", { setValueAs: emptyToNull })}>
             <option value="">Select…</option>
             {US_STATES.map((s) => (
@@ -198,7 +198,7 @@ export function AddCandidateForm({
         <Field
           label="Target Locations"
           htmlFor="ac-target-location"
-          error={fieldError(form, "targetLocation")}
+          {...fieldErrorProps(form, "targetLocation")}
         >
           <Input
             id="ac-target-location"
@@ -206,10 +206,10 @@ export function AddCandidateForm({
             {...form.register("targetLocation", { setValueAs: emptyToNull })}
           />
         </Field>
-        <Field label="Employer" htmlFor="ac-employer" error={fieldError(form, "employer")}>
+        <Field label="Employer" htmlFor="ac-employer" {...fieldErrorProps(form, "employer")}>
           <Input id="ac-employer" {...form.register("employer", { setValueAs: emptyToNull })} />
         </Field>
-        <Field label="Population" htmlFor="ac-pop" error={fieldError(form, "population")}>
+        <Field label="Population" htmlFor="ac-pop" {...fieldErrorProps(form, "population")}>
           <Select id="ac-pop" {...form.register("population", { setValueAs: emptyToNull })}>
             <option value="">Select…</option>
             {POPULATIONS.map((p) => (
@@ -219,7 +219,7 @@ export function AddCandidateForm({
             ))}
           </Select>
         </Field>
-        <Field label="Setting" htmlFor="ac-setting" error={fieldError(form, "setting")}>
+        <Field label="Setting" htmlFor="ac-setting" {...fieldErrorProps(form, "setting")}>
           <Select id="ac-setting" {...form.register("setting", { setValueAs: emptyToNull })}>
             <option value="">Select…</option>
             {SETTINGS.map((s) => (
@@ -229,7 +229,7 @@ export function AddCandidateForm({
             ))}
           </Select>
         </Field>
-        <Field label="Telehealth" htmlFor="ac-tele" error={fieldError(form, "telehealthPref")}>
+        <Field label="Telehealth" htmlFor="ac-tele" {...fieldErrorProps(form, "telehealthPref")}>
           <Select id="ac-tele" {...form.register("telehealthPref", { setValueAs: emptyToNull })}>
             <option value="">Select…</option>
             {TELEHEALTH_PREFS.map((t) => (
@@ -239,7 +239,7 @@ export function AddCandidateForm({
             ))}
           </Select>
         </Field>
-        <Field label="Years Exp" htmlFor="ac-years" error={fieldError(form, "yearsExp")}>
+        <Field label="Years Exp" htmlFor="ac-years" {...fieldErrorProps(form, "yearsExp")}>
           <Input
             id="ac-years"
             type="number"

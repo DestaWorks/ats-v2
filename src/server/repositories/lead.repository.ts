@@ -316,7 +316,10 @@ export const leadRepository = {
     tx?: Prisma.TransactionClient,
     opts?: { skipDuplicates?: boolean },
   ) {
-    return db(tx).sourceLead.createMany({ data: rows, skipDuplicates: opts?.skipDuplicates });
+    return db(tx).sourceLead.createMany({
+      data: rows,
+      ...(opts?.skipDuplicates !== undefined && { skipDuplicates: opts.skipDuplicates }),
+    });
   },
 
   /** Bulk-backfill outreach-attempt history (import only — live logging goes through

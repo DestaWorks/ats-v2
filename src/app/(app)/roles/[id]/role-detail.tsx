@@ -45,7 +45,7 @@ import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Table, Td } from "@/components/ui/table";
-import { fieldError } from "../../candidates/[id]/lib/form-error";
+import { fieldErrorProps } from "../../lib/field-error-props";
 import { PRIORITY_TONE, STATUS_TONE } from "../lib/role-style";
 
 export function RoleDetail({
@@ -252,7 +252,7 @@ function EditRoleForm({
     >
       {serverError ? <ErrorState message={serverError} /> : null}
       <div className="grid gap-4 sm:grid-cols-3">
-        <Field label="Target client" htmlFor="er-client" error={fieldError(form, "clientId")}>
+        <Field label="Target client" htmlFor="er-client" {...fieldErrorProps(form, "clientId")}>
           <Select id="er-client" {...form.register("clientId")}>
             {clients.map((c) => (
               <option key={c.id} value={c.id}>
@@ -264,12 +264,12 @@ function EditRoleForm({
         <Field
           label="Title"
           htmlFor="er-title"
-          error={fieldError(form, "title")}
+          {...fieldErrorProps(form, "title")}
           className="sm:col-span-2"
         >
           <Input id="er-title" {...form.register("title")} />
         </Field>
-        <Field label="Status" htmlFor="er-status" error={fieldError(form, "status")}>
+        <Field label="Status" htmlFor="er-status" {...fieldErrorProps(form, "status")}>
           <Select id="er-status" {...form.register("status")}>
             {ROLE_STATUSES.map((s) => (
               <option key={s} value={s}>
@@ -278,7 +278,7 @@ function EditRoleForm({
             ))}
           </Select>
         </Field>
-        <Field label="Priority" htmlFor="er-priority" error={fieldError(form, "priority")}>
+        <Field label="Priority" htmlFor="er-priority" {...fieldErrorProps(form, "priority")}>
           <Select id="er-priority" {...form.register("priority")}>
             {ROLE_PRIORITIES.map((p) => (
               <option key={p} value={p}>
@@ -287,7 +287,7 @@ function EditRoleForm({
             ))}
           </Select>
         </Field>
-        <Field label="Credential" htmlFor="er-cred" error={fieldError(form, "credential")}>
+        <Field label="Credential" htmlFor="er-cred" {...fieldErrorProps(form, "credential")}>
           <Select id="er-cred" {...form.register("credential", { setValueAs: emptyToNull })}>
             <option value="">Select…</option>
             {CREDENTIALS.map((c) => (
@@ -297,7 +297,7 @@ function EditRoleForm({
             ))}
           </Select>
         </Field>
-        <Field label="State" htmlFor="er-state" error={fieldError(form, "state")}>
+        <Field label="State" htmlFor="er-state" {...fieldErrorProps(form, "state")}>
           <Select id="er-state" {...form.register("state", { setValueAs: emptyToNull })}>
             <option value="">Select…</option>
             {US_STATES.map((s) => (
@@ -307,10 +307,10 @@ function EditRoleForm({
             ))}
           </Select>
         </Field>
-        <Field label="City" htmlFor="er-city" error={fieldError(form, "city")}>
+        <Field label="City" htmlFor="er-city" {...fieldErrorProps(form, "city")}>
           <Input id="er-city" {...form.register("city", { setValueAs: emptyToNull })} />
         </Field>
-        <Field label="Setting" htmlFor="er-setting" error={fieldError(form, "setting")}>
+        <Field label="Setting" htmlFor="er-setting" {...fieldErrorProps(form, "setting")}>
           <Select id="er-setting" {...form.register("setting", { setValueAs: emptyToNull })}>
             <option value="">Select…</option>
             {SETTINGS.map((s) => (
@@ -320,7 +320,7 @@ function EditRoleForm({
             ))}
           </Select>
         </Field>
-        <Field label="Population" htmlFor="er-population" error={fieldError(form, "population")}>
+        <Field label="Population" htmlFor="er-population" {...fieldErrorProps(form, "population")}>
           <Select id="er-population" {...form.register("population", { setValueAs: emptyToNull })}>
             <option value="">Select…</option>
             {POPULATIONS.map((p) => (
@@ -330,13 +330,13 @@ function EditRoleForm({
             ))}
           </Select>
         </Field>
-        <Field label="Rate" htmlFor="er-rate" error={fieldError(form, "rate")}>
+        <Field label="Rate" htmlFor="er-rate" {...fieldErrorProps(form, "rate")}>
           <Input id="er-rate" {...form.register("rate", { setValueAs: emptyToNull })} />
         </Field>
         <Field
           label="Description"
           htmlFor="er-description"
-          error={fieldError(form, "description")}
+          {...fieldErrorProps(form, "description")}
           className="sm:col-span-3"
         >
           <textarea

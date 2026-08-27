@@ -64,19 +64,26 @@ export default async function CandidatesPage({
     return Number.isNaN(d.getTime()) ? undefined : d;
   };
 
+  const clientId = one(sp.clientId);
+  const search = one(sp.search);
+  const source = one(sp.source);
+  const ownerId = one(sp.ownerId);
+  const addedFrom = date(sp.addedFrom);
+  const addedTo = date(sp.addedTo);
+
   const [list, clientRows, userRows, savedViews] = await Promise.all([
     candidateService.listCandidates(
       {
-        track,
-        status,
-        clientId: one(sp.clientId),
-        search: one(sp.search),
-        tags,
-        licenseStatus,
-        source: one(sp.source),
-        ownerId: one(sp.ownerId),
-        addedFrom: date(sp.addedFrom),
-        addedTo: date(sp.addedTo),
+        ...(track !== undefined && { track }),
+        ...(status !== undefined && { status }),
+        ...(clientId !== undefined && { clientId }),
+        ...(search !== undefined && { search }),
+        ...(tags !== undefined && { tags }),
+        ...(licenseStatus !== undefined && { licenseStatus }),
+        ...(source !== undefined && { source }),
+        ...(ownerId !== undefined && { ownerId }),
+        ...(addedFrom !== undefined && { addedFrom }),
+        ...(addedTo !== undefined && { addedTo }),
         mine: flag(sp.mine),
         overdue: flag(sp.overdue),
         stuck: flag(sp.stuck),

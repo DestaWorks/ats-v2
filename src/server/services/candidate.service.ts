@@ -33,6 +33,7 @@ import type {
 } from "@/lib/validation/pipeline";
 import { encodeCursor, type PageCursor } from "@/lib/validation/cursor";
 import { toIso } from "@/lib/utils/iso";
+import { defined } from "@/lib/utils/defined";
 import { pageMeta } from "@/lib/pagination";
 import { listSortToOrderBy, type ListSort } from "@/lib/validation/pipeline";
 import type { LogOutreachInput, OutreachAttemptDTO } from "@/lib/validation/lead";
@@ -121,20 +122,21 @@ export interface ListFilters extends SharedListFilters {
  * `status` is threaded through separately by each caller (the list keeps it; the board strips it).
  */
 function toRepoFilters(filters: SharedListFilters, viewer: AuthUser) {
+  // `mine` always resolves to the SESSION user (never a client-supplied id); the explicit
+  // view-as `ownerId` filter is just a filter over data every operator can already see.
+  const createdById = filters.mine ? viewer.id : filters.ownerId;
   return {
-    track: filters.track,
-    clientId: filters.clientId,
-    search: filters.search,
-    tags: filters.tags,
-    licenseStatus: filters.licenseStatus,
-    source: filters.source,
-    // `mine` always resolves to the SESSION user (never a client-supplied id); the explicit
-    // view-as `ownerId` filter is just a filter over data every operator can already see.
-    createdById: filters.mine ? viewer.id : filters.ownerId,
-    addedFrom: filters.addedFrom ? utcDayStart(filters.addedFrom) : undefined,
-    addedTo: filters.addedTo ? utcNextDayStart(filters.addedTo) : undefined,
-    overdue: filters.overdue,
-    stuck: filters.stuck,
+    ...(filters.track !== undefined && { track: filters.track }),
+    ...(filters.clientId !== undefined && { clientId: filters.clientId }),
+    ...(filters.search !== undefined && { search: filters.search }),
+    ...(filters.tags !== undefined && { tags: filters.tags }),
+    ...(filters.licenseStatus !== undefined && { licenseStatus: filters.licenseStatus }),
+    ...(filters.source !== undefined && { source: filters.source }),
+    ...(createdById !== undefined && { createdById }),
+    ...(filters.addedFrom ? { addedFrom: utcDayStart(filters.addedFrom) } : {}),
+    ...(filters.addedTo ? { addedTo: utcNextDayStart(filters.addedTo) } : {}),
+    ...(filters.overdue !== undefined && { overdue: filters.overdue }),
+    ...(filters.stuck !== undefined && { stuck: filters.stuck }),
   };
 }
 
@@ -459,15 +461,16 @@ export const candidateService = {
   async update(id: string, input: UpdateCandidateInput, user: AuthUser) {
     const existing = await candidateRepository.findById(id);
     if (!existing) throw new AppError("NOT_FOUND", "Candidate not found");
+    const data = defined(input);
     return withTransaction(async (tx) => {
-      const updated = await candidateRepository.update(id, input, tx);
+      const updated = await candidateRepository.update(id, data, tx);
       await writeAudit(tx, {
         entity: "candidate",
         entityId: id,
         actor: user.id,
         action: "update",
-        before: pickAudited(existing, input),
-        after: pickAudited(updated, input),
+        before: pickAudited(existing, data),
+        after: pickAudited(updated, data),
       });
       return updated;
     });
@@ -716,21 +719,23 @@ export const candidateService = {
       });
     }
     for (const n of visibleNotes(notes, viewer)) {
+      const noteType = n.noteType as JourneyEventDTO["noteType"];
       events.push({
         kind: "note",
         at: toIso(n.createdAt),
         actorName: n.authorName,
         detail: n.body,
-        noteType: n.noteType as JourneyEventDTO["noteType"],
+        ...(noteType !== undefined && { noteType }),
       });
     }
     for (const a of outreachRows) {
+      const channel = a.channel as JourneyEventDTO["channel"];
       events.push({
         kind: "outreach",
         at: toIso(a.at),
         actorName: nameOf(a.actorId),
         detail: a.note,
-        channel: a.channel as JourneyEventDTO["channel"],
+        ...(channel !== undefined && { channel }),
       });
     }
 
@@ -846,7 +851,10 @@ export const candidateService = {
     const hot = filters.hot ?? false;
     const requestedPage = Math.max(1, filters.page ?? 1);
     const baseOrder = listSortToOrderBy(sort);
-    const repoFilters = { ...toRepoFilters(filters, viewer), status: filters.status };
+    const repoFilters = {
+      ...toRepoFilters(filters, viewer),
+      ...(filters.status !== undefined && { status: filters.status }),
+    };
 
     const namesAndRules = Promise.all([cachedClientNameMap(), cachedClientRulesList()]);
 
@@ -1092,7 +1100,7 @@ export const candidateService = {
         ...shared,
         status,
         orderBy: "createdAt_desc",
-        cursor,
+        ...(cursor !== undefined && { cursor }),
         take: BOARD_PAGE + 1,
       }),
       cachedClientNameMap(),

@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { ErrorState } from "@/components/ui/error-state";
 import { Modal } from "@/components/ui/modal";
-import { fieldError } from "../candidates/[id]/lib/form-error";
+import { fieldErrorProps } from "../lib/field-error-props";
 
 export interface ClientOption {
   id: string;
@@ -130,7 +130,7 @@ function AddRoleForm({ clients, onCancel }: { clients: ClientOption[]; onCancel:
         <Field
           label="Target client"
           htmlFor="ar-client"
-          error={fieldError(form, "clientId")}
+          {...fieldErrorProps(form, "clientId")}
           required
         >
           <Select id="ar-client" {...form.register("clientId")}>
@@ -142,10 +142,10 @@ function AddRoleForm({ clients, onCancel }: { clients: ClientOption[]; onCancel:
             ))}
           </Select>
         </Field>
-        <Field label="Title" htmlFor="ar-title" error={fieldError(form, "title")} required>
+        <Field label="Title" htmlFor="ar-title" {...fieldErrorProps(form, "title")} required>
           <Input id="ar-title" autoFocus {...form.register("title")} />
         </Field>
-        <Field label="Credential" htmlFor="ar-cred" error={fieldError(form, "credential")}>
+        <Field label="Credential" htmlFor="ar-cred" {...fieldErrorProps(form, "credential")}>
           <Select id="ar-cred" {...form.register("credential", { setValueAs: emptyToNull })}>
             <option value="">Select…</option>
             {CREDENTIALS.map((c) => (
@@ -155,7 +155,7 @@ function AddRoleForm({ clients, onCancel }: { clients: ClientOption[]; onCancel:
             ))}
           </Select>
         </Field>
-        <Field label="State" htmlFor="ar-state" error={fieldError(form, "state")}>
+        <Field label="State" htmlFor="ar-state" {...fieldErrorProps(form, "state")}>
           <Select id="ar-state" {...form.register("state", { setValueAs: emptyToNull })}>
             <option value="">Select…</option>
             {US_STATES.map((s) => (
@@ -165,10 +165,10 @@ function AddRoleForm({ clients, onCancel }: { clients: ClientOption[]; onCancel:
             ))}
           </Select>
         </Field>
-        <Field label="City" htmlFor="ar-city" error={fieldError(form, "city")}>
+        <Field label="City" htmlFor="ar-city" {...fieldErrorProps(form, "city")}>
           <Input id="ar-city" {...form.register("city", { setValueAs: emptyToNull })} />
         </Field>
-        <Field label="Setting" htmlFor="ar-setting" error={fieldError(form, "setting")}>
+        <Field label="Setting" htmlFor="ar-setting" {...fieldErrorProps(form, "setting")}>
           <Select id="ar-setting" {...form.register("setting", { setValueAs: emptyToNull })}>
             <option value="">Select…</option>
             {SETTINGS.map((s) => (
@@ -178,7 +178,7 @@ function AddRoleForm({ clients, onCancel }: { clients: ClientOption[]; onCancel:
             ))}
           </Select>
         </Field>
-        <Field label="Population" htmlFor="ar-population" error={fieldError(form, "population")}>
+        <Field label="Population" htmlFor="ar-population" {...fieldErrorProps(form, "population")}>
           <Select id="ar-population" {...form.register("population", { setValueAs: emptyToNull })}>
             <option value="">Select…</option>
             {POPULATIONS.map((p) => (
@@ -191,12 +191,12 @@ function AddRoleForm({ clients, onCancel }: { clients: ClientOption[]; onCancel:
         <Field
           label="Rate"
           htmlFor="ar-rate"
-          error={fieldError(form, "rate")}
+          {...fieldErrorProps(form, "rate")}
           hint="e.g. $75-90/hr"
         >
           <Input id="ar-rate" {...form.register("rate", { setValueAs: emptyToNull })} />
         </Field>
-        <Field label="Priority" htmlFor="ar-priority" error={fieldError(form, "priority")}>
+        <Field label="Priority" htmlFor="ar-priority" {...fieldErrorProps(form, "priority")}>
           <Select id="ar-priority" {...form.register("priority")}>
             {ROLE_PRIORITIES.map((p) => (
               <option key={p} value={p}>
@@ -208,7 +208,7 @@ function AddRoleForm({ clients, onCancel }: { clients: ClientOption[]; onCancel:
         <Field
           label="Description"
           htmlFor="ar-description"
-          error={fieldError(form, "description")}
+          {...fieldErrorProps(form, "description")}
           className="sm:col-span-2"
         >
           <textarea

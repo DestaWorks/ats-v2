@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils/cn";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Card } from "@/components/ui/card";
-import { fieldError } from "./lib/form-error";
+import { fieldErrorProps } from "../../lib/field-error-props";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { postVerifyLicense } from "./lib/detail-fetch";
@@ -140,7 +140,7 @@ export function LicenseTab({
             <Field
               label="Status"
               htmlFor="lic-status"
-              error={fieldError(form, "licenseStatus")}
+              {...fieldErrorProps(form, "licenseStatus")}
               required
             >
               <Select id="lic-status" {...form.register("licenseStatus")}>
@@ -151,7 +151,7 @@ export function LicenseTab({
                 ))}
               </Select>
             </Field>
-            <Field label="Expiry" htmlFor="lic-expiry" error={fieldError(form, "licenseExpiry")}>
+            <Field label="Expiry" htmlFor="lic-expiry" {...fieldErrorProps(form, "licenseExpiry")}>
               <Input
                 id="lic-expiry"
                 type="date"
@@ -162,7 +162,7 @@ export function LicenseTab({
               <Field
                 label="License number"
                 htmlFor="lic-number"
-                error={fieldError(form, "licenseNumber")}
+                {...fieldErrorProps(form, "licenseNumber")}
               >
                 <Input
                   id="lic-number"

@@ -38,7 +38,12 @@ export function ReportsView({
     {
       key: "executive",
       label: "Executive",
-      panel: <ExecutiveTab filters={filters} initial={initialExecutive} />,
+      panel: (
+        <ExecutiveTab
+          filters={filters}
+          {...(initialExecutive !== undefined && { initial: initialExecutive })}
+        />
+      ),
     },
     {
       key: "pipeline-funnel",

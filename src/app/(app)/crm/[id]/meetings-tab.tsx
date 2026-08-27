@@ -16,7 +16,7 @@ import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { Select } from "@/components/ui/select";
-import { fieldError } from "../../candidates/[id]/lib/form-error";
+import { fieldErrorProps } from "../../lib/field-error-props";
 
 // --- Meetings tab (Wave 4.2 slice 2) ----------------------------------------
 
@@ -138,7 +138,7 @@ function MeetingForm({
   return (
     <form method="post" onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
       {serverError ? <ErrorState message={serverError} /> : null}
-      <Field label="Type" htmlFor="cm-type" error={fieldError(form, "type")} required>
+      <Field label="Type" htmlFor="cm-type" {...fieldErrorProps(form, "type")} required>
         <Select id="cm-type" {...form.register("type")}>
           {MEETING_TYPES.map((t) => (
             <option key={t} value={t}>
@@ -147,10 +147,10 @@ function MeetingForm({
           ))}
         </Select>
       </Field>
-      <Field label="Attendees" htmlFor="cm-attendees" error={fieldError(form, "attendees")}>
+      <Field label="Attendees" htmlFor="cm-attendees" {...fieldErrorProps(form, "attendees")}>
         <Input id="cm-attendees" {...form.register("attendees", { setValueAs: emptyToNull })} />
       </Field>
-      <Field label="Notes" htmlFor="cm-notes" error={fieldError(form, "notes")}>
+      <Field label="Notes" htmlFor="cm-notes" {...fieldErrorProps(form, "notes")}>
         <textarea
           id="cm-notes"
           rows={3}
@@ -158,7 +158,7 @@ function MeetingForm({
           {...form.register("notes", { setValueAs: emptyToNull })}
         />
       </Field>
-      <Field label="Action items" htmlFor="cm-actions" error={fieldError(form, "actionItems")}>
+      <Field label="Action items" htmlFor="cm-actions" {...fieldErrorProps(form, "actionItems")}>
         <textarea
           id="cm-actions"
           rows={2}

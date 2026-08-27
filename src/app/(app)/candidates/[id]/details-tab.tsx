@@ -23,7 +23,7 @@ import { emptyToNull, emptyToNullNumber } from "@/lib/forms/empty-to-null";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Card } from "@/components/ui/card";
-import { fieldError } from "./lib/form-error";
+import { fieldErrorProps } from "../../lib/field-error-props";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { patchCandidate } from "./lib/detail-fetch";
@@ -139,23 +139,23 @@ export function DetailsTab({
   return (
     <form method="post" onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Name" htmlFor="cd-name" error={fieldError(form, "name")} required>
+        <Field label="Name" htmlFor="cd-name" {...fieldErrorProps(form, "name")} required>
           <Input id="cd-name" {...form.register("name")} />
         </Field>
-        <Field label="Email" htmlFor="cd-email" error={fieldError(form, "email")}>
+        <Field label="Email" htmlFor="cd-email" {...fieldErrorProps(form, "email")}>
           <Input
             id="cd-email"
             type="email"
             {...form.register("email", { setValueAs: emptyToNull })}
           />
         </Field>
-        <Field label="Phone" htmlFor="cd-phone" error={fieldError(form, "phone")}>
+        <Field label="Phone" htmlFor="cd-phone" {...fieldErrorProps(form, "phone")}>
           <Input id="cd-phone" {...form.register("phone", { setValueAs: emptyToNull })} />
         </Field>
-        <Field label="City" htmlFor="cd-city" error={fieldError(form, "city")}>
+        <Field label="City" htmlFor="cd-city" {...fieldErrorProps(form, "city")}>
           <Input id="cd-city" {...form.register("city", { setValueAs: emptyToNull })} />
         </Field>
-        <Field label="State" htmlFor="cd-state" error={fieldError(form, "state")}>
+        <Field label="State" htmlFor="cd-state" {...fieldErrorProps(form, "state")}>
           <Select id="cd-state" {...form.register("state", { setValueAs: emptyToNull })}>
             <option value="">Select…</option>
             {US_STATES.map((s) => (
@@ -168,7 +168,7 @@ export function DetailsTab({
         <Field
           label="Target Locations"
           htmlFor="cd-target-location"
-          error={fieldError(form, "targetLocation")}
+          {...fieldErrorProps(form, "targetLocation")}
         >
           <Input
             id="cd-target-location"
@@ -176,10 +176,10 @@ export function DetailsTab({
             {...form.register("targetLocation", { setValueAs: emptyToNull })}
           />
         </Field>
-        <Field label="Employer" htmlFor="cd-employer" error={fieldError(form, "employer")}>
+        <Field label="Employer" htmlFor="cd-employer" {...fieldErrorProps(form, "employer")}>
           <Input id="cd-employer" {...form.register("employer", { setValueAs: emptyToNull })} />
         </Field>
-        <Field label="Years experience" htmlFor="cd-years" error={fieldError(form, "yearsExp")}>
+        <Field label="Years experience" htmlFor="cd-years" {...fieldErrorProps(form, "yearsExp")}>
           <Input
             id="cd-years"
             type="number"
@@ -188,7 +188,7 @@ export function DetailsTab({
             {...form.register("yearsExp", { setValueAs: emptyToNullNumber })}
           />
         </Field>
-        <Field label="Credential" htmlFor="cd-cred" error={fieldError(form, "credential")}>
+        <Field label="Credential" htmlFor="cd-cred" {...fieldErrorProps(form, "credential")}>
           <Select id="cd-cred" {...form.register("credential", { setValueAs: emptyToNull })}>
             <option value="">Select…</option>
             {CREDENTIALS.map((c) => (
@@ -198,7 +198,7 @@ export function DetailsTab({
             ))}
           </Select>
         </Field>
-        <Field label="Population" htmlFor="cd-pop" error={fieldError(form, "population")}>
+        <Field label="Population" htmlFor="cd-pop" {...fieldErrorProps(form, "population")}>
           <Select id="cd-pop" {...form.register("population", { setValueAs: emptyToNull })}>
             <option value="">Select…</option>
             {POPULATIONS.map((p) => (
@@ -208,7 +208,7 @@ export function DetailsTab({
             ))}
           </Select>
         </Field>
-        <Field label="Setting" htmlFor="cd-setting" error={fieldError(form, "setting")}>
+        <Field label="Setting" htmlFor="cd-setting" {...fieldErrorProps(form, "setting")}>
           <Select id="cd-setting" {...form.register("setting", { setValueAs: emptyToNull })}>
             <option value="">Select…</option>
             {SETTINGS.map((s) => (
@@ -218,7 +218,7 @@ export function DetailsTab({
             ))}
           </Select>
         </Field>
-        <Field label="Telehealth" htmlFor="cd-tele" error={fieldError(form, "telehealthPref")}>
+        <Field label="Telehealth" htmlFor="cd-tele" {...fieldErrorProps(form, "telehealthPref")}>
           <Select id="cd-tele" {...form.register("telehealthPref", { setValueAs: emptyToNull })}>
             <option value="">Select…</option>
             {TELEHEALTH_PREFS.map((t) => (
@@ -228,7 +228,7 @@ export function DetailsTab({
             ))}
           </Select>
         </Field>
-        <Field label="Track" htmlFor="cd-track" error={fieldError(form, "track")}>
+        <Field label="Track" htmlFor="cd-track" {...fieldErrorProps(form, "track")}>
           <Select id="cd-track" {...form.register("track")}>
             {TRACKS.map((t) => (
               <option key={t} value={t}>
@@ -237,7 +237,7 @@ export function DetailsTab({
             ))}
           </Select>
         </Field>
-        <Field label="Source" htmlFor="cd-source" error={fieldError(form, "source")}>
+        <Field label="Source" htmlFor="cd-source" {...fieldErrorProps(form, "source")}>
           <Select id="cd-source" {...form.register("source", { setValueAs: emptyToNull })}>
             <option value="">Select…</option>
             {SOURCES.map((s) => (
@@ -247,7 +247,11 @@ export function DetailsTab({
             ))}
           </Select>
         </Field>
-        <Field label="License state" htmlFor="cd-licstate" error={fieldError(form, "licenseState")}>
+        <Field
+          label="License state"
+          htmlFor="cd-licstate"
+          {...fieldErrorProps(form, "licenseState")}
+        >
           <Select id="cd-licstate" {...form.register("licenseState", { setValueAs: emptyToNull })}>
             <option value="">Select…</option>
             {US_STATES.map((s) => (
@@ -257,7 +261,7 @@ export function DetailsTab({
             ))}
           </Select>
         </Field>
-        <Field label="Client" htmlFor="cd-client" error={fieldError(form, "clientId")}>
+        <Field label="Client" htmlFor="cd-client" {...fieldErrorProps(form, "clientId")}>
           <Select id="cd-client" {...form.register("clientId", { setValueAs: emptyToNull })}>
             <option value="">Unassigned</option>
             {clients.map((c) => (
@@ -271,7 +275,7 @@ export function DetailsTab({
           <Field
             label="License number"
             htmlFor="cd-licnum"
-            error={fieldError(form, "licenseNumber")}
+            {...fieldErrorProps(form, "licenseNumber")}
             hint="Only visible to credential-cleared roles"
           >
             <Input

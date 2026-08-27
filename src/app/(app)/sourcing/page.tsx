@@ -1,4 +1,5 @@
 import { isLeadStatus, type LeadStatus } from "@/lib/constants";
+import { defined } from "@/lib/utils/defined";
 import { leadService } from "@/server/services/lead.service";
 import { LeadFilters } from "./lead-filters";
 import { LeadsInventory } from "./leads-inventory";
@@ -33,15 +34,9 @@ export default async function SourcingPage({
   const page = Number.isInteger(rawPage) && rawPage > 0 ? rawPage : 1;
 
   const [list, clientRows, users] = await Promise.all([
-    leadService.list({
-      status,
-      source,
-      clientId,
-      ownerId,
-      search,
-      includeDeleted: showDeleted,
-      page,
-    }),
+    leadService.list(
+      defined({ status, source, clientId, ownerId, search, includeDeleted: showDeleted, page }),
+    ),
     cachedClientList(),
     cachedUserList(), // filter + bulk "Assign owner…" options (id + display name only)
   ]);

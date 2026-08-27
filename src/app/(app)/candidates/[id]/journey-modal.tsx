@@ -160,7 +160,7 @@ export function JourneyButton({
           <JourneyTimeline
             candidateId={candidateId}
             candidateName={candidateName}
-            subtitle={subtitle}
+            {...(subtitle !== undefined && { subtitle })}
           />
         ) : null}
       </Modal>

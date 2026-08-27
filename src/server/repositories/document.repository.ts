@@ -80,11 +80,12 @@ function decryptRow<T extends Document | null>(row: T): T {
 export const documentRepository = {
   async create(data: DocumentCreateData, tx?: Prisma.TransactionClient) {
     const { extractedData, extractedText, ...rest } = data;
+    const text = encryptText(extractedText);
     return decryptRow(
       await db(tx).document.create({
         data: {
           ...rest,
-          extractedText: encryptText(extractedText),
+          ...(text !== undefined && { extractedText: text }),
           extractedData: encryptJson(extractedData),
         },
       }),
@@ -119,8 +120,17 @@ export const documentRepository = {
     return decryptRow(
       await db(tx).document.upsert({
         where: { legacyId },
-        create: { ...rest, legacyId, extractedText: text, extractedData: json },
-        update: { ...rest, extractedText: text, extractedData: json },
+        create: {
+          ...rest,
+          legacyId,
+          ...(text !== undefined && { extractedText: text }),
+          extractedData: json,
+        },
+        update: {
+          ...rest,
+          ...(text !== undefined && { extractedText: text }),
+          extractedData: json,
+        },
       }),
     );
   },

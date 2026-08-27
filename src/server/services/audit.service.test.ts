@@ -52,7 +52,14 @@ import { auditService } from "./audit.service";
 import { decodeCursor } from "@/lib/validation/cursor";
 
 function signInAs(role?: string) {
-  mockSession = { user: { id: "u1", email: "u@desta.works", name: "Test User", role } };
+  mockSession = {
+    user: {
+      id: "u1",
+      email: "u@desta.works",
+      name: "Test User",
+      ...(role !== undefined && { role }),
+    },
+  };
 }
 
 /** A raw audit row as the repo's `list` returns it (before/after selected to derive `hasChanges`). */
