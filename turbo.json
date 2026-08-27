@@ -64,10 +64,40 @@
     },
     "//#app:test": {
       "dependsOn": ["^topo", "^build"],
+      "inputs": [
+        "apps/*/src/**",
+        "packages/*/src/**",
+        "packages/db/prisma/schema.prisma",
+        "package.json"
+      ]
+    },
+    "//#app:test-contract": {
+      "dependsOn": ["^topo", "^build"],
+      "inputs": [
+        "apps/*/src/**",
+        "packages/*/src/**",
+        "packages/db/prisma/schema.prisma",
+        "package.json"
+      ]
+    },
+    "//#app:test-logs": {
+      "dependsOn": ["^topo", "^build"],
       "inputs": ["apps/*/src/**", "packages/*/src/**", "package.json"]
     },
     "//#app:deps-check": {
       "inputs": ["package.json", "pnpm-workspace.yaml", "scripts/check-dependency-drift.mjs"]
+    },
+    "//#app:arch-check": {
+      "inputs": [
+        "apps/*/src/**",
+        "packages/*/src/**",
+        "apps/*/package.json",
+        "packages/*/package.json",
+        "package.json",
+        "pnpm-workspace.yaml",
+        "scripts/check-architecture.mjs",
+        "scripts/architecture-baseline.json"
+      ]
     }
   }
 }
