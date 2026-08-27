@@ -1,10 +1,10 @@
 import { ROLE_PRIORITIES, ROLE_STATUSES, isRolePriority, isRoleStatus } from "@/lib/constants";
-import { cachedClientList } from "@/server/repositories/client.repository";
 import { openRoleService } from "@/server/services/open-role.service";
 import { AddRoleButton } from "./add-role-modal";
 import { RoleFilters } from "./role-filters";
 import { RolesInventory } from "./roles-inventory";
 import { TriageStrip } from "./triage-strip";
+import { cachedClientList } from "@/server/http/request-cache";
 
 /**
  * Open Roles (RSC, Wave 3.5) — the client-requisition board. SSR-renders page 1 of the filtered

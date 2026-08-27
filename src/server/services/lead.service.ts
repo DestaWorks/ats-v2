@@ -30,11 +30,12 @@ import {
   type LeadRow,
   type OutreachRow,
 } from "@/server/repositories/lead.repository";
-import { clientRepository, cachedClientNameMap } from "@/server/repositories/client.repository";
+import { clientRepository } from "@/server/repositories/client.repository";
 import { userRepository } from "@/server/repositories/user.repository";
 import { AppError } from "@/server/http/app-error";
 import { candidateService } from "./candidate.service";
 import { leadToCandidateInput } from "./lead.promote-map";
+import { cachedClientNameMap } from "@/server/http/request-cache";
 
 /** One OFFSET page of the `/sourcing` inventory (matches the candidate `LIST_PAGE`). */
 const LIST_PAGE = 25;

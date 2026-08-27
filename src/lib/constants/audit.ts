@@ -10,7 +10,7 @@
  * set.
  */
 
-import type { BadgeTone } from "@/components/ui/badge";
+import type { BadgeTone } from "./tone";
 
 /** Every audit `action` the services write today (`writeAudit(..., action, ...)`). */
 export const AUDIT_ACTIONS = [

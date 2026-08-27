@@ -3,13 +3,10 @@ import { scoreCandidate } from "@/lib/rules/scoring";
 import type { ClientRules } from "@/lib/rules/types";
 import type { ReportFilters } from "@/lib/validation/reports";
 import { candidateRepository, type CandidateRow } from "@/server/repositories/candidate.repository";
-import { cachedClientNameMap } from "@/server/repositories/client.repository";
-import {
-  cachedClientRulesList,
-  toClientRules,
-} from "@/server/repositories/client-rules.repository";
+import { toClientRules } from "@/server/repositories/client-rules.repository";
 import { userRepository } from "@/server/repositories/user.repository";
 import { toRuleCandidate } from "@/server/services/candidate.dto";
+import { cachedClientNameMap, cachedClientRulesList } from "@/server/http/request-cache";
 
 /** Row cap for the shared cohort read — a boutique-agency-scale ceiling, documented (matches the
  *  `TRASH_PAGE`-style cap precedent in `candidate.service.ts`), not a silent truncation: reports

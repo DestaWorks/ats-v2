@@ -40,9 +40,10 @@ import {
   type ManagerFeedbackRow,
 } from "@/server/repositories/daily.repository";
 import { clientRepository } from "@/server/repositories/client.repository";
-import { userRepository, cachedUserList } from "@/server/repositories/user.repository";
+import { userRepository } from "@/server/repositories/user.repository";
 import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/http/app-error";
+import { cachedUserList } from "@/server/http/request-cache";
 
 /** The capability that gates target-setting (leadership; legacy: the Daily Brief manager modal). */
 const SET_TARGETS_CAP = "viewReports" as const;

@@ -1,9 +1,8 @@
 import { isLeadStatus, type LeadStatus } from "@/lib/constants";
 import { leadService } from "@/server/services/lead.service";
-import { cachedClientList } from "@/server/repositories/client.repository";
-import { cachedUserList } from "@/server/repositories/user.repository";
 import { LeadFilters } from "./lead-filters";
 import { LeadsInventory } from "./leads-inventory";
+import { cachedClientList, cachedUserList } from "@/server/http/request-cache";
 
 /**
  * Sourcing inventory (RSC, Wave 2.6) — the pre-pipeline source-lead board (Sourced → Outreach →

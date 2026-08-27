@@ -43,18 +43,13 @@ import {
   type CandidateRow,
   type CandidateCardRow,
 } from "@/server/repositories/candidate.repository";
-import { cachedClientNameMap } from "@/server/repositories/client.repository";
 import {
   outreachRepository,
   type OutreachAttemptRow,
 } from "@/server/repositories/outreach.repository";
 import { userRepository } from "@/server/repositories/user.repository";
 import { leadRepository } from "@/server/repositories/lead.repository";
-import {
-  cachedClientRulesList,
-  toClientRules,
-  type ClientRulesRow,
-} from "@/server/repositories/client-rules.repository";
+import { toClientRules, type ClientRulesRow } from "@/server/repositories/client-rules.repository";
 import { documentRepository } from "@/server/repositories/document.repository";
 import { noteRepository } from "@/server/repositories/note.repository";
 import { stageHistoryRepository } from "@/server/repositories/stage-history.repository";
@@ -75,6 +70,7 @@ import {
   type CandidateDTO,
   type RuleCandidateSource,
 } from "./candidate.dto";
+import { cachedClientNameMap, cachedClientRulesList } from "@/server/http/request-cache";
 
 /**
  * Filters shared by the board + list reads. The three chip flags (`mine`/`overdue`/`stuck`) are

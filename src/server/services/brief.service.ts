@@ -33,9 +33,10 @@ import { leadRepository } from "@/server/repositories/lead.repository";
 import { openRoleRepository } from "@/server/repositories/open-role.repository";
 import { stageHistoryRepository } from "@/server/repositories/stage-history.repository";
 import { clientRepository } from "@/server/repositories/client.repository";
-import { userRepository, cachedUserList } from "@/server/repositories/user.repository";
+import { userRepository } from "@/server/repositories/user.repository";
 import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/http/app-error";
+import { cachedUserList } from "@/server/http/request-cache";
 
 /** Candidates entering this status = a "hire" for the week's KPI ribbon (legacy: Status===Started). */
 const HIRE_STATUS = "STARTED_DAY1";

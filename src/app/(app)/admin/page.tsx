@@ -4,9 +4,9 @@ import { adminUserService } from "@/server/services/admin-user.service";
 import { accessRequestService } from "@/server/services/access-request.service";
 import { portalAccessRequestService } from "@/server/services/portal-access-request.service";
 import { aiOpsService } from "@/server/services/ai-ops.service";
-import { cachedClientList } from "@/server/repositories/client.repository";
 import { ErrorState } from "@/components/ui/error-state";
 import { AdminDashboard } from "./admin-dashboard";
+import { cachedClientList } from "@/server/http/request-cache";
 
 /**
  * Admin (Wave 5.3) — Users / Access Requests / Roles / Blocked. Gated `manageUsers` (the

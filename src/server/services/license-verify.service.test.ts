@@ -19,6 +19,8 @@ vi.mock("@/server/repositories/license-verify.repository", () => ({
 }));
 vi.mock("@/server/repositories/client.repository", () => ({
   clientRepository: h.clientRepo,
+}));
+vi.mock("@/server/http/request-cache", () => ({
   cachedClientNameMap: h.clientRepo.nameMap,
 }));
 

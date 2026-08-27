@@ -7,8 +7,7 @@ import type {
 } from "@/lib/validation/credentials";
 import { COMPACT_STATES } from "@/lib/constants";
 import { credentialsIntelligenceRepository } from "@/server/repositories/credentials-intelligence.repository";
-import { cachedClientRulesList } from "@/server/repositories/client-rules.repository";
-import { cachedClientNameMap } from "@/server/repositories/client.repository";
+import { cachedClientNameMap, cachedClientRulesList } from "@/server/http/request-cache";
 
 /** NLC tracker row cap — a leadership summary, not a full list; matches other dashboard caps. */
 const NLC_HOLDER_CAP = 20;

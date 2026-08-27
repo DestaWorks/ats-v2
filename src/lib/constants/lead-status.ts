@@ -3,7 +3,7 @@
  * (legacy `SL_STATUSES`). Leads are promoted into a Candidate.
  */
 
-import type { BadgeTone } from "@/components/ui/badge";
+import type { BadgeTone } from "./tone";
 
 export const LEAD_STATUSES = [
   "Sourced",

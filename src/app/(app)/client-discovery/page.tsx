@@ -1,9 +1,9 @@
 import { hasCapability, isProspectStatus } from "@/lib/constants";
 import { getVerifiedUser } from "@/server/auth/guards";
 import { prospectService } from "@/server/services/prospect.service";
-import { cachedUserList } from "@/server/repositories/user.repository";
 import { ErrorState } from "@/components/ui/error-state";
 import { ProspectsInventory } from "./prospects-inventory";
+import { cachedUserList } from "@/server/http/request-cache";
 
 /**
  * Client Discovery — B2B prospecting pipeline (RSC, new domain). Gated `viewClientDiscovery`

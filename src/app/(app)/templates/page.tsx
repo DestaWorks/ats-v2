@@ -1,8 +1,8 @@
 import { getVerifiedUser } from "@/server/auth/guards";
 import { hasCapability } from "@/lib/constants";
-import { cachedClientList } from "@/server/repositories/client.repository";
 import { userPreferencesService } from "@/server/services/user-preferences.service";
 import { TemplatesWorkspace } from "./templates-workspace";
+import { cachedClientList } from "@/server/http/request-cache";
 
 /**
  * Templates (RSC, Wave 4.1) — outreach/workflow template library, ported from legacy

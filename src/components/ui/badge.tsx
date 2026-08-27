@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils/cn";
+import type { BadgeTone } from "@/lib/constants/tone";
 
 /**
  * Small status/label pill. Extracted from the count pills, timing badges
@@ -12,7 +13,7 @@ import { cn } from "@/lib/utils/cn";
  * rectangular badges (timing chips). `className` is merged last for overrides.
  */
 
-export type BadgeTone = "neutral" | "navy" | "success" | "amber" | "danger" | "purple";
+export type { BadgeTone };
 export type BadgeSize = "sm" | "md";
 
 /** Tinted bg + text per tone (matches the existing inline usages). */

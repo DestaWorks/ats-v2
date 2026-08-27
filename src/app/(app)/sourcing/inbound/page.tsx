@@ -1,5 +1,5 @@
-import { cachedClientList } from "@/server/repositories/client.repository";
 import { InboundTriage } from "./inbound-triage";
+import { cachedClientList } from "@/server/http/request-cache";
 
 /**
  * Inbound Triage (Wave 2.8, RSC shell) — replaces legacy `inbound_triage`. Server-guards the route

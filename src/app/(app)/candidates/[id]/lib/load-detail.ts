@@ -2,10 +2,9 @@ import "server-only";
 import { notFound } from "next/navigation";
 import { getVerifiedUser } from "@/server/auth/guards";
 import { candidateService } from "@/server/services/candidate.service";
-import { cachedClientList } from "@/server/repositories/client.repository";
-import { cachedUserList } from "@/server/repositories/user.repository";
 import { storageEnabled } from "@/server/integrations/storage";
 import { AppError } from "@/server/http/app-error";
+import { cachedClientList, cachedUserList } from "@/server/http/request-cache";
 
 /**
  * Shared RSC loader for the candidate detail — used by BOTH renderings of `/candidates/[id]`:

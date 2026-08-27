@@ -34,11 +34,11 @@ import { withTransaction } from "@/server/db/with-transaction";
 import { extractJd } from "@/server/ai/extract-jd";
 import { openRoleRepository, type OpenRoleRow } from "@/server/repositories/open-role.repository";
 import { clientMatchProfileRepository } from "@/server/repositories/client-match-profile.repository";
-import { cachedClientNameMap } from "@/server/repositories/client.repository";
 import { leadRepository, type LeadMatchRow } from "@/server/repositories/lead.repository";
 import { userRepository } from "@/server/repositories/user.repository";
 import { AppError } from "@/server/http/app-error";
 import { leadService } from "./lead.service";
+import { cachedClientNameMap } from "@/server/http/request-cache";
 
 /** One OFFSET page of the `/roles` list (matches the candidates/leads list page size). */
 const LIST_PAGE = 25;

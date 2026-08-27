@@ -5,8 +5,8 @@ import type {
   LicenseVerifyTimelineRowDTO,
 } from "@/lib/validation/license-verify";
 import { toIso } from "@/lib/utils/iso";
-import { cachedClientNameMap } from "@/server/repositories/client.repository";
 import { licenseVerifyRepository } from "@/server/repositories/license-verify.repository";
+import { cachedClientNameMap } from "@/server/http/request-cache";
 
 /** Operational cap on the queue read — legacy had none, but this many at once would be unusual. */
 const QUEUE_CAP = 100;

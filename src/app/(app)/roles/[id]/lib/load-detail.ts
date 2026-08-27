@@ -2,8 +2,8 @@ import "server-only";
 import { notFound } from "next/navigation";
 import { getVerifiedUser } from "@/server/auth/guards";
 import { openRoleService } from "@/server/services/open-role.service";
-import { cachedClientList } from "@/server/repositories/client.repository";
 import { AppError } from "@/server/http/app-error";
+import { cachedClientList } from "@/server/http/request-cache";
 
 /** Shared RSC loader for `/roles/[id]` — one place owns the guard → composite-read → NOT_FOUND mapping. */
 export async function loadRoleDetail(id: string) {

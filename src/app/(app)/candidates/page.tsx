@@ -10,13 +10,12 @@ import {
 import type { ListSort } from "@/lib/validation/pipeline";
 import { getVerifiedUser } from "@/server/auth/guards";
 import { candidateService } from "@/server/services/candidate.service";
-import { cachedClientList } from "@/server/repositories/client.repository";
-import { cachedUserList } from "@/server/repositories/user.repository";
 import { savedViewService } from "@/server/services/saved-view.service";
 import { SavedViewsBar } from "../lib/saved-views-bar";
 import { AddCandidateButton } from "../add-candidate-modal";
 import { CandidatesList } from "./candidates-list";
 import { ListFilters } from "./list-filters";
+import { cachedClientList, cachedUserList } from "@/server/http/request-cache";
 
 /**
  * Candidates browse (RSC) — a searchable, filterable, SERVER OFFSET-paginated flat list, distinct

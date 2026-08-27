@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { hasCapability } from "@/lib/constants";
 import { getVerifiedUser } from "@/server/auth/guards";
-import { cachedClientList } from "@/server/repositories/client.repository";
 import { AddCandidateForm } from "./add-candidate-form";
+import { cachedClientList } from "@/server/http/request-cache";
 
 /**
  * Add candidate (RSC, Wave 2.4). Mirrors the pipeline board / detail guard-then-load pattern (the

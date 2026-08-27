@@ -1,11 +1,11 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/server/auth/guards";
 import { hasCapability } from "@/lib/constants";
-import { cachedClientList } from "@/server/repositories/client.repository";
 import { StickyNote } from "@/components/sticky-note";
 import { AppHeader } from "./app-header";
 import { AppNav } from "./app-nav";
 import { BASE_NAV_ITEMS, type NavItem } from "./lib/nav";
+import { cachedClientList } from "@/server/http/request-cache";
 
 /**
  * App-shell layout for every `(app)` route (server component). Four jobs:

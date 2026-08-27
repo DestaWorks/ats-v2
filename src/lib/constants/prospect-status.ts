@@ -5,7 +5,7 @@
  * a Qualified prospect into a Client row is a manual step for now).
  */
 
-import type { BadgeTone } from "@/components/ui/badge";
+import type { BadgeTone } from "./tone";
 
 export const PROSPECT_STATUSES = [
   "Fresh Lead",

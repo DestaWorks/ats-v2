@@ -1,5 +1,4 @@
 import "server-only";
-import { cache } from "react";
 import type { Client, Prisma } from "@/generated/prisma/client";
 import { db } from "@/server/db/prisma";
 
@@ -60,24 +59,3 @@ export const clientRepository = {
     return new Map(rows.map((r) => [r.clientId, r._count._all]));
   },
 };
-
-/**
- * Request-memoized `clientRepository.list()` — perf audit 2026-08-04: the root layout AND most
- * pages independently call the plain list read (sidebar's add-candidate modal, filter dropdowns,
- * etc.), duplicating the same DB round trip on nearly every request. `cache()`-wrapped for that
- * specific "no filters, no transaction, pure page-render read" shape.
- *
- * DELIBERATELY separate from `clientRepository.list` itself (never cache that directly): several
- * services call `list`/`nameMap` around a write in the SAME request (e.g. create-then-relist) —
- * caching there would risk serving a stale pre-write result. Use this only from `page.tsx`/
- * `layout.tsx` render paths that never mutate within the same request; every mutation-adjacent
- * caller keeps using the raw, uncached `clientRepository.list()`.
- */
-export const cachedClientList = cache(() => clientRepository.list());
-
-/** `id → name` map built from `cachedClientList()` (not a second query). Same render-path-only
- *  caveat as `cachedClientList` — `clientRepository.nameMap()` queries raw, uncached. */
-export const cachedClientNameMap = cache(async (): Promise<Map<string, string>> => {
-  const clients = await cachedClientList();
-  return new Map(clients.map((c) => [c.id, c.name]));
-});

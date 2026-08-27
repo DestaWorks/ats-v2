@@ -12,14 +12,13 @@ import type { AuthUser } from "@/server/auth/guards";
 import { writeAudit } from "@/server/db/audit";
 import { withTransaction } from "@/server/db/with-transaction";
 import { candidateRepository } from "@/server/repositories/candidate.repository";
-import { cachedClientNameMap } from "@/server/repositories/client.repository";
-import { cachedClientRulesList } from "@/server/repositories/client-rules.repository";
 import {
   screeningRepository,
   type ScreeningScorecardRow,
 } from "@/server/repositories/screening.repository";
 import { AppError } from "@/server/http/app-error";
 import { candidateService } from "./candidate.service";
+import { cachedClientNameMap, cachedClientRulesList } from "@/server/http/request-cache";
 
 function toResultDTO(row: ScreeningScorecardRow): ScreeningResultDTO {
   return {

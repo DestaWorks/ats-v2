@@ -3,10 +3,9 @@ import { TRACKS, type Track } from "@/lib/constants";
 import { getVerifiedUser } from "@/server/auth/guards";
 import { candidateService } from "@/server/services/candidate.service";
 import { savedViewService } from "@/server/services/saved-view.service";
-import { cachedClientList } from "@/server/repositories/client.repository";
-import { cachedUserList } from "@/server/repositories/user.repository";
 import { Spinner } from "@/components/ui/spinner";
 import { PipelineBoard } from "./pipeline-board";
+import { cachedClientList, cachedUserList } from "@/server/http/request-cache";
 
 /**
  * Pipeline board (RSC). Guards with `getCurrentUser()` (mirrors the dashboard — the `(app)` segment

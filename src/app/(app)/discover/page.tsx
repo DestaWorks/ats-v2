@@ -1,10 +1,10 @@
 import { discoverSearchQuerySchema } from "@/lib/validation/discover";
 import { getVerifiedUser } from "@/server/auth/guards";
 import { discoverService } from "@/server/services/discover.service";
-import { cachedClientList } from "@/server/repositories/client.repository";
 import { DiscoverSearchForm } from "./discover-search-form";
 import { DiscoverResultsTable } from "./discover-results-table";
 import { CoverageGaps } from "./coverage-gaps";
+import { cachedClientList } from "@/server/http/request-cache";
 
 /**
  * Discover (RSC, Wave 2.7) — the "find" step of the funnel: search NPPES, dedupe against existing

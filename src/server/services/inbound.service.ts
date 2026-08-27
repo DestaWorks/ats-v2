@@ -14,14 +14,11 @@ import type { LeadDetailDTO } from "@/lib/validation/lead";
 import type { AuthUser } from "@/server/auth/guards";
 import { extractInbound } from "@/server/ai/extract-inbound";
 import { candidateRepository } from "@/server/repositories/candidate.repository";
-import { cachedClientNameMap } from "@/server/repositories/client.repository";
-import {
-  cachedClientRulesList,
-  toClientRules,
-} from "@/server/repositories/client-rules.repository";
+import { toClientRules } from "@/server/repositories/client-rules.repository";
 import { leadRepository } from "@/server/repositories/lead.repository";
 import { AppError } from "@/server/http/app-error";
 import { leadService } from "./lead.service";
+import { cachedClientNameMap, cachedClientRulesList } from "@/server/http/request-cache";
 
 /** Top-N client matches surfaced to the reviewer (legacy showed the top 5 open roles). */
 const MAX_CLIENT_MATCHES = 5;

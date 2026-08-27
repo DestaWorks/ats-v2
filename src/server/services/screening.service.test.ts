@@ -27,14 +27,16 @@ vi.mock("@/server/repositories/candidate.repository", () => ({
 }));
 vi.mock("@/server/repositories/client.repository", () => ({
   clientRepository: h.clientRepo,
-  cachedClientNameMap: h.clientRepo.nameMap,
 }));
 vi.mock("@/server/repositories/client-rules.repository", () => ({
   clientRulesRepository: h.clientRulesRepo,
-  cachedClientRulesList: h.clientRulesRepo.list,
 }));
 vi.mock("@/server/repositories/screening.repository", () => ({
   screeningRepository: h.screeningRepo,
+}));
+vi.mock("@/server/http/request-cache", () => ({
+  cachedClientNameMap: h.clientRepo.nameMap,
+  cachedClientRulesList: h.clientRulesRepo.list,
 }));
 vi.mock("./candidate.service", () => ({ candidateService: h.candidateService }));
 vi.mock("@/server/db/audit", () => ({ writeAudit: h.writeAudit }));
