@@ -700,21 +700,21 @@ move PR contains no logic changes.
 
 **Goal:** the dependency law is machine-enforced. This is what the restructure was for.
 
-- [ ] Architecture check: package dependency direction matches the declared graph
-- [ ] Architecture check: forbidden imports (the `──X──>` list above)
-- [ ] Architecture check: no circular dependencies
-- [ ] Architecture check: Prisma imported only inside `@destaworks/db`
-- [ ] Architecture check: `@destaworks/domain` has no runtime dependencies
-- [ ] Architecture check: packages never import from apps
-- [ ] Architecture check: **`apps/web` and `apps/admin` never import `@destaworks/db` or `@destaworks/application`** — the read path is HTTP only (4.0); without this, Option B leaks back in unnoticed
-- [ ] Every PR runs: format · lint · typecheck · dependency-graph validation · architecture checks · unit tests · integration tests · contract tests · build
-- [ ] Contract check: every endpoint declares request and response types from `@destaworks/contracts`
-- [ ] Contract check: no endpoint returns a raw database row
-- [ ] Log check: no PII/PHI field names in log calls
-- [ ] Commitlint enforced on the merge commit, not only pre-commit
-- [ ] Turborepo affected-package execution — unaffected packages are not rebuilt or retested
-- [ ] Branch protection on `main`: merge only when all required checks are green
-- [ ] Deployment workflows separated from PR validation, building from the same immutable revision that passed
+- [x] Architecture check: package dependency direction matches the declared graph
+- [x] Architecture check: forbidden imports (the `──X──>` list above)
+- [x] Architecture check: no circular dependencies
+- [x] Architecture check: Prisma imported only inside `@destaworks/db`
+- [x] Architecture check: `@destaworks/domain` has no runtime dependencies
+- [x] Architecture check: packages never import from apps
+- [x] Architecture check: **`apps/web` and `apps/admin` never import `@destaworks/db` or `@destaworks/application`** — the read path is HTTP only (4.0); without this, Option B leaks back in unnoticed
+- [x] Every PR runs: format · lint · typecheck · dependency-graph validation · architecture checks · unit tests · integration tests · contract tests · build
+- [x] Contract check: every endpoint declares request and response types from `@destaworks/contracts`
+- [x] Contract check: no endpoint returns a raw database row
+- [x] Log check: no PII/PHI field names in log calls
+- [x] Commitlint enforced on the merge commit, not only pre-commit
+- [x] Turborepo affected-package execution — unaffected packages are not rebuilt or retested
+- [ ] Branch protection on `main`: merge only when all required checks are green *(BLOCKED ON OWNER — needs GitHub repository settings. Require PR + 1 approval; require these four checks: `Commit messages`, `Static analysis`, `Tests`, `Build`; require branches up to date; require conversation resolution; **linear history OFF** and merge-commits-only, since the plan mandates a merge commit for the final `restructure` → `main`; "do not allow bypassing" ON, or the rule is advisory for admins; block force pushes and deletions. Also create `staging` and `production` environments, with required reviewers on `production`.)*
+- [x] Deployment workflows separated from PR validation, building from the same immutable revision that passed
 - **Done-when:** each forbidden dependency has been deliberately introduced once and proven to fail CI
 
 ---
