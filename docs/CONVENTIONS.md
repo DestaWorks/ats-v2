@@ -4,6 +4,11 @@ Standards for the **new** codebase. The legacy `index.html` is exempt (it is bei
 strangled, not maintained). These exist so the project is reviewable, testable, and safe to
 ship continuously.
 
+**Base document: [`SAAS-RESTRUCTURE-PLAN.md`](./SAAS-RESTRUCTURE-PLAN.md).** It defines the target
+architecture, the engineering standards and the phased plan for getting there. This file is the
+day-to-day working version of those rules; **where the two conflict, the plan wins**, and this file
+is the one that gets corrected.
+
 ---
 
 ## 1. Source control & workflow
@@ -96,19 +101,33 @@ When several branches run at once:
 
 ## 2. Languages & tooling
 
-- **TypeScript everywhere.** `strict: true`. No `any` without a written reason.
+- **TypeScript everywhere.** `strict` and `noUncheckedIndexedAccess` are on; the restructure adds
+  `noUnusedLocals`, `noUnusedParameters`, `exactOptionalPropertyTypes` and `verbatimModuleSyntax`.
+- **No `any` in application code.** No non-null assertion (`!`) used to silence a nullable — narrow
+  it or handle it. An `as` cast requires a comment saying why the compiler cannot know. External
+  data is `unknown` until a zod schema proves otherwise.
 - **Formatting**: Prettier (single source of truth — no style debates in review).
 - **Linting**: ESLint (typescript-eslint, react-hooks). CI fails on lint errors. The layer
   boundaries are lint-enforced, not just documented: client/UI code under `app/**` +
   `components/**` may not import `server/**` (`import/no-restricted-paths`), and the Prisma
   client may only be imported from `server/repositories/**`, `server/db/**`, and
   `server/auth/**` (`no-restricted-imports`).
-- **Package manager**: pick one (pnpm recommended) and commit the lockfile.
+- **Package manager**: pnpm, lockfile committed. Under the monorepo, one version of each shared
+  dependency via pnpm `catalog:`, and Turborepo for the task graph and caching.
 - **Node**: pin the version (`.nvmrc` / `engines`).
+- **Commits**: enforced by commitlint via a husky `commit-msg` hook; a `pre-commit` hook runs
+  lint-staged (Prettier + `eslint --fix`) over staged files.
 
-## 3. Project structure (target)
+## 3. Project structure
 
-**The authoritative folder structure is `docs/STACK-ARCHITECTURE.md` §2** — client feature code
+**Target (monorepo): `docs/SAAS-RESTRUCTURE-PLAN.md` — "Target structure" and "Where today's code
+goes".** That plan is the base document for the restructure; where anything here conflicts with it,
+the plan wins. It defines the `@destaworks/*` package graph, the dependency law, and which of
+today's directories each package is assembled from — including that **`src/lib` does not move as a
+unit**, because parts of it carry React, Sonner, Better Auth and Sentry and `domain` must stay
+dependency-free.
+
+**Until Phase 2 lands, the current single-tree layout is `docs/STACK-ARCHITECTURE.md` §2** — client feature code
 co-located under `app/(app)/<feature>/` (§3.6) + `server/{services, repositories, rules, auth,
 db, ai, http}` (layered backend). Do not invent a parallel `features/` + `domain/` + `api/` tree,
 and do not recreate `src/modules/` (an unused, empty placeholder from an earlier plan, now
@@ -134,6 +153,34 @@ on top.
   each independently fetch the same unbounded/expensive dataset for one page (e.g. two scorers
   both reading "every lead"), add a composite method that fetches once and returns both results,
   and have the RSC loader call that instead of `Promise.all`-ing the two originals.
+
+## 3b. One home per concern (DRY)
+
+The recurring defect in this codebase is the same logic living in several places and drifting —
+`utcDayStart` existed three times with two different end-of-day rules, and the Activity Log and the
+candidate list disagreed about what "to = 30 June" meant. Each concern has one home:
+
+| Concern | Lives in |
+|---|---|
+| Wire shapes | `lib/validation` → `@destaworks/contracts` |
+| Business rules, stage gates, scoring | `lib/rules` → `@destaworks/domain` |
+| Time — "today", day boundaries, expiry | `lib/clock.ts` + `lib/daily.ts` |
+| Money arithmetic | `lib/money.ts` |
+| Database access | `server/repositories` → `@destaworks/db` |
+| Permission decisions | capability checks in `server/auth` |
+| Error mapping | one `apiHandler` / exception filter |
+| Logging | `lib/logger` |
+
+A PR that introduces a second implementation of any of these is rejected.
+
+**Business logic is told the time, it never asks for it.** No ambient `new Date()` inside a rule or
+service: pure rules take a `Date` instant, composition roots take a `Clock` (`systemClock` in
+production, `fixedClock` in tests). A default parameter of `new Date()` IS the ambient read, just
+hidden in a signature. Day windows are half-open `[start, end)` — adjacent days tile with no gap,
+and an inclusive `23:59:59.999` bound silently drops rows, because Postgres stores microseconds.
+
+**Money is integer minor units with an explicit currency** (`lib/money.ts`). A float amount is
+unrepresentable, and the major/minor factor comes from the currency's scale — never a literal 100.
 
 ## 4. Naming
 
@@ -176,6 +223,27 @@ on top.
 
 ## 6. API & validation
 
+**The contract model is contract-first typed REST** (`SAAS-RESTRUCTURE-PLAN.md` — "How the API
+contract works"). Wire shapes live in one place — `lib/validation` today, `@destaworks/contracts`
+after Phase 2 — and both sides import them. Nothing infers a shape from an implementation detail.
+
+- **Every route declares its response type**, and the client imports that declaration rather than
+  asserting one. A shape the route never promised is caught today only because both sides compile
+  together; across a process boundary it becomes a silent runtime failure.
+- **Requests**: one zod schema per endpoint, `.strict()`, so unknown keys are rejected rather than
+  ignored. Validated once at the boundary — never re-validated in a service, never trusted from
+  the client.
+- **Responses**: resources are returned bare — no `{ data: ... }` wrapper.
+- **No endpoint returns a raw database row, and no DTO is defined by omission from a model.**
+  `Omit<XRow, "secret">` publishes every future column automatically; declare the published,
+  capability-gated and withheld field lists explicitly and map field by field.
+- **Errors are always enveloped**: `{ error: { code, message, issues?, ref? } }`, `code` drawn from
+  the fixed union in `server/http/app-error.ts`. An unexpected error never leaks its message — it
+  becomes `INTERNAL` with a `ref` that ties the response to a PII-free log line.
+- **Pagination — two shapes, chosen by what the UI needs.** Keyset `{ items, nextCursor, hasMore }`
+  is the default for feeds and unbounded lists. Offset `{ items } & PageMeta` is correct where the
+  product shows numbered pages, because a pager needs `total`/`totalPages`. Use `PageMeta` from
+  `lib/pagination.ts`; never hand-roll the fields.
 - **Validate every boundary** with zod; share schemas between client and server.
 - **Resource-oriented endpoints**, not a single multiplexed `event` switch.
 - **Authorize every endpoint** server-side by role. UI hiding is UX, never security.
@@ -194,7 +262,13 @@ on top.
 ## 7. Security rules (non-negotiable — NDA-binding)
 
 - Never trust the client for authentication or authorization.
-- Never log PII/PHI (names, emails, phones, license #, NPI, patient data).
+- **Never log PII/PHI** (names, emails, phones, license #, NPI, patient data) — and this is
+  enforced structurally, not by vigilance. Use `logger` from `lib/logger`; `console.*` is banned
+  outside tests by lint. The logger's signature is `(event, fields)` with no format string, so a
+  value cannot be interpolated into a message, and PII keys are redacted before serialization.
+  Errors are reduced to their type: **Prisma embeds the offending field VALUES in its messages.**
+  Every line carries the request's `requestId`, which is the same id returned to a client as
+  `error.ref`.
 - **Audit vs. logs are different systems.** The `activity_log` table (`before`/`after`)
   **intentionally** stores PII, under access control (capability-restricted reads) and
   encryption at rest — it is the compliance audit trail. **Application and observability logs
@@ -224,6 +298,13 @@ on top.
 Rigor is **tiered — not full coverage everywhere** (we ship then harden):
 
 **Mandatory (no merge without tests):**
+- **Tenant isolation** — once multi-tenancy lands, every tenant-scoped repository has a test
+  seeding two tenants and asserting one cannot read the other's data. Run on every PR; this is the
+  proof of isolation, not a belief in it.
+- **Boundary invariants are asserted as invariants**, not inferred from a green suite. Branches
+  that each pass can combine to undo one another — a parallel change reopened the `next/headers`
+  boundary another had just closed and no test failed. The architecture checks in CI exist for
+  exactly this.
 - **Rules engine and transforms** — unit tests (scoring, disqualify, stage gates,
   status-code normalization, import mapping). This is the highest-value surface.
 - **Authorization-failure cases** — every guarded route has a test proving the wrong role
@@ -242,6 +323,12 @@ CI runs typecheck + lint + the mandatory tests on every PR; red = no merge.
 - Update the relevant `docs/*` when behavior changes. Docs and code move together.
 - Public functions/services get a short doc comment on intent (not restating the code).
 - Decisions of consequence get a short ADR note (in EDD or a `docs/adr/` folder).
+
+## 9a. Definition of done for a PR
+
+Format · lint · typecheck · dependency and architecture checks · unit tests · integration tests ·
+contract tests · build — all green. Authorization enforced server-side. Inputs validated at the
+boundary. Mutations audited. No PII in logs. Conventional commit message. One concern per PR.
 
 ## 10. Accessibility & UX baseline (per-view acceptance)
 

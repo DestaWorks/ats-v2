@@ -404,9 +404,20 @@ row; no endpoint returns a type defined by omission from a model.
 ```
 
 The list item is a **narrower type than the detail resource**, declared separately in
-`@destaworks/contracts`. A list endpoint never returns the full resource "because it was already loaded".
-`nextCursor` is `null` and `hasMore` is `false` on the last page. Cursor pagination, not offset —
-offset drifts as rows are inserted.
+`@destaworks/contracts`. A list endpoint never returns the full resource "because it was already
+loaded". `nextCursor` is `null` and `hasMore` is `false` on the last page.
+
+**Two pagination shapes, chosen by what the UI needs — not by preference:**
+
+| Shape | Use when | Envelope |
+|---|---|---|
+| **Keyset (cursor)** | A feed or unbounded list scrolled forward — candidates, activity log | `{ items, nextCursor, hasMore }` |
+| **Offset** | The UI shows numbered pages and needs a total — leads, roles, prospects | `{ items } & PageMeta` |
+
+Keyset is the default, because offset drifts as rows are inserted and degrades on deep pages. But a
+numbered pager cannot be built on a cursor — it needs `total` and `totalPages`. Where the product
+shows page numbers, offset is correct, and `PageMeta` from the shared pagination module is the one
+envelope, never six hand-rolled `total`/`page`/`pageSize` fields.
 
 **Errors** — same envelope at every status.
 
