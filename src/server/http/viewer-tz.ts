@@ -1,5 +1,5 @@
 import "server-only";
-import { cookies } from "next/headers";
+import { requestContext } from "@/server/auth/request-context";
 import { parseTzOffset } from "@/lib/daily";
 
 /**
@@ -9,6 +9,5 @@ import { parseTzOffset } from "@/lib/daily";
  * viewer's and must never be substituted silently.
  */
 export async function viewerTzOffset(): Promise<number | undefined> {
-  const store = await cookies();
-  return parseTzOffset(store.get("app-tz")?.value);
+  return parseTzOffset(await requestContext().cookie("app-tz"));
 }
