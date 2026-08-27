@@ -1,0 +1,117 @@
+name: Deploy
+
+# Deployment is deliberately separate from PR validation (SAAS-RESTRUCTURE-PLAN Phase 3), and
+# deliberately manual: the Vercel project has no Git integration, so nothing here is triggered
+# by a push. A human dispatches it with the exact revision CI already passed.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "The immutable revision to deploy — a full commit SHA that CI has passed."
+        required: true
+        type: string
+      environment:
+        description: "Target environment."
+        required: true
+        type: choice
+        options: [staging, production]
+
+concurrency:
+  group: deploy-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy ${{ inputs.ref }} to ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    # Attach GitHub environment protection rules (required reviewers for production) here.
+    environment: ${{ inputs.environment }}
+    permissions:
+      contents: write
+      checks: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+
+      # Same revision, same checks. A tag or branch name could move between the CI run and the
+      # deploy; a SHA cannot, so the deployable unit is pinned to one.
+      - name: Require a full commit SHA
+        run: |
+          set -euo pipefail
+          if ! printf '%s' "${{ inputs.ref }}" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "::error::'${{ inputs.ref }}' is not a full 40-character commit SHA."
+            exit 1
+          fi
+
+      # The gate this workflow exists to honour: build only what the pipeline already passed.
+      - name: Require green CI on this revision
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          conclusions=$(gh api "repos/${{ github.repository }}/commits/${{ inputs.ref }}/check-runs" \
+            --jq '.check_runs[] | select(.name | IN("Commit messages","Static analysis","Tests","Build")) | "\(.name)=\(.conclusion)"')
+          echo "${conclusions}"
+          for required in "Commit messages" "Static analysis" "Tests" "Build"; do
+            if ! printf '%s\n' "${conclusions}" | grep -qx "${required}=success"; then
+              echo "::error::Required check '${required}' is not green on ${{ inputs.ref }}."
+              exit 1
+            fi
+          done
+
+      - uses: ./.github/actions/setup
+
+      - name: Install Vercel CLI
+        run: pnpm add -g vercel@latest
+
+      - name: Pull Vercel environment
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          vercel pull --yes \
+            --environment=${{ inputs.environment == 'production' && 'production' || 'preview' }} \
+            --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Build
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: vercel build ${{ inputs.environment == 'production' && '--prod' || '' }} --token=${{ secrets.VERCEL_TOKEN }}
+
+      # `--prebuilt` ships the artifact built above from `inputs.ref`, so the deployed bytes come
+      # from the revision that passed CI rather than from a rebuild of a moving branch.
+      - name: Deploy
+        id: deploy
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          url=$(vercel deploy --prebuilt ${{ inputs.environment == 'production' && '--prod' || '' }} \
+            --token=${{ secrets.VERCEL_TOKEN }})
+          echo "url=${url}" >> "$GITHUB_OUTPUT"
+          echo "Deployed ${{ inputs.ref }} to ${url}"
+
+      # "Nothing currently records what is live" — SAAS-RESTRUCTURE-PLAN, Deploy tags. This is
+      # the answer to "roll back to what?".
+      - name: Tag the deployed revision
+        run: |
+          set -euo pipefail
+          tag="deploy/${{ inputs.environment }}-$(date -u +%Y-%m-%d)-${GITHUB_RUN_NUMBER}"
+          git tag -a "${tag}" "${{ inputs.ref }}" -m "Deployed to ${{ inputs.environment }}: ${{ steps.deploy.outputs.url }}"
+          git push origin "${tag}"
+
+      - name: Summary
+        run: |
+          {
+            echo "### Deployed"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Environment | \`${{ inputs.environment }}\` |"
+            echo "| Revision | \`${{ inputs.ref }}\` |"
+            echo "| URL | ${{ steps.deploy.outputs.url }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
