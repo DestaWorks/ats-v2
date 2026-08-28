@@ -29,7 +29,6 @@
     "test": {
       "dependsOn": ["^topo", "^build"]
     },
-
     "//#app:build": {
       "dependsOn": ["^build"],
       "outputs": ["apps/web/.next/**", "!apps/web/.next/cache/**"],
@@ -109,6 +108,14 @@
         "pnpm-workspace.yaml",
         "scripts/check-architecture.mjs",
         "scripts/architecture-baseline.json"
+      ]
+    },
+    "//#app:auth-check": {
+      "inputs": [
+        "apps/api/src/modules/**",
+        "apps/api/src/common/guards/**",
+        "apps/web/src/app/api/**",
+        "scripts/check-auth-surface.mjs"
       ]
     }
   }

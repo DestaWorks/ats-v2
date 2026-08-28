@@ -96,6 +96,14 @@ jobs:
       - name: Architecture checks
         run: pnpm arch:check
 
+      # The cross-cutting half of the Phase 4.3 auth review. Per-route tests assert 401/403 for one
+      # endpoint at a time; this asserts, over all of them at once, that no capability was widened,
+      # dropped or swapped between a Next route and the controller replacing it, and that every
+      # endpoint sits behind the right guard. It carries floors, so a parser that stops matching
+      # fails loudly instead of reporting a clean surface it never inspected.
+      - name: Auth-surface parity
+        run: pnpm auth:check
+
   test:
     name: Tests
     runs-on: ubuntu-latest
