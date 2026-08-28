@@ -22,6 +22,11 @@
   "devDependencies": {
     "@destaworks/tsconfig": "workspace:*",
     "@types/node": "^22.10.0",
+    "esbuild": "catalog:",
     "typescript": "catalog:"
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "start": "node dist/main.js"
   }
 }

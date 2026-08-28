@@ -1,7 +1,9 @@
 import "reflect-metadata";
 import { NestFactory } from "@nestjs/core";
+import type { INestApplication } from "@nestjs/common";
 import { logger } from "@destaworks/config/logger";
 import { installNodeLogger } from "@destaworks/config/logger/install";
+import { shutdownApplication } from "@destaworks/application/lifecycle";
 import { installNestRequestContext } from "./common/request-context/nest-request-context";
 import { requestContextMiddleware } from "./common/request-context/request-context.middleware";
 import { AppModule } from "./app.module";
@@ -25,8 +27,9 @@ function resolvePort(): number {
  * failure but a useless response. The middleware then keeps the request in scope for the whole of
  * its handling, so a service called by a controller resolves the same headers the guard did.
  *
- * Deliberately thin otherwise: hosting concerns — graceful shutdown, connection-pool sizing for a
- * long-lived process — are Phase 4.4.
+ * Otherwise thin: cross-cutting request handling is Phase 4.2 and lives in `common/`, and TLS
+ * terminates at the platform. What does belong here is shutdown, because the entry point is the
+ * only thing that knows the process is stopping.
  */
 async function bootstrap(): Promise<void> {
   installNodeLogger();
@@ -36,6 +39,36 @@ async function bootstrap(): Promise<void> {
   const port = resolvePort();
   await app.listen(port);
   logger.info("api.listening", { port });
+
+  installShutdownHandlers(app);
+}
+
+/**
+ * Stop cleanly on the signals an orchestrator actually sends. `app.close()` stops accepting new
+ * connections and lets in-flight requests finish, so a rolling deploy does not answer a live
+ * request with a reset; only once that has drained is it safe to hand back the pooler slots.
+ *
+ * Guarded against a second signal: an impatient orchestrator sends SIGTERM twice, and re-entering
+ * this would close the pool underneath requests that are still draining.
+ */
+function installShutdownHandlers(app: INestApplication): void {
+  let stopping = false;
+
+  for (const signal of ["SIGTERM", "SIGINT"] as const) {
+    process.once(signal, () => {
+      if (stopping) return;
+      stopping = true;
+      logger.info("api.shutting_down", { signal });
+
+      void app
+        .close()
+        .then(() => shutdownApplication())
+        .then(() => {
+          logger.info("api.stopped", { signal });
+          process.exit(0);
+        });
+    });
+  }
 }
 
 // No try/catch: if the app cannot start it cannot serve, and Node's own unhandled-rejection exit

@@ -13,6 +13,7 @@ packages:
 # references these as `catalog:` so a version bump happens here, once, and cannot drift
 # between packages (see scripts/check-dependency-drift.mjs).
 catalog:
+  esbuild: ^0.28.1
   "@types/react": ^19.0.0
   "@types/react-dom": ^19.0.0
   react: ^19.0.0

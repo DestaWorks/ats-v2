@@ -133,6 +133,7 @@ const baseConfig = [
   {
     ignores: [
       "**/.next/**",
+      "**/dist/**",
       "**/node_modules/**",
       ".claude/**",
       "internal-docs/**",

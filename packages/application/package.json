@@ -5,7 +5,8 @@
   "license": "UNLICENSED",
   "type": "module",
   "exports": {
-    "./*": "./src/*.ts"
+    "./*": "./src/*.ts",
+    "./lifecycle": "./src/lifecycle.ts"
   },
   "dependencies": {
     "@destaworks/auth": "workspace:*",

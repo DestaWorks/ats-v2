@@ -41,7 +41,8 @@
     "db:seed:rules": "NODE_OPTIONS=--conditions=react-server tsx scripts/seed-rules.ts",
     "db:seed:demo": "NODE_OPTIONS=--conditions=react-server tsx scripts/seed-demo.ts",
     "db:status": "NODE_OPTIONS=--conditions=react-server tsx scripts/db-status.ts",
-    "setup:storage": "tsx scripts/setup-storage.ts"
+    "setup:storage": "tsx scripts/setup-storage.ts",
+    "build:api": "pnpm --filter @destaworks/api build"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.7",

@@ -12,6 +12,9 @@ catalogs:
     '@types/react-dom':
       specifier: ^19.0.0
       version: 19.2.3
+    esbuild:
+      specifier: ^0.28.1
+      version: 0.28.1
     react:
       specifier: ^19.0.0
       version: 19.2.7
@@ -274,6 +277,9 @@ importers:
       '@types/node':
         specifier: ^22.10.0
         version: 22.20.1
+      esbuild:
+        specifier: 'catalog:'
+        version: 0.28.1
       typescript:
         specifier: 'catalog:'
         version: 5.9.3

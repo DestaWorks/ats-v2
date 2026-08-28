@@ -7,6 +7,7 @@
     "./audit": "./src/audit.ts",
     "./field-crypto": "./src/field-crypto.ts",
     "./generated/*": "./src/generated/*.ts",
+    "./lifecycle": "./src/lifecycle.ts",
     "./prisma": "./src/prisma.ts",
     "./repositories/*": "./src/repositories/*.ts",
     "./with-transaction": "./src/with-transaction.ts"

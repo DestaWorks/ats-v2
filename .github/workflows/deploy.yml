@@ -21,6 +21,67 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # The API is not hosted yet — the target and its cost are an owner decision (SAAS-RESTRUCTURE-PLAN
+  # 4.4), and Vercel is not it: apps/api is a long-lived process, which is the whole reason it left
+  # serverless. What this job does is the part that does not depend on that decision — build the
+  # deployable artefact from the same pinned revision and prove it boots and serves before anyone
+  # promotes it. When a host is chosen, its deploy step slots in after the smoke test.
+  api-artifact:
+    name: Build the API from ${{ inputs.ref }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - uses: ./.github/actions/setup
+
+      - name: Build the bundle
+        run: pnpm build:api
+
+      # A bundle that compiles is not a bundle that runs: externalised native deps and Pino's
+      # transport worker both fail at import, not at build. Booting it here is what catches that.
+      - name: Smoke-test the artefact
+        env:
+          NODE_ENV: production
+          LOG_PRETTY: "0"
+          API_PORT: "3004"
+          DATABASE_URL: postgresql://smoke:smoke@127.0.0.1:5432/smoke
+          DIRECT_URL: postgresql://smoke:smoke@127.0.0.1:5432/smoke
+          # Throwaway, and deliberately not a secret: this proves the process starts, and it never
+          # reaches a database or signs anything. Better Auth refuses to boot on its built-in
+          # default, which is the check working as intended.
+          BETTER_AUTH_SECRET: smoke-test-only-not-a-real-credential
+        run: |
+          set -euo pipefail
+          node apps/api/dist/main.js & pid=$!
+          for _ in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:3004/health > /dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:3004/health | tee /dev/stderr | grep -q '"status":"ok"'
+
+          # The reason production runs node rather than tsx: under tsx the runner killed the
+          # process on SIGTERM before the handler drained, so a rolling deploy reset live requests.
+          kill -TERM "$pid"
+          for _ in $(seq 1 20); do
+            if ! kill -0 "$pid" 2>/dev/null; then
+              echo "API shut down gracefully on SIGTERM"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::API did not exit within 20s of SIGTERM — shutdown is not graceful."
+          exit 1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: api-${{ inputs.ref }}
+          path: apps/api/dist/
+          retention-days: 14
+
   deploy:
     name: Deploy ${{ inputs.ref }} to ${{ inputs.environment }}
     runs-on: ubuntu-latest

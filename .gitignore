@@ -49,3 +49,6 @@ yarn-error.log*
 
 # Turborepo
 .turbo
+
+# API build output (apps/api/build.mjs) — an immutable artefact, rebuilt per deploy.
+apps/api/dist/
