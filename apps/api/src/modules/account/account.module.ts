@@ -1,21 +1,19 @@
 import { Module } from "@nestjs/common";
 import { userPreferencesService } from "@destaworks/application/user-preferences.service";
 import { learnService } from "@destaworks/application/learn.service";
-import { provideService, serviceToken } from "../service-token";
+import { provideService } from "../service-token";
+import { MeController } from "./me.controller";
+import { LEARN_SERVICE, USER_PREFERENCES_SERVICE } from "./account.tokens";
 
-export const USER_PREFERENCES_SERVICE = serviceToken<typeof userPreferencesService>(
-  "USER_PREFERENCES_SERVICE",
-);
-export const LEARN_SERVICE = serviceToken<typeof learnService>("LEARN_SERVICE");
+export { LEARN_SERVICE, USER_PREFERENCES_SERVICE };
 
 /**
- * The signed-in operator's own record: UI preferences and Learn progress. Everything here is
- * scoped to the caller, never to another user — administering *other* accounts is `AdminModule`.
- *
- * Wiring only until Phase 4.3 adds the controllers: the services are bound to tokens and exported,
- * so a controller injects one instead of importing the singleton and becoming untestable.
+ * The signed-in operator's own record: identity, UI preferences and Learn progress. Everything
+ * here is scoped to the caller, never to another user — administering *other* accounts is
+ * `AdminModule`.
  */
 @Module({
+  controllers: [MeController],
   providers: [
     provideService(USER_PREFERENCES_SERVICE, userPreferencesService),
     provideService(LEARN_SERVICE, learnService),

@@ -1,8 +1,10 @@
 import { Module } from "@nestjs/common";
 import { screeningService } from "@destaworks/application/screening.service";
-import { provideService, serviceToken } from "../service-token";
+import { provideService } from "../service-token";
+import { SCREENING_SERVICE } from "./screening.tokens";
+import { ScreeningController } from "./screening.controller";
 
-export const SCREENING_SERVICE = serviceToken<typeof screeningService>("SCREENING_SERVICE");
+export { SCREENING_SERVICE } from "./screening.tokens";
 
 /**
  * Screening calls and their outcomes — the first human gate in the pipeline.
@@ -11,6 +13,7 @@ export const SCREENING_SERVICE = serviceToken<typeof screeningService>("SCREENIN
  * so a controller injects one instead of importing the singleton and becoming untestable.
  */
 @Module({
+  controllers: [ScreeningController],
   providers: [provideService(SCREENING_SERVICE, screeningService)],
   exports: [SCREENING_SERVICE],
 })

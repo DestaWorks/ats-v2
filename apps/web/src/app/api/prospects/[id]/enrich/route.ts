@@ -1,10 +1,10 @@
-import type { ProspectDetailDTO } from "@destaworks/contracts/validation/prospect";
+import type { ProspectEnvelope } from "@destaworks/contracts/validation/prospect";
 import { requireCapability } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { prospectService } from "@destaworks/application/prospect.service";
 
 /** Response body of `POST /api/prospects/:id/enrich`. */
-export type PostProspectEnrichResponse = { prospect: ProspectDetailDTO };
+export type PostProspectEnrichResponse = ProspectEnvelope;
 
 /**
  * POST /api/prospects/:id/enrich — find contacts at this prospect via Apollo. Rate-limited inside

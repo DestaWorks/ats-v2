@@ -1,10 +1,23 @@
 import { z } from "zod";
+import type { Role } from "@destaworks/domain/constants";
 
 /**
  * Auth input schemas (shared client ↔ server). Used by the sign-in form (client)
  * and the auth route (server) so both validate identically. Real schema — reused
  * when Better Auth lands in Wave 0.3.
  */
+
+/**
+ * The signed-in operator as `/api/me` publishes them: identity and role, and deliberately
+ * nothing else off the session record. A wire shape rather than an internal one — the client
+ * reads it — so it is listed field by field here instead of derived from the auth user.
+ */
+export interface SessionUserDTO {
+  id: string;
+  email: string;
+  name: string;
+  role: Role;
+}
 
 export const signInSchema = z.object({
   email: z.email("Enter a valid email address"),

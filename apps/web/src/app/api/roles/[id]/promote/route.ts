@@ -1,10 +1,11 @@
 import { promoteFromMatchSchema } from "@destaworks/contracts/validation/open-role";
+import type { PromotedCandidateResponse } from "@destaworks/contracts/api";
 import { requireUser } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { openRoleService } from "@destaworks/application/open-role.service";
 
 /** Response body of `POST /api/roles/:id/promote` — the new candidate's id only. */
-export type PostRolePromoteResponse = { candidateId: string };
+export type PostRolePromoteResponse = PromotedCandidateResponse;
 
 /**
  * POST /api/roles/:id/promote — fill this role from a matched lead: promotes the lead into the

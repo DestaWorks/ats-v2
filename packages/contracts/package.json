@@ -6,6 +6,7 @@
   "license": "UNLICENSED",
   "exports": {
     "./api": "./src/api.ts",
+    "./http/*": "./src/http/*.ts",
     "./reports/filter-options": "./src/reports/filter-options.ts",
     "./validation/*": "./src/validation/*.ts"
   },

@@ -1,17 +1,17 @@
 import {
   createSavedViewSchema,
   savedViewListQuerySchema,
-  type SavedViewDTO,
 } from "@destaworks/contracts/validation/saved-view";
+import type * as Contract from "@destaworks/contracts/http/saved-view";
 import { requireUser } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { savedViewService } from "@destaworks/application/saved-view.service";
 
 /** Response body of `GET /api/saved-views`. */
-export type GetSavedViewsResponse = { savedViews: SavedViewDTO[] };
+export type GetSavedViewsResponse = Contract.GetSavedViewsResponse;
 
 /** Response body of `POST /api/saved-views` (201). */
-export type PostSavedViewResponse = { savedView: SavedViewDTO };
+export type PostSavedViewResponse = Contract.PostSavedViewResponse;
 
 /**
  * GET /api/saved-views?scope=pipeline|candidates — the caller's saved views for that scope

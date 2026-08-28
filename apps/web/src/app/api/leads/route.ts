@@ -1,10 +1,10 @@
-import { addLeadSchema, type LeadDetailDTO } from "@destaworks/contracts/validation/lead";
+import { addLeadSchema, type LeadEnvelope } from "@destaworks/contracts/validation/lead";
 import { requireUser } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { leadService } from "@destaworks/application/lead.service";
 
 /** Response body of `POST /api/leads`. */
-export type PostLeadResponse = { lead: LeadDetailDTO };
+export type PostLeadResponse = LeadEnvelope;
 
 /**
  * POST /api/leads — add a source lead (Wave 2.6). Guarded by `requireUser()` (sourcing is open to

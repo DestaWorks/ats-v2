@@ -1,10 +1,11 @@
 import { bulkProspectActionSchema } from "@destaworks/contracts/validation/prospect";
+import type { BulkActionCounts } from "@destaworks/contracts/api";
 import { requireCapability } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { prospectService } from "@destaworks/application/prospect.service";
 
 /** Response body of `POST /api/prospects/bulk` — counts only, never prospect PII. */
-export type PostProspectBulkResponse = { affected: number; skipped: number };
+export type PostProspectBulkResponse = BulkActionCounts;
 
 /**
  * POST /api/prospects/bulk — one dispatcher for the pipeline bulk toolbar: delete · restore ·

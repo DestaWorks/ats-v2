@@ -19,3 +19,6 @@ export const pipelineHealthAiSchema = z.object({
   topAction: z.string().describe("The single most valuable next action, specific not generic"),
 });
 export type PipelineHealthDTO = z.infer<typeof pipelineHealthAiSchema>;
+
+/** Response body of `POST /api/pipeline/health`. */
+export type PostPipelineHealthResponse = PipelineHealthDTO;

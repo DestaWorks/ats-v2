@@ -1,10 +1,10 @@
-import { logOutreachSchema, type LeadDetailDTO } from "@destaworks/contracts/validation/lead";
+import { logOutreachSchema, type LeadEnvelope } from "@destaworks/contracts/validation/lead";
 import { requireUser } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { leadService } from "@destaworks/application/lead.service";
 
 /** Response body of `POST /api/leads/:id/outreach`. */
-export type PostLeadOutreachResponse = { lead: LeadDetailDTO };
+export type PostLeadOutreachResponse = LeadEnvelope;
 
 /**
  * POST /api/leads/:id/outreach — log an outreach attempt (advances the lead through the outreach

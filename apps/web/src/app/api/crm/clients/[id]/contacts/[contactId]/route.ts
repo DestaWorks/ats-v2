@@ -1,16 +1,14 @@
-import {
-  updateContactSchema,
-  type ClientContactDTO,
-} from "@destaworks/contracts/validation/client";
+import { updateContactSchema } from "@destaworks/contracts/validation/client";
+import type * as Contract from "@destaworks/contracts/http/crm";
 import { requireCapability } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { clientService } from "@destaworks/application/client.service";
 
 /** Wire shape of `PATCH /api/crm/clients/:id/contacts/:contactId`. */
-export type PatchCrmClientContactResponse = { contact: ClientContactDTO };
+export type PatchCrmClientContactResponse = Contract.PatchCrmClientContactResponse;
 
 /** Wire shape of `DELETE /api/crm/clients/:id/contacts/:contactId`. */
-export type DeleteCrmClientContactResponse = { ok: true; id: string };
+export type DeleteCrmClientContactResponse = Contract.DeleteCrmClientContactResponse;
 
 /**
  * PATCH /api/crm/clients/:id/contacts/:contactId — edit a contact (incl. marking "left"). DELETE

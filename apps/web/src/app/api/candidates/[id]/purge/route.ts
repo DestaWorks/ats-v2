@@ -1,12 +1,10 @@
 import { requireCapability } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { candidateService } from "@destaworks/application/candidate.service";
+import type { CandidateAckEnvelope } from "@destaworks/contracts/validation/envelopes";
 
 /** Wire shape of `POST /api/candidates/:id/purge` — an ack only; the record is gone. */
-export interface PostCandidatePurgeResponse {
-  ok: true;
-  id: string;
-}
+export type PostCandidatePurgeResponse = CandidateAckEnvelope;
 
 /**
  * POST /api/candidates/:id/purge — PERMANENTLY delete a trashed candidate (cascades documents,

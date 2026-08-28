@@ -4,12 +4,10 @@ import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { checkRateLimit } from "@destaworks/integrations/http/rate-limit";
 import { resumeService } from "@destaworks/application/resume.service";
 import { toDocumentSummaryDTO } from "@destaworks/application/candidate.dto";
-import type { DocumentSummaryDTO } from "@destaworks/contracts/validation/candidate";
+import type { DocumentSummaryEnvelope } from "@destaworks/contracts/validation/envelopes";
 
 /** Wire shape of `POST /api/candidates/:id/resume` — the newly attached document summary. */
-export interface PostCandidateResumeResponse {
-  document: DocumentSummaryDTO;
-}
+export type PostCandidateResumeResponse = DocumentSummaryEnvelope;
 
 /**
  * POST /api/candidates/:id/resume — attach a resume directly to this ALREADY-KNOWN candidate (the

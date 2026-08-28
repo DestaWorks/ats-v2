@@ -36,3 +36,8 @@ export const uploadAvatarSchema = z.object({
   dataUrl: z.string().min(1).max(300_000),
 });
 export type UploadAvatarInput = z.infer<typeof uploadAvatarSchema>;
+
+/** `POST /api/me/avatar` response — the public URL of the stored image, nothing else. */
+export interface AvatarUploadedDTO {
+  url: string;
+}

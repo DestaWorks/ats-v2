@@ -1,13 +1,13 @@
 import {
   addProspectContactSchema,
-  type ProspectDetailDTO,
+  type ProspectEnvelope,
 } from "@destaworks/contracts/validation/prospect";
 import { requireCapability } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { prospectService } from "@destaworks/application/prospect.service";
 
 /** Response body of `POST /api/prospects/:id/contacts` — the fresh prospect detail. */
-export type PostProspectContactResponse = { prospect: ProspectDetailDTO };
+export type PostProspectContactResponse = ProspectEnvelope;
 
 /**
  * POST /api/prospects/:id/contacts — add a contact manually. A converted ("Client") prospect is

@@ -14,6 +14,7 @@ import {
   type ProspectStatus,
 } from "@destaworks/domain/constants";
 import type { PageMeta } from "@destaworks/domain/pagination";
+import type { BulkActionCounts, BulkAddCounts, SoftDeletedResponse } from "../api";
 import { boolFlagSchema } from "./pipeline";
 
 // --- response DTOs (serialized wire shapes) ---------------------------------
@@ -190,3 +191,49 @@ export const prospectListQuerySchema = z.object({
   /** 1-based OFFSET page (clamped server-side to `[1, totalPages]`). */
   page: z.coerce.number().int().min(1).optional(),
 });
+
+/**
+ * Response bodies for `/api/prospects/*` — declared here, not in the route files, so `apps/web` and
+ * `apps/api` answer with the same shape by construction (Phase 4.3).
+ */
+
+/** The envelope every prospect endpoint answers with: the fresh detail, and nothing around it. */
+export interface ProspectEnvelope {
+  prospect: ProspectDetailDTO;
+}
+
+/** Response body of `POST /api/prospects`. */
+export type PostProspectResponse = ProspectEnvelope;
+
+/** Response body of `GET /api/prospects/:id`. */
+export type GetProspectResponse = ProspectEnvelope;
+
+/** Response body of `PATCH /api/prospects/:id`. */
+export type PatchProspectResponse = ProspectEnvelope;
+
+/** Response body of `DELETE /api/prospects/:id` — the soft-deleted id only, never prospect PII. */
+export type DeleteProspectResponse = SoftDeletedResponse;
+
+/** Response body of `GET /api/prospects/list`. */
+export type GetProspectListResponse = ProspectListDTO;
+
+/** Response body of `POST /api/prospects/bulk` — counts only, never prospect PII. */
+export type PostProspectBulkResponse = BulkActionCounts;
+
+/** Response body of `POST /api/prospects/bulk-add` — counts only. */
+export type PostProspectBulkAddResponse = BulkAddCounts;
+
+/** Response body of `POST /api/prospects/:id/contacts` — the fresh prospect detail. */
+export type PostProspectContactResponse = ProspectEnvelope;
+
+/** Response body of `DELETE /api/prospects/:id/contacts/:contactId` — the fresh prospect detail. */
+export type DeleteProspectContactResponse = ProspectEnvelope;
+
+/** Response body of `POST /api/prospects/:id/enrich`. */
+export type PostProspectEnrichResponse = ProspectEnvelope;
+
+/** Response body of `POST /api/prospects/:id/enrich-hunter`. */
+export type PostProspectEnrichHunterResponse = ProspectEnvelope;
+
+/** Response body of `POST /api/prospects/:id/restore`. */
+export type PostProspectRestoreResponse = ProspectEnvelope;

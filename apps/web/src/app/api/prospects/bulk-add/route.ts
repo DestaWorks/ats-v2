@@ -1,10 +1,11 @@
 import { addProspectsFromSearchSchema } from "@destaworks/contracts/validation/prospect";
+import type { BulkAddCounts } from "@destaworks/contracts/api";
 import { requireCapability } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { prospectService } from "@destaworks/application/prospect.service";
 
 /** Response body of `POST /api/prospects/bulk-add` — counts only. */
-export type PostProspectBulkAddResponse = { added: number; skipped: number };
+export type PostProspectBulkAddResponse = BulkAddCounts;
 
 /**
  * POST /api/prospects/bulk-add — bulk-add selected NPPES search-result rows to the pipeline

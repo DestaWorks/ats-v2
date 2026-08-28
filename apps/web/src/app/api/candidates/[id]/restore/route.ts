@@ -1,12 +1,11 @@
 import { requireUser } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { candidateService } from "@destaworks/application/candidate.service";
-import { toCandidateDTO, type CandidateDTO } from "@destaworks/application/candidate.dto";
+import { toCandidateDTO } from "@destaworks/application/candidate.dto";
+import type { CandidateEnvelope } from "@destaworks/application/candidate.wire";
 
 /** Wire shape of `POST /api/candidates/:id/restore` — the PII-re-gated candidate. */
-export interface PostCandidateRestoreResponse {
-  candidate: CandidateDTO;
-}
+export type PostCandidateRestoreResponse = CandidateEnvelope;
 
 /**
  * POST /api/candidates/:id/restore — restore a soft-deleted candidate from Trash back into its

@@ -1,10 +1,13 @@
-import { postPortalRoleSchema } from "@destaworks/contracts/validation/portal";
+import {
+  postPortalRoleSchema,
+  type PostPortalRoleResponse as PortalRoleContract,
+} from "@destaworks/contracts/validation/portal";
 import { requirePortalContact } from "@destaworks/auth/portal-guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { clientPortalService } from "@destaworks/application/client-portal.service";
 
 /** Response body of `POST /api/portal/roles` — the new role's id only, nothing else. */
-export type PostPortalRoleResponse = { role: { id: string } };
+export type PostPortalRoleResponse = PortalRoleContract;
 
 /**
  * POST /api/portal/roles — a client posts a new open role. Identity comes ONLY from

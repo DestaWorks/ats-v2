@@ -1,10 +1,11 @@
 import { discoverAddToSourcingSchema } from "@destaworks/contracts/validation/discover";
+import type * as Contract from "@destaworks/contracts/http/discover";
 import { requireUser } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { discoverService } from "@destaworks/application/discover.service";
 
 /** Wire shape of `POST /api/discover/add`. */
-export type PostDiscoverAddResponse = { added: number; skipped: number };
+export type PostDiscoverAddResponse = Contract.PostDiscoverAddResponse;
 
 /**
  * POST /api/discover/add — bulk-add the caller's selected NPPES search results to Sourcing

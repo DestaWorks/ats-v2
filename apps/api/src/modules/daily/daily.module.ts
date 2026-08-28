@@ -1,16 +1,17 @@
 import { Module } from "@nestjs/common";
 import { dailyService } from "@destaworks/application/daily.service";
-import { provideService, serviceToken } from "../service-token";
-
-export const DAILY_SERVICE = serviceToken<typeof dailyService>("DAILY_SERVICE");
+import { provideService } from "../service-token";
+import { DailyController } from "./daily.controller";
+import { DAILY_SERVICE } from "./daily.tokens";
 
 /**
  * The daily activity log — per-day recruiter activity over half-open `[start, end)` windows.
  *
- * Wiring only until Phase 4.3 adds the controllers: the services are bound to tokens and exported,
- * so a controller injects one instead of importing the singleton and becoming untestable.
+ * The service is bound to a token (`daily.tokens.ts`) rather than imported by the controller, so
+ * `DailyController` injects it instead of reaching for the singleton and becoming untestable.
  */
 @Module({
+  controllers: [DailyController],
   providers: [provideService(DAILY_SERVICE, dailyService)],
   exports: [DAILY_SERVICE],
 })

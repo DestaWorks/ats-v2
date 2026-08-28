@@ -1,9 +1,10 @@
+import type { PromotedCandidateResponse } from "@destaworks/contracts/api";
 import { requireUser } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { leadService } from "@destaworks/application/lead.service";
 
 /** Response body of `POST /api/leads/:id/promote` — the new candidate's id only. */
-export type PostLeadPromoteResponse = { candidateId: string };
+export type PostLeadPromoteResponse = PromotedCandidateResponse;
 
 /**
  * POST /api/leads/:id/promote — promote a lead into the candidate pipeline (creates a real Candidate

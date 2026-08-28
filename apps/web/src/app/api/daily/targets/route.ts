@@ -1,10 +1,10 @@
-import { setTargetSchema } from "@destaworks/contracts/validation/daily";
+import { setTargetSchema, type AcknowledgedDTO } from "@destaworks/contracts/validation/daily";
 import { requireUser } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { dailyService } from "@destaworks/application/daily.service";
 
 /** Response body of `POST /api/daily/targets`. */
-export type PostDailyTargetsResponse = { ok: true };
+export type PostDailyTargetsResponse = AcknowledgedDTO;
 
 /**
  * POST /api/daily/targets — set/replace one associate's targets for a day (legacy

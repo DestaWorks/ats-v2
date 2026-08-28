@@ -1,11 +1,11 @@
 import { attachInboundSchema } from "@destaworks/contracts/validation/inbound";
-import type { LeadDetailDTO } from "@destaworks/contracts/validation/lead";
+import type { LeadEnvelope } from "@destaworks/contracts/validation/lead";
 import { requireUser } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { inboundService } from "@destaworks/application/inbound.service";
 
 /** Response body of `POST /api/inbound/attach`. */
-export type PostInboundAttachResponse = { lead: LeadDetailDTO };
+export type PostInboundAttachResponse = LeadEnvelope;
 
 /**
  * POST /api/inbound/attach — the reply belongs to an EXISTING lead (dedupe match, reviewer

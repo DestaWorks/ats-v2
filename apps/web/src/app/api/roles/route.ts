@@ -1,7 +1,7 @@
 import {
   createOpenRoleSchema,
   roleListQuerySchema,
-  type OpenRoleDetailDTO,
+  type OpenRoleEnvelope,
   type OpenRoleListDTO,
 } from "@destaworks/contracts/validation/open-role";
 import { defined } from "@destaworks/domain/utils/defined";
@@ -10,7 +10,7 @@ import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { openRoleService } from "@destaworks/application/open-role.service";
 
 /** Response body of `POST /api/roles`. */
-export type PostRoleResponse = { role: OpenRoleDetailDTO };
+export type PostRoleResponse = OpenRoleEnvelope;
 
 /** Response body of `GET /api/roles`. */
 export type GetRoleListResponse = OpenRoleListDTO;

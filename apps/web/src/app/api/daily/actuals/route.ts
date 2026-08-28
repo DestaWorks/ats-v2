@@ -1,10 +1,10 @@
-import { saveActualsSchema } from "@destaworks/contracts/validation/daily";
+import { saveActualsSchema, type AcknowledgedDTO } from "@destaworks/contracts/validation/daily";
 import { requireUser } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { dailyService } from "@destaworks/application/daily.service";
 
 /** Response body of `POST /api/daily/actuals`. */
-export type PostDailyActualsResponse = { ok: true };
+export type PostDailyActualsResponse = AcknowledgedDTO;
 
 /**
  * POST /api/daily/actuals — End of Shift (legacy `ats_actuals_save`): the SESSION user confirms

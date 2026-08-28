@@ -2,17 +2,13 @@ import { addNoteSchema } from "@destaworks/contracts/validation/candidate";
 import { requireUser } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { noteService } from "@destaworks/application/note.service";
-import type { NoteDTO } from "@destaworks/contracts/validation/candidate";
+import type { NoteEnvelope, NoteListEnvelope } from "@destaworks/contracts/validation/envelopes";
 
 /** Wire shape of `POST /api/candidates/:id/notes` — the created note (author from the session). */
-export interface PostCandidateNoteResponse {
-  note: NoteDTO;
-}
+export type PostCandidateNoteResponse = NoteEnvelope;
 
 /** Wire shape of `GET /api/candidates/:id/notes` — the viewer-scoped notes for one candidate. */
-export interface GetCandidateNotesResponse {
-  notes: NoteDTO[];
-}
+export type GetCandidateNotesResponse = NoteListEnvelope;
 
 /**
  * POST /api/candidates/:id/notes — add a note. Guarded by `requireUser()`. `authorId`/`authorName`

@@ -5,29 +5,31 @@ import { teamReportsService } from "@destaworks/application/reports/team-reports
 import { timeReportsService } from "@destaworks/application/reports/time-reports.service";
 import { reportFilterOptionsService } from "@destaworks/application/reports/filter-options.service";
 import { exportService } from "@destaworks/application/reports/export.service";
-import { provideService, serviceToken } from "../service-token";
-
-export const PIPELINE_REPORTS_SERVICE = serviceToken<typeof pipelineReportsService>(
-  "PIPELINE_REPORTS_SERVICE",
-);
-export const CLIENT_REPORTS_SERVICE =
-  serviceToken<typeof clientReportsService>("CLIENT_REPORTS_SERVICE");
-export const TEAM_REPORTS_SERVICE = serviceToken<typeof teamReportsService>("TEAM_REPORTS_SERVICE");
-export const TIME_REPORTS_SERVICE = serviceToken<typeof timeReportsService>("TIME_REPORTS_SERVICE");
-export const REPORT_FILTER_OPTIONS_SERVICE = serviceToken<typeof reportFilterOptionsService>(
-  "REPORT_FILTER_OPTIONS_SERVICE",
-);
-export const EXPORT_SERVICE = serviceToken<typeof exportService>("EXPORT_SERVICE");
+import { massJourneyReport } from "@destaworks/application/reports/mass-journey.report";
+import { trendsReport } from "@destaworks/application/reports/trends.report";
+import { provideService } from "../service-token";
+import { ReportsController } from "./reports.controller";
+import {
+  CLIENT_REPORTS_SERVICE,
+  EXPORT_SERVICE,
+  MASS_JOURNEY_REPORT,
+  PIPELINE_REPORTS_SERVICE,
+  REPORT_FILTER_OPTIONS_SERVICE,
+  TEAM_REPORTS_SERVICE,
+  TIME_REPORTS_SERVICE,
+  TRENDS_REPORT,
+} from "./reports.tokens";
 
 /**
  * Reporting across the pipeline, clients, team and time, plus the filter vocabularies the
  * report UI offers and CSV/XLSX export. Export is a long read that Phase 5 moves to a job; the
  * module boundary is what makes that a one-file change.
  *
- * Wiring only until Phase 4.3 adds the controllers: the services are bound to tokens and exported,
- * so a controller injects one instead of importing the singleton and becoming untestable.
+ * The services are bound to tokens (`reports.tokens.ts`) rather than imported by the controller,
+ * so `ReportsController` injects one instead of reaching for the singleton and becoming untestable.
  */
 @Module({
+  controllers: [ReportsController],
   providers: [
     provideService(PIPELINE_REPORTS_SERVICE, pipelineReportsService),
     provideService(CLIENT_REPORTS_SERVICE, clientReportsService),
@@ -35,6 +37,8 @@ export const EXPORT_SERVICE = serviceToken<typeof exportService>("EXPORT_SERVICE
     provideService(TIME_REPORTS_SERVICE, timeReportsService),
     provideService(REPORT_FILTER_OPTIONS_SERVICE, reportFilterOptionsService),
     provideService(EXPORT_SERVICE, exportService),
+    provideService(MASS_JOURNEY_REPORT, massJourneyReport),
+    provideService(TRENDS_REPORT, trendsReport),
   ],
   exports: [
     PIPELINE_REPORTS_SERVICE,
@@ -43,6 +47,8 @@ export const EXPORT_SERVICE = serviceToken<typeof exportService>("EXPORT_SERVICE
     TIME_REPORTS_SERVICE,
     REPORT_FILTER_OPTIONS_SERVICE,
     EXPORT_SERVICE,
+    MASS_JOURNEY_REPORT,
+    TRENDS_REPORT,
   ],
 })
 export class ReportsModule {}

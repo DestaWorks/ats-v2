@@ -1,19 +1,11 @@
-import { z } from "zod";
 import {
-  generateDailyBriefSchema,
+  generateDailyBriefRequestSchema,
   type DailyBriefAiOutput,
 } from "@destaworks/contracts/validation/briefs";
 import { requireCapability } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { checkRateLimit } from "@destaworks/integrations/http/rate-limit";
 import { briefService } from "@destaworks/application/brief.service";
-
-const requestSchema = generateDailyBriefSchema.extend({
-  priorityClientId: z.string().min(1).nullish(),
-  shiftA: z.string().trim().max(2000).nullish(),
-  shiftB: z.string().trim().max(2000).nullish(),
-  watchItems: z.string().trim().max(2000).nullish(),
-});
 
 /** Response body of `POST /api/briefs/daily/generate` — the unsaved AI draft. */
 export type PostBriefsDailyGenerateResponse = DailyBriefAiOutput;
@@ -28,7 +20,7 @@ export type PostBriefsDailyGenerateResponse = DailyBriefAiOutput;
 export const POST = apiHandler(async (req: Request) => {
   const user = await requireCapability("viewReports");
   await checkRateLimit(`briefs-daily-generate:${user.id}`, { limit: 20, windowMs: 60_000 });
-  const input = requestSchema.parse(await req.json());
+  const input = generateDailyBriefRequestSchema.parse(await req.json());
   const draft = await briefService.generateDaily(
     { date: input.date, tz: input.tz },
     {

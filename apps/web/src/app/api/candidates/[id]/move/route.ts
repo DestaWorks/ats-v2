@@ -3,16 +3,10 @@ import { requireUser } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { candidateService } from "@destaworks/application/candidate.service";
 import { toIso } from "@destaworks/domain/utils/iso";
+import type { MovedCandidateEnvelope } from "@destaworks/contracts/validation/envelopes";
 
 /** Wire shape of `POST /api/candidates/:id/move` — the persisted pipeline fields only, never PII. */
-export interface PostCandidateMoveResponse {
-  candidate: {
-    id: string;
-    status: string;
-    stageOrder: number;
-    stageEnteredAt: string;
-  };
-}
+export type PostCandidateMoveResponse = MovedCandidateEnvelope;
 
 /**
  * POST /api/candidates/:id/move — a single server-authoritative move. Guarded by `requireUser()`;

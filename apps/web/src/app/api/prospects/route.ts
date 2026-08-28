@@ -1,13 +1,13 @@
 import {
   addProspectSchema,
-  type ProspectDetailDTO,
+  type ProspectEnvelope,
 } from "@destaworks/contracts/validation/prospect";
 import { requireCapability } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { prospectService } from "@destaworks/application/prospect.service";
 
 /** Response body of `POST /api/prospects`. */
-export type PostProspectResponse = { prospect: ProspectDetailDTO };
+export type PostProspectResponse = ProspectEnvelope;
 
 /**
  * POST /api/prospects — add a prospect manually (Client Discovery). Leadership-gated

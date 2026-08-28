@@ -25,6 +25,12 @@ export interface MentionListDTO {
 }
 
 /**
+ * The badge count on its own — what marking a mention read answers with. Derived from
+ * `MentionListDTO` so the bell's two endpoints can never disagree about the key's name or type.
+ */
+export type MentionUnreadDTO = Pick<MentionListDTO, "unread">;
+
+/**
  * Body for `POST /api/mentions/read` — exactly one of: `{ mentionId }` (mark one) or
  * `{ all: true }` (mark all). The recipient is ALWAYS the session user, never a body field.
  */

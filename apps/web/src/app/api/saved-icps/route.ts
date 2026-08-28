@@ -1,13 +1,14 @@
-import { createSavedIcpSchema, type SavedIcpDTO } from "@destaworks/contracts/validation/saved-icp";
+import { createSavedIcpSchema } from "@destaworks/contracts/validation/saved-icp";
+import type * as Contract from "@destaworks/contracts/http/saved-icp";
 import { requireCapability } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { savedIcpService } from "@destaworks/application/saved-icp.service";
 
 /** Response body of `GET /api/saved-icps`. */
-export type GetSavedIcpsResponse = { savedIcps: SavedIcpDTO[] };
+export type GetSavedIcpsResponse = Contract.GetSavedIcpsResponse;
 
 /** Response body of `POST /api/saved-icps` (201). */
-export type PostSavedIcpResponse = { savedIcp: SavedIcpDTO };
+export type PostSavedIcpResponse = Contract.PostSavedIcpResponse;
 
 /**
  * GET /api/saved-icps — every ICP visible to the caller: all team-shared ones + the caller's own

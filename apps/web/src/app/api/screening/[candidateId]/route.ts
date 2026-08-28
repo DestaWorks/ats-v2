@@ -2,12 +2,10 @@ import { saveScreeningSchema } from "@destaworks/contracts/validation/screening"
 import { requireUser } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { screeningService } from "@destaworks/application/screening.service";
-import type { ScreeningScorecardDTO } from "@destaworks/contracts/validation/screening";
+import type { ScreeningScorecardEnvelope } from "@destaworks/contracts/validation/envelopes";
 
 /** Wire shape of `POST /api/screening/:candidateId` — the persisted scorecard. */
-export interface PostScreeningResponse {
-  scorecard: ScreeningScorecardDTO;
-}
+export type PostScreeningResponse = ScreeningScorecardEnvelope;
 
 /**
  * POST /api/screening/:candidateId — score a candidate and persist the scorecard; if `action` is

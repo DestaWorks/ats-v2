@@ -7,16 +7,15 @@ import { requireUser } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { AppError } from "@destaworks/integrations/http/app-error";
 import { candidateService } from "@destaworks/application/candidate.service";
-import { toCandidateDTO, type CandidateDTO } from "@destaworks/application/candidate.dto";
+import { toCandidateDTO } from "@destaworks/application/candidate.dto";
+import type { CandidateEnvelope } from "@destaworks/application/candidate.wire";
 import type { BoardResponse, ColumnPageDTO } from "@destaworks/contracts/validation/pipeline";
 
 /** Wire shape of `GET /api/candidates` — the full board, or one column page when `column` is set. */
 export type GetCandidatesResponse = BoardResponse | ColumnPageDTO;
 
 /** Wire shape of `POST /api/candidates` — the PII-re-gated newly created candidate. */
-export interface PostCandidateResponse {
-  candidate: CandidateDTO;
-}
+export type PostCandidateResponse = CandidateEnvelope;
 
 /**
  * GET /api/candidates — funnel-grouped pipeline board data (+ per-column load-more). Guarded by

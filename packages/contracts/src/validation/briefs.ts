@@ -87,15 +87,28 @@ export interface WeeklyBriefDTO extends WeeklyBriefAiOutput {
 export const generateDailyBriefSchema = z.object({ date: dateKey, tz: z.coerce.number().int() });
 export type GenerateDailyBriefInput = z.infer<typeof generateDailyBriefSchema>;
 
+/**
+ * The Daily Brief form's manual inputs. Declared once because BOTH the generate request and the
+ * save request carry them — generate to seed the AI's context, save to persist what the author
+ * typed — and two copies of the same four fields drift the moment one of them gains a fifth.
+ */
+const manualInputsShape = {
+  priorityClientId: z.string().min(1).nullish(),
+  shiftA: z.string().trim().max(2000).nullish(),
+  shiftB: z.string().trim().max(2000).nullish(),
+  watchItems: z.string().trim().max(2000).nullish(),
+};
+
+/**
+ * `POST /api/briefs/daily/generate` — the full request body: the day window plus the manual
+ * inputs. NOT `.strict()`, matching `generateDailyBriefSchema`: unknown keys are stripped.
+ */
+export const generateDailyBriefRequestSchema = generateDailyBriefSchema.extend(manualInputsShape);
+export type GenerateDailyBriefRequest = z.infer<typeof generateDailyBriefRequestSchema>;
+
 /** `POST /api/briefs/daily/save` — persist the (possibly edited) draft + manual inputs. */
 export const saveDailyBriefSchema = dailyBriefAiSchema
-  .extend({
-    date: dateKey,
-    priorityClientId: z.string().min(1).nullish(),
-    shiftA: z.string().trim().max(2000).nullish(),
-    shiftB: z.string().trim().max(2000).nullish(),
-    watchItems: z.string().trim().max(2000).nullish(),
-  })
+  .extend({ date: dateKey, ...manualInputsShape })
   .strict();
 export type SaveDailyBriefInput = z.infer<typeof saveDailyBriefSchema>;
 

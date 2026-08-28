@@ -1,10 +1,10 @@
-import type { ProspectDetailDTO } from "@destaworks/contracts/validation/prospect";
+import type { ProspectEnvelope } from "@destaworks/contracts/validation/prospect";
 import { requireCapability } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { prospectService } from "@destaworks/application/prospect.service";
 
 /** Response body of `DELETE /api/prospects/:id/contacts/:contactId` — the fresh prospect detail. */
-export type DeleteProspectContactResponse = { prospect: ProspectDetailDTO };
+export type DeleteProspectContactResponse = ProspectEnvelope;
 
 /**
  * DELETE /api/prospects/:id/contacts/:contactId — remove one contact, scoped to its prospect (a

@@ -1,9 +1,10 @@
 import { requireCapability } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { adminUserService } from "@destaworks/application/admin-user.service";
+import type { ResetPasswordDTO } from "@destaworks/contracts/validation/admin";
 
 /** Response body of `POST /api/admin/users/:id/reset-password` — returned once, never persisted. */
-export type PostAdminUserResetPasswordResponse = { generatedPassword: string };
+export type PostAdminUserResetPasswordResponse = ResetPasswordDTO;
 
 /**
  * POST /api/admin/users/:id/reset-password — generates a new password and returns it ONCE

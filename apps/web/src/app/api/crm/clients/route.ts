@@ -1,17 +1,14 @@
-import {
-  createClientSchema,
-  type ClientListDTO,
-  type ClientProfileDTO,
-} from "@destaworks/contracts/validation/client";
+import { createClientSchema } from "@destaworks/contracts/validation/client";
+import type * as Contract from "@destaworks/contracts/http/crm";
 import { requireCapability } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { clientService } from "@destaworks/application/client.service";
 
 /** Wire shape of `GET /api/crm/clients`. */
-export type GetCrmClientsResponse = ClientListDTO;
+export type GetCrmClientsResponse = Contract.GetCrmClientsResponse;
 
 /** Wire shape of `POST /api/crm/clients`. */
-export type PostCrmClientResponse = { client: ClientProfileDTO };
+export type PostCrmClientResponse = Contract.PostCrmClientResponse;
 
 /**
  * GET /api/crm/clients — the full client list (small, fixed set — no pagination, matches

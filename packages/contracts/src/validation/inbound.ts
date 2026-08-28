@@ -5,6 +5,7 @@
  * editable result.
  */
 import { z } from "zod";
+import type { LeadEnvelope } from "./lead";
 
 /** Legacy intent labels (ported verbatim). */
 export const INBOUND_INTENTS = [
@@ -108,3 +109,20 @@ export const attachInboundSchema = z
   })
   .strict();
 export type AttachInboundInput = z.infer<typeof attachInboundSchema>;
+
+/**
+ * Response bodies for `/api/inbound/*` — declared here, not in the route files, so `apps/web` and
+ * `apps/api` answer with the same shape by construction (Phase 4.3).
+ *
+ * Attach and save both end at a lead, so both reuse `LeadEnvelope` rather than restating it: the
+ * reviewer's "the reply became a lead" view is the lead detail, whichever path produced it.
+ */
+
+/** Response body of `POST /api/inbound/triage` — read-only; no lead exists yet. */
+export type PostInboundTriageResponse = TriageResultDTO;
+
+/** Response body of `POST /api/inbound/attach`. */
+export type PostInboundAttachResponse = LeadEnvelope;
+
+/** Response body of `POST /api/inbound/save`. */
+export type PostInboundSaveResponse = LeadEnvelope;

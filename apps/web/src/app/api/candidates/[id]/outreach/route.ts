@@ -2,12 +2,10 @@ import { logOutreachSchema } from "@destaworks/contracts/validation/lead";
 import { requireUser } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { candidateService } from "@destaworks/application/candidate.service";
-import type { OutreachAttemptDTO } from "@destaworks/contracts/validation/lead";
+import type { OutreachAttemptEnvelope } from "@destaworks/contracts/validation/envelopes";
 
 /** Wire shape of `POST /api/candidates/:id/outreach` — the freshly logged attempt. */
-export interface PostCandidateOutreachResponse {
-  attempt: OutreachAttemptDTO;
-}
+export type PostCandidateOutreachResponse = OutreachAttemptEnvelope;
 
 /**
  * POST /api/candidates/:id/outreach — log one outreach attempt on a candidate

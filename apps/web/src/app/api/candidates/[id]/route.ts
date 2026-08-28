@@ -4,24 +4,21 @@ import { requireUser } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { AppError } from "@destaworks/integrations/http/app-error";
 import { candidateService } from "@destaworks/application/candidate.service";
-import { toCandidateDTO, type CandidateDTO } from "@destaworks/application/candidate.dto";
-import type { CandidateProfileDTO } from "@destaworks/contracts/validation/candidate";
+import { toCandidateDTO } from "@destaworks/application/candidate.dto";
+import type { CandidateEnvelope } from "@destaworks/application/candidate.wire";
+import type {
+  CandidateAckEnvelope,
+  CandidateProfileEnvelope,
+} from "@destaworks/contracts/validation/envelopes";
 
 /** Wire shape of `GET /api/candidates/:id` — the lighter profile projection (ISO date strings). */
-export interface GetCandidateResponse {
-  candidate: CandidateProfileDTO;
-}
+export type GetCandidateResponse = CandidateProfileEnvelope;
 
 /** Wire shape of `PATCH /api/candidates/:id` — the PII-re-gated candidate after the edit. */
-export interface PatchCandidateResponse {
-  candidate: CandidateDTO;
-}
+export type PatchCandidateResponse = CandidateEnvelope;
 
 /** Wire shape of `DELETE /api/candidates/:id` — a soft-delete ack; never candidate PII. */
-export interface DeleteCandidateResponse {
-  ok: true;
-  id: string;
-}
+export type DeleteCandidateResponse = CandidateAckEnvelope;
 
 /**
  * GET /api/candidates/:id — one candidate's PROFILE fields (Wave 4.1, Templates — the recipient

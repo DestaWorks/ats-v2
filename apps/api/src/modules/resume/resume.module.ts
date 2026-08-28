@@ -1,8 +1,11 @@
 import { Module } from "@nestjs/common";
 import { resumeService } from "@destaworks/application/resume.service";
-import { provideService, serviceToken } from "../service-token";
+import { provideService } from "../service-token";
+import { RESUME_SERVICE } from "./resume.tokens";
+import { DocumentsController } from "./documents.controller";
+import { ResumeController } from "./resume.controller";
 
-export const RESUME_SERVICE = serviceToken<typeof resumeService>("RESUME_SERVICE");
+export { RESUME_SERVICE } from "./resume.tokens";
 
 /**
  * Resume upload, parsing and matching — the AI-assisted path from an uploaded document to a
@@ -12,6 +15,7 @@ export const RESUME_SERVICE = serviceToken<typeof resumeService>("RESUME_SERVICE
  * so a controller injects one instead of importing the singleton and becoming untestable.
  */
 @Module({
+  controllers: [ResumeController, DocumentsController],
   providers: [provideService(RESUME_SERVICE, resumeService)],
   exports: [RESUME_SERVICE],
 })

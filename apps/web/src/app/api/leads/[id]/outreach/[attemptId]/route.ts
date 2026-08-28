@@ -1,13 +1,13 @@
-import { updateOutreachSchema, type LeadDetailDTO } from "@destaworks/contracts/validation/lead";
+import { updateOutreachSchema, type LeadEnvelope } from "@destaworks/contracts/validation/lead";
 import { requireUser } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { leadService } from "@destaworks/application/lead.service";
 
 /** Response body of `PATCH /api/leads/:id/outreach/:attemptId`. */
-export type PatchLeadOutreachAttemptResponse = { lead: LeadDetailDTO };
+export type PatchLeadOutreachAttemptResponse = LeadEnvelope;
 
 /** Response body of `DELETE /api/leads/:id/outreach/:attemptId`. */
-export type DeleteLeadOutreachAttemptResponse = { lead: LeadDetailDTO };
+export type DeleteLeadOutreachAttemptResponse = LeadEnvelope;
 
 /**
  * PATCH /api/leads/:id/outreach/:attemptId — edit one logged attempt

@@ -1,8 +1,8 @@
 import {
   submitLogSchema,
   tzOffsetSchema,
-  type DailyLogDTO,
   type DailyLogViewDTO,
+  type SubmittedLogDTO,
 } from "@destaworks/contracts/validation/daily";
 import { DATE_KEY_RE, dateKeyForOffset } from "@destaworks/domain/daily";
 import { requireUser } from "@destaworks/auth/guards";
@@ -13,7 +13,7 @@ import { dailyService } from "@destaworks/application/daily.service";
 export type GetDailyLogResponse = DailyLogViewDTO;
 
 /** Response body of `POST /api/daily/log`. */
-export type PostDailyLogResponse = { log: DailyLogDTO };
+export type PostDailyLogResponse = SubmittedLogDTO;
 
 /**
  * GET /api/daily/log?date&tz — the Daily Log page composite for the SESSION user (today's log

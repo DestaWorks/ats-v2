@@ -1,10 +1,10 @@
-import { snoozeLeadSchema, type LeadDetailDTO } from "@destaworks/contracts/validation/lead";
+import { snoozeLeadSchema, type LeadEnvelope } from "@destaworks/contracts/validation/lead";
 import { requireUser } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { leadService } from "@destaworks/application/lead.service";
 
 /** Response body of `POST /api/leads/:id/snooze`. */
-export type PostLeadSnoozeResponse = { lead: LeadDetailDTO };
+export type PostLeadSnoozeResponse = LeadEnvelope;
 
 /**
  * POST /api/leads/:id/snooze — snooze (`{ until: date }`) or wake (`{ until: null }`) a lead

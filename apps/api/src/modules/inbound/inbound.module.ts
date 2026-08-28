@@ -1,16 +1,17 @@
 import { Module } from "@nestjs/common";
 import { inboundService } from "@destaworks/application/inbound.service";
-import { provideService, serviceToken } from "../service-token";
+import { provideService } from "../service-token";
+import { InboundController } from "./inbound.controller";
+import { INBOUND_SERVICE } from "./inbound.tokens";
 
-export const INBOUND_SERVICE = serviceToken<typeof inboundService>("INBOUND_SERVICE");
+export { INBOUND_SERVICE };
 
 /**
- * Inbound applications arriving from outside the operator app.
- *
- * Wiring only until Phase 4.3 adds the controllers: the services are bound to tokens and exported,
- * so a controller injects one instead of importing the singleton and becoming untestable.
+ * Inbound Triage — a pasted reply is extracted, deduped and client-matched, then either attached to
+ * the lead it belongs to or saved as a new one.
  */
 @Module({
+  controllers: [InboundController],
   providers: [provideService(INBOUND_SERVICE, inboundService)],
   exports: [INBOUND_SERVICE],
 })

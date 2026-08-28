@@ -1,10 +1,13 @@
-import { uploadAvatarSchema } from "@destaworks/contracts/validation/user-preferences";
+import {
+  uploadAvatarSchema,
+  type AvatarUploadedDTO,
+} from "@destaworks/contracts/validation/user-preferences";
 import { requireUser } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { userPreferencesService } from "@destaworks/application/user-preferences.service";
 
 /** Response body of `POST /api/me/avatar` — the public URL of the stored avatar. */
-export type PostMeAvatarResponse = { url: string };
+export type PostMeAvatarResponse = AvatarUploadedDTO;
 
 /**
  * POST /api/me/avatar (Wave 6) — uploads a client-resized avatar image to Storage and returns its

@@ -1,16 +1,19 @@
 import { Module } from "@nestjs/common";
 import { prospectService } from "@destaworks/application/prospect.service";
-import { provideService, serviceToken } from "../service-token";
+import { provideService } from "../service-token";
+import { ProspectsController } from "./prospects.controller";
+import { PROSPECT_SERVICE } from "./prospects.tokens";
 
-export const PROSPECT_SERVICE = serviceToken<typeof prospectService>("PROSPECT_SERVICE");
+export { PROSPECT_SERVICE };
 
 /**
- * Prospective clients and their own lifecycle, ahead of becoming a client record.
+ * Client Discovery prospects — the outbound side of the business: organisations we want as clients,
+ * their contacts, and the enrichment that finds those contacts.
  *
- * Wiring only until Phase 4.3 adds the controllers: the services are bound to tokens and exported,
- * so a controller injects one instead of importing the singleton and becoming untestable.
+ * The whole area is leadership-gated on `viewClientDiscovery`, declared once on the controller.
  */
 @Module({
+  controllers: [ProspectsController],
   providers: [provideService(PROSPECT_SERVICE, prospectService)],
   exports: [PROSPECT_SERVICE],
 })

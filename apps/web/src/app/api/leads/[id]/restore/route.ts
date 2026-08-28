@@ -1,10 +1,10 @@
-import type { LeadDetailDTO } from "@destaworks/contracts/validation/lead";
+import type { LeadEnvelope } from "@destaworks/contracts/validation/lead";
 import { requireUser } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { leadService } from "@destaworks/application/lead.service";
 
 /** Response body of `POST /api/leads/:id/restore`. */
-export type PostLeadRestoreResponse = { lead: LeadDetailDTO };
+export type PostLeadRestoreResponse = LeadEnvelope;
 
 /**
  * POST /api/leads/:id/restore — restore a soft-deleted lead (clears the delete markers; status and

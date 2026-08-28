@@ -1,10 +1,10 @@
-import { addFeedbackSchema } from "@destaworks/contracts/validation/daily";
+import { addFeedbackSchema, type AcknowledgedDTO } from "@destaworks/contracts/validation/daily";
 import { requireUser } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { dailyService } from "@destaworks/application/daily.service";
 
 /** Response body of `POST /api/daily/manager-feedback`. */
-export type PostDailyManagerFeedbackResponse = { ok: true };
+export type PostDailyManagerFeedbackResponse = AcknowledgedDTO;
 
 /**
  * POST /api/daily/manager-feedback — post a feedback note to an associate (Wave 3.1 backlog,

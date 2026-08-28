@@ -1,9 +1,10 @@
+import type * as Contract from "@destaworks/contracts/http/crm";
 import { requireCapability } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { clientPortalService } from "@destaworks/application/client-portal.service";
 
 /** Wire shape of `POST /api/crm/clients/:id/portal/tokens/:tokenId/revoke`. */
-export type PostCrmPortalTokenRevokeResponse = { ok: true; id: string };
+export type PostCrmPortalTokenRevokeResponse = Contract.PostCrmPortalTokenRevokeResponse;
 
 /**
  * POST /api/crm/clients/:id/portal/tokens/:tokenId/revoke — immediately invalidates a portal

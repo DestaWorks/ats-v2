@@ -1,16 +1,14 @@
-import {
-  createClientNoteSchema,
-  type ClientNoteDTO,
-} from "@destaworks/contracts/validation/client-note";
+import { createClientNoteSchema } from "@destaworks/contracts/validation/client-note";
+import type * as Contract from "@destaworks/contracts/http/crm";
 import { requireCapability } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { clientNoteService } from "@destaworks/application/client-note.service";
 
 /** Wire shape of `GET /api/crm/clients/:id/notes`. */
-export type GetCrmClientNotesResponse = { notes: ClientNoteDTO[] };
+export type GetCrmClientNotesResponse = Contract.GetCrmClientNotesResponse;
 
 /** Wire shape of `POST /api/crm/clients/:id/notes`. */
-export type PostCrmClientNoteResponse = { note: ClientNoteDTO };
+export type PostCrmClientNoteResponse = Contract.PostCrmClientNoteResponse;
 
 /** GET/POST /api/crm/clients/:id/notes — manual call/note log. Gated `viewCrm`. */
 export const GET = apiHandler<{ params: Promise<{ id: string }> }>(async (_req, ctx) => {

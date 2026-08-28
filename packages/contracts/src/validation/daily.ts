@@ -239,6 +239,41 @@ export const journalGoalSchema = z
 
 export const toggleGoalSchema = z.object({ done: z.boolean() }).strict();
 
+/**
+ * `GET /api/daily/recap?since=<ISO>` — how far back the "Since you closed" buckets look.
+ *
+ * The server clamps it to `RECAP_MAX_LOOKBACK_DAYS`: a stale `localStorage` timestamp must not
+ * turn a page load into a scan of the whole history.
+ */
+export const recapQuerySchema = z.object({ since: z.coerce.date() });
+export const RECAP_MAX_LOOKBACK_DAYS = 14;
+
+// --- Response shapes -------------------------------------------------------
+//
+// Wire shapes that wrap a DTO or acknowledge a write. They live here, beside the DTOs they wrap,
+// so the Next.js route and the API controller serving the same endpoint import ONE definition of
+// the body instead of each declaring its own.
+
+/** A write that returns nothing but its own success. */
+export interface AcknowledgedDTO {
+  ok: true;
+}
+
+/** `POST /api/daily/log` — the day's self-report as persisted. */
+export interface SubmittedLogDTO {
+  log: DailyLogDTO;
+}
+
+/** `POST /api/daily/journal/entries` — the note just added. */
+export interface CreatedJournalEntryDTO {
+  entry: JournalEntryDTO;
+}
+
+/** `POST /api/daily/journal/goals` — the weekly goal just added. */
+export interface CreatedJournalGoalDTO {
+  goal: JournalGoalDTO;
+}
+
 /** Legacy blocker vocabulary (Daily Log dropdown, ported verbatim). */
 export const BLOCKERS = [
   "Indeed credits low",

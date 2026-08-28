@@ -1,10 +1,11 @@
-import { addTaskSchema, type ClientTaskDTO } from "@destaworks/contracts/validation/client";
+import { addTaskSchema } from "@destaworks/contracts/validation/client";
+import type * as Contract from "@destaworks/contracts/http/crm";
 import { requireCapability } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { clientService } from "@destaworks/application/client.service";
 
 /** Wire shape of `POST /api/crm/clients/:id/tasks`. */
-export type PostCrmClientTaskResponse = { task: ClientTaskDTO };
+export type PostCrmClientTaskResponse = Contract.PostCrmClientTaskResponse;
 
 /** POST /api/crm/clients/:id/tasks — add a follow-up task for this client. Gated `viewCrm`. */
 export const POST = apiHandler<{ params: Promise<{ id: string }> }>(async (req, ctx) => {

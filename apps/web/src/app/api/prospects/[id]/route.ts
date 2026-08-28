@@ -1,19 +1,20 @@
 import {
   updateProspectSchema,
-  type ProspectDetailDTO,
+  type ProspectEnvelope,
 } from "@destaworks/contracts/validation/prospect";
+import type { SoftDeletedResponse } from "@destaworks/contracts/api";
 import { requireCapability } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { prospectService } from "@destaworks/application/prospect.service";
 
 /** Response body of `GET /api/prospects/:id`. */
-export type GetProspectResponse = { prospect: ProspectDetailDTO };
+export type GetProspectResponse = ProspectEnvelope;
 
 /** Response body of `PATCH /api/prospects/:id`. */
-export type PatchProspectResponse = { prospect: ProspectDetailDTO };
+export type PatchProspectResponse = ProspectEnvelope;
 
 /** Response body of `DELETE /api/prospects/:id` — the soft-deleted id only, never prospect PII. */
-export type DeleteProspectResponse = { ok: true; id: string };
+export type DeleteProspectResponse = SoftDeletedResponse;
 
 /**
  * GET /api/prospects/:id — the full prospect detail (list item + notes + contacts). Includes

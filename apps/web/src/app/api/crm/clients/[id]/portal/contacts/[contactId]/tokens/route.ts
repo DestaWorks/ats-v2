@@ -1,10 +1,10 @@
-import type { GeneratedPortalLinkDTO } from "@destaworks/contracts/validation/portal";
+import type * as Contract from "@destaworks/contracts/http/crm";
 import { requireCapability } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { clientPortalService } from "@destaworks/application/client-portal.service";
 
 /** Wire shape of `POST /api/crm/clients/:id/portal/contacts/:contactId/tokens`. */
-export type PostCrmPortalTokenResponse = GeneratedPortalLinkDTO;
+export type PostCrmPortalTokenResponse = Contract.PostCrmPortalTokenResponse;
 
 /**
  * POST /api/crm/clients/:id/portal/contacts/:contactId/tokens — generate a portal link for this

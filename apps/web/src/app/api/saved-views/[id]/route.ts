@@ -1,9 +1,10 @@
+import type * as Contract from "@destaworks/contracts/http/saved-view";
 import { requireUser } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { savedViewService } from "@destaworks/application/saved-view.service";
 
 /** Response body of `DELETE /api/saved-views/:id` — the id that was removed. */
-export type DeleteSavedViewResponse = { id: string };
+export type DeleteSavedViewResponse = Contract.DeleteSavedViewResponse;
 
 /**
  * DELETE /api/saved-views/:id — permanently remove one of the caller's saved views (hard

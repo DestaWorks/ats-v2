@@ -1,11 +1,11 @@
 import { saveInboundLeadSchema } from "@destaworks/contracts/validation/inbound";
-import type { LeadDetailDTO } from "@destaworks/contracts/validation/lead";
+import type { LeadEnvelope } from "@destaworks/contracts/validation/lead";
 import { requireUser } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { inboundService } from "@destaworks/application/inbound.service";
 
 /** Response body of `POST /api/inbound/save`. */
-export type PostInboundSaveResponse = { lead: LeadDetailDTO };
+export type PostInboundSaveResponse = LeadEnvelope;
 
 /**
  * POST /api/inbound/save — save the (possibly reviewer-edited) triage extraction as a fresh Source

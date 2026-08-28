@@ -1,18 +1,14 @@
 import { Module } from "@nestjs/common";
 import { pipelineHealthService } from "@destaworks/application/pipeline-health.service";
-import { provideService, serviceToken } from "../service-token";
+import { provideService } from "../service-token";
+import { PipelineController } from "./pipeline.controller";
+import { PIPELINE_HEALTH_SERVICE } from "./pipeline.tokens";
 
-export const PIPELINE_HEALTH_SERVICE =
-  serviceToken<typeof pipelineHealthService>("PIPELINE_HEALTH_SERVICE");
+export { PIPELINE_HEALTH_SERVICE };
 
-/**
- * Pipeline health — stage-level aging, stalls and funnel conversion, keyed off the stable status
- * code and its `stage_order`, never the label string.
- *
- * Wiring only until Phase 4.3 adds the controllers: the services are bound to tokens and exported,
- * so a controller injects one instead of importing the singleton and becoming untestable.
- */
+/** The AI Pipeline Health strip — one team-wide read of how the pipeline is doing right now. */
 @Module({
+  controllers: [PipelineController],
   providers: [provideService(PIPELINE_HEALTH_SERVICE, pipelineHealthService)],
   exports: [PIPELINE_HEALTH_SERVICE],
 })

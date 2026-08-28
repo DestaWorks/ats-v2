@@ -1,9 +1,10 @@
+import type * as Contract from "@destaworks/contracts/http/crm";
 import { requireCapability } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { clientService } from "@destaworks/application/client.service";
 
 /** Wire shape of `DELETE /api/crm/clients/:id/meetings/:meetingId`. */
-export type DeleteCrmClientMeetingResponse = { ok: true; id: string };
+export type DeleteCrmClientMeetingResponse = Contract.DeleteCrmClientMeetingResponse;
 
 /**
  * DELETE /api/crm/clients/:id/meetings/:meetingId — soft-delete a logged meeting (correction

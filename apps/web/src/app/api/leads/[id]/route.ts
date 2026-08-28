@@ -1,13 +1,14 @@
-import type { LeadDetailDTO } from "@destaworks/contracts/validation/lead";
+import type { LeadEnvelope } from "@destaworks/contracts/validation/lead";
+import type { SoftDeletedResponse } from "@destaworks/contracts/api";
 import { requireUser } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { leadService } from "@destaworks/application/lead.service";
 
 /** Response body of `GET /api/leads/:id`. */
-export type GetLeadResponse = { lead: LeadDetailDTO };
+export type GetLeadResponse = LeadEnvelope;
 
 /** Response body of `DELETE /api/leads/:id` — the soft-deleted id only, never lead PII. */
-export type DeleteLeadResponse = { ok: true; id: string };
+export type DeleteLeadResponse = SoftDeletedResponse;
 
 /**
  * GET /api/leads/:id — the full lead detail (list item + sourcing context + attempt log). The

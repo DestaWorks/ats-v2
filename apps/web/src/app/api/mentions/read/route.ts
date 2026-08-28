@@ -1,12 +1,13 @@
-import { markMentionReadSchema } from "@destaworks/contracts/validation/mention";
+import {
+  markMentionReadSchema,
+  type MentionUnreadDTO,
+} from "@destaworks/contracts/validation/mention";
 import { requireUser } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { mentionService } from "@destaworks/application/mention.service";
 
 /** Wire shape of `POST /api/mentions/read` — the viewer's fresh unread badge count. */
-export interface PostMentionsReadResponse {
-  unread: number;
-}
+export type PostMentionsReadResponse = MentionUnreadDTO;
 
 /**
  * POST /api/mentions/read — mark one mention (`{ mentionId }`) or all of the session user's

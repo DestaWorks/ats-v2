@@ -2,14 +2,10 @@ import { saveResumeInputSchema } from "@destaworks/contracts/validation/resume";
 import { requireUser } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { resumeService } from "@destaworks/application/resume.service";
-import type { CandidateDTO } from "@destaworks/application/candidate.dto";
-import type { DocumentDTO } from "@destaworks/application/document.dto";
+import type { ResumeSaveEnvelope } from "@destaworks/application/candidate.wire";
 
 /** Wire shape of `POST /api/resume/save` — the attached-or-created candidate + its document. */
-export interface PostResumeSaveResponse {
-  candidate: CandidateDTO;
-  document: DocumentDTO;
-}
+export type PostResumeSaveResponse = ResumeSaveEnvelope;
 
 /**
  * POST /api/resume/save — persist a reviewed resume: attach to an existing candidate or create a

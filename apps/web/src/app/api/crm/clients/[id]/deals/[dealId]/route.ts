@@ -1,13 +1,14 @@
-import { updateDealSchema, type DealDTO } from "@destaworks/contracts/validation/client";
+import { updateDealSchema } from "@destaworks/contracts/validation/client";
+import type * as Contract from "@destaworks/contracts/http/crm";
 import { requireCapability } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { clientService } from "@destaworks/application/client.service";
 
 /** Wire shape of `PATCH /api/crm/clients/:id/deals/:dealId`. */
-export type PatchCrmDealResponse = { deal: DealDTO };
+export type PatchCrmDealResponse = Contract.PatchCrmDealResponse;
 
 /** Wire shape of `DELETE /api/crm/clients/:id/deals/:dealId`. */
-export type DeleteCrmDealResponse = { ok: true; id: string };
+export type DeleteCrmDealResponse = Contract.DeleteCrmDealResponse;
 
 /**
  * PATCH /api/crm/clients/:id/deals/:dealId — edit a deal (incl. moving its kanban stage and

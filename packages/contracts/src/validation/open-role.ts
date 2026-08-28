@@ -18,6 +18,7 @@ import {
   type TriageBadge,
 } from "@destaworks/domain/constants";
 import type { PageMeta } from "@destaworks/domain/pagination";
+import type { PromotedCandidateResponse } from "../api";
 
 export const createOpenRoleSchema = z
   .object({
@@ -196,3 +197,63 @@ export interface ClientMatchProfileDTO {
   /** True when this client has no saved row — the response is `DEFAULT_MATCH_WEIGHTS`, not a real row. */
   isDefault: boolean;
 }
+
+/**
+ * Response bodies for `/api/roles/*` — declared here, not in the route files, so `apps/web` and
+ * `apps/api` answer with the same shape by construction (Phase 4.3).
+ */
+
+/** The envelope every role endpoint that returns a role answers with — detail, notes included. */
+export interface OpenRoleEnvelope {
+  role: OpenRoleDetailDTO;
+}
+
+/** Both matchers answer with the same ranked list; only the weighting behind it differs. */
+export interface RoleMatchesEnvelope {
+  matches: RoleMatchDTO[];
+}
+
+/** Response body of `POST /api/roles`. */
+export type PostRoleResponse = OpenRoleEnvelope;
+
+/** Response body of `GET /api/roles`. */
+export type GetRoleListResponse = OpenRoleListDTO;
+
+/** Response body of `GET /api/roles/:id`. */
+export type GetRoleResponse = OpenRoleEnvelope;
+
+/** Response body of `PATCH /api/roles/:id`. */
+export type PatchRoleResponse = OpenRoleEnvelope;
+
+/**
+ * Response body of `DELETE /api/roles/:id` — the HARD-deleted role's id only.
+ *
+ * Not `SoftDeletedResponse`: this delete has no undo, so it carries no `ok: true` that a client
+ * could read as "restorable". The two are different outcomes and stay different shapes.
+ */
+export interface DeleteRoleResponse {
+  id: string;
+}
+
+/** Response body of `GET /api/roles/triage`. */
+export interface GetRoleTriageResponse {
+  roles: TriageRoleDTO[];
+}
+
+/** Response body of `POST /api/roles/parse-jd` — the AI-extracted role fields. */
+export type PostRoleParseJdResponse = ParsedJdDTO;
+
+/** Response body of `POST /api/roles/:id/promote` — the new candidate's id only. */
+export type PostRolePromoteResponse = PromotedCandidateResponse;
+
+/** Response body of `GET /api/roles/:id/matches`. */
+export type GetRoleMatchesResponse = RoleMatchesEnvelope;
+
+/** Response body of `GET /api/roles/:id/dormant-matches`. */
+export type GetRoleDormantMatchesResponse = RoleMatchesEnvelope;
+
+/** Response body of `POST /api/roles/:id/notes` — the whole role detail, notes included. */
+export type PostRoleNoteResponse = OpenRoleEnvelope;
+
+/** Response body of `DELETE /api/roles/:id/notes/:noteId` — the fresh role detail. */
+export type DeleteRoleNoteResponse = OpenRoleEnvelope;

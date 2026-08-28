@@ -1,10 +1,11 @@
 import { importLeadsSchema } from "@destaworks/contracts/validation/lead";
+import type { BulkAddCounts } from "@destaworks/contracts/api";
 import { requireUser } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { leadService } from "@destaworks/application/lead.service";
 
 /** Response body of `POST /api/leads/import` — per-chunk counts only. */
-export type PostLeadImportResponse = { added: number; skipped: number };
+export type PostLeadImportResponse = BulkAddCounts;
 
 /**
  * POST /api/leads/import — one ≤200-row chunk of the lead CSV import

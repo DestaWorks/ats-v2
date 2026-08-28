@@ -1,10 +1,10 @@
-import { respondSchema, type LeadDetailDTO } from "@destaworks/contracts/validation/lead";
+import { respondSchema, type LeadEnvelope } from "@destaworks/contracts/validation/lead";
 import { requireUser } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { leadService } from "@destaworks/application/lead.service";
 
 /** Response body of `POST /api/leads/:id/respond`. */
-export type PostLeadRespondResponse = { lead: LeadDetailDTO };
+export type PostLeadRespondResponse = LeadEnvelope;
 
 /**
  * POST /api/leads/:id/respond — mark a lead Responded (Hot/Cold). Guarded by `requireUser()` (L-7).

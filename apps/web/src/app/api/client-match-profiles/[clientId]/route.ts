@@ -1,19 +1,17 @@
-import {
-  saveMatchProfileSchema,
-  type ClientMatchProfileDTO,
-} from "@destaworks/contracts/validation/open-role";
+import { saveMatchProfileSchema } from "@destaworks/contracts/validation/open-role";
+import type * as Contract from "@destaworks/contracts/http/open-role";
 import { requireUser } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { openRoleService } from "@destaworks/application/open-role.service";
 
 /** Wire shape of `GET /api/client-match-profiles/:clientId`. */
-export type GetClientMatchProfileResponse = ClientMatchProfileDTO;
+export type GetClientMatchProfileResponse = Contract.GetClientMatchProfileResponse;
 
 /** Wire shape of `PUT /api/client-match-profiles/:clientId`. */
-export type PutClientMatchProfileResponse = ClientMatchProfileDTO;
+export type PutClientMatchProfileResponse = Contract.PutClientMatchProfileResponse;
 
 /** Wire shape of `DELETE /api/client-match-profiles/:clientId`. */
-export type DeleteClientMatchProfileResponse = ClientMatchProfileDTO;
+export type DeleteClientMatchProfileResponse = Contract.DeleteClientMatchProfileResponse;
 
 /** GET /api/client-match-profiles/:clientId — this client's weights, or the system default (`isDefault`). */
 export const GET = apiHandler<{ params: Promise<{ clientId: string }> }>(async (_req, ctx) => {

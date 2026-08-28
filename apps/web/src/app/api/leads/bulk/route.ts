@@ -1,10 +1,11 @@
 import { bulkLeadActionSchema } from "@destaworks/contracts/validation/lead";
+import type { BulkActionCounts } from "@destaworks/contracts/api";
 import { requireUser } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { leadService } from "@destaworks/application/lead.service";
 
 /** Response body of `POST /api/leads/bulk` — counts only, never lead PII. */
-export type PostLeadBulkResponse = { affected: number; skipped: number };
+export type PostLeadBulkResponse = BulkActionCounts;
 
 /**
  * POST /api/leads/bulk — one dispatcher for the sourcing bulk toolbar

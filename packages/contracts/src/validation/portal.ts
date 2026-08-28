@@ -91,6 +91,11 @@ export interface PortalAccessRequestDTO {
   createdAt: string; // ISO
 }
 
+/** The admin-facing queue of portal-access requests — every submitted request. */
+export interface PortalAccessRequestListDTO {
+  requests: PortalAccessRequestDTO[];
+}
+
 export const approvePortalRequestSchema = z
   .object({
     clientId: z.string().trim().min(1),
@@ -122,4 +127,16 @@ export interface AdminPortalContactDTO {
 export interface GeneratedPortalLinkDTO {
   contact: AdminPortalContactDTO;
   token: string;
+}
+
+/**
+ * Response body of `POST /api/portal/roles` — the new role's id, and nothing else.
+ *
+ * Written as a literal rather than reusing `OpenRoleEnvelope` ON PURPOSE. This surface answers
+ * people OUTSIDE the company, so a later widening of the internal role DTO must not be able to
+ * widen what the portal returns. The narrow shape is the guarantee; sharing the internal envelope
+ * would silently trade it away the next time a field is added.
+ */
+export interface PostPortalRoleResponse {
+  role: { id: string };
 }

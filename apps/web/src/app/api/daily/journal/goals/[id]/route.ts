@@ -1,10 +1,10 @@
-import { toggleGoalSchema } from "@destaworks/contracts/validation/daily";
+import { toggleGoalSchema, type AcknowledgedDTO } from "@destaworks/contracts/validation/daily";
 import { requireUser } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { dailyService } from "@destaworks/application/daily.service";
 
 /** Response body of `PATCH /api/daily/journal/goals/:id`. */
-export type PatchDailyJournalGoalResponse = { ok: true };
+export type PatchDailyJournalGoalResponse = AcknowledgedDTO;
 
 /**
  * PATCH /api/daily/journal/goals/:id — toggle done/undone. A REAL update scoped to the owner

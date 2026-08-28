@@ -25,6 +25,20 @@ export interface AdminUserListDTO {
   total: number;
 }
 
+/**
+ * The single account an admin mutation answers with. Ban, unban and set-role all return the same
+ * envelope, so it is named once — three copies is how one of them quietly starts returning the
+ * bare DTO and breaks a client that reads `.user`.
+ */
+export interface AdminUserEnvelopeDTO {
+  user: AdminUserDTO;
+}
+
+/** A reset password, returned exactly once and never persisted or emailed in plaintext. */
+export interface ResetPasswordDTO {
+  generatedPassword: string;
+}
+
 /** Password is optional — the service generates + returns one once if omitted (never re-fetchable). */
 export const createUserSchema = z
   .object({
@@ -62,6 +76,11 @@ export interface AccessRequestDTO {
   message: string | null;
   status: string;
   createdAt: string; // ISO
+}
+
+/** The queue an admin works through — every submitted request, newest first. */
+export interface AccessRequestListDTO {
+  requests: AccessRequestDTO[];
 }
 
 /** Approving picks a role — legacy's Admin Panel never had this step (a real improvement). */

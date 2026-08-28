@@ -1,9 +1,9 @@
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { requireUser } from "@destaworks/auth/guards";
-import type { Role } from "@destaworks/domain/constants";
+import type { SessionUserDTO } from "@destaworks/contracts/validation/auth";
 
 /** Response body of `GET /api/me`. */
-export type GetMeResponse = { id: string; email: string; name: string; role: Role };
+export type GetMeResponse = SessionUserDTO;
 
 /**
  * GET /api/me — the current authenticated user. Proves the end-to-end guarded path:

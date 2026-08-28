@@ -1,4 +1,4 @@
-import { Module } from "@nestjs/common";
+import { Module, type Provider } from "@nestjs/common";
 import { APP_FILTER, APP_INTERCEPTOR } from "@nestjs/core";
 import { ApiExceptionFilter } from "./common/filters/api-exception.filter";
 import { AuditActorInterceptor } from "./common/interceptors/audit-actor.interceptor";
@@ -49,16 +49,23 @@ import { TemplatesModule } from "./modules/templates/templates.module";
  * decomposition of the domain, and it is not a folder per URL segment — route areas that a single
  * service already serves (briefs/targets, roles/client-match-profiles) share one module.
  */
+/**
+ * The request pipeline every route passes through, exported so a contract test can boot ONE module
+ * behind the same interceptors and the same exception filter the deployed app uses. A test that
+ * rebuilt this list would be asserting parity against a pipeline nothing ships.
+ */
+export const REQUEST_PIPELINE_PROVIDERS: Provider[] = [
+  { provide: APP_INTERCEPTOR, useClass: RequestIdInterceptor },
+  { provide: APP_INTERCEPTOR, useClass: LoggingInterceptor },
+  // Constructed, not `useClass`: its allowance argument is optional, and `emitDecoratorMetadata`
+  // is off (tsx/esbuild cannot emit `design:paramtypes`), so DI cannot resolve an untokenised
+  // parameter. Passing no allowance is the strict default — every mutation must be attributed.
+  { provide: APP_INTERCEPTOR, useValue: new AuditActorInterceptor() },
+  { provide: APP_FILTER, useClass: ApiExceptionFilter },
+];
+
 @Module({
-  providers: [
-    { provide: APP_INTERCEPTOR, useClass: RequestIdInterceptor },
-    { provide: APP_INTERCEPTOR, useClass: LoggingInterceptor },
-    // Constructed, not `useClass`: its allowance argument is optional, and `emitDecoratorMetadata`
-    // is off (tsx/esbuild cannot emit `design:paramtypes`), so DI cannot resolve an untokenised
-    // parameter. Passing no allowance is the strict default — every mutation must be attributed.
-    { provide: APP_INTERCEPTOR, useValue: new AuditActorInterceptor() },
-    { provide: APP_FILTER, useClass: ApiExceptionFilter },
-  ],
+  providers: REQUEST_PIPELINE_PROVIDERS,
   imports: [
     AccountModule,
     ActivityModule,

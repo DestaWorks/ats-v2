@@ -1,13 +1,11 @@
-import {
-  coverageGapSupplyQuerySchema,
-  type CoverageGapSupplyDTO,
-} from "@destaworks/contracts/validation/discover";
+import { coverageGapSupplyQuerySchema } from "@destaworks/contracts/validation/discover";
+import type * as Contract from "@destaworks/contracts/http/discover";
 import { requireUser } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { discoverService } from "@destaworks/application/discover.service";
 
 /** Wire shape of `GET /api/discover/coverage-gaps/supply`. */
-export type GetDiscoverCoverageGapSupplyResponse = CoverageGapSupplyDTO;
+export type GetDiscoverCoverageGapSupplyResponse = Contract.GetDiscoverCoverageGapSupplyResponse;
 
 /**
  * GET /api/discover/coverage-gaps/supply — live NPPES supply for one (credential, state) combo

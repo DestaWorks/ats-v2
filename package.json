@@ -14,7 +14,6 @@
     "start": "next start apps/web",
     "dev:api": "tsx watch --tsconfig apps/api/tsconfig.json apps/api/src/main.ts",
     "start:api": "tsx --tsconfig apps/api/tsconfig.json apps/api/src/main.ts",
-    "build:api": "turbo run //#api:build",
     "lint": "turbo run //#app:lint",
     "typecheck": "turbo run //#app:typecheck",
     "test": "turbo run //#app:test",

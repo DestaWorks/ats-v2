@@ -4,12 +4,11 @@ import { requireUser } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { AppError } from "@destaworks/integrations/http/app-error";
 import { candidateService } from "@destaworks/application/candidate.service";
-import { toCandidateDTO, type CandidateDTO } from "@destaworks/application/candidate.dto";
+import { toCandidateDTO } from "@destaworks/application/candidate.dto";
+import type { CandidateEnvelope } from "@destaworks/application/candidate.wire";
 
 /** Wire shape of `POST /api/candidates/:id/verify-license` — the PII-re-gated candidate. */
-export interface PostCandidateVerifyLicenseResponse {
-  candidate: CandidateDTO;
-}
+export type PostCandidateVerifyLicenseResponse = CandidateEnvelope;
 
 /**
  * POST /api/candidates/:id/verify-license — record a license verification. OPEN TO OPERATORS

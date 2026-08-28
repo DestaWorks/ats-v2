@@ -1,10 +1,10 @@
 import { Module } from "@nestjs/common";
 import { templatePerformanceService } from "@destaworks/application/template-performance.service";
-import { provideService, serviceToken } from "../service-token";
+import { provideService } from "../service-token";
+import { TEMPLATE_PERFORMANCE_SERVICE } from "./templates.tokens";
+import { TemplatesController } from "./templates.controller";
 
-export const TEMPLATE_PERFORMANCE_SERVICE = serviceToken<typeof templatePerformanceService>(
-  "TEMPLATE_PERFORMANCE_SERVICE",
-);
+export { TEMPLATE_PERFORMANCE_SERVICE } from "./templates.tokens";
 
 /**
  * Outreach templates and how each one is actually performing.
@@ -13,6 +13,7 @@ export const TEMPLATE_PERFORMANCE_SERVICE = serviceToken<typeof templatePerforma
  * so a controller injects one instead of importing the singleton and becoming untestable.
  */
 @Module({
+  controllers: [TemplatesController],
   providers: [provideService(TEMPLATE_PERFORMANCE_SERVICE, templatePerformanceService)],
   exports: [TEMPLATE_PERFORMANCE_SERVICE],
 })

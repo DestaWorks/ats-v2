@@ -1,13 +1,14 @@
-import { updateBlockerSchema, type DealBlockerDTO } from "@destaworks/contracts/validation/client";
+import { updateBlockerSchema } from "@destaworks/contracts/validation/client";
+import type * as Contract from "@destaworks/contracts/http/crm";
 import { requireCapability } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { clientService } from "@destaworks/application/client.service";
 
 /** Wire shape of `PATCH /api/crm/clients/:id/deals/:dealId/blockers/:blockerId`. */
-export type PatchCrmDealBlockerResponse = { blocker: DealBlockerDTO };
+export type PatchCrmDealBlockerResponse = Contract.PatchCrmDealBlockerResponse;
 
 /** Wire shape of `DELETE /api/crm/clients/:id/deals/:dealId/blockers/:blockerId`. */
-export type DeleteCrmDealBlockerResponse = { ok: true; id: string };
+export type DeleteCrmDealBlockerResponse = Contract.DeleteCrmDealBlockerResponse;
 
 /**
  * PATCH /api/crm/clients/:id/deals/:dealId/blockers/:blockerId — toggle `resolved` (stamps/clears

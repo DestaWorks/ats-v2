@@ -1,19 +1,20 @@
 import {
   updateOpenRoleSchema,
-  type OpenRoleDetailDTO,
+  type DeleteRoleResponse as DeleteRoleContract,
+  type OpenRoleEnvelope,
 } from "@destaworks/contracts/validation/open-role";
 import { requireUser, requireCapability } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { openRoleService } from "@destaworks/application/open-role.service";
 
 /** Response body of `GET /api/roles/:id`. */
-export type GetRoleResponse = { role: OpenRoleDetailDTO };
+export type GetRoleResponse = OpenRoleEnvelope;
 
 /** Response body of `PATCH /api/roles/:id`. */
-export type PatchRoleResponse = { role: OpenRoleDetailDTO };
+export type PatchRoleResponse = OpenRoleEnvelope;
 
 /** Response body of `DELETE /api/roles/:id` — the hard-deleted role's id only. */
-export type DeleteRoleResponse = { id: string };
+export type DeleteRoleResponse = DeleteRoleContract;
 
 /** GET /api/roles/:id — one role's detail (role + notes). 404 if missing. */
 export const GET = apiHandler<{ params: Promise<{ id: string }> }>(async (_req, ctx) => {

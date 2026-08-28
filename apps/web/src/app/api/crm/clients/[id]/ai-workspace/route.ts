@@ -1,14 +1,12 @@
-import {
-  generateWorkspaceSchema,
-  type WorkspaceResultDTO,
-} from "@destaworks/contracts/validation/crm-ai-workspace";
+import { generateWorkspaceSchema } from "@destaworks/contracts/validation/crm-ai-workspace";
+import type * as Contract from "@destaworks/contracts/http/crm";
 import { requireCapability } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { checkRateLimit } from "@destaworks/integrations/http/rate-limit";
 import { crmAiWorkspaceService } from "@destaworks/application/crm-ai-workspace.service";
 
 /** Wire shape of `POST /api/crm/clients/:id/ai-workspace`. */
-export type PostCrmAiWorkspaceResponse = WorkspaceResultDTO;
+export type PostCrmAiWorkspaceResponse = Contract.PostCrmAiWorkspaceResponse;
 
 /**
  * POST /api/crm/clients/:id/ai-workspace — AI Client Workspace (legacy `crm_ai_workspace`).

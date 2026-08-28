@@ -2,22 +2,32 @@ import { Module } from "@nestjs/common";
 import { adminUserService } from "@destaworks/application/admin-user.service";
 import { accessRequestService } from "@destaworks/application/access-request.service";
 import { aiOpsService } from "@destaworks/application/ai-ops.service";
-import { provideService, serviceToken } from "../service-token";
+import { provideService } from "../service-token";
+import { PortalModule } from "../portal/portal.module";
+import { AdminAccessRequestsController } from "./admin-access-requests.controller";
+import { AdminAiController } from "./admin-ai.controller";
+import { AdminPortalRequestsController } from "./admin-portal-requests.controller";
+import { AdminUsersController } from "./admin-users.controller";
+import { ACCESS_REQUEST_SERVICE, ADMIN_USER_SERVICE, AI_OPS_SERVICE } from "./admin.tokens";
 
-export const ADMIN_USER_SERVICE = serviceToken<typeof adminUserService>("ADMIN_USER_SERVICE");
-export const ACCESS_REQUEST_SERVICE =
-  serviceToken<typeof accessRequestService>("ACCESS_REQUEST_SERVICE");
-export const AI_OPS_SERVICE = serviceToken<typeof aiOpsService>("AI_OPS_SERVICE");
+export { ACCESS_REQUEST_SERVICE, ADMIN_USER_SERVICE, AI_OPS_SERVICE };
 
 /**
  * Back-office administration of the operator app itself: user accounts and roles, requests for
- * access to it, and AI usage/ops. Requests for access to the *client portal* belong to
- * `PortalModule`, which owns that audience.
+ * access to it, and AI usage/ops.
  *
- * Wiring only until Phase 4.3 adds the controllers: the services are bound to tokens and exported,
- * so a controller injects one instead of importing the singleton and becoming untestable.
+ * The admin view of CLIENT PORTAL access requests is served here too — its callers are operators —
+ * but the service behind it stays in `PortalModule`, which owns that audience. `PortalModule` is
+ * imported for the token rather than the service being registered twice.
  */
 @Module({
+  imports: [PortalModule],
+  controllers: [
+    AdminUsersController,
+    AdminAccessRequestsController,
+    AdminAiController,
+    AdminPortalRequestsController,
+  ],
   providers: [
     provideService(ADMIN_USER_SERVICE, adminUserService),
     provideService(ACCESS_REQUEST_SERVICE, accessRequestService),

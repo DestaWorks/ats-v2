@@ -1,11 +1,10 @@
 import { requireCapability } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { resumeService } from "@destaworks/application/resume.service";
+import type { DownloadUrlEnvelope } from "@destaworks/contracts/validation/envelopes";
 
 /** Wire shape of `GET /api/documents/:id/download-url` — a fresh, short-lived signed URL. */
-export interface GetDocumentDownloadUrlResponse {
-  url: string;
-}
+export type GetDocumentDownloadUrlResponse = DownloadUrlEnvelope;
 
 /**
  * GET /api/documents/:id/download-url — a fresh, short-lived signed URL for a document's stored

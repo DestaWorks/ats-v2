@@ -1,13 +1,14 @@
-import { updateTaskSchema, type ClientTaskDTO } from "@destaworks/contracts/validation/client";
+import { updateTaskSchema } from "@destaworks/contracts/validation/client";
+import type * as Contract from "@destaworks/contracts/http/crm";
 import { requireCapability } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { clientService } from "@destaworks/application/client.service";
 
 /** Wire shape of `PATCH /api/crm/clients/:id/tasks/:taskId`. */
-export type PatchCrmClientTaskResponse = { task: ClientTaskDTO };
+export type PatchCrmClientTaskResponse = Contract.PatchCrmClientTaskResponse;
 
 /** Wire shape of `DELETE /api/crm/clients/:id/tasks/:taskId`. */
-export type DeleteCrmClientTaskResponse = { ok: true; id: string };
+export type DeleteCrmClientTaskResponse = Contract.DeleteCrmClientTaskResponse;
 
 /**
  * PATCH /api/crm/clients/:id/tasks/:taskId — edit a task (incl. toggling `status`, which

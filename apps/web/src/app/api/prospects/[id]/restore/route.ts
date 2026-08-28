@@ -1,10 +1,10 @@
-import type { ProspectDetailDTO } from "@destaworks/contracts/validation/prospect";
+import type { ProspectEnvelope } from "@destaworks/contracts/validation/prospect";
 import { requireCapability } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { prospectService } from "@destaworks/application/prospect.service";
 
 /** Response body of `POST /api/prospects/:id/restore`. */
-export type PostProspectRestoreResponse = { prospect: ProspectDetailDTO };
+export type PostProspectRestoreResponse = ProspectEnvelope;
 
 /**
  * POST /api/prospects/:id/restore — restore a soft-deleted prospect (clears the delete markers;

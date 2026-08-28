@@ -34,3 +34,6 @@ export interface FindSimilarResultDTO {
   taxonomyLabel: string;
   results: SimilarProviderDTO[];
 }
+
+/** Response body of `POST /api/sourcing/similar`. */
+export type PostSourcingSimilarResponse = FindSimilarResultDTO;

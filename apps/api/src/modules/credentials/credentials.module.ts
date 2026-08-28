@@ -1,13 +1,11 @@
 import { Module } from "@nestjs/common";
 import { credentialsIntelligenceService } from "@destaworks/application/credentials-intelligence.service";
 import { licenseVerifyService } from "@destaworks/application/license-verify.service";
-import { provideService, serviceToken } from "../service-token";
+import { provideService } from "../service-token";
+import { CREDENTIALS_INTELLIGENCE_SERVICE, LICENSE_VERIFY_SERVICE } from "./credentials.tokens";
+import { CredentialsController } from "./credentials.controller";
 
-export const CREDENTIALS_INTELLIGENCE_SERVICE = serviceToken<typeof credentialsIntelligenceService>(
-  "CREDENTIALS_INTELLIGENCE_SERVICE",
-);
-export const LICENSE_VERIFY_SERVICE =
-  serviceToken<typeof licenseVerifyService>("LICENSE_VERIFY_SERVICE");
+export { CREDENTIALS_INTELLIGENCE_SERVICE, LICENSE_VERIFY_SERVICE } from "./credentials.tokens";
 
 /**
  * Credential and licensure state for clinical candidates — the credentials matrix and the
@@ -17,6 +15,7 @@ export const LICENSE_VERIFY_SERVICE =
  * so a controller injects one instead of importing the singleton and becoming untestable.
  */
 @Module({
+  controllers: [CredentialsController],
   providers: [
     provideService(CREDENTIALS_INTELLIGENCE_SERVICE, credentialsIntelligenceService),
     provideService(LICENSE_VERIFY_SERVICE, licenseVerifyService),

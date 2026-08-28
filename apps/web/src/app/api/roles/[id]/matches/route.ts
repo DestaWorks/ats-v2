@@ -1,10 +1,10 @@
-import type { RoleMatchDTO } from "@destaworks/contracts/validation/open-role";
+import type { RoleMatchesEnvelope } from "@destaworks/contracts/validation/open-role";
 import { requireUser } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { openRoleService } from "@destaworks/application/open-role.service";
 
 /** Response body of `GET /api/roles/:id/matches`. */
-export type GetRoleMatchesResponse = { matches: RoleMatchDTO[] };
+export type GetRoleMatchesResponse = RoleMatchesEnvelope;
 
 /**
  * GET /api/roles/:id/matches — the active matcher's ranked leads for this role (client-tunable

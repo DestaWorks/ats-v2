@@ -17,6 +17,12 @@ import {
   type OutreachChannel,
 } from "@destaworks/domain/constants";
 import type { PageMeta } from "@destaworks/domain/pagination";
+import type {
+  BulkActionCounts,
+  BulkAddCounts,
+  PromotedCandidateResponse,
+  SoftDeletedResponse,
+} from "../api";
 import { boolFlagSchema } from "./pipeline";
 
 // --- response DTOs (serialized wire shapes) ---------------------------------
@@ -259,3 +265,56 @@ export const leadListQuerySchema = z.object({
   /** 1-based OFFSET page (clamped server-side to `[1, totalPages]`). */
   page: z.coerce.number().int().min(1).optional(),
 });
+
+/**
+ * Response bodies for `/api/leads/*` and `/api/inbound/*`.
+ *
+ * They are declared here, not in the route files, so that `apps/web`'s route and `apps/api`'s
+ * controller answer with the SAME shape by construction rather than by agreement (Phase 4.3). Each
+ * route file aliases the `<Method><Resource>Response` name its contract test requires onto the
+ * envelope below — an alias cannot drift from the thing it aliases.
+ */
+
+/** The envelope every lead mutation answers with: the fresh detail, and nothing around it. */
+export interface LeadEnvelope {
+  lead: LeadDetailDTO;
+}
+
+/** Response body of `POST /api/leads`. */
+export type PostLeadResponse = LeadEnvelope;
+
+/** Response body of `GET /api/leads/:id`. */
+export type GetLeadResponse = LeadEnvelope;
+
+/** Response body of `DELETE /api/leads/:id` — the soft-deleted id only, never lead PII. */
+export type DeleteLeadResponse = SoftDeletedResponse;
+
+/** Response body of `GET /api/leads/list`. */
+export type GetLeadListResponse = LeadListDTO;
+
+/** Response body of `POST /api/leads/bulk` — counts only, never lead PII. */
+export type PostLeadBulkResponse = BulkActionCounts;
+
+/** Response body of `POST /api/leads/import` — per-chunk counts only. */
+export type PostLeadImportResponse = BulkAddCounts;
+
+/** Response body of `POST /api/leads/:id/promote` — the new candidate's id only. */
+export type PostLeadPromoteResponse = PromotedCandidateResponse;
+
+/** Response body of `POST /api/leads/:id/respond`. */
+export type PostLeadRespondResponse = LeadEnvelope;
+
+/** Response body of `POST /api/leads/:id/snooze`. */
+export type PostLeadSnoozeResponse = LeadEnvelope;
+
+/** Response body of `POST /api/leads/:id/restore`. */
+export type PostLeadRestoreResponse = LeadEnvelope;
+
+/** Response body of `POST /api/leads/:id/outreach`. */
+export type PostLeadOutreachResponse = LeadEnvelope;
+
+/** Response body of `PATCH /api/leads/:id/outreach/:attemptId`. */
+export type PatchLeadOutreachAttemptResponse = LeadEnvelope;
+
+/** Response body of `DELETE /api/leads/:id/outreach/:attemptId`. */
+export type DeleteLeadOutreachAttemptResponse = LeadEnvelope;

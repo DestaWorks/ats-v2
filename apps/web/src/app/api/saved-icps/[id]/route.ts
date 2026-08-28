@@ -1,9 +1,10 @@
+import type * as Contract from "@destaworks/contracts/http/saved-icp";
 import { requireCapability } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { savedIcpService } from "@destaworks/application/saved-icp.service";
 
 /** Response body of `DELETE /api/saved-icps/:id` — the id that was removed. */
-export type DeleteSavedIcpResponse = { id: string };
+export type DeleteSavedIcpResponse = Contract.DeleteSavedIcpResponse;
 
 /**
  * DELETE /api/saved-icps/:id — permanently remove one of the caller's saved ICPs (hard delete,
