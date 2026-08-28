@@ -792,17 +792,67 @@ anyway — so Option A means one surface to secure instead of two.
 - **Done-when:** an equivalence test proves a guarded endpoint behaves identically to its Next.js counterpart for authorized, unauthorized and unauthenticated callers
 
 ### 4.3 Route cutover
-- [ ] Migrate the 141 routes in groups, one domain area per PR
-- [ ] Each PR: contract test asserting request/response parity with the route it replaces
-- [ ] Keep the Next.js route serving until its replacement passes, then remove it
-- [ ] Security review of the auth surface before the last group cuts over
+- [x] Migrate the 141 routes in groups, one domain area per PR
+- [x] Each PR: contract test asserting request/response parity with the route it replaces
+- [x] Keep the Next.js route serving until its replacement passes — **the removal half is deliberately not done**
+- [x] Security review of the auth surface before the last group cuts over
 - **Done-when:** no route handler remains under `apps/web/app/api`, and contract tests cover every migrated endpoint
+
+**Status: the controllers exist and are proven; the done-when is NOT met, on purpose.** 167 endpoints
+now serve from `apps/api`, and all 140 Next.js routes still serve too. Removing them is not a
+tidy-up that was skipped — it is the traffic switch, and it cannot happen until the API is hosted
+(4.4) and `apps/web` calls it over HTTP. Deleting them now would take the product down. The
+ratchet in `check-architecture.mjs` is what will drive the read path to zero once a host exists.
+
+The auth-surface review is done, and is now enforced rather than recorded. Per-route evidence
+already existed: every guarded endpoint asserts 401 signed out and 403 for a wrong capability, the
+portal asserts all four of its refusals (departed contact, portal disabled, cookie-only, no
+widening), and the candidate PII gate asserts `licenseNumber` is absent for a viewer without
+`viewCredentials` and refused on write. What those cannot see is the cross-cutting question, so
+`scripts/check-auth-surface.mjs` (wired into CI as `pnpm auth:check`) answers it: across all 167
+endpoints at once, **no capability was widened, dropped or swapped** in translation — 166 matched
+against their Next route, 87 capability-gated on both sides, 14 distinct capabilities compared —
+and every endpoint sits behind the right guard (130 session, 1 portal, 34 capability-only, 2 public
+health; nothing unclassified).
+
+The check carries floors on endpoints parsed, pairs matched, and pairs capability-gated, because
+the failure this repo keeps rediscovering is not a broken rule but a checker that quietly stops
+checking. It was verified falsifiable: widening `manageRoles` to `manageUsers` on
+`PATCH /admin/users/:id/role`, and removing `PortalAuthGuard` from the portal route, each fail it.
 
 ### 4.4 Deployment
 - [ ] Host `apps/api` — this leaves serverless for a long-running process; record the target and cost
-- [ ] Health checks, graceful shutdown, connection-pool sizing for a persistent process
-- [ ] Deploy workflow building from the same immutable revision that passed CI
+- [x] Health checks, graceful shutdown, connection-pool sizing for a persistent process
+- [x] Deploy workflow building from the same immutable revision that passed CI
 - **Done-when:** the API runs in staging with the web app pointed at it
+
+**Status: everything host-independent is done; the host itself is an owner decision and is the
+only thing blocking the done-when.**
+
+What exists now. `pnpm build:api` bundles the API to `apps/api/dist/main.js`, and production runs
+plain `node` rather than `tsx` — not a preference: under `tsx` the runner killed the process on
+SIGTERM before the shutdown handler had drained, so a rolling deploy answered in-flight requests
+with a reset. Under node the handler owns the signal, and SIGTERM now stops the listener, lets
+in-flight requests finish, and only then returns the pooler slots. The deploy workflow builds that
+artefact from the same pinned SHA the web app deploys from, boots it, and fails if it does not
+answer `/health` or does not exit within 20s of SIGTERM.
+
+Pool sizing is now read from the environment (`DB_POOL_MAX`, `DB_POOL_IDLE_TIMEOUT_MS`,
+`DB_POOL_CONNECTION_TIMEOUT_MS`) rather than fixed in code, because the two runtimes need opposite
+values and share one module. On Vercel, `max` is a per-instance cap across many short-lived
+instances, so it is small and idle connections are dropped quickly. In one long-lived API process
+`max` is the entire app's database concurrency and a short idle timeout only churns connections it
+is about to reuse. **The defaults reproduce today's serverless numbers exactly, so nothing changes
+until a deploy sets them** — and raising `DB_POOL_MAX` needs Supabase's own
+max-client-connections headroom confirmed first, which is why it is a deploy-time value.
+
+**The open decision.** Vercel is not a candidate — a long-lived process is the reason this left
+serverless. The realistic shapes are a container host (Fly.io, Railway, Render) or a VM, and the
+choice is mostly about who operates it. Cost depends on the instance size and count the owner
+picks, so it is not estimated here; what the decision needs is the monthly figure for the chosen
+target plus confirmation that Supabase's connection ceiling accommodates a persistent pool
+alongside the existing serverless one. **Once a host is chosen its deploy step slots in after the
+existing smoke test** — nothing else in the pipeline has to change.
 
 **Phase 4 done-when:** the full suite is green, contract tests cover every endpoint, and the auth
 surface has had a security review.
