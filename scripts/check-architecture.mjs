@@ -118,6 +118,25 @@ const PERMITTED = [
       "everywhere outside `db`.",
   },
   {
+    id: "contract-tests-may-import-the-route-they-replace",
+    rule: "dependency-direction",
+    applies: (unit, spec, record) =>
+      unit.short === "api" &&
+      record?.isTest === true &&
+      /(^|\/)web\/src\/app\/api\/.*\/route$/.test(spec),
+    reason:
+      "A Phase 4.3 contract test proves a NestJS controller and the Next.js route it replaces " +
+      "answer identically, so it must drive BOTH — there is no way to assert parity against a " +
+      "handler you cannot call. The exemption is as narrow as the claim: only `apps/api`, only a " +
+      "`*.test.ts` / `*.spec.ts`, and only a `route` module under `apps/web/src/app/api`. " +
+      "Production code in `apps/api` importing anything from `apps/web` still FAILS, and so does " +
+      "a test importing a web page, component or helper.",
+    debt:
+      "It retires with the routes. Phase 4.3's done-when is that no handler remains under " +
+      "apps/web/app/api; the last route deleted takes the last of these imports with it, and this " +
+      "entry should be removed in the same PR.",
+  },
+  {
     id: "tests-may-cross-the-web-read-path",
     rule: "web-read-path-is-http-only",
     reason:
@@ -129,8 +148,9 @@ const PERMITTED = [
 ];
 
 const permittedFor = (rule) => PERMITTED.filter((p) => p.rule === rule);
-const isPermitted = (rule, unit, spec) =>
-  permittedFor(rule).some((p) => p.applies?.(unit, spec) === true);
+/** `record` is the whole import record, so an exemption can scope itself to tests. */
+const isPermitted = (rule, unit, spec, record) =>
+  permittedFor(rule).some((p) => p.applies?.(unit, spec, record) === true);
 
 /* ------------------------------------------------------------------ workspace reading ---- */
 
@@ -361,7 +381,7 @@ check("dependency-direction", "Dependency direction matches the declared graph",
     const allowed = ALLOWED_DEPENDENCIES[r.unit.short] ?? [];
     declared.add(`${r.unit.short}->${r.target.unit.short}`);
     if (allowed.includes(r.target.unit.short)) continue;
-    if (isPermitted("dependency-direction", r.unit, r.specifier)) continue;
+    if (isPermitted("dependency-direction", r.unit, r.specifier, r)) continue;
     fail(
       `${r.unit.short} -> ${r.target.unit.short} is not a declared edge` +
         `${r.target.viaRelative ? " (reached by a relative path escaping the package)" : ""}` +
