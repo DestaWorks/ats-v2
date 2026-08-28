@@ -1,0 +1,23 @@
+{
+  "name": "@destaworks/jobs",
+  "version": "0.0.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "type": "module",
+  "exports": {
+    "./*": "./src/*.ts"
+  },
+  "dependencies": {
+    "@destaworks/application": "workspace:*",
+    "@destaworks/config": "workspace:*",
+    "@destaworks/contracts": "workspace:*",
+    "@destaworks/db": "workspace:*",
+    "@destaworks/domain": "workspace:*",
+    "@destaworks/integrations": "workspace:*",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@destaworks/tsconfig": "workspace:*",
+    "typescript": "catalog:"
+  }
+}

@@ -32,6 +32,11 @@ const ALLOWED_DEPENDENCIES = {
   // to break the auth <-> integrations cycle. db, auth and integrations may all reach it; there is
   // no rule that makes `application` the exception, and it already imports `requestContext`.
   application: ["auth", "config", "contracts", "db", "domain", "integrations"],
+  // Phase 5. `jobs` sits ABOVE application, never beside it: a job handler orchestrates the same
+  // services a controller does. The edge is deliberately one-way — `application` must not import
+  // `jobs`, or enqueuing from a service would make the two mutually dependent and a job handler
+  // able to enqueue itself through a cycle the graph could no longer see.
+  jobs: ["application", "auth", "config", "contracts", "db", "domain", "integrations"],
   ui: ["domain"],
   web: ["application", "auth", "config", "contracts", "db", "domain", "integrations", "ui"],
   // Phase 4.1. The plan's graph draws api -> {application, auth, contracts}; `config` (the Logger)
@@ -41,7 +46,7 @@ const ALLOWED_DEPENDENCIES = {
   // exception filter maps onto, so the API cannot grow a second copy of the code union.
   // `db` is ABSENT ON PURPOSE and must stay absent: a controller is transport, and the moment it
   // can reach a repository the "one path to the data" decision of Phase 4.0 is gone.
-  api: ["application", "auth", "config", "contracts", "domain", "integrations"],
+  api: ["application", "auth", "config", "contracts", "domain", "integrations", "jobs"],
 };
 
 const PRISMA_VENDOR = /^(@prisma\/|prisma$)/;

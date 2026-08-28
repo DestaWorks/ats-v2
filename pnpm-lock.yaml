@@ -482,6 +482,37 @@ importers:
         specifier: 'catalog:'
         version: 5.9.3
 
+  packages/jobs:
+    dependencies:
+      '@destaworks/application':
+        specifier: workspace:*
+        version: link:../application
+      '@destaworks/config':
+        specifier: workspace:*
+        version: link:../config
+      '@destaworks/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@destaworks/db':
+        specifier: workspace:*
+        version: link:../db
+      '@destaworks/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@destaworks/integrations':
+        specifier: workspace:*
+        version: link:../integrations
+      zod:
+        specifier: 'catalog:'
+        version: 4.4.3
+    devDependencies:
+      '@destaworks/tsconfig':
+        specifier: workspace:*
+        version: link:../../tooling/typescript
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+
   packages/ui:
     dependencies:
       '@destaworks/domain':
