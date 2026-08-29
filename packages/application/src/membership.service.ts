@@ -4,7 +4,8 @@ import {
   type MembershipRow,
 } from "@destaworks/db/tenancy/membership.repository";
 import { userRepository } from "@destaworks/db/repositories/user.repository";
-import { withTenantTransaction, withTransaction } from "@destaworks/db/with-transaction";
+import { withTenantTransaction } from "@destaworks/db/with-transaction";
+import { withAnnouncedTenant } from "@destaworks/db/tenant-transaction";
 import { hasCapability, isRole, ROLES, type Role } from "@destaworks/domain/constants";
 import type { TenantContext } from "@destaworks/domain/tenant";
 import { toIso } from "@destaworks/domain/utils/iso";
@@ -205,7 +206,11 @@ export const membershipService = {
       throw new AppError("CONFLICT", "That invitation is no longer open");
     }
 
-    const accepted = await withTransaction(async (tx) => {
+    // Announced with the membership's own tenant: the audit row below lands in `activity_log`,
+    // which is tenant-scoped with a WITH CHECK policy, and an invitation carries no context to
+    // announce until the moment it is accepted. Without this the insert is refused under RLS and
+    // accepting an invitation fails for every user.
+    const accepted = await withAnnouncedTenant(row.tenantId, async (tx) => {
       const updated = await membershipRepository.updateStatus(row.id, "active", tx);
       await writeAudit(tx, {
         entity: "membership",

@@ -23,6 +23,16 @@ vi.mock("@destaworks/db/tenancy/membership.repository", () => ({
   tenantRepository: { listAll: h.listAll, findBySlug: h.findBySlug },
 }));
 vi.mock("@destaworks/db/audit", () => ({ writeAudit: h.writeAudit }));
+const announced: string[] = vi.hoisted(() => []);
+
+vi.mock("@destaworks/db/tenant-transaction", () => ({
+  // Records the tenant the transaction ANNOUNCES, which is the whole point of these two flows:
+  // they write into a tenant they can name but hold no context for.
+  withAnnouncedTenant: (tenantId: string, fn: (tx: unknown) => unknown) => {
+    announced.push(tenantId);
+    return fn({ tx: true });
+  },
+}));
 vi.mock("@destaworks/db/with-transaction", () => ({
   withTransaction: (fn: (tx: unknown) => unknown) => fn({ tx: true }),
 }));
@@ -94,6 +104,16 @@ describe("a tenant Owner cannot reach the platform plane", () => {
 });
 
 describe("a platform admin's cross-tenant action is audited", () => {
+  it("announces the tenant it TOUCHES, not the admin's — there is no admin tenant", async () => {
+    announced.length = 0;
+    await platformAdminService.readTenant(admin, "acme");
+
+    // The audit row lands in that tenant's own `activity_log`, which is tenant-scoped with a
+    // WITH CHECK policy. Unannounced the insert is refused, and since the audit gates the read,
+    // the whole platform plane stops working the day RLS is applied.
+    expect(announced).toEqual(["t1"]);
+  });
+
   it("writes exactly one audit row, into the tenant it touched", async () => {
     await platformAdminService.readTenant(admin, "acme");
 

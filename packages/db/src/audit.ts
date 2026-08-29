@@ -1,5 +1,5 @@
 import type { Prisma } from "./generated/prisma/client";
-import type { ScopedTx } from "./tenant-scope";
+import type { AnyTx } from "./tenant-scope";
 
 /**
  * Parameters for a single audit entry.
@@ -66,8 +66,13 @@ function redactSensitive(value: unknown): unknown {
  * `activity_log` is tenant-scoped, so the tenant comes from the client `tx` was opened on rather
  * than from a context of its own: an audit row can only ever belong to the tenant whose
  * transaction is writing it.
+ *
+ * Takes either client. A scoped one is the normal case and the seam supplies the tenant. The raw
+ * one comes from `withAnnouncedTenant`, used by the two flows that write into a tenant they can
+ * name but hold no context for — accepting an invitation, and the platform plane auditing a
+ * cross-tenant read. Those pass `tenantId` explicitly, which is why it is a parameter at all.
  */
-export function writeAudit(tx: ScopedTx, params: WriteAuditParams) {
+export function writeAudit(tx: AnyTx, params: WriteAuditParams) {
   const before = redactSensitive(params.before) as Prisma.InputJsonValue | undefined;
   const after = redactSensitive(params.after) as Prisma.InputJsonValue | undefined;
   return tx.activityLog.create({

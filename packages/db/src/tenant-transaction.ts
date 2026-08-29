@@ -1,5 +1,8 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import { prisma } from "./prisma";
+import type { Prisma as PrismaNs } from "./generated/prisma/client";
+
+type PrismaTransactionClient = PrismaNs.TransactionClient;
 import { db, type ScopedTx } from "./tenant-scope";
 import { runWithAmbientTenantTransaction, setTenantIdOnConnection } from "./tenant-connection";
 
@@ -72,6 +75,39 @@ export function withTenantTransaction<T>(
     },
     // `exactOptionalPropertyTypes` is on, so an explicit `undefined` is not the same as an absent
     // key — spreading the caller's options is how "unset means Prisma's default" stays true.
+    { ...options },
+  );
+}
+
+/**
+ * A transaction that announces a tenant it is GIVEN, rather than one carried on a context.
+ *
+ * Two flows legitimately write into a tenant without holding a `TenantContext`, and both would
+ * break the day RLS is applied. Accepting an invitation writes the audit row that records the
+ * acceptance — but an invitation grants no context until it is accepted, so there is none to pass.
+ * The platform-admin plane audits a cross-tenant read into the tenant it touched, and its
+ * `PlatformContext` deliberately carries no tenant at all.
+ *
+ * In both cases the tenant id is known — it is on the membership being accepted, or the tenant
+ * being read. What was missing was a way to say so. Without it the statement runs on a connection
+ * with no `app.tenant_id`, `current_setting` returns NULL, `activity_log`'s `WITH CHECK` refuses
+ * the insert, and because the audit gates the operation, the whole flow fails.
+ *
+ * This is deliberately narrow. It announces a tenant and gives back the RAW transaction client, not
+ * a scoped one: a caller reaching for this has already established it is acting outside the normal
+ * scoping rules, and handing it a scoped client would imply a guarantee that is not being made.
+ * Prefer `withTenantTransaction` everywhere a context exists.
+ */
+export function withAnnouncedTenant<T>(
+  tenantId: string,
+  fn: (tx: PrismaTransactionClient) => Promise<T>,
+  options?: TenantTransactionOptions,
+): Promise<T> {
+  return prisma.$transaction(
+    async (tx) => {
+      await setTenantIdOnConnection(tx, tenantId);
+      return runWithAmbientTenantTransaction(tenantId, tx, () => fn(tx));
+    },
     { ...options },
   );
 }

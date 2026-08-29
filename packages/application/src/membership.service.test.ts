@@ -47,6 +47,16 @@ vi.mock("@destaworks/db/repositories/user.repository", () => ({
   },
 }));
 vi.mock("@destaworks/db/audit", () => ({ writeAudit: h.writeAudit }));
+const announced: string[] = vi.hoisted(() => []);
+
+vi.mock("@destaworks/db/tenant-transaction", () => ({
+  // Records the tenant the transaction ANNOUNCES — the point of this flow is that it writes into a
+  // tenant it can name but holds no context for.
+  withAnnouncedTenant: (tenantId: string, fn: (tx: unknown) => unknown) => {
+    announced.push(tenantId);
+    return fn({ tx: true });
+  },
+}));
 vi.mock("@destaworks/db/with-transaction", () => ({
   withTransaction: (fn: (tx: unknown) => unknown) => fn({ tx: true }),
   withTenantTransaction: (_ctx: unknown, fn: (tx: unknown) => unknown) => fn({ tx: true }),
@@ -249,6 +259,21 @@ describe("invite", () => {
 });
 
 describe("acceptInvitation", () => {
+  it("announces the membership's own tenant, or RLS refuses the audit row", async () => {
+    announced.length = 0;
+    h.findByUserAndSlug.mockResolvedValue(
+      membership({ id: "m9", status: "invited", userId: "u1" }),
+    );
+    h.updateStatus.mockResolvedValue(membership({ id: "m9", status: "active", userId: "u1" }));
+
+    await membershipService.acceptInvitation(user, { tenant: "acme" });
+
+    // An invitation carries no `TenantContext` — that is the point of accepting one — so the
+    // tenant has to come off the membership row. Unannounced, the audit insert meets
+    // `activity_log`'s WITH CHECK with a NULL `app.tenant_id` and the whole acceptance fails.
+    expect(announced).toEqual(["t1"]);
+  });
+
   it("flips the invitee's own membership to active and audits the change", async () => {
     h.findByUserAndSlug.mockResolvedValue(
       membership({ id: "m9", status: "invited", userId: "u1" }),

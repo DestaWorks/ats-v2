@@ -4,7 +4,7 @@ import {
   tenantRepository,
   type MembershipTenantRow,
 } from "@destaworks/db/tenancy/membership.repository";
-import { withTransaction } from "@destaworks/db/with-transaction";
+import { withAnnouncedTenant } from "@destaworks/db/tenant-transaction";
 import type { PlatformContext } from "@destaworks/domain/platform";
 import type { AuthUser } from "@destaworks/auth/guards";
 import { requirePlatformCapability } from "@destaworks/auth/platform-admin";
@@ -64,7 +64,11 @@ function auditCrossTenantAccess(
   tenantId: string,
   detail: Readonly<Record<string, string>>,
 ): Promise<unknown> {
-  return withTransaction((tx) =>
+  // Announced with the tenant being touched, not the admin's — there is no admin tenant, and the
+  // row lands in that tenant's own `activity_log`, which is tenant-scoped with a WITH CHECK policy.
+  // Unannounced the insert is refused under RLS, and since the audit gates the read, the whole
+  // platform plane stops working.
+  return withAnnouncedTenant(tenantId, (tx) =>
     writeAudit(tx, {
       entity: "tenant",
       entityId: tenantId,
