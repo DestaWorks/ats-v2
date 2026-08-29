@@ -3,6 +3,7 @@ import {
   weeklyBriefAiSchema,
   type WeeklyBriefAiOutput,
 } from "@destaworks/contracts/validation/briefs";
+import type { AiCallOptions } from "../deadline";
 import { generateAi } from "../shared";
 
 export interface WeeklyBriefAssociateContext {
@@ -71,8 +72,12 @@ function buildPrompt(ctx: WeeklyBriefContext): string {
 }
 
 /** Generate this week's Weekly Brief from live context (legacy `weekly_brief_generate`). */
-export function generateWeeklyBrief(ctx: WeeklyBriefContext): Promise<WeeklyBriefAiOutput> {
+export function generateWeeklyBrief(
+  ctx: WeeklyBriefContext,
+  options?: AiCallOptions,
+): Promise<WeeklyBriefAiOutput> {
   return generateAi("Weekly Brief", {
+    ...options,
     schema: weeklyBriefAiSchema,
     system: SYSTEM_PROMPT,
     prompt: buildPrompt(ctx),

@@ -63,7 +63,17 @@ export type TargetsSuggestAiOutput = z.infer<typeof targetsSuggestAiSchema>;
 
 // --- persisted-row DTOs (what GET/save return — attribution resolved to a name) ---------------
 
-export interface DailyBriefDTO extends DailyBriefAiOutput {
+/**
+ * The unreviewed AI output a generate JOB left behind (Phase 5), carried alongside the saved
+ * brief rather than merged into it: until a human saves it, a draft is a proposal, and the saved
+ * fields must keep showing what that human last approved.
+ */
+export interface BriefDraftEnvelope<TOutput> {
+  draft: TOutput | null;
+  draftAt: string | null; // ISO
+}
+
+export interface DailyBriefDTO extends DailyBriefAiOutput, BriefDraftEnvelope<DailyBriefAiOutput> {
   date: string;
   priorityClientId: string | null;
   shiftA: string | null;
@@ -73,7 +83,8 @@ export interface DailyBriefDTO extends DailyBriefAiOutput {
   savedAt: string | null; // ISO
 }
 
-export interface WeeklyBriefDTO extends WeeklyBriefAiOutput {
+export interface WeeklyBriefDTO
+  extends WeeklyBriefAiOutput, BriefDraftEnvelope<WeeklyBriefAiOutput> {
   weekStart: string;
   savedByName: string | null;
   savedAt: string | null; // ISO
@@ -81,7 +92,7 @@ export interface WeeklyBriefDTO extends WeeklyBriefAiOutput {
 
 // --- request schemas ----------------------------------------------------------------------
 
-/** `POST /api/briefs/daily/generate` — assembles live context + calls the AI, returns a draft. */
+/** `POST /api/briefs/daily/generate` — Phase 5: QUEUES the generation, returns the job id. */
 /** NOT `.strict()` — the request body also carries `manualInputsSchema`'s fields (route parses
  *  both against the same JSON body); unknown keys are stripped here, not rejected. */
 export const generateDailyBriefSchema = z.object({ date: dateKey, tz: z.coerce.number().int() });

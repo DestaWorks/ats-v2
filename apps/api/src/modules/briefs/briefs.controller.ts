@@ -16,10 +16,13 @@ import {
   saveDailyBriefSchema,
   saveWeeklyBriefSchema,
   weeklyPatternsSchema,
-  type DailyBriefAiOutput,
-  type WeeklyBriefAiOutput,
   type WeeklyPatternsAiOutput,
 } from "@destaworks/contracts/validation/briefs";
+import type { EnqueuedJobResponse } from "@destaworks/contracts/validation/jobs";
+import {
+  enqueueDailyBriefGeneration,
+  enqueueWeeklyBriefGeneration,
+} from "@destaworks/jobs/enqueue/briefs";
 import { mondayOf } from "@destaworks/domain/daily";
 import type { AuthUser } from "@destaworks/auth/guards";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
@@ -76,22 +79,21 @@ export class BriefsController {
     sendJson(response, await this.briefs.getDaily(day));
   }
 
-  /** POST /briefs/daily/generate — assemble live context, call the AI, return an unsaved draft. */
+  /**
+   * POST /briefs/daily/generate — QUEUE the AI generation and answer 202 with the job id.
+   *
+   * Phase 5: the generation itself is `briefs.daily.generate`, enqueued as a singleton per day, and
+   * its output lands in that day's `draft` (returned by `GET /briefs/daily`). Enqueuing goes
+   * through the shared `@destaworks/jobs` helper so this controller and the Next.js route cannot
+   * disagree about the singleton key while both stacks are serving.
+   */
   @Post("daily/generate")
-  @HttpCode(HttpStatus.OK)
+  @HttpCode(HttpStatus.ACCEPTED)
   @RateLimit({ name: "briefs-daily-generate", limit: 20, windowMs: 60_000 })
   generateDaily(
     @Body(generateDailyPipe) body: ContractOutput<typeof generateDailyBriefRequestSchema>,
-  ): Promise<DailyBriefAiOutput> {
-    return this.briefs.generateDaily(
-      { date: body.date, tz: body.tz },
-      {
-        priorityClientId: body.priorityClientId ?? null,
-        shiftA: body.shiftA ?? null,
-        shiftB: body.shiftB ?? null,
-        watchItems: body.watchItems ?? null,
-      },
-    );
+  ): Promise<EnqueuedJobResponse> {
+    return enqueueDailyBriefGeneration(body);
   }
 
   /** POST /briefs/daily/save — persist the (possibly edited) draft. */
@@ -114,14 +116,14 @@ export class BriefsController {
     sendJson(response, await this.briefs.getWeekly(monday));
   }
 
-  /** POST /briefs/weekly/generate — assemble live context, call the AI, return an unsaved draft. */
+  /** POST /briefs/weekly/generate — QUEUE the AI generation. See `generateDaily` above. */
   @Post("weekly/generate")
-  @HttpCode(HttpStatus.OK)
+  @HttpCode(HttpStatus.ACCEPTED)
   @RateLimit({ name: "briefs-weekly-generate", limit: 10, windowMs: 60_000 })
   generateWeekly(
     @Body(generateWeeklyPipe) body: ContractOutput<typeof generateWeeklyBriefSchema>,
-  ): Promise<WeeklyBriefAiOutput> {
-    return this.briefs.generateWeekly(body);
+  ): Promise<EnqueuedJobResponse> {
+    return enqueueWeeklyBriefGeneration(body);
   }
 
   /** POST /briefs/weekly/save — persist the (possibly edited) draft. */

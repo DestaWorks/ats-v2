@@ -19,6 +19,7 @@ import type {
 } from "@destaworks/contracts/validation/briefs";
 import { toIso } from "@destaworks/domain/utils/iso";
 import type { AuthUser } from "@destaworks/auth/guards";
+import type { AiCallOptions } from "@destaworks/integrations/ai/deadline";
 import { writeAudit } from "@destaworks/db/audit";
 import { withTransaction } from "@destaworks/db/with-transaction";
 import {
@@ -67,6 +68,10 @@ function toDailyDTO(row: DailyBriefRow, savedByName: string | null): DailyBriefD
     watchItems: row.watchItems,
     savedByName,
     savedAt: row.savedAt ? toIso(row.savedAt) : null,
+    // `as` on a Json column, like every other field here: Prisma types JSON as `JsonValue`, and
+    // the shape is the one the generate job validated against `dailyBriefAiSchema` before writing.
+    draft: (row.draft as DailyBriefDTO["draft"] | null) ?? null,
+    draftAt: row.draftAt ? toIso(row.draftAt) : null,
   };
 }
 
@@ -83,6 +88,8 @@ function toWeeklyDTO(row: WeeklyBriefRow, savedByName: string | null): WeeklyBri
     blockers: row.blockers ?? "",
     savedByName,
     savedAt: row.savedAt ? toIso(row.savedAt) : null,
+    draft: (row.draft as WeeklyBriefDTO["draft"] | null) ?? null,
+    draftAt: row.draftAt ? toIso(row.draftAt) : null,
   };
 }
 
@@ -104,7 +111,12 @@ async function topClientsByActiveCandidates(): Promise<
 export const briefService = {
   // --- Daily Brief ---
 
-  /** Assemble live context + call the AI (legacy `daily_brief_generate`). Not persisted yet. */
+  /**
+   * Assemble live context + call the AI (legacy `daily_brief_generate`). Not persisted here.
+   *
+   * `options` is the caller's cancellation and time budget: the generate JOB passes its
+   * `ctx.signal`, so a worker killing the job also cancels the provider call it is waiting on.
+   */
   async generateDaily(
     input: GenerateDailyBriefInput,
     manualInputs: {
@@ -113,6 +125,7 @@ export const briefService = {
       shiftB: string | null;
       watchItems: string | null;
     },
+    options?: AiCallOptions,
   ) {
     const w = dayWindow(input.date, input.tz);
     const now = new Date();
@@ -189,7 +202,29 @@ export const briefService = {
           }
         : null,
     };
-    return generateDailyBrief(ctx);
+    return generateDailyBrief(ctx, options);
+  },
+
+  /**
+   * What the `briefs.daily.generate` JOB runs: generate, then park the result as a draft.
+   *
+   * It calls `generateDaily` rather than repeating it — the job moved WHERE generation happens,
+   * not what it does. The output goes to the row's draft columns, never the saved fields, so a job
+   * finishing after someone saved that day's brief offers a newer draft instead of overwriting
+   * their work. Returns nothing: a handler's result channel is the database.
+   */
+  async generateDailyDraft(
+    input: GenerateDailyBriefInput,
+    manualInputs: {
+      priorityClientId: string | null;
+      shiftA: string | null;
+      shiftB: string | null;
+      watchItems: string | null;
+    },
+    options?: AiCallOptions,
+  ): Promise<void> {
+    const draft = await this.generateDaily(input, manualInputs, options);
+    await briefRepository.upsertDailyDraft(input.date, draft);
   },
 
   /** Persist the (possibly edited) draft + manual inputs (legacy `daily_brief_save`). */
@@ -236,7 +271,7 @@ export const briefService = {
 
   // --- Weekly Brief ---
 
-  async generateWeekly(input: GenerateWeeklyBriefInput) {
+  async generateWeekly(input: GenerateWeeklyBriefInput, options?: AiCallOptions) {
     const weekStart = mondayOf(input.weekStart);
     const lastWeekStart = daysBefore(weekStart, 7);
     const thisW = weekWindow(weekStart, input.tz);
@@ -283,7 +318,16 @@ export const briefService = {
           }
         : null,
     };
-    return generateWeeklyBrief(ctx);
+    return generateWeeklyBrief(ctx, options);
+  },
+
+  /** What the `briefs.weekly.generate` JOB runs. See `generateDailyDraft` for the reasoning. */
+  async generateWeeklyDraft(
+    input: GenerateWeeklyBriefInput,
+    options?: AiCallOptions,
+  ): Promise<void> {
+    const draft = await this.generateWeekly(input, options);
+    await briefRepository.upsertWeeklyDraft(mondayOf(input.weekStart), draft);
   },
 
   async saveWeekly(input: SaveWeeklyBriefInput, user: AuthUser): Promise<WeeklyBriefDTO> {

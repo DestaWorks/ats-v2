@@ -3,6 +3,7 @@ import {
   dailyBriefAiSchema,
   type DailyBriefAiOutput,
 } from "@destaworks/contracts/validation/briefs";
+import type { AiCallOptions } from "../deadline";
 import { generateAi } from "../shared";
 
 /** One associate's rollup for the day — sourced/outreach live counts + workload + risk. */
@@ -86,9 +87,19 @@ function buildPrompt(ctx: DailyBriefContext): string {
   return lines.join("\n");
 }
 
-/** Generate today's Daily Brief from live context (legacy `daily_brief_generate`). */
-export function generateDailyBrief(ctx: DailyBriefContext): Promise<DailyBriefAiOutput> {
+/**
+ * Generate today's Daily Brief from live context (legacy `daily_brief_generate`).
+ *
+ * `options` carries the caller's cancellation and time budget — a job's `ctx.signal` when this
+ * runs on the queue. Optional, so the (still-served) request path behaves exactly as before and
+ * simply inherits the default deadline.
+ */
+export function generateDailyBrief(
+  ctx: DailyBriefContext,
+  options?: AiCallOptions,
+): Promise<DailyBriefAiOutput> {
   return generateAi("Daily Brief", {
+    ...options,
     schema: dailyBriefAiSchema,
     system: SYSTEM_PROMPT,
     prompt: buildPrompt(ctx),

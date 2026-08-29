@@ -43,7 +43,13 @@ function providerOptionsFor(provider: AiProvider) {
 
 async function attempt<T>(
   modelString: string,
-  opts: { schema: ZodType<T>; system: string; prompt: string; maxOutputTokens?: number },
+  opts: {
+    schema: ZodType<T>;
+    system: string;
+    prompt: string;
+    maxOutputTokens?: number;
+    signal?: AbortSignal;
+  },
 ) {
   const { provider, modelId } = parseModel(modelString);
   const providerOptions = providerOptionsFor(provider);
@@ -53,6 +59,10 @@ async function attempt<T>(
     system: opts.system,
     prompt: opts.prompt,
     maxOutputTokens: opts.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
+    // The deadline reaches the provider's `fetch` through here, so an expired budget cancels the
+    // in-flight HTTP request instead of being noticed after it finally returns. The SDK also
+    // watches it between retries, which is what stops a 2s/4s backoff outliving the budget.
+    ...(opts.signal !== undefined && { abortSignal: opts.signal }),
     ...(providerOptions !== undefined && { providerOptions }),
   });
   return { object, provider, modelId, usage };
@@ -108,6 +118,11 @@ export async function generateStructured<T>(opts: {
   /** Override the configured model (`"provider/model"`). Defaults to `AI_MODEL`. */
   model?: string;
   maxOutputTokens?: number;
+  /**
+   * Cancels the whole operation — both models and every retry inside each. Supplied by
+   * `generateAi`, which starts the budget; see `./deadline`.
+   */
+  signal?: AbortSignal;
 }): Promise<T> {
   const primaryModel = opts.model ?? AI_MODEL;
   const { provider: primaryProvider, modelId: primaryModelId } = parseModel(primaryModel);
@@ -125,6 +140,11 @@ export async function generateStructured<T>(opts: {
       errorName: primaryErr instanceof Error ? primaryErr.name : "UnknownError",
       ...errorStatus(primaryErr),
     });
+
+    // A blown deadline (or a cancelled caller) must NOT buy a second model. The fallback exists for
+    // a provider that is down, and it costs another three attempts plus their backoff — spending
+    // that after the budget is gone is precisely the unbounded retry this phase removes.
+    if (opts.signal?.aborted === true) throw primaryErr;
 
     const fallback = parseFallbackModel(primaryModel);
     if (!fallback) throw primaryErr;

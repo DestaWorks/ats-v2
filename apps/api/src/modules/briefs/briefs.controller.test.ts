@@ -13,10 +13,8 @@ vi.mock("server-only", () => ({}));
 const h = vi.hoisted(() => ({
   session: null as { user: { id: string; email: string; name: string; role?: string } } | null,
   getDaily: vi.fn(),
-  generateDaily: vi.fn(),
   saveDaily: vi.fn(),
   getWeekly: vi.fn(),
-  generateWeekly: vi.fn(),
   saveWeekly: vi.fn(),
   generatePatterns: vi.fn(),
   suggestTargets: vi.fn(),
@@ -26,6 +24,8 @@ const h = vi.hoisted(() => ({
 vi.mock("@destaworks/auth/auth", () => ({ auth: { api: { getSession: async () => h.session } } }));
 vi.mock("@destaworks/integrations/http/rate-limit", () => ({ checkRateLimit: h.checkRateLimit }));
 
+import type { EnqueueOptions, JobDefinition, JobQueue } from "@destaworks/jobs/queue";
+import { resetJobQueue, setJobQueue } from "@destaworks/jobs/runtime";
 import { installNestRequestContext } from "../../common/request-context/nest-request-context";
 import { provideFakeService, startTestApi, type TestApi } from "../../common/testing/nest-app";
 import { BriefsController } from "./briefs.controller";
@@ -35,6 +35,25 @@ import { TargetsController } from "./targets.controller";
 interface Envelope {
   error: { code: string; message: string; issues?: { path: string; message: string }[] };
 }
+
+/**
+ * Phase 5: the two generate endpoints enqueue instead of generating, so their "service" is the
+ * queue. Bound through the registry rather than module-mocked, so the assertions below still run
+ * through the real enqueue helper — the same one the Next.js route uses, which is the parity this
+ * file exists to prove.
+ */
+const enqueued: { name: string; payload: unknown; options?: EnqueueOptions }[] = [];
+
+const fakeQueue: JobQueue = {
+  enqueue<TDefinition extends JobDefinition<unknown>>(
+    definition: TDefinition,
+    payload: unknown,
+    options?: EnqueueOptions,
+  ): Promise<string> {
+    enqueued.push({ name: definition.name, payload, ...(options && { options }) });
+    return Promise.resolve("job-1");
+  },
+};
 
 const OWNER = { user: { id: "u1", email: "o@desta.works", name: "O", role: "Owner" } };
 const ASSOCIATE = { user: { id: "u2", email: "a@desta.works", name: "A", role: "Associate" } };
@@ -77,10 +96,8 @@ beforeAll(async () => {
     providers: [
       provideFakeService(BRIEF_SERVICE, {
         getDaily: h.getDaily,
-        generateDaily: h.generateDaily,
         saveDaily: h.saveDaily,
         getWeekly: h.getWeekly,
-        generateWeekly: h.generateWeekly,
         saveWeekly: h.saveWeekly,
         generatePatterns: h.generatePatterns,
         suggestTargets: h.suggestTargets,
@@ -89,52 +106,63 @@ beforeAll(async () => {
   });
 });
 
-afterAll(() => api.close());
+afterAll(() => {
+  resetJobQueue();
+  return api.close();
+});
 
 beforeEach(() => {
   h.session = null;
+  enqueued.length = 0;
+  setJobQueue(fakeQueue);
   for (const value of Object.values(h)) if (vi.isMockFunction(value)) value.mockReset();
 });
 
 /** Every endpoint in both controllers, with the request that exercises it. */
 const ENDPOINTS = [
-  { method: "GET", path: "/briefs/daily", call: h.getDaily, body: undefined },
+  { method: "GET", path: "/briefs/daily", call: h.getDaily, body: undefined, queued: false },
   {
     method: "POST",
     path: "/briefs/daily/generate",
-    call: h.generateDaily,
+    call: null,
     body: { date: "2026-08-25", tz: 0 },
+    queued: true,
   },
   {
     method: "POST",
     path: "/briefs/daily/save",
     call: h.saveDaily,
     body: { ...DAILY_DRAFT, date: "2026-08-25" },
+    queued: false,
   },
-  { method: "GET", path: "/briefs/weekly", call: h.getWeekly, body: undefined },
+  { method: "GET", path: "/briefs/weekly", call: h.getWeekly, body: undefined, queued: false },
   {
     method: "POST",
     path: "/briefs/weekly/generate",
-    call: h.generateWeekly,
+    call: null,
     body: { weekStart: "2026-08-24", tz: 0 },
+    queued: true,
   },
   {
     method: "POST",
     path: "/briefs/weekly/save",
     call: h.saveWeekly,
     body: { ...WEEKLY_DRAFT, weekStart: "2026-08-24" },
+    queued: false,
   },
   {
     method: "POST",
     path: "/briefs/weekly/patterns",
     call: h.generatePatterns,
     body: { weekStart: "2026-08-24", tz: 0 },
+    queued: false,
   },
   {
     method: "POST",
     path: "/targets/suggest",
     call: h.suggestTargets,
     body: { userId: "u9", date: "2026-08-25" },
+    queued: false,
   },
 ] as const;
 
@@ -142,13 +170,19 @@ const send = (endpoint: (typeof ENDPOINTS)[number]) =>
   endpoint.method === "GET" ? api.fetch(endpoint.path) : post(endpoint.path, endpoint.body);
 
 describe.each(ENDPOINTS)("$method $path", (endpoint) => {
-  const { call } = endpoint;
+  const { call, queued } = endpoint;
+
+  /** "Did the work start?" — the service for most endpoints, the queue for the two that enqueue. */
+  const expectUntouched = () => {
+    if (call) expect(call).not.toHaveBeenCalled();
+    expect(enqueued).toHaveLength(0);
+  };
 
   it("401 when signed out, and never reaches the service", async () => {
     const res = await send(endpoint);
     expect(res.status).toBe(401);
     expect(((await res.json()) as Envelope).error.code).toBe("UNAUTHORIZED");
-    expect(call).not.toHaveBeenCalled();
+    expectUntouched();
   });
 
   it("403 for a role without viewReports, and never reaches the service", async () => {
@@ -156,15 +190,18 @@ describe.each(ENDPOINTS)("$method $path", (endpoint) => {
     const res = await send(endpoint);
     expect(res.status).toBe(403);
     expect(((await res.json()) as Envelope).error.code).toBe("FORBIDDEN");
-    expect(call).not.toHaveBeenCalled();
+    expectUntouched();
   });
 
-  it("200 for Owner — never Nest's default 201 for a POST", async () => {
+  it("answers Owner with its own success status — never Nest's default 201 for a POST", async () => {
     h.session = OWNER;
-    call.mockResolvedValue({ ok: 1 });
+    if (call) call.mockResolvedValue({ ok: 1 });
     const res = await send(endpoint);
-    expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: 1 });
+    // The two generate endpoints are 202 Accepted since Phase 5 queued them; everything else 200.
+    expect(res.status).toBe(queued ? 202 : 200);
+    expect(await res.json()).toEqual(
+      queued ? { jobId: "job-1", job: expect.any(String) } : { ok: 1 },
+    );
   });
 });
 
@@ -263,22 +300,24 @@ describe("request validation", () => {
     const body = (await res.json()) as Envelope;
     expect(body.error.code).toBe("BAD_REQUEST");
     expect(body.error.issues?.map((i) => i.path)).toContain("date");
-    expect(h.generateDaily).not.toHaveBeenCalled();
+    expect(enqueued).toHaveLength(0);
   });
 
-  it("splits the generate body into the window and the manual inputs the service expects", async () => {
+  it("queues the parsed generate body under a per-day singleton key, exactly as the route does", async () => {
     h.session = OWNER;
-    h.generateDaily.mockResolvedValue(DAILY_DRAFT);
     await post("/briefs/daily/generate", {
       date: "2026-08-25",
       tz: -180,
       priorityClientId: "c1",
       shiftA: "A",
     });
-    expect(h.generateDaily).toHaveBeenCalledWith(
-      { date: "2026-08-25", tz: -180 },
-      { priorityClientId: "c1", shiftA: "A", shiftB: null, watchItems: null },
-    );
+    expect(enqueued).toEqual([
+      {
+        name: "briefs.daily.generate",
+        payload: { date: "2026-08-25", tz: -180, priorityClientId: "c1", shiftA: "A" },
+        options: { singletonKey: "briefs.daily.generate:2026-08-25" },
+      },
+    ]);
   });
 
   it("rejects an unknown key on a strict schema", async () => {

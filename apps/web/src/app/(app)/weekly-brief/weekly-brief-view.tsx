@@ -4,8 +4,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { dateKey, mondayOf } from "@destaworks/domain/daily";
 import { useTzCookieSync } from "@/lib/use-tz-cookie-sync";
-import type { WeeklyBriefDTO } from "@destaworks/contracts/validation/briefs";
+import type { WeeklyBriefAiOutput, WeeklyBriefDTO } from "@destaworks/contracts/validation/briefs";
 import { getJson, messageForFailure, postJson } from "@/lib/api/client";
+import { awaitBriefDraft } from "@/lib/api/await-brief-draft";
 import type { GetBriefsWeeklyResponse } from "@/app/api/briefs/weekly/route";
 import type { PostBriefsWeeklyGenerateResponse } from "@/app/api/briefs/weekly/generate/route";
 import type { PostBriefsWeeklyPatternsResponse } from "@/app/api/briefs/weekly/patterns/route";
@@ -15,7 +16,34 @@ import { Card } from "@destaworks/ui/card";
 import { Field } from "@destaworks/ui/field";
 import { Input } from "@destaworks/ui/input";
 
-type Draft = PostBriefsWeeklyGenerateResponse & { weekStart: string };
+type Draft = WeeklyBriefAiOutput & { weekStart: string };
+
+/**
+ * Narrow a DTO down to the AI fields — the save endpoint's schema is `.strict()`, so a whole DTO
+ * spread into it (attribution, draft columns and all) is a 400.
+ */
+function toDraft(source: WeeklyBriefAiOutput, weekStart: string): Draft {
+  return {
+    weekStart,
+    headline: source.headline,
+    kpiNarrative: source.kpiNarrative,
+    clientCards: source.clientCards,
+    perAssociate: source.perAssociate,
+    lastWeekCheck: source.lastWeekCheck,
+    decisions: source.decisions,
+    highlights: source.highlights,
+    blockers: source.blockers,
+  };
+}
+
+/** Saved brief vs. a job's draft: show whichever is newer. See the Daily Brief for the reasoning. */
+function newest(dto: WeeklyBriefDTO): WeeklyBriefAiOutput {
+  const draftIsNewer =
+    dto.draft !== null &&
+    dto.draftAt !== null &&
+    (dto.savedAt === null || dto.draftAt > dto.savedAt);
+  return draftIsNewer && dto.draft !== null ? dto.draft : dto;
+}
 
 /**
  * Weekly Brief (Wave 5.1, legacy `weekly_brief_generate`/`weekly_brief_save`/`weekly_brief_patterns`).
@@ -42,7 +70,9 @@ export function WeeklyBriefView({
   const [saved, setSaved] = useState<WeeklyBriefDTO | null | undefined>(
     initialWeekStart !== undefined ? (initial ?? null) : undefined,
   );
-  const [draft, setDraft] = useState<Draft | null>(initial ? { ...initial } : null);
+  const [draft, setDraft] = useState<Draft | null>(
+    initial ? toDraft(newest(initial), initial.weekStart) : null,
+  );
   const [patterns, setPatterns] = useState<PostBriefsWeeklyPatternsResponse | null>(null);
   const [generating, setGenerating] = useState(false);
   const [findingPatterns, setFindingPatterns] = useState(false);
@@ -57,7 +87,7 @@ export function WeeklyBriefView({
     const res = await getJson<GetBriefsWeeklyResponse>(`/api/briefs/weekly?weekStart=${weekStart}`);
     if (res.ok) {
       setSaved(res.data);
-      if (res.data) setDraft({ ...res.data });
+      if (res.data) setDraft(toDraft(newest(res.data), weekStart));
     }
   }, [weekStart]);
 
@@ -71,15 +101,26 @@ export function WeeklyBriefView({
 
   useTzCookieSync(tz);
 
+  /** Queue the generation, then wait for the job's draft — see the Daily Brief for why. */
   async function generate() {
     setGenerating(true);
+    const previousDraftAt = saved?.draftAt ?? null;
     const res = await postJson<PostBriefsWeeklyGenerateResponse>("/api/briefs/weekly/generate", {
       weekStart,
       tz,
     });
+    if (!res.ok) {
+      setGenerating(false);
+      toast.error(messageForFailure(res.failure));
+      return;
+    }
+    const fresh = await awaitBriefDraft<WeeklyBriefAiOutput>(
+      `/api/briefs/weekly?weekStart=${weekStart}`,
+      previousDraftAt,
+    );
     setGenerating(false);
-    if (res.ok) setDraft({ ...res.data, weekStart });
-    else toast.error(messageForFailure(res.failure));
+    if (fresh) setDraft(toDraft(fresh, weekStart));
+    else toast.error("The brief is still generating — reopen this tab shortly to pick it up.");
   }
 
   async function findPatterns() {

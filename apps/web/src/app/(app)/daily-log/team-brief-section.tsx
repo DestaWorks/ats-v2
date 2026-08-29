@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { dateKey } from "@destaworks/domain/daily";
-import type { DailyBriefDTO } from "@destaworks/contracts/validation/briefs";
+import type { DailyBriefAiOutput, DailyBriefDTO } from "@destaworks/contracts/validation/briefs";
 import type { DailyOverviewDTO } from "@destaworks/contracts/validation/daily";
 import { getJson, messageForFailure, postJson } from "@/lib/api/client";
+import { awaitBriefDraft } from "@/lib/api/await-brief-draft";
 import type { GetBriefsDailyResponse } from "@/app/api/briefs/daily/route";
 import type { PostBriefsDailyGenerateResponse } from "@/app/api/briefs/daily/generate/route";
 import type { PostBriefsDailySaveResponse } from "@/app/api/briefs/daily/save/route";
@@ -17,7 +18,37 @@ import { Input } from "@destaworks/ui/input";
 import { Select } from "@destaworks/ui/select";
 
 /** The editable draft — the AI output fields, held client-side between generate → save. */
-type Draft = PostBriefsDailyGenerateResponse & { date: string };
+type Draft = DailyBriefAiOutput & { date: string };
+
+/**
+ * Narrow a DTO down to the AI fields. The save endpoint's schema is `.strict()`, so spreading a
+ * whole DTO into it (attribution, draft columns and all) is a 400 — this picks exactly the fields
+ * the contract accepts.
+ */
+function toDraft(source: DailyBriefAiOutput, date: string): Draft {
+  return {
+    date,
+    headline: source.headline,
+    exceptions: source.exceptions,
+    yesterdayCheck: source.yesterdayCheck,
+    clientCards: source.clientCards,
+    perAssociate: source.perAssociate,
+    teamPulse: source.teamPulse,
+  };
+}
+
+/**
+ * What to show when a saved brief and a job's draft both exist: whichever is newer. A draft
+ * generated after the last save is the thing the author asked for and has not reviewed yet; a
+ * draft older than the save was already superseded by their edits.
+ */
+function newest(dto: DailyBriefDTO): DailyBriefAiOutput {
+  const draftIsNewer =
+    dto.draft !== null &&
+    dto.draftAt !== null &&
+    (dto.savedAt === null || dto.draftAt > dto.savedAt);
+  return draftIsNewer && dto.draft !== null ? dto.draft : dto;
+}
 
 /** Plain-text export (legacy's Slack/email-friendly format — Copy button, no fake integration). */
 function toPlainText(draft: Draft): string {
@@ -81,7 +112,7 @@ export function TeamBriefSection() {
     if (res.ok) {
       setSaved(res.data);
       if (res.data) {
-        setDraft({ ...res.data });
+        setDraft(toDraft(newest(res.data), date));
         setManual({
           priorityClientId: res.data.priorityClientId ?? "",
           shiftA: res.data.shiftA ?? "",
@@ -96,8 +127,14 @@ export function TeamBriefSection() {
     void refresh();
   }, [refresh]);
 
+  /**
+   * Queue the generation, then wait for the job's draft. The endpoint answers 202 with a job id
+   * rather than the brief (Phase 5), so the button stays in its loading state across the wait and
+   * the work no longer holds a serverless slot while it runs.
+   */
   async function generate() {
     setGenerating(true);
+    const previousDraftAt = saved?.draftAt ?? null;
     const res = await postJson<PostBriefsDailyGenerateResponse>("/api/briefs/daily/generate", {
       date,
       tz,
@@ -106,9 +143,18 @@ export function TeamBriefSection() {
       shiftB: manual.shiftB.trim() || null,
       watchItems: manual.watchItems.trim() || null,
     });
+    if (!res.ok) {
+      setGenerating(false);
+      toast.error(messageForFailure(res.failure));
+      return;
+    }
+    const fresh = await awaitBriefDraft<DailyBriefAiOutput>(
+      `/api/briefs/daily?date=${date}`,
+      previousDraftAt,
+    );
     setGenerating(false);
-    if (res.ok) setDraft({ ...res.data, date });
-    else toast.error(messageForFailure(res.failure));
+    if (fresh) setDraft(toDraft(fresh, date));
+    else toast.error("The brief is still generating — reopen this tab shortly to pick it up.");
   }
 
   async function save() {

@@ -6,6 +6,7 @@ import { logger } from "@destaworks/config/logger";
 import { getLogContext } from "@destaworks/config/logger/request-context";
 import { aiSettingsRepository } from "@destaworks/db/repositories/ai-settings.repository";
 import { aiEnabled } from "./config";
+import { isAbortError, startAiDeadline, type AiCallOptions } from "./deadline";
 import { generateStructured } from "./provider";
 
 /**
@@ -21,17 +22,49 @@ export async function isAiAvailable(): Promise<boolean> {
   return !disabled;
 }
 
+/**
+ * Run one structured-AI operation under a wall-clock deadline.
+ *
+ * The deadline is started HERE, once, and covers everything downstream — both models and every
+ * retry inside each — because this is the one place every AI feature passes through. Putting it
+ * per feature would give six copies that drift; putting it per attempt would bound nothing (see
+ * `./deadline`). `opts.signal` is the caller's own cancellation (a job's `ctx.signal`, a request's)
+ * and composes with the budget rather than replacing it; `opts.budgetMs` overrides the ceiling for
+ * an operation that legitimately needs longer. Omitting both keeps the previous call shape working
+ * and simply adds the default ceiling, so every existing feature gains it without changing.
+ */
 export async function generateAi<T>(
   featureLabel: string,
-  opts: { schema: ZodType<T>; system: string; prompt: string; maxOutputTokens?: number },
+  opts: {
+    schema: ZodType<T>;
+    system: string;
+    prompt: string;
+    maxOutputTokens?: number;
+  } & AiCallOptions,
 ): Promise<T> {
   if (!(await isAiAvailable())) {
     throw new AppError("FEATURE_DISABLED", `${featureLabel} is not configured`);
   }
+  const deadline = startAiDeadline(opts);
   try {
-    return await generateStructured({ ...opts, operation: featureLabel });
+    return await generateStructured({
+      operation: featureLabel,
+      schema: opts.schema,
+      system: opts.system,
+      prompt: opts.prompt,
+      ...(opts.maxOutputTokens !== undefined && { maxOutputTokens: opts.maxOutputTokens }),
+      signal: deadline.signal,
+    });
   } catch (err) {
     if (err instanceof AppError) throw err;
+    if (isAbortError(err)) {
+      // 504, not the code's default 502: the upstream did not fail, we stopped waiting for it. A
+      // distinct status is what lets a client tell "retry may help" from "this model is broken".
+      const reason = deadline.expired()
+        ? `did not finish within ${deadline.budgetMs}ms`
+        : "was cancelled";
+      throw new AppError("UPSTREAM_ERROR", `${featureLabel} ${reason}`, 504);
+    }
     if (APICallError.isInstance(err)) {
       if (err.statusCode === 401 || err.statusCode === 403) {
         throw new AppError("FEATURE_DISABLED", `${featureLabel} is not configured`);

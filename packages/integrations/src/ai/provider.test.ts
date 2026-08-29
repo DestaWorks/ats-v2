@@ -126,6 +126,34 @@ describe("generateStructured", () => {
     expect(h.record.mock.calls[1]![0]).toMatchObject({ provider: "openai", status: "error" });
   });
 
+  it("passes the caller's signal into the SDK call", async () => {
+    const signal = new AbortController().signal;
+    h.generateObject.mockResolvedValue({ object: { name: "Jane" }, usage: {} });
+
+    await generateStructured({ ...baseOpts, model: "anthropic/claude-opus-4-8", signal });
+
+    expect(h.generateObject).toHaveBeenCalledWith(expect.objectContaining({ abortSignal: signal }));
+  });
+
+  it("does not spend the fallback model's attempts once the signal has aborted", async () => {
+    h.fallback = "openai/gpt-5";
+    const controller = new AbortController();
+    controller.abort();
+    const err = new Error("aborted");
+    h.generateObject.mockRejectedValue(err);
+
+    await expect(
+      generateStructured({
+        ...baseOpts,
+        model: "anthropic/claude-opus-4-8",
+        signal: controller.signal,
+      }),
+    ).rejects.toBe(err);
+
+    // The deadline is gone; a second model is another three attempts nobody is waiting for.
+    expect(h.generateObject).toHaveBeenCalledTimes(1);
+  });
+
   it("does not retry when the fallback model is the same as the primary", async () => {
     h.fallback = "anthropic/claude-opus-4-8";
     const err = new Error("boom");
