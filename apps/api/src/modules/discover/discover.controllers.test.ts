@@ -3,17 +3,16 @@ import { describe, it, expect, afterAll, beforeAll, beforeEach, vi, type Mock } 
 import type { Type } from "@nestjs/common";
 
 /**
- * Phase 4.3 contract test for `/discover/**` and `/saved-icps`: each ported route driven through
- * the NestJS controller and the Next.js route it replaces, with the same input against the same
- * mocked service, and the two `{ status, body }` results compared.
+ * Contract test for `/discover/**` and `/saved-icps`: each endpoint driven through its controller
+ * — its own declared guards, the handler, then the exception filter — and the resulting
+ * `{ status, body }` asserted against the wire contract.
  *
  * The two areas share a file because they share a module and their gates differ in exactly the way
  * the table shows — the searches are open to any operator, the saved ICPs are not.
  *
- * `GET /discover/search` and `GET /discover/coverage-gaps` have no Next.js counterpart to compare
- * against — the `/discover` page read them in-process — so they are driven over a real socket at
- * the bottom of this file instead, which is the only way to exercise the query pipe and the
- * envelope the filter renders for a rejected query.
+ * `GET /discover/search` and `GET /discover/coverage-gaps` are driven over a real socket at the
+ * bottom of this file instead, which is the only way to exercise the query pipe and the envelope
+ * the filter renders for a rejected query.
  */
 
 const h = vi.hoisted(() => ({
@@ -49,7 +48,6 @@ import type { AuthContext } from "@destaworks/auth/guards";
 import {
   guardOutcome,
   handlerOutcome,
-  routeOutcome,
   routeSurface,
   type RouteSurface,
 } from "../../common/testing/route-parity";
@@ -57,13 +55,6 @@ import { provideFakeService, startTestApi, type TestApi } from "../../common/tes
 import { DiscoverController } from "./discover.controller";
 import { SavedIcpsController } from "./saved-icps.controller";
 import { DISCOVER_SERVICE } from "./discover.tokens";
-import { POST as addToSourcing } from "../../../../web/src/app/api/discover/add/route";
-import { GET as coverageGapSupply } from "../../../../web/src/app/api/discover/coverage-gaps/supply/route";
-import {
-  GET as listSavedIcps,
-  POST as createSavedIcp,
-} from "../../../../web/src/app/api/saved-icps/route";
-import { DELETE as deleteSavedIcp } from "../../../../web/src/app/api/saved-icps/[id]/route";
 
 /** Holds `viewClientDiscovery`. */
 const DIRECTOR = "Director";
@@ -78,25 +69,22 @@ const ADD_INPUT = { rows: [{ npi: "1234567893", name: "Dr. R. Alemu" }] };
 const SUPPLY_QUERY = { credential: "PMHNP", state: "TX" } as const;
 const ICP_INPUT = { name: "TX PMHNPs", state: "TX", isPrivate: false } as const;
 
-const url = (path: string): string => `http://localhost/api${path}`;
-const ctx = <P extends object>(params: P): { params: Promise<P> } => ({
-  params: Promise.resolve(params),
-});
-
-interface ParityCase {
+interface EndpointCase {
   readonly name: string;
   readonly controller: Type<object>;
   readonly handler: string;
   readonly surface: RouteSurface;
   readonly spy: Mock;
+  /** What the service resolves to on the happy path. */
   readonly result: unknown;
-  readonly viaRoute: () => Response | Promise<Response>;
+  /** The response body that produces, which is `result` unless the handler wraps it. */
+  readonly body: unknown;
   readonly viaController: (user: AuthContext) => Promise<unknown>;
   /** A signed-in role that lacks the route's capability, or `null` when it declares none. */
   readonly deniedRole: string | null;
 }
 
-const CASES: ParityCase[] = [
+const CASES: EndpointCase[] = [
   {
     name: "POST /discover/add",
     controller: DiscoverController,
@@ -110,11 +98,7 @@ const CASES: ParityCase[] = [
     },
     spy: h.discover.addToSourcing,
     result: { added: 1, skipped: 0 },
-    viaRoute: () =>
-      addToSourcing(
-        new Request(url("/discover/add"), { method: "POST", body: JSON.stringify(ADD_INPUT) }),
-        undefined,
-      ),
+    body: { added: 1, skipped: 0 },
     viaController: (user) => discover.addToSourcing(ADD_INPUT, user),
     deniedRole: null,
   },
@@ -131,11 +115,7 @@ const CASES: ParityCase[] = [
     },
     spy: h.discover.supplyForCombo,
     result: { total: 42, sample: [] },
-    viaRoute: () =>
-      coverageGapSupply(
-        new Request(url("/discover/coverage-gaps/supply?credential=PMHNP&state=TX")),
-        undefined,
-      ),
+    body: { total: 42, sample: [] },
     viaController: (user) => discover.coverageGapSupply(SUPPLY_QUERY, user),
     deniedRole: null,
   },
@@ -152,7 +132,7 @@ const CASES: ParityCase[] = [
     },
     spy: h.savedIcp.list,
     result: [{ id: ICP_ID, name: "TX PMHNPs" }],
-    viaRoute: () => listSavedIcps(new Request(url("/saved-icps")), undefined),
+    body: { savedIcps: [{ id: ICP_ID, name: "TX PMHNPs" }] },
     viaController: (user) => savedIcps.list(user),
     deniedRole: ASSOCIATE,
   },
@@ -169,11 +149,7 @@ const CASES: ParityCase[] = [
     },
     spy: h.savedIcp.create,
     result: { id: ICP_ID, name: "TX PMHNPs" },
-    viaRoute: () =>
-      createSavedIcp(
-        new Request(url("/saved-icps"), { method: "POST", body: JSON.stringify(ICP_INPUT) }),
-        undefined,
-      ),
+    body: { savedIcp: { id: ICP_ID, name: "TX PMHNPs" } },
     viaController: (user) => savedIcps.create(ICP_INPUT, user),
     deniedRole: ASSOCIATE,
   },
@@ -190,10 +166,7 @@ const CASES: ParityCase[] = [
     },
     spy: h.savedIcp.remove,
     result: { id: ICP_ID },
-    viaRoute: () =>
-      deleteSavedIcp(new Request(url(`/saved-icps/${ICP_ID}`), { method: "DELETE" }), {
-        ...ctx({ id: ICP_ID }),
-      }),
+    body: { id: ICP_ID },
     viaController: (user) => savedIcps.remove(ICP_ID, user),
     deniedRole: ASSOCIATE,
   },
@@ -203,7 +176,7 @@ function signIn(role: string): void {
   h.session = { user: { id: "u1", email: "u@desta.works", name: "U", role } };
 }
 
-async function authorize(testCase: ParityCase): Promise<AuthContext> {
+async function authorize(testCase: EndpointCase): Promise<AuthContext> {
   const request: { headers: Record<string, string>; user?: AuthContext } = { headers: {} };
   expect(await guardOutcome(testCase.controller, testCase.handler, request)).toBeNull();
   if (!request.user) throw new Error(`${testCase.name}: guards attached no user`);
@@ -218,64 +191,64 @@ beforeEach(() => {
 });
 
 describe.each(CASES)("$name", (testCase) => {
-  it("is registered at the verb, path, status and capability the Next route enforces", () => {
+  it("is registered at the verb, path, status and capability the endpoint declares", () => {
     expect(routeSurface(testCase.controller, testCase.handler)).toEqual(testCase.surface);
   });
 
-  it("answers the same body and status as the Next route", async () => {
+  it("answers the service's result at the declared status", async () => {
     signIn(DIRECTOR);
-    testCase.spy.mockResolvedValue(testCase.result);
-    const fromRoute = await routeOutcome(await testCase.viaRoute());
-
     testCase.spy.mockResolvedValue(testCase.result);
     const user = await authorize(testCase);
     const fromController = await handlerOutcome(testCase.controller, testCase.handler, () =>
       testCase.viaController(user),
     );
 
-    expect(fromController).toEqual(fromRoute);
-    expect(fromRoute.status).toBe(testCase.surface.status);
+    expect(fromController.status).toBe(testCase.surface.status);
+    expect(fromController.body).toEqual(testCase.body);
   });
 
-  it("maps a service failure to the same envelope", async () => {
+  it("maps a service failure to a 404 envelope", async () => {
     signIn(DIRECTOR);
     const reject = (): never => {
       throw new AppError("NOT_FOUND", "Saved ICP not found");
     };
     testCase.spy.mockImplementation(reject);
-    const fromRoute = await routeOutcome(await testCase.viaRoute());
 
     const user = await authorize(testCase);
     const fromController = await handlerOutcome(testCase.controller, testCase.handler, () =>
       testCase.viaController(user),
     );
 
-    expect(fromController).toEqual(fromRoute);
-    expect(fromRoute.status).toBe(404);
+    expect(fromController.status).toBe(404);
+    expect(fromController.body).toEqual({
+      error: { code: "NOT_FOUND", message: "Saved ICP not found" },
+    });
   });
 
-  it("refuses an unauthenticated caller with the same envelope, without touching the service", async () => {
-    const fromRoute = await routeOutcome(await testCase.viaRoute());
+  it("refuses an unauthenticated caller, without touching the service", async () => {
     const fromController = await guardOutcome(testCase.controller, testCase.handler, {
       headers: {},
     });
 
-    expect(fromController).toEqual(fromRoute);
-    expect(fromRoute.status).toBe(401);
+    expect(fromController?.status).toBe(401);
+    expect(fromController?.body).toEqual({
+      error: { code: "UNAUTHORIZED", message: "Sign in required" },
+    });
     expect(testCase.spy).not.toHaveBeenCalled();
   });
 });
 
 describe.each(CASES.filter((c) => c.deniedRole !== null))("$name — capability", (testCase) => {
-  it("refuses a role without the capability with the same envelope", async () => {
+  it("refuses a role without the capability", async () => {
     signIn(testCase.deniedRole ?? ASSOCIATE);
-    const fromRoute = await routeOutcome(await testCase.viaRoute());
     const fromController = await guardOutcome(testCase.controller, testCase.handler, {
       headers: {},
     });
 
-    expect(fromController).toEqual(fromRoute);
-    expect(fromRoute.status).toBe(403);
+    expect(fromController?.status).toBe(403);
+    expect(fromController?.body).toEqual({
+      error: { code: "FORBIDDEN", message: "You don't have permission to do that" },
+    });
     expect(testCase.spy).not.toHaveBeenCalled();
   });
 });

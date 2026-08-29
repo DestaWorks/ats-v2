@@ -3,10 +3,9 @@ import { describe, it, expect, beforeEach, vi, type Mock } from "vitest";
 import type { Type } from "@nestjs/common";
 
 /**
- * Phase 4.3 contract test for the whole `/crm/**` surface: every ported route is driven through
- * BOTH transports — the NestJS controller (its own guards, then the handler, then the exception
- * filter) and the Next.js route it replaces — with the same input against the same mocked service,
- * and the two `{ status, body }` results compared.
+ * Contract test for the whole `/crm/**` surface: every endpoint is driven through its controller —
+ * its own declared guards, then the handler, then the exception filter — against a mocked service,
+ * and the resulting `{ status, body }` asserted against the wire contract.
  *
  * Table-driven because the assertions are identical for all 27 routes and the interesting part is
  * the table: verb, path, success status and capability per route, all read back off the decorators
@@ -75,7 +74,6 @@ import type { AuthContext } from "@destaworks/auth/guards";
 import {
   guardOutcome,
   handlerOutcome,
-  routeOutcome,
   routeSurface,
   type RouteSurface,
 } from "../../common/testing/route-parity";
@@ -88,48 +86,6 @@ import { CrmClientNotesController } from "./client-notes.controller";
 import { CrmClientPortalAdminController } from "./client-portal-admin.controller";
 import { CrmClientTasksController } from "./client-tasks.controller";
 import { CrmClientsController } from "./clients.controller";
-
-import {
-  GET as listClients,
-  POST as createClient,
-} from "../../../../web/src/app/api/crm/clients/route";
-import {
-  GET as readClient,
-  PATCH as patchClient,
-} from "../../../../web/src/app/api/crm/clients/[id]/route";
-import { GET as compareClients } from "../../../../web/src/app/api/crm/compare/route";
-import { GET as clientHealth } from "../../../../web/src/app/api/crm/clients/[id]/health/route";
-import { GET as clientRevenue } from "../../../../web/src/app/api/crm/clients/[id]/revenue/route";
-import { POST as aiWorkspace } from "../../../../web/src/app/api/crm/clients/[id]/ai-workspace/route";
-import { POST as addContact } from "../../../../web/src/app/api/crm/clients/[id]/contacts/route";
-import {
-  PATCH as patchContact,
-  DELETE as deleteContact,
-} from "../../../../web/src/app/api/crm/clients/[id]/contacts/[contactId]/route";
-import { POST as addDeal } from "../../../../web/src/app/api/crm/clients/[id]/deals/route";
-import {
-  PATCH as patchDeal,
-  DELETE as deleteDeal,
-} from "../../../../web/src/app/api/crm/clients/[id]/deals/[dealId]/route";
-import { POST as addBlocker } from "../../../../web/src/app/api/crm/clients/[id]/deals/[dealId]/blockers/route";
-import {
-  PATCH as patchBlocker,
-  DELETE as deleteBlocker,
-} from "../../../../web/src/app/api/crm/clients/[id]/deals/[dealId]/blockers/[blockerId]/route";
-import { POST as addTask } from "../../../../web/src/app/api/crm/clients/[id]/tasks/route";
-import {
-  PATCH as patchTask,
-  DELETE as deleteTask,
-} from "../../../../web/src/app/api/crm/clients/[id]/tasks/[taskId]/route";
-import { POST as addMeeting } from "../../../../web/src/app/api/crm/clients/[id]/meetings/route";
-import { DELETE as deleteMeeting } from "../../../../web/src/app/api/crm/clients/[id]/meetings/[meetingId]/route";
-import {
-  GET as listNotes,
-  POST as createNote,
-} from "../../../../web/src/app/api/crm/clients/[id]/notes/route";
-import { GET as listPortalContacts } from "../../../../web/src/app/api/crm/clients/[id]/portal/contacts/route";
-import { POST as mintPortalLink } from "../../../../web/src/app/api/crm/clients/[id]/portal/contacts/[contactId]/tokens/route";
-import { POST as revokePortalLink } from "../../../../web/src/app/api/crm/clients/[id]/portal/tokens/[tokenId]/revoke/route";
 
 const CLIENT_ID = "cli1";
 const CONTACT_ID = "con1";
@@ -156,17 +112,6 @@ const analytics = new CrmAnalyticsController(crmAnalyticsService);
 const workspace = new CrmAiWorkspaceController(crmAiWorkspaceService);
 const portal = new CrmClientPortalAdminController(clientPortalService);
 
-const url = (path: string): string => `http://localhost/api${path}`;
-const get = (path: string): Request => new Request(url(path));
-const send = (path: string, method: string, payload?: unknown): Request =>
-  new Request(url(path), {
-    method,
-    ...(payload === undefined ? {} : { body: JSON.stringify(payload) }),
-  });
-const ctx = <P extends object>(params: P): { params: Promise<P> } => ({
-  params: Promise.resolve(params),
-});
-
 const CONTACT_INPUT = { fullName: "Dr. R. Alemu" } as const;
 const CONTACT_PATCH = { title: "COO" } as const;
 const DEAL_INPUT = { name: "2027 renewal" } as const;
@@ -183,16 +128,17 @@ const CLIENT_PATCH = { location: "Addis Ababa" } as const;
 
 const REMOVED = { ok: true } as const;
 
-interface ParityCase {
+interface EndpointCase {
   readonly name: string;
   readonly controller: Type<object>;
   readonly handler: string;
   readonly surface: RouteSurface;
-  /** The application method both transports go through — mocked once, seen by both. */
+  /** The application method the handler delegates to, mocked for this test. */
   readonly spy: Mock;
   /** What that method resolves to on the happy path. */
   readonly result: unknown;
-  readonly viaRoute: () => Response | Promise<Response>;
+  /** The response body that produces, which is `result` unless the handler wraps or replaces it. */
+  readonly body: unknown;
   readonly viaController: (user: AuthContext) => Promise<unknown>;
   /** A signed-in role that lacks this route's capability. */
   readonly deniedRole: string;
@@ -206,7 +152,7 @@ function crmSurface(method: string, path: string, status: number): RouteSurface 
   return { method, path, status, capability: "viewCrm", guards: GUARDS };
 }
 
-const CASES: ParityCase[] = [
+const CASES: EndpointCase[] = [
   {
     name: "GET /crm/clients",
     controller: CrmClientsController,
@@ -214,7 +160,7 @@ const CASES: ParityCase[] = [
     surface: crmSurface("GET", "/crm/clients", 200),
     spy: h.client.list,
     result: { clients: [{ id: CLIENT_ID, name: "Acme Health" }] },
-    viaRoute: () => listClients(get("/crm/clients"), undefined),
+    body: { clients: [{ id: CLIENT_ID, name: "Acme Health" }] },
     viaController: (user) => clients.list(user),
     deniedRole: ASSOCIATE,
   },
@@ -225,7 +171,7 @@ const CASES: ParityCase[] = [
     surface: crmSurface("POST", "/crm/clients", 201),
     spy: h.client.create,
     result: { id: CLIENT_ID, name: "Acme Health" },
-    viaRoute: () => createClient(send("/crm/clients", "POST", CLIENT_INPUT), undefined),
+    body: { client: { id: CLIENT_ID, name: "Acme Health" } },
     viaController: (user) => clients.create(CLIENT_INPUT, user),
     deniedRole: ASSOCIATE,
   },
@@ -236,7 +182,7 @@ const CASES: ParityCase[] = [
     surface: crmSurface("GET", "/crm/clients/:id", 200),
     spy: h.client.detail,
     result: { client: { id: CLIENT_ID }, contacts: [], pipeline: [] },
-    viaRoute: () => readClient(get(`/crm/clients/${CLIENT_ID}`), ctx({ id: CLIENT_ID })),
+    body: { client: { id: CLIENT_ID }, contacts: [], pipeline: [] },
     viaController: (user) => clients.detail(CLIENT_ID, user),
     deniedRole: ASSOCIATE,
   },
@@ -247,8 +193,7 @@ const CASES: ParityCase[] = [
     surface: crmSurface("PATCH", "/crm/clients/:id", 200),
     spy: h.client.update,
     result: { id: CLIENT_ID, name: "Acme Health" },
-    viaRoute: () =>
-      patchClient(send(`/crm/clients/${CLIENT_ID}`, "PATCH", CLIENT_PATCH), ctx({ id: CLIENT_ID })),
+    body: { client: { id: CLIENT_ID, name: "Acme Health" } },
     viaController: (user) => clients.update(CLIENT_ID, CLIENT_PATCH, user),
     deniedRole: ASSOCIATE,
   },
@@ -259,7 +204,7 @@ const CASES: ParityCase[] = [
     surface: crmSurface("GET", "/crm/compare", 200),
     spy: h.analytics.compare,
     result: [{ clientId: CLIENT_ID, name: "Acme Health" }],
-    viaRoute: () => compareClients(get("/crm/compare"), undefined),
+    body: { clients: [{ clientId: CLIENT_ID, name: "Acme Health" }] },
     viaController: (user) => analytics.compare(user),
     deniedRole: ASSOCIATE,
   },
@@ -270,7 +215,7 @@ const CASES: ParityCase[] = [
     surface: crmSurface("GET", "/crm/clients/:id/health", 200),
     spy: h.analytics.healthScore,
     result: { score: 72, band: "healthy" },
-    viaRoute: () => clientHealth(get(`/crm/clients/${CLIENT_ID}/health`), ctx({ id: CLIENT_ID })),
+    body: { score: 72, band: "healthy" },
     viaController: (user) => analytics.healthScore(CLIENT_ID, user),
     deniedRole: ASSOCIATE,
   },
@@ -281,7 +226,7 @@ const CASES: ParityCase[] = [
     surface: crmSurface("GET", "/crm/clients/:id/revenue", 200),
     spy: h.analytics.revenue,
     result: { monthlyRate: 1000, grossMargin: 40 },
-    viaRoute: () => clientRevenue(get(`/crm/clients/${CLIENT_ID}/revenue`), ctx({ id: CLIENT_ID })),
+    body: { monthlyRate: 1000, grossMargin: 40 },
     viaController: (user) => analytics.revenue(CLIENT_ID, user),
     deniedRole: ASSOCIATE,
   },
@@ -298,11 +243,7 @@ const CASES: ParityCase[] = [
     },
     spy: h.workspace.generate,
     result: { text: "Acme is healthy." },
-    viaRoute: () =>
-      aiWorkspace(
-        send(`/crm/clients/${CLIENT_ID}/ai-workspace`, "POST", WORKSPACE_INPUT),
-        ctx({ id: CLIENT_ID }),
-      ),
+    body: { text: "Acme is healthy." },
     viaController: (user) => workspace.generate(CLIENT_ID, WORKSPACE_INPUT, user),
     deniedRole: ASSOCIATE,
   },
@@ -313,11 +254,7 @@ const CASES: ParityCase[] = [
     surface: crmSurface("POST", "/crm/clients/:id/contacts", 201),
     spy: h.client.addContact,
     result: { id: CONTACT_ID, fullName: "Dr. R. Alemu" },
-    viaRoute: () =>
-      addContact(
-        send(`/crm/clients/${CLIENT_ID}/contacts`, "POST", CONTACT_INPUT),
-        ctx({ id: CLIENT_ID }),
-      ),
+    body: { contact: { id: CONTACT_ID, fullName: "Dr. R. Alemu" } },
     viaController: (user) => contacts.add(CLIENT_ID, { ...CONTACT_INPUT, role: "unknown" }, user),
     deniedRole: ASSOCIATE,
   },
@@ -328,11 +265,7 @@ const CASES: ParityCase[] = [
     surface: crmSurface("PATCH", "/crm/clients/:id/contacts/:contactId", 200),
     spy: h.client.updateContact,
     result: { id: CONTACT_ID, title: "COO" },
-    viaRoute: () =>
-      patchContact(
-        send(`/crm/clients/${CLIENT_ID}/contacts/${CONTACT_ID}`, "PATCH", CONTACT_PATCH),
-        ctx({ id: CLIENT_ID, contactId: CONTACT_ID }),
-      ),
+    body: { contact: { id: CONTACT_ID, title: "COO" } },
     viaController: (user) => contacts.update(CLIENT_ID, CONTACT_ID, CONTACT_PATCH, user),
     deniedRole: ASSOCIATE,
   },
@@ -343,11 +276,7 @@ const CASES: ParityCase[] = [
     surface: crmSurface("DELETE", "/crm/clients/:id/contacts/:contactId", 200),
     spy: h.client.removeContact,
     result: REMOVED,
-    viaRoute: () =>
-      deleteContact(
-        send(`/crm/clients/${CLIENT_ID}/contacts/${CONTACT_ID}`, "DELETE"),
-        ctx({ id: CLIENT_ID, contactId: CONTACT_ID }),
-      ),
+    body: { ok: true, id: CONTACT_ID },
     viaController: (user) => contacts.remove(CLIENT_ID, CONTACT_ID, user),
     deniedRole: ASSOCIATE,
   },
@@ -358,8 +287,7 @@ const CASES: ParityCase[] = [
     surface: crmSurface("POST", "/crm/clients/:id/deals", 201),
     spy: h.client.addDeal,
     result: { id: DEAL_ID, name: "2027 renewal" },
-    viaRoute: () =>
-      addDeal(send(`/crm/clients/${CLIENT_ID}/deals`, "POST", DEAL_INPUT), ctx({ id: CLIENT_ID })),
+    body: { deal: { id: DEAL_ID, name: "2027 renewal" } },
     viaController: (user) => deals.add(CLIENT_ID, DEAL_INPUT, user),
     deniedRole: ASSOCIATE,
   },
@@ -370,11 +298,7 @@ const CASES: ParityCase[] = [
     surface: crmSurface("PATCH", "/crm/clients/:id/deals/:dealId", 200),
     spy: h.client.updateDeal,
     result: { id: DEAL_ID, stage: "Signed" },
-    viaRoute: () =>
-      patchDeal(
-        send(`/crm/clients/${CLIENT_ID}/deals/${DEAL_ID}`, "PATCH", DEAL_PATCH),
-        ctx({ id: CLIENT_ID, dealId: DEAL_ID }),
-      ),
+    body: { deal: { id: DEAL_ID, stage: "Signed" } },
     viaController: (user) => deals.update(CLIENT_ID, DEAL_ID, DEAL_PATCH, user),
     deniedRole: ASSOCIATE,
   },
@@ -385,11 +309,7 @@ const CASES: ParityCase[] = [
     surface: crmSurface("DELETE", "/crm/clients/:id/deals/:dealId", 200),
     spy: h.client.removeDeal,
     result: REMOVED,
-    viaRoute: () =>
-      deleteDeal(
-        send(`/crm/clients/${CLIENT_ID}/deals/${DEAL_ID}`, "DELETE"),
-        ctx({ id: CLIENT_ID, dealId: DEAL_ID }),
-      ),
+    body: { ok: true, id: DEAL_ID },
     viaController: (user) => deals.remove(CLIENT_ID, DEAL_ID, user),
     deniedRole: ASSOCIATE,
   },
@@ -400,11 +320,7 @@ const CASES: ParityCase[] = [
     surface: crmSurface("POST", "/crm/clients/:id/deals/:dealId/blockers", 201),
     spy: h.client.addBlocker,
     result: { id: BLOCKER_ID, text: "Waiting on redlines" },
-    viaRoute: () =>
-      addBlocker(
-        send(`/crm/clients/${CLIENT_ID}/deals/${DEAL_ID}/blockers`, "POST", BLOCKER_INPUT),
-        ctx({ id: CLIENT_ID, dealId: DEAL_ID }),
-      ),
+    body: { blocker: { id: BLOCKER_ID, text: "Waiting on redlines" } },
     viaController: (user) => deals.addBlocker(CLIENT_ID, DEAL_ID, BLOCKER_INPUT, user),
     deniedRole: ASSOCIATE,
   },
@@ -415,15 +331,7 @@ const CASES: ParityCase[] = [
     surface: crmSurface("PATCH", "/crm/clients/:id/deals/:dealId/blockers/:blockerId", 200),
     spy: h.client.updateBlocker,
     result: { id: BLOCKER_ID, resolved: true },
-    viaRoute: () =>
-      patchBlocker(
-        send(
-          `/crm/clients/${CLIENT_ID}/deals/${DEAL_ID}/blockers/${BLOCKER_ID}`,
-          "PATCH",
-          BLOCKER_PATCH,
-        ),
-        ctx({ id: CLIENT_ID, dealId: DEAL_ID, blockerId: BLOCKER_ID }),
-      ),
+    body: { blocker: { id: BLOCKER_ID, resolved: true } },
     viaController: (user) =>
       deals.updateBlocker(CLIENT_ID, DEAL_ID, BLOCKER_ID, BLOCKER_PATCH, user),
     deniedRole: ASSOCIATE,
@@ -435,11 +343,7 @@ const CASES: ParityCase[] = [
     surface: crmSurface("DELETE", "/crm/clients/:id/deals/:dealId/blockers/:blockerId", 200),
     spy: h.client.removeBlocker,
     result: REMOVED,
-    viaRoute: () =>
-      deleteBlocker(
-        send(`/crm/clients/${CLIENT_ID}/deals/${DEAL_ID}/blockers/${BLOCKER_ID}`, "DELETE"),
-        ctx({ id: CLIENT_ID, dealId: DEAL_ID, blockerId: BLOCKER_ID }),
-      ),
+    body: { ok: true, id: BLOCKER_ID },
     viaController: (user) => deals.removeBlocker(CLIENT_ID, DEAL_ID, BLOCKER_ID, user),
     deniedRole: ASSOCIATE,
   },
@@ -450,8 +354,7 @@ const CASES: ParityCase[] = [
     surface: crmSurface("POST", "/crm/clients/:id/tasks", 201),
     spy: h.client.addTask,
     result: { id: TASK_ID, title: "Chase the MSA" },
-    viaRoute: () =>
-      addTask(send(`/crm/clients/${CLIENT_ID}/tasks`, "POST", TASK_INPUT), ctx({ id: CLIENT_ID })),
+    body: { task: { id: TASK_ID, title: "Chase the MSA" } },
     viaController: (user) => tasks.add(CLIENT_ID, TASK_INPUT, user),
     deniedRole: ASSOCIATE,
   },
@@ -462,11 +365,7 @@ const CASES: ParityCase[] = [
     surface: crmSurface("PATCH", "/crm/clients/:id/tasks/:taskId", 200),
     spy: h.client.updateTask,
     result: { id: TASK_ID, status: "done" },
-    viaRoute: () =>
-      patchTask(
-        send(`/crm/clients/${CLIENT_ID}/tasks/${TASK_ID}`, "PATCH", TASK_PATCH),
-        ctx({ id: CLIENT_ID, taskId: TASK_ID }),
-      ),
+    body: { task: { id: TASK_ID, status: "done" } },
     viaController: (user) => tasks.update(CLIENT_ID, TASK_ID, TASK_PATCH, user),
     deniedRole: ASSOCIATE,
   },
@@ -477,11 +376,7 @@ const CASES: ParityCase[] = [
     surface: crmSurface("DELETE", "/crm/clients/:id/tasks/:taskId", 200),
     spy: h.client.removeTask,
     result: REMOVED,
-    viaRoute: () =>
-      deleteTask(
-        send(`/crm/clients/${CLIENT_ID}/tasks/${TASK_ID}`, "DELETE"),
-        ctx({ id: CLIENT_ID, taskId: TASK_ID }),
-      ),
+    body: { ok: true, id: TASK_ID },
     viaController: (user) => tasks.remove(CLIENT_ID, TASK_ID, user),
     deniedRole: ASSOCIATE,
   },
@@ -492,11 +387,7 @@ const CASES: ParityCase[] = [
     surface: crmSurface("POST", "/crm/clients/:id/meetings", 201),
     spy: h.client.addMeeting,
     result: { id: MEETING_ID, type: "weekly" },
-    viaRoute: () =>
-      addMeeting(
-        send(`/crm/clients/${CLIENT_ID}/meetings`, "POST", MEETING_INPUT),
-        ctx({ id: CLIENT_ID }),
-      ),
+    body: { meeting: { id: MEETING_ID, type: "weekly" } },
     viaController: (user) => meetings.add(CLIENT_ID, MEETING_INPUT, user),
     deniedRole: ASSOCIATE,
   },
@@ -507,11 +398,7 @@ const CASES: ParityCase[] = [
     surface: crmSurface("DELETE", "/crm/clients/:id/meetings/:meetingId", 200),
     spy: h.client.removeMeeting,
     result: REMOVED,
-    viaRoute: () =>
-      deleteMeeting(
-        send(`/crm/clients/${CLIENT_ID}/meetings/${MEETING_ID}`, "DELETE"),
-        ctx({ id: CLIENT_ID, meetingId: MEETING_ID }),
-      ),
+    body: { ok: true, id: MEETING_ID },
     viaController: (user) => meetings.remove(CLIENT_ID, MEETING_ID, user),
     deniedRole: ASSOCIATE,
   },
@@ -522,7 +409,7 @@ const CASES: ParityCase[] = [
     surface: crmSurface("GET", "/crm/clients/:id/notes", 200),
     spy: h.note.list,
     result: [{ id: "n1", text: "Called the COO" }],
-    viaRoute: () => listNotes(get(`/crm/clients/${CLIENT_ID}/notes`), ctx({ id: CLIENT_ID })),
+    body: { notes: [{ id: "n1", text: "Called the COO" }] },
     viaController: (user) => notes.list(CLIENT_ID, user),
     deniedRole: ASSOCIATE,
   },
@@ -533,11 +420,7 @@ const CASES: ParityCase[] = [
     surface: crmSurface("POST", "/crm/clients/:id/notes", 201),
     spy: h.note.create,
     result: { id: "n1", text: "Called the COO" },
-    viaRoute: () =>
-      createNote(
-        send(`/crm/clients/${CLIENT_ID}/notes`, "POST", NOTE_INPUT),
-        ctx({ id: CLIENT_ID }),
-      ),
+    body: { note: { id: "n1", text: "Called the COO" } },
     viaController: (user) => notes.create(CLIENT_ID, NOTE_INPUT, user),
     deniedRole: ASSOCIATE,
   },
@@ -554,8 +437,7 @@ const CASES: ParityCase[] = [
     },
     spy: h.portal.listContactsForClient,
     result: [{ id: CONTACT_ID, portalEnabled: true }],
-    viaRoute: () =>
-      listPortalContacts(get(`/crm/clients/${CLIENT_ID}/portal/contacts`), ctx({ id: CLIENT_ID })),
+    body: { contacts: [{ id: CONTACT_ID, portalEnabled: true }] },
     viaController: (user) => portal.listContacts(CLIENT_ID, user),
     deniedRole: DIRECTOR,
   },
@@ -572,11 +454,7 @@ const CASES: ParityCase[] = [
     },
     spy: h.portal.generateLink,
     result: { url: "https://portal.example/abc", expiresAt: "2026-09-01T00:00:00.000Z" },
-    viaRoute: () =>
-      mintPortalLink(
-        send(`/crm/clients/${CLIENT_ID}/portal/contacts/${CONTACT_ID}/tokens`, "POST"),
-        ctx({ id: CLIENT_ID, contactId: CONTACT_ID }),
-      ),
+    body: { url: "https://portal.example/abc", expiresAt: "2026-09-01T00:00:00.000Z" },
     viaController: (user) => portal.generateLink(CLIENT_ID, CONTACT_ID, user),
     deniedRole: DIRECTOR,
   },
@@ -593,11 +471,7 @@ const CASES: ParityCase[] = [
     },
     spy: h.portal.revokeLink,
     result: REMOVED,
-    viaRoute: () =>
-      revokePortalLink(
-        send(`/crm/clients/${CLIENT_ID}/portal/tokens/${TOKEN_ID}/revoke`, "POST"),
-        ctx({ id: CLIENT_ID, tokenId: TOKEN_ID }),
-      ),
+    body: { ok: true, id: TOKEN_ID },
     viaController: (user) => portal.revokeLink(CLIENT_ID, TOKEN_ID, user),
     deniedRole: DIRECTOR,
   },
@@ -608,7 +482,7 @@ function signIn(role: string): void {
 }
 
 /** Run one case's guards and hand back the user they attached, failing if they refused. */
-async function authorize(testCase: ParityCase): Promise<AuthContext> {
+async function authorize(testCase: EndpointCase): Promise<AuthContext> {
   const request: { headers: Record<string, string>; user?: AuthContext } = { headers: {} };
   expect(await guardOutcome(testCase.controller, testCase.handler, request)).toBeNull();
   if (!request.user) throw new Error(`${testCase.name}: guards attached no user`);
@@ -623,62 +497,62 @@ beforeEach(() => {
 });
 
 describe.each(CASES)("$name", (testCase) => {
-  it("is registered at the verb, path, status and capability the Next route enforces", () => {
+  it("is registered at the verb, path, status and capability the endpoint declares", () => {
     expect(routeSurface(testCase.controller, testCase.handler)).toEqual(testCase.surface);
   });
 
-  it("answers the same body and status as the Next route", async () => {
+  it("answers the contract body at the declared status", async () => {
     signIn(OWNER);
-    testCase.spy.mockResolvedValue(testCase.result);
-    const fromRoute = await routeOutcome(await testCase.viaRoute());
-
     testCase.spy.mockResolvedValue(testCase.result);
     const user = await authorize(testCase);
     const fromController = await handlerOutcome(testCase.controller, testCase.handler, () =>
       testCase.viaController(user),
     );
 
-    expect(fromController).toEqual(fromRoute);
-    expect(fromRoute.status).toBe(testCase.surface.status);
+    expect(fromController.status).toBe(testCase.surface.status);
+    expect(fromController.body).toEqual(testCase.body);
   });
 
-  it("maps a service failure to the same envelope", async () => {
+  it("maps a service failure to a 404 envelope", async () => {
     signIn(OWNER);
     const reject = (): never => {
       throw new AppError("NOT_FOUND", "Client not found");
     };
     testCase.spy.mockImplementation(reject);
-    const fromRoute = await routeOutcome(await testCase.viaRoute());
 
     const user = await authorize(testCase);
     const fromController = await handlerOutcome(testCase.controller, testCase.handler, () =>
       testCase.viaController(user),
     );
 
-    expect(fromController).toEqual(fromRoute);
-    expect(fromRoute.status).toBe(404);
+    expect(fromController.status).toBe(404);
+    expect(fromController.body).toEqual({
+      error: { code: "NOT_FOUND", message: "Client not found" },
+    });
   });
 
-  it("refuses an unauthenticated caller with the same envelope, without touching the service", async () => {
-    const fromRoute = await routeOutcome(await testCase.viaRoute());
+  it("refuses an unauthenticated caller, without touching the service", async () => {
     const fromController = await guardOutcome(testCase.controller, testCase.handler, {
       headers: {},
     });
 
-    expect(fromController).toEqual(fromRoute);
-    expect(fromRoute.status).toBe(401);
+    expect(fromController?.status).toBe(401);
+    expect(fromController?.body).toEqual({
+      error: { code: "UNAUTHORIZED", message: "Sign in required" },
+    });
     expect(testCase.spy).not.toHaveBeenCalled();
   });
 
-  it("refuses a role without the capability with the same envelope", async () => {
+  it("refuses a role without the capability", async () => {
     signIn(testCase.deniedRole);
-    const fromRoute = await routeOutcome(await testCase.viaRoute());
     const fromController = await guardOutcome(testCase.controller, testCase.handler, {
       headers: {},
     });
 
-    expect(fromController).toEqual(fromRoute);
-    expect(fromRoute.status).toBe(403);
+    expect(fromController?.status).toBe(403);
+    expect(fromController?.body).toEqual({
+      error: { code: "FORBIDDEN", message: "You don't have permission to do that" },
+    });
     expect(testCase.spy).not.toHaveBeenCalled();
   });
 });
