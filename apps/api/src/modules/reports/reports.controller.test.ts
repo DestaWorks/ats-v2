@@ -27,6 +27,7 @@ const h = vi.hoisted(() => ({
   compliance: vi.fn(),
   massJourney: vi.fn(),
   trends: vi.fn(),
+  filterOptions: vi.fn(),
   candidatesCsv: vi.fn(),
   requestExport: vi.fn(),
   getExport: vi.fn(),
@@ -50,6 +51,7 @@ import {
   MASS_JOURNEY_REPORT,
   PIPELINE_REPORTS_SERVICE,
   REPORT_EXPORT_SERVICE,
+  REPORT_FILTER_OPTIONS_SERVICE,
   TEAM_REPORTS_SERVICE,
   TIME_REPORTS_SERVICE,
   TRENDS_REPORT,
@@ -87,6 +89,7 @@ beforeAll(async () => {
         timeAnalysis: h.timeAnalysis,
         compliance: h.compliance,
       }),
+      provideFakeService(REPORT_FILTER_OPTIONS_SERVICE, { load: h.filterOptions }),
       provideFakeService(MASS_JOURNEY_REPORT, { massJourney: h.massJourney }),
       provideFakeService(TRENDS_REPORT, { trends: h.trends }),
       provideFakeService(EXPORT_SERVICE, { candidatesCsv: h.candidatesCsv }),
@@ -183,6 +186,59 @@ describe("GET /reports/* filter validation", () => {
       expect.objectContaining({ tenantId: expect.any(String) }),
       { clientId: "c1" },
     );
+  });
+});
+
+describe("GET /reports/filter-options", () => {
+  const OPTIONS = {
+    clients: [{ id: "c1", name: "Northside" }],
+    users: [{ id: "u1", name: "O" }],
+    sources: ["LinkedIn"],
+    credentials: ["PMHNP"],
+  };
+
+  it("401 when signed out, and never reaches the service", async () => {
+    const res = await api.fetch("/reports/filter-options");
+    expect(res.status).toBe(401);
+    expect(((await res.json()) as Envelope).error.code).toBe("UNAUTHORIZED");
+    expect(h.filterOptions).not.toHaveBeenCalled();
+  });
+
+  it("403 for a role without viewReports, and never reaches the service", async () => {
+    h.session = ASSOCIATE;
+    const res = await api.fetch("/reports/filter-options");
+    expect(res.status).toBe(403);
+    expect(((await res.json()) as Envelope).error.code).toBe("FORBIDDEN");
+    expect(h.filterOptions).not.toHaveBeenCalled();
+  });
+
+  it("200 for Owner, returning the vocabularies scoped to the resolved tenant", async () => {
+    h.session = OWNER;
+    h.filterOptions.mockResolvedValue(OPTIONS);
+    const res = await api.fetch("/reports/filter-options");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(OPTIONS);
+    expect(h.filterOptions).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tenantId: expect.any(String),
+        user: expect.objectContaining({ id: "u1" }),
+      }),
+    );
+  });
+
+  it("takes no request parameters — a query string reaches the service as nothing", async () => {
+    h.session = OWNER;
+    h.filterOptions.mockResolvedValue(OPTIONS);
+    await api.fetch("/reports/filter-options?clientId=c1&sneaky=1");
+    expect(h.filterOptions).toHaveBeenCalledTimes(1);
+    expect(h.filterOptions.mock.calls[0]).toHaveLength(1);
+  });
+
+  it("is not captured by the export/jobs/:id route", async () => {
+    h.session = OWNER;
+    h.filterOptions.mockResolvedValue(OPTIONS);
+    await api.fetch("/reports/filter-options");
+    expect(h.getExport).not.toHaveBeenCalled();
   });
 });
 

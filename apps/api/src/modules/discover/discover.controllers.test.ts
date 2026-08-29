@@ -1,5 +1,5 @@
 import "reflect-metadata";
-import { describe, it, expect, beforeEach, vi, type Mock } from "vitest";
+import { describe, it, expect, afterAll, beforeAll, beforeEach, vi, type Mock } from "vitest";
 import type { Type } from "@nestjs/common";
 
 /**
@@ -9,11 +9,21 @@ import type { Type } from "@nestjs/common";
  *
  * The two areas share a file because they share a module and their gates differ in exactly the way
  * the table shows — the searches are open to any operator, the saved ICPs are not.
+ *
+ * `GET /discover/search` and `GET /discover/coverage-gaps` have no Next.js counterpart to compare
+ * against — the `/discover` page read them in-process — so they are driven over a real socket at
+ * the bottom of this file instead, which is the only way to exercise the query pipe and the
+ * envelope the filter renders for a rejected query.
  */
 
 const h = vi.hoisted(() => ({
   session: null as { user: { id: string; email: string; name: string; role?: string } } | null,
-  discover: { addToSourcing: vi.fn(), supplyForCombo: vi.fn() },
+  discover: {
+    addToSourcing: vi.fn(),
+    supplyForCombo: vi.fn(),
+    search: vi.fn(),
+    coverageGaps: vi.fn(),
+  },
   savedIcp: { list: vi.fn(), create: vi.fn(), remove: vi.fn() },
 }));
 
@@ -43,8 +53,10 @@ import {
   routeSurface,
   type RouteSurface,
 } from "../../common/testing/route-parity";
+import { provideFakeService, startTestApi, type TestApi } from "../../common/testing/nest-app";
 import { DiscoverController } from "./discover.controller";
 import { SavedIcpsController } from "./saved-icps.controller";
+import { DISCOVER_SERVICE } from "./discover.tokens";
 import { POST as addToSourcing } from "../../../../web/src/app/api/discover/add/route";
 import { GET as coverageGapSupply } from "../../../../web/src/app/api/discover/coverage-gaps/supply/route";
 import {
@@ -265,5 +277,146 @@ describe.each(CASES.filter((c) => c.deniedRole !== null))("$name — capability"
     expect(fromController).toEqual(fromRoute);
     expect(fromRoute.status).toBe(403);
     expect(testCase.spy).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * The two reads the `/discover` page used to make in-process. No Next.js route ever served them,
+ * so there is nothing to compare against — what these assert instead is the surface the page now
+ * depends on: the gate, the contract that validates the query, and the delegation.
+ */
+describe("the /discover page reads", () => {
+  const SEARCH_RESULT = {
+    results: [
+      {
+        npi: "1234567893",
+        firstName: "R",
+        lastName: "Alemu",
+        credential: "PMHNP",
+        city: "Austin",
+        state: "TX",
+        phone: null,
+        taxonomyDesc: null,
+        licenseNumber: null,
+        licenseState: "TX",
+        dupStatus: "new",
+        dupMatchId: null,
+        dupMatchLabel: null,
+      },
+    ],
+    resultCount: 1,
+  };
+  const GAP_ROWS = [
+    { credential: "PMHNP", state: "TX", roleCount: 4, poolCount: 2, pipelineCount: 1 },
+  ];
+
+  let api: TestApi;
+
+  beforeAll(async () => {
+    api = await startTestApi({
+      controllers: [DiscoverController],
+      providers: [
+        provideFakeService(DISCOVER_SERVICE, {
+          search: h.discover.search,
+          coverageGaps: h.discover.coverageGaps,
+        }),
+      ],
+    });
+  });
+
+  afterAll(() => api.close());
+
+  describe("GET /discover/search", () => {
+    it("is registered at the verb, path, status and gate the page enforced", () => {
+      expect(routeSurface(DiscoverController, "search")).toEqual({
+        method: "GET",
+        path: "/discover/search",
+        status: 200,
+        capability: undefined,
+        guards: ["SessionAuthGuard"],
+      });
+    });
+
+    it("401 when signed out, and never reaches the service", async () => {
+      const res = await api.fetch("/discover/search?state=TX&city=Austin");
+      expect(res.status).toBe(401);
+      expect(h.discover.search).not.toHaveBeenCalled();
+    });
+
+    it("passes the validated query and the resolved context through", async () => {
+      signIn(ASSOCIATE);
+      h.discover.search.mockResolvedValue(SEARCH_RESULT);
+      const res = await api.fetch("/discover/search?state=TX&city=Austin&sneaky=1");
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual(SEARCH_RESULT);
+      expect(h.discover.search).toHaveBeenCalledWith(
+        { state: "TX", city: "Austin" },
+        expect.objectContaining({
+          tenantId: expect.any(String),
+          user: expect.objectContaining({ id: "u1" }),
+        }),
+      );
+    });
+
+    it("422s a query NPPES itself refuses, without calling out to it", async () => {
+      signIn(ASSOCIATE);
+      const res = await api.fetch("/discover/search?state=TX");
+      expect(res.status).toBe(422);
+      const body = (await res.json()) as { error: { code: string } };
+      expect(body.error.code).toBe("BAD_REQUEST");
+      expect(h.discover.search).not.toHaveBeenCalled();
+    });
+
+    it("422s a value outside the contract's vocabulary", async () => {
+      signIn(ASSOCIATE);
+      const res = await api.fetch("/discover/search?state=XX&city=Austin");
+      expect(res.status).toBe(422);
+      expect(h.discover.search).not.toHaveBeenCalled();
+    });
+
+    it("reads a repeated key the way the page's own parse did — the first value", async () => {
+      signIn(ASSOCIATE);
+      h.discover.search.mockResolvedValue(SEARCH_RESULT);
+      await api.fetch("/discover/search?city=Austin&city=Dallas");
+      expect(h.discover.search).toHaveBeenCalledWith(
+        { city: "Austin" },
+        expect.objectContaining({ tenantId: expect.any(String) }),
+      );
+    });
+  });
+
+  describe("GET /discover/coverage-gaps", () => {
+    it("is registered at the verb, path, status and gate the page enforced", () => {
+      expect(routeSurface(DiscoverController, "coverageGaps")).toEqual({
+        method: "GET",
+        path: "/discover/coverage-gaps",
+        status: 200,
+        capability: undefined,
+        guards: ["SessionAuthGuard"],
+      });
+    });
+
+    it("401 when signed out, and never reaches the service", async () => {
+      const res = await api.fetch("/discover/coverage-gaps");
+      expect(res.status).toBe(401);
+      expect(h.discover.coverageGaps).not.toHaveBeenCalled();
+    });
+
+    it("answers the widget's rows for the resolved tenant, taking no parameters", async () => {
+      signIn(ASSOCIATE);
+      h.discover.coverageGaps.mockResolvedValue(GAP_ROWS);
+      const res = await api.fetch("/discover/coverage-gaps?credential=PMHNP");
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual(GAP_ROWS);
+      expect(h.discover.coverageGaps).toHaveBeenCalledTimes(1);
+      expect(h.discover.coverageGaps.mock.calls[0]).toHaveLength(1);
+    });
+
+    it("does not collide with the per-combo supply lookup below it", async () => {
+      signIn(ASSOCIATE);
+      h.discover.coverageGaps.mockResolvedValue(GAP_ROWS);
+      await api.fetch("/discover/coverage-gaps");
+      expect(h.discover.supplyForCombo).not.toHaveBeenCalled();
+    });
   });
 });
