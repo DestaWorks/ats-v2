@@ -23,6 +23,7 @@ import {
   type DeleteRoleResponse,
   type GetRoleDormantMatchesResponse,
   type GetRoleListResponse,
+  type GetRoleMatchesAndDormantResponse,
   type GetRoleMatchesResponse,
   type GetRoleResponse,
   type GetRoleTriageResponse,
@@ -163,6 +164,22 @@ export class RolesController {
     @CurrentUser() user: AuthContext,
   ): Promise<GetRoleDormantMatchesResponse> {
     return { matches: await this.roles.dormantMatches(id, user) };
+  }
+
+  /**
+   * GET /roles/:id/matches-and-dormant — both ranked lists in ONE request.
+   *
+   * The `/roles/[id]` page needs both, and the service computes them from a single lead fetch. Two
+   * separate calls would undo that and add a second network hop for the same data, so the composite
+   * read gets a composite endpoint (SAAS-RESTRUCTURE-PLAN 4.0). Declared after `:id/matches` and
+   * `:id/dormant-matches`, which stay for callers that want only one list.
+   */
+  @Get(":id/matches-and-dormant")
+  async matchesAndDormant(
+    @Param("id") id: string,
+    @CurrentUser() user: AuthContext,
+  ): Promise<GetRoleMatchesAndDormantResponse> {
+    return await this.roles.matchesAndDormant(id, user);
   }
 
   /** POST /roles/:id/notes — add a note; author comes from the session, never the body. 201. */
