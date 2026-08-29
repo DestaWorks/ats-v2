@@ -6,7 +6,7 @@
  * calls + the pure type-to-confirm gate live here (no server imports — safe to bundle client-side).
  */
 import type { CandidateAckEnvelope as PostCandidatePurgeResponse } from "@destaworks/contracts/validation/envelopes";
-import type { PostCandidateRestoreResponse } from "@/app/api/candidates/[id]/restore/route";
+import type { CandidateIdEnvelope } from "@destaworks/contracts/validation/envelopes";
 import { postJson, type ApiResult } from "@/lib/api/client";
 
 export { messageForFailure } from "@/lib/api/client";
@@ -26,7 +26,7 @@ export function canConfirmPurge(typedName: string, candidateName: string): boole
 
 /** POST a restore (Trash → back to its original stage). `POST /api/candidates/[id]/restore`. */
 export async function restoreCandidate(id: string): Promise<ApiResult<{ id: string }>> {
-  const res = await postJson<PostCandidateRestoreResponse>(`/api/candidates/${id}/restore`, {});
+  const res = await postJson<CandidateIdEnvelope>(`/api/candidates/${id}/restore`, {});
   return res.ok ? { ok: true, data: res.data.candidate } : res;
 }
 

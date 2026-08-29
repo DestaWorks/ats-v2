@@ -25,13 +25,20 @@ export type { ApiErrorBody, ApiFailure, FieldIssue };
 function resolveTarget(url: string): { url: string; crossOrigin: boolean } {
   const relative = { url, crossOrigin: false };
   const base = process.env.NEXT_PUBLIC_API_URL?.trim();
-  if (base === undefined || base === "") return relative;
+  // Non-`/api` URLs are the app's own pages and never move.
   if (url !== "/api" && !url.startsWith("/api/")) return relative;
-
-  const path = url.slice("/api".length);
   // Better Auth is mounted INSIDE apps/web at app/api/auth/[...all] and owns its own transport;
   // sending it to apps/api would break sign-in, so it stays relative whatever the base is.
-  if (/^\/auth(?:[/?#]|$)/.test(path)) return relative;
+  if (/^\/api\/auth(?:[/?#]|$)/.test(url) || url === "/api/auth") return relative;
+  // Phase 4.3 deleted the App Router handlers, so there is nothing behind a relative `/api/...`
+  // any more. Falling back would 404 every call with an HTML error page; failing here says why.
+  if (base === undefined || base === "") {
+    throw new Error(
+      "NEXT_PUBLIC_API_URL is not set. apps/web serves no API routes — every data call goes to apps/api.",
+    );
+  }
+
+  const path = url.slice("/api".length);
 
   try {
     const joined = new URL(path.replace(/^\//, ""), base.endsWith("/") ? base : `${base}/`);

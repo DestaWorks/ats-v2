@@ -81,3 +81,26 @@ export interface ScreeningScorecardEnvelope {
 export interface ScreeningCandidateListEnvelope {
   candidates: ScreeningCandidateDTO[];
 }
+
+/**
+ * What a candidate mutation answers with, narrowed to what the BROWSER consumes.
+ *
+ * The endpoint returns the whole PII-gated candidate — `CandidateEnvelope`, which lives in
+ * `@destaworks/application` and must stay there: `CandidateDTO` is the output type of
+ * `toCandidateDTO`, whose `licenseNumber` key is present only for a viewer holding
+ * `viewCredentials`, and contracts may not depend on application without forking the type that
+ * encodes that gate. `apps/web` may not import application either.
+ *
+ * Neither restriction is a problem, because no browser caller reads more than this: create,
+ * update, restore and verify-license each use `candidate.id`, and the resume save also shows the
+ * name. Declaring what the client actually consumes is narrower than the wire and structurally
+ * satisfied by it — so the client cannot come to depend on a field the PII gate might withhold.
+ */
+export interface CandidateIdEnvelope {
+  candidate: { id: string };
+}
+
+/** `POST /resume/save` — the attached-or-created candidate, as the confirmation screen shows it. */
+export interface ResumeSaveAckEnvelope {
+  candidate: { id: string; name: string };
+}

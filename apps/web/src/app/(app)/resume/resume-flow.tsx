@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { ResumeVariant } from "@destaworks/domain/constants/documents";
 import { RESUME_VARIANT_LABELS } from "@destaworks/domain/constants/documents";
-import type { PostResumeSaveResponse } from "@/app/api/resume/save/route";
+import type { ResumeSaveAckEnvelope } from "@destaworks/contracts/validation/envelopes";
 import type {
   ResumeData,
   ResumeMatch,
@@ -161,7 +161,7 @@ export function ResumeFlow({
       storageKey,
     };
     try {
-      const result = await postJson<PostResumeSaveResponse>("/api/resume/save", payload);
+      const result = await postJson<ResumeSaveAckEnvelope>("/api/resume/save", payload);
       if (!result.ok) {
         setError(
           messageForError(result.failure, "Could not save this candidate. Please try again."),

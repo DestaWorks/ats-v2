@@ -36,18 +36,20 @@ describe("with NEXT_PUBLIC_API_URL unset", () => {
     vi.stubEnv("NEXT_PUBLIC_API_URL", "");
   });
 
-  it("sends the caller's relative URL untouched", async () => {
-    await getJson("/api/candidates?track=Clinical");
-    const [url] = calledWith();
-    expect(url).toBe("/api/candidates?track=Clinical");
+  // Phase 4.3 deleted the App Router handlers, so a relative `/api/...` resolves to nothing. A
+  // fallback would 404 with an HTML error page the envelope parser cannot read; this says why.
+  it("refuses a data call rather than falling back to a route that no longer exists", async () => {
+    await expect(getJson("/api/candidates?track=Clinical")).rejects.toThrow(
+      /NEXT_PUBLIC_API_URL is not set/,
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("does not set credentials, so a same-origin call behaves exactly as before", async () => {
-    await postJson("/api/candidates", { fullName: "A" });
-    const [, init] = calledWith();
-    expect(init.credentials).toBeUndefined();
-    expect(init.method).toBe("POST");
-    expect(init.body).toBe(JSON.stringify({ fullName: "A" }));
+  it("refuses a mutation the same way", async () => {
+    await expect(postJson("/api/candidates", { fullName: "A" })).rejects.toThrow(
+      /NEXT_PUBLIC_API_URL is not set/,
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("keeps /api/auth relative", async () => {

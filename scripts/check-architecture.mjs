@@ -41,7 +41,11 @@ const ALLOWED_DEPENDENCIES = {
   // Phase 5 adds `jobs` for the same reason `api` has it: a route that used to do slow work inline
   // now enqueues it, and both stacks serve until the traffic switch, so both need the edge. It
   // points the same way as everywhere else — web may enqueue, `jobs` may never import an app.
-  web: ["application", "auth", "config", "contracts", "db", "domain", "integrations", "ui"],
+  // Phase 4.3 drove the read path to zero, so `application` and `db` are GONE from this row and
+  // must not come back: apps/web reaches data over HTTP through apps/api, and nothing else. The
+  // ratchet that held the debt while it shrank is now a ban — a service import in a page fails
+  // the build rather than raising a number somebody has to notice.
+  web: ["auth", "config", "contracts", "domain", "integrations", "ui"],
   // Phase 4.1. The plan's graph draws api -> {application, auth, contracts}; `config` (the Logger)
   // and `domain` (the capability + status vocabularies a guard decides on) are added for the same
   // reason they were added to `application` above — they are dependency-free leaves every layer
@@ -424,7 +428,17 @@ check("dependency-direction", "Dependency direction matches the declared graph",
     );
   }
   // A manifest may not declare an edge the graph forbids.
+  //
+  // `apps/web` is the exception, and only because it has no manifest of its own: it is built by
+  // the ROOT package, which also carries the repo's own scripts (`scripts/seed-*.ts`,
+  // `db-status.ts`) that legitimately reach `@destaworks/db`. Attributing every root dependency
+  // to `web` would read those scripts as a web edge. The check that actually matters for 4.0 is
+  // `web-read-path-is-http-only` below, which reads SOURCE imports and is now a hard zero — a
+  // page importing a service fails there whatever the root manifest says. Giving `apps/web` its
+  // own manifest (as `apps/admin` has) removes the exception; until then this is written down.
+  const SHARED_ROOT_MANIFEST = new Set(["web"]);
   for (const unit of units) {
+    if (!unit.hasOwnManifest && SHARED_ROOT_MANIFEST.has(unit.short)) continue;
     const allowed = ALLOWED_DEPENDENCIES[unit.short] ?? [];
     for (const field of ["dependencies", "peerDependencies"]) {
       for (const name of Object.keys(unit.manifest[field] ?? {})) {

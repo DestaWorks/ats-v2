@@ -6,14 +6,13 @@
  * The detail DTO carries PII (email/phone, gated licenseNumber), so these responses stay on the
  * authenticated detail page only.
  */
-import type { PatchCandidateResponse } from "@/app/api/candidates/[id]/route";
 import type {
+  CandidateIdEnvelope,
   MovedCandidateEnvelope as PostCandidateMoveResponse,
   NoteEnvelope as PostCandidateNoteResponse,
   OutreachAttemptEnvelope as PostCandidateOutreachResponse,
   DocumentSummaryEnvelope as PostCandidateResumeResponse,
 } from "@destaworks/contracts/validation/envelopes";
-import type { PostCandidateVerifyLicenseResponse } from "@/app/api/candidates/[id]/verify-license/route";
 import type { CandidateStatus } from "@destaworks/domain/constants";
 import type {
   AddNoteInput,
@@ -45,8 +44,8 @@ export async function postMove(
 export async function patchCandidate(
   id: string,
   input: UpdateCandidateInput,
-): Promise<ApiResult<PatchCandidateResponse["candidate"]>> {
-  const res = await patchJson<PatchCandidateResponse>(`/api/candidates/${id}`, input);
+): Promise<ApiResult<CandidateIdEnvelope["candidate"]>> {
+  const res = await patchJson<CandidateIdEnvelope>(`/api/candidates/${id}`, input);
   return res.ok ? { ok: true, data: res.data.candidate } : res;
 }
 
@@ -54,8 +53,8 @@ export async function patchCandidate(
 export async function postVerifyLicense(
   id: string,
   input: VerifyLicenseInput,
-): Promise<ApiResult<PostCandidateVerifyLicenseResponse["candidate"]>> {
-  const res = await postJson<PostCandidateVerifyLicenseResponse>(
+): Promise<ApiResult<CandidateIdEnvelope["candidate"]>> {
+  const res = await postJson<CandidateIdEnvelope>(
     `/api/candidates/${id}/verify-license`,
     input,
   );

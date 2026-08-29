@@ -42,7 +42,7 @@ type Method = keyof typeof METHOD_PREFIX;
 const METHODS = Object.keys(METHOD_PREFIX) as Method[];
 
 /**
- * The two endpoints that legitimately never return through `json<T>()`. Named, with the reason
+ * The endpoint that legitimately never returns through `json<T>()`. Named, with the reason
  * and the marker that proves the reason still holds — a silent skip would let a real JSON
  * endpoint hide behind an exemption. `mustContain` fails the exemption if the file stops being
  * what it claims to be; `mustNotCallJson` fails it the moment a JSON response is added.
@@ -54,13 +54,6 @@ const RESPONSE_TYPE_EXEMPTIONS = [
       "Better Auth catch-all: GET/POST are re-exported from toNextJsHandler(auth) and never " +
       "return through json(). The wire shapes are Better Auth's, not ours to declare.",
     mustContain: "toNextJsHandler",
-  },
-  {
-    path: "apps/web/src/app/api/reports/export/route.ts",
-    reason:
-      "CSV export: responds text/csv as a file download, not JSON. There is no response type " +
-      "to declare because there is no JSON body.",
-    mustContain: "text/csv",
   },
 ] as const;
 
@@ -77,7 +70,12 @@ function filesUnder(dir: string, matches: (name: string) => boolean, out: string
   return out;
 }
 
-/** Every `route.ts` under every app's `src/app/api`, in POSIX-separated repo-relative form. */
+/**
+ * Every App Router `route.ts` still served by an app. Phase 4.3 deleted the 140 that made up the
+ * old API; what remains is the Better Auth catch-all, which is transport Better Auth owns. The
+ * API surface itself is `apps/api` — `controllerFiles()` below — and `check-auth-surface.mjs`
+ * is what proves the two agree on guards and capabilities.
+ */
 function routeFiles(): string[] {
   if (!existsSync(APPS_DIR)) return [];
   return readdirSync(APPS_DIR)
@@ -118,11 +116,42 @@ function jsonCalls(src: string): { typed: string[]; untyped: number } {
   return { typed, untyped };
 }
 
+/** Every NestJS controller in `apps/api` — the API surface since Phase 4.3's route cutover. */
+function controllerFiles(): string[] {
+  return filesUnder(join(APPS_DIR, "api", "src", "modules"), (n) => n.endsWith(".controller.ts"));
+}
+
+/** Every handler's declared return type: the text inside `Promise<…>` on a decorated method. */
+function declaredReturnTypes(src: string): string[] {
+  return [...src.matchAll(/\)\s*:\s*Promise<([^>]*(?:<[^>]*>)?[^>]*)>\s*\{/g)].map((m) =>
+    m[1] === undefined ? "" : m[1].trim(),
+  );
+}
+
 describe("every endpoint declares its request and response types", () => {
   const routes = routeFiles();
+  const controllers = controllerFiles();
 
   it("finds the API surface", () => {
-    expect(routes.length).toBeGreaterThanOrEqual(138);
+    // The floor is on `apps/api` now. `apps/web` serves one route (Better Auth) and must not grow
+    // a second — a new handler there would be a second API surface, which 4.0 decided against.
+    expect(controllers.length).toBeGreaterThanOrEqual(24);
+    expect(routes.length).toBe(1);
+  });
+
+  it("declares a concrete response type on every controller handler", () => {
+    const offenders: string[] = [];
+    for (const file of controllers) {
+      for (const declared of declaredReturnTypes(readFileSync(file, "utf8"))) {
+        if (declared === "any" || declared === "unknown" || declared === "") {
+          offenders.push(`${file}: handler returns Promise<${declared || "?"}>`);
+        }
+      }
+    }
+    expect(
+      offenders,
+      `handlers with an undeclared response type:\n${offenders.join("\n")}`,
+    ).toEqual([]);
   });
 
   it("exports a <Method><Resource>Response per handler and passes it to json<T>()", () => {

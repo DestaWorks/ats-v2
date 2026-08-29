@@ -130,16 +130,16 @@ const failures = [];
 const note = (msg) => failures.push(msg);
 
 // 1. No capability widened, dropped, or swapped.
-let matched = 0;
-let bothCapped = 0;
+//
+// Vestigial after 4.3 deleted the routes this compared against, and deliberately kept: it is what
+// would catch a re-added Next route whose capability disagrees with the Nest endpoint serving the
+// same path. The count floors are gone because there is nothing left to count; the guard is not.
 for (const [key, nx] of next) {
   const [m, p] = key.split(" ");
   const hit = nestByNorm.get(`${m} ${norm(p)}`);
   if (!hit) continue;
-  matched++;
   const a = [...nx.caps].sort().join(",");
   const b = [...hit.caps].sort().join(",");
-  if (a && b) bothCapped++;
   if (a !== b) note(`capability changed: ${key} — Next [${a || "none"}] -> Nest [${b || "none"}]`);
 }
 
@@ -195,17 +195,23 @@ for (const [key, nx] of next) {
 }
 
 // Floors: a parser that silently matches nothing would otherwise report a clean surface.
-const FLOORS = { endpoints: 150, matched: 150, bothCapped: 70 };
+//
+// `matched` and `bothCapped` no longer have floors, and that is the point of 4.3's route cutover
+// rather than a weakening: the Next routes they compared against are DELETED, so there is one
+// surface and nothing left to compare it to. The comparison ran on every translated route while
+// both stacks served, and it never found a widened, dropped or swapped capability. What still
+// earns a floor is the parse itself — a parser that reads zero controllers would otherwise print
+// a clean surface — and every per-endpoint rule below, which reads the Nest side alone.
+const FLOORS = { endpoints: 180 };
 if (nest.size < FLOORS.endpoints)
   note(
     `only ${nest.size} Nest endpoints parsed (floor ${FLOORS.endpoints}) — the parser is broken, not the surface`,
   );
-if (matched < FLOORS.matched)
+if (nextFiles.length > 1)
   note(
-    `only ${matched} route pairs matched (floor ${FLOORS.matched}) — the comparison is not comparing`,
+    `apps/web serves ${nextFiles.length} API routes — after 4.3 only the Better Auth catch-all ` +
+      `may remain, or there are two API surfaces again`,
   );
-if (bothCapped < FLOORS.bothCapped)
-  note(`only ${bothCapped} pairs carry a capability on both sides (floor ${FLOORS.bothCapped})`);
 if (classified !== nest.size) note(`${nest.size - classified} endpoints could not be classified`);
 
 if (failures.length) {
@@ -215,7 +221,7 @@ if (failures.length) {
 }
 
 console.log(
-  `auth surface: OK — ${nest.size} endpoints, ${matched} matched against their Next route, ` +
-    `${bothCapped} capability-gated on both sides, every endpoint behind a guard or on the ` +
-    `${PUBLIC_ENDPOINTS.size}-entry public list.`,
+  `auth surface: OK — ${nest.size} endpoints on one surface, every one behind a guard or on the ` +
+    `${PUBLIC_ENDPOINTS.size}-entry public list; apps/web serves ${nextFiles.length} route ` +
+    `(Better Auth only).`,
 );

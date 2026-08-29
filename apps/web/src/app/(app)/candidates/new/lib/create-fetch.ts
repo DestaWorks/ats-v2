@@ -6,7 +6,7 @@
  * unwrap is here. The created candidate carries PII, so this stays on the authenticated
  * add-candidate page only.
  */
-import type { PostCandidateResponse } from "@/app/api/candidates/route";
+import type { CandidateIdEnvelope } from "@destaworks/contracts/validation/envelopes";
 import type { CreateCandidateInput } from "@destaworks/contracts/validation/candidate";
 import { postJson, type ApiResult } from "@/lib/api/client";
 
@@ -17,6 +17,6 @@ export type { ApiFailure, FieldIssue } from "@/lib/api/client";
 export async function postCandidate(
   input: CreateCandidateInput,
 ): Promise<ApiResult<{ id: string }>> {
-  const res = await postJson<PostCandidateResponse>("/api/candidates", input);
+  const res = await postJson<CandidateIdEnvelope>("/api/candidates", input);
   return res.ok ? { ok: true, data: { id: res.data.candidate.id } } : res;
 }
