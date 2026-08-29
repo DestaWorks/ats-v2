@@ -138,17 +138,21 @@ export const dailyService = {
   async overview(ctx: TenantContext, date: string, tz: number): Promise<DailyOverviewDTO> {
     const canSetTargets = hasCapability(ctx.role, SET_TARGETS_CAP);
     const monday = mondayOf(date);
-    const [target, live, actual, clients, users, targetsToday, weekLogs] = await Promise.all([
-      dailyRepository.targetFor(ctx, ctx.user.id, date),
-      this.liveActuals(ctx.user.id, date, tz, ctx),
-      dailyRepository.actualFor(ctx, ctx.user.id, date),
-      clientRepository.list(ctx),
-      canSetTargets ? userRepository.listByRole("Associate") : Promise.resolve(undefined),
-      canSetTargets ? dailyRepository.targetsForDate(ctx, date) : Promise.resolve(undefined),
-      canSetTargets
-        ? dailyRepository.logsForDateRange(ctx, monday, date)
-        : Promise.resolve(undefined),
-    ]);
+    const [target, live, actual, clients, users, targetsToday, weekLogs] =
+      await withTenantTransaction(ctx, async () =>
+        // Batched onto one transaction — see the note in `logView` below for why.
+        Promise.all([
+          dailyRepository.targetFor(ctx, ctx.user.id, date),
+          this.liveActuals(ctx.user.id, date, tz, ctx),
+          dailyRepository.actualFor(ctx, ctx.user.id, date),
+          clientRepository.list(ctx),
+          canSetTargets ? userRepository.listByRole("Associate") : Promise.resolve(undefined),
+          canSetTargets ? dailyRepository.targetsForDate(ctx, date) : Promise.resolve(undefined),
+          canSetTargets
+            ? dailyRepository.logsForDateRange(ctx, monday, date)
+            : Promise.resolve(undefined),
+        ]),
+      );
     const clientNames = new Map(clients.map((c) => [c.id, c.name]));
     const userNames = target
       ? await userRepository.namesByIds([target.setById])
@@ -256,14 +260,18 @@ export const dailyService = {
 
   /** "Since you closed" recap — counts + a few names, from DOMAIN tables (never gated audit). */
   async recap(since: Date, ctx: TenantContext): Promise<RecapDTO> {
-    const [added, moves, outreach, addedCount, movesCount, outreachCount] = await Promise.all([
-      dailyRepository.candidatesAddedSince(ctx, since),
-      dailyRepository.stageMovesSince(ctx, since),
-      dailyRepository.outreachSince(ctx, since),
-      dailyRepository.countCandidatesAddedSince(ctx, since),
-      dailyRepository.countStageMovesSince(ctx, since),
-      dailyRepository.countOutreachSince(ctx, since),
-    ]);
+    const [added, moves, outreach, addedCount, movesCount, outreachCount] =
+      await withTenantTransaction(ctx, async () =>
+        // Batched onto one transaction — see the note in `logView` below for why.
+        Promise.all([
+          dailyRepository.candidatesAddedSince(ctx, since),
+          dailyRepository.stageMovesSince(ctx, since),
+          dailyRepository.outreachSince(ctx, since),
+          dailyRepository.countCandidatesAddedSince(ctx, since),
+          dailyRepository.countStageMovesSince(ctx, since),
+          dailyRepository.countOutreachSince(ctx, since),
+        ]),
+      );
     const actorNames = await userRepository.namesByIds(outreach.map((o) => o.actorId));
     const distinctActors = [...new Set(outreach.map((o) => actorNames.get(o.actorId) ?? "—"))];
     return {
@@ -293,19 +301,29 @@ export const dailyService = {
       clients,
       feedback,
       goals,
-    ] = await Promise.all([
-      dailyRepository.logFor(ctx, ctx.user.id, date),
-      dailyRepository.countCandidatesAdded(ctx, ctx.user.id, w),
-      dailyRepository.countAuditAction(ctx, ctx.user.id, "move", w),
-      dailyRepository.countAuditAction(ctx, ctx.user.id, "add_note", w),
-      dailyRepository.countAuditAction(ctx, ctx.user.id, "verify_license", w),
-      dailyRepository.logsForUser(ctx, ctx.user.id, 15),
-      dailyRepository.entriesForUser(ctx, ctx.user.id, 20),
-      userRepository.findTenureBasis(ctx.user.id),
-      clientRepository.list(ctx),
-      dailyRepository.feedbackForUser(ctx, ctx.user.id, 2),
-      dailyRepository.goalsForWeek(ctx, ctx.user.id, mondayOf(date)),
-    ]);
+    ] = await withTenantTransaction(ctx, async () =>
+      // One transaction for the whole fan-out, not eleven. Every scoped query has to run inside a
+      // transaction that announced its tenant (RLS reads `app.tenant_id` off the connection), so
+      // without this each of these opens its own BEGIN/set_config/COMMIT and takes a connection
+      // from a pool of five — eleven of them, three waves deep, for one page. Inside an ambient
+      // transaction they all reuse it, so this is one connection and one round trip each.
+      //
+      // The repositories need no change: `db(ctx)` re-dispatches onto the ambient transaction on
+      // its own, which is why nothing here threads a `tx` argument.
+      Promise.all([
+        dailyRepository.logFor(ctx, ctx.user.id, date),
+        dailyRepository.countCandidatesAdded(ctx, ctx.user.id, w),
+        dailyRepository.countAuditAction(ctx, ctx.user.id, "move", w),
+        dailyRepository.countAuditAction(ctx, ctx.user.id, "add_note", w),
+        dailyRepository.countAuditAction(ctx, ctx.user.id, "verify_license", w),
+        dailyRepository.logsForUser(ctx, ctx.user.id, 15),
+        dailyRepository.entriesForUser(ctx, ctx.user.id, 20),
+        userRepository.findTenureBasis(ctx.user.id),
+        clientRepository.list(ctx),
+        dailyRepository.feedbackForUser(ctx, ctx.user.id, 2),
+        dailyRepository.goalsForWeek(ctx, ctx.user.id, mondayOf(date)),
+      ]),
+    );
     const weekNum = tenureWeek(userRow?.createdAt ?? clock.now(), date);
     const ramp = rampFor(weekNum);
     const logsByDate = new Map(history.map((l) => [l.date, l.sourced]));
