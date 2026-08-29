@@ -12,6 +12,7 @@ import type {
   GeneratedPasswordDTO,
 } from "@destaworks/contracts/validation/admin";
 import type { Role } from "@destaworks/domain/constants";
+import type { TenantContext } from "@destaworks/domain/tenant";
 
 function toDTO(row: {
   id: string;
@@ -79,7 +80,7 @@ export const accessRequestService = {
    * unmapped `APIError` — not one of our own `AppError`s, so it fell through to the generic
    * catch-all as an opaque 500 instead of a clear message. Pre-check and reject with CONFLICT.
    */
-  async approve(id: string, role: Role, actorId: string): Promise<GeneratedPasswordDTO> {
+  async approve(id: string, role: Role, ctx: TenantContext): Promise<GeneratedPasswordDTO> {
     const request = await accessRequestRepository.findById(id);
     if (!request) throw new AppError("NOT_FOUND", "Access request not found");
     if (request.status !== "pending") {
@@ -94,7 +95,7 @@ export const accessRequestService = {
         email: request.email,
         role,
       },
-      actorId,
+      ctx,
     );
     await accessRequestRepository.updateStatus(id, "approved");
     // Best-effort: the account is already created and the request already resolved by this

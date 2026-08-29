@@ -18,6 +18,6 @@ export const POST = apiHandler<{ params: Promise<{ id: string }> }>(async (req, 
   const actor = await requireCapability("manageAccessRequests");
   const { id } = await ctx.params;
   const input = approveRequestSchema.parse(await req.json());
-  const result = await accessRequestService.approve(id, input.role, actor.user.id);
+  const result = await accessRequestService.approve(id, input.role, actor);
   return json<PostAdminAccessRequestApproveResponse>(result);
 });

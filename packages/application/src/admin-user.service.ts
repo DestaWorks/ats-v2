@@ -3,7 +3,8 @@ import { auth } from "@destaworks/auth/auth";
 import { requestContext } from "@destaworks/config/request-context";
 import { toIso, isoOrNull } from "@destaworks/domain/utils/iso";
 import { writeAudit } from "@destaworks/db/audit";
-import { withTransaction } from "@destaworks/db/with-transaction";
+import { withAnnouncedTenant } from "@destaworks/db/tenant-transaction";
+import type { TenantContext } from "@destaworks/domain/tenant";
 import type { Role } from "@destaworks/domain/constants";
 import type {
   AdminUserDTO,
@@ -73,7 +74,7 @@ export const adminUserService = {
    * every admin-created account would otherwise permanently fail to link ("account not linked"),
    * blocking the "sign in with either Google or password" flow entirely.
    */
-  async create(input: CreateUserInput, actorId: string): Promise<GeneratedPasswordDTO> {
+  async create(input: CreateUserInput, ctx: TenantContext): Promise<GeneratedPasswordDTO> {
     const password = input.password ?? generatePassword();
     const generatedPassword = input.password ? null : password;
     const result = await auth.api.createUser({
@@ -86,11 +87,11 @@ export const adminUserService = {
         data: { emailVerified: true },
       },
     });
-    await withTransaction((tx) =>
+    await withAnnouncedTenant(ctx.tenantId, (tx) =>
       writeAudit(tx, {
         entity: "user",
         entityId: result.user.id,
-        actor: actorId,
+        actor: ctx.user.id,
         action: "create",
         after: { email: result.user.email, role: input.role },
       }),
@@ -98,16 +99,16 @@ export const adminUserService = {
     return { user: toDTO(result.user), generatedPassword };
   },
 
-  async setRole(userId: string, role: Role, actorId: string): Promise<AdminUserDTO> {
+  async setRole(userId: string, role: Role, ctx: TenantContext): Promise<AdminUserDTO> {
     const result = await auth.api.setRole({
       headers: await requestContext().headers(),
       body: { userId, role },
     });
-    await withTransaction((tx) =>
+    await withAnnouncedTenant(ctx.tenantId, (tx) =>
       writeAudit(tx, {
         entity: "user",
         entityId: userId,
-        actor: actorId,
+        actor: ctx.user.id,
         action: "setRole",
         after: { role },
       }),
@@ -115,7 +116,7 @@ export const adminUserService = {
     return toDTO(result.user);
   },
 
-  async ban(userId: string, input: BanUserInput, actorId: string): Promise<AdminUserDTO> {
+  async ban(userId: string, input: BanUserInput, ctx: TenantContext): Promise<AdminUserDTO> {
     const result = await auth.api.banUser({
       headers: await requestContext().headers(),
       body: {
@@ -124,11 +125,11 @@ export const adminUserService = {
         banExpiresIn: input.expiresInDays ? input.expiresInDays * 86_400 : undefined,
       },
     });
-    await withTransaction((tx) =>
+    await withAnnouncedTenant(ctx.tenantId, (tx) =>
       writeAudit(tx, {
         entity: "user",
         entityId: userId,
-        actor: actorId,
+        actor: ctx.user.id,
         action: "ban",
         after: { banReason: input.reason ?? null, expiresInDays: input.expiresInDays ?? null },
       }),
@@ -136,40 +137,40 @@ export const adminUserService = {
     return toDTO(result.user);
   },
 
-  async unban(userId: string, actorId: string): Promise<AdminUserDTO> {
+  async unban(userId: string, ctx: TenantContext): Promise<AdminUserDTO> {
     const result = await auth.api.unbanUser({
       headers: await requestContext().headers(),
       body: { userId },
     });
-    await withTransaction((tx) =>
-      writeAudit(tx, { entity: "user", entityId: userId, actor: actorId, action: "unban" }),
+    await withAnnouncedTenant(ctx.tenantId, (tx) =>
+      writeAudit(tx, { entity: "user", entityId: userId, actor: ctx.user.id, action: "unban" }),
     );
     return toDTO(result.user);
   },
 
   /** Generates + returns a new password once (never persisted in plaintext — the audit row
    *  records that a reset happened, never the password itself). */
-  async resetPassword(userId: string, actorId: string): Promise<{ generatedPassword: string }> {
+  async resetPassword(userId: string, ctx: TenantContext): Promise<{ generatedPassword: string }> {
     const generatedPassword = generatePassword();
     await auth.api.setUserPassword({
       headers: await requestContext().headers(),
       body: { userId, newPassword: generatedPassword },
     });
-    await withTransaction((tx) =>
+    await withAnnouncedTenant(ctx.tenantId, (tx) =>
       writeAudit(tx, {
         entity: "user",
         entityId: userId,
-        actor: actorId,
+        actor: ctx.user.id,
         action: "resetPassword",
       }),
     );
     return { generatedPassword };
   },
 
-  async remove(userId: string, actorId: string): Promise<void> {
+  async remove(userId: string, ctx: TenantContext): Promise<void> {
     await auth.api.removeUser({ headers: await requestContext().headers(), body: { userId } });
-    await withTransaction((tx) =>
-      writeAudit(tx, { entity: "user", entityId: userId, actor: actorId, action: "remove" }),
+    await withAnnouncedTenant(ctx.tenantId, (tx) =>
+      writeAudit(tx, { entity: "user", entityId: userId, actor: ctx.user.id, action: "remove" }),
     );
   },
 };

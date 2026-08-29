@@ -86,7 +86,7 @@ describe("POST /api/admin/users", () => {
     expect(res.status).toBe(201);
     expect(h.create).toHaveBeenCalledWith(
       expect.objectContaining({ name: "A", email: "a@b.com", role: "Associate" }),
-      "u1",
+      expect.objectContaining({ user: expect.objectContaining({ id: "u1" }) }),
     );
   });
 

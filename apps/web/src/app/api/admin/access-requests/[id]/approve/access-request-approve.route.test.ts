@@ -61,7 +61,11 @@ describe("POST /api/admin/access-requests/:id/approve", () => {
     h.approve.mockResolvedValue({ user: { id: "n1" }, generatedPassword: "pw123" });
     const res = await POST(postReq({ role: "Associate" }), ctx);
     expect(res.status).toBe(200);
-    expect(h.approve).toHaveBeenCalledWith("r1", "Associate", "u1");
+    expect(h.approve).toHaveBeenCalledWith(
+      "r1",
+      "Associate",
+      expect.objectContaining({ user: expect.objectContaining({ id: "u1" }) }),
+    );
   });
 
   it("maps a service CONFLICT to 409", async () => {

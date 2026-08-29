@@ -11,6 +11,6 @@ export const PATCH = apiHandler<{ params: Promise<{ id: string }> }>(async (req,
   const actor = await requireCapability("manageRoles");
   const { id } = await ctx.params;
   const input = setRoleSchema.parse(await req.json());
-  const user = await adminUserService.setRole(id, input.role, actor.user.id);
+  const user = await adminUserService.setRole(id, input.role, actor);
   return json<PatchAdminUserRoleResponse>({ user });
 });

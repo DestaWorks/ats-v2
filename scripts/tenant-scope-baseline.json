@@ -1,7 +1,6 @@
 {
   "unscopedUses": {
     "packages/application/src/admin-user.service.test.ts": 1,
-    "packages/application/src/admin-user.service.ts": 7,
     "packages/application/src/client-portal.service.test.ts": 1,
     "packages/application/src/client-portal.service.ts": 3,
     "packages/application/src/membership.service.test.ts": 1,

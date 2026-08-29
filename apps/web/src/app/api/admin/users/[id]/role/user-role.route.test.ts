@@ -56,7 +56,11 @@ describe("PATCH /api/admin/users/:id/role", () => {
     h.setRole.mockResolvedValue({ id: "u2", role: "Manager" });
     const res = await PATCH(patchReq({ role: "Manager" }), ctx);
     expect(res.status).toBe(200);
-    expect(h.setRole).toHaveBeenCalledWith("u2", "Manager", "u1");
+    expect(h.setRole).toHaveBeenCalledWith(
+      "u2",
+      "Manager",
+      expect.objectContaining({ user: expect.objectContaining({ id: "u1" }) }),
+    );
   });
 
   it("422 on an invalid role", async () => {

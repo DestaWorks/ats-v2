@@ -36,6 +36,14 @@ vi.mock("@destaworks/auth/auth", () => ({
   },
 }));
 vi.mock("@destaworks/db/audit", () => ({ writeAudit: h.writeAudit }));
+const announced: string[] = vi.hoisted(() => []);
+
+vi.mock("@destaworks/db/tenant-transaction", () => ({
+  withAnnouncedTenant: (tenantId: string, fn: (tx: unknown) => unknown) => {
+    announced.push(tenantId);
+    return fn(h.fakeTx);
+  },
+}));
 vi.mock("@destaworks/db/with-transaction", () => ({
   withTransaction: (fn: (tx: unknown) => unknown) => fn(h.fakeTx),
 }));
@@ -64,6 +72,13 @@ beforeEach(() => {
   h.writeAudit.mockReset();
 });
 
+const adminCtx = {
+  tenantId: "t1",
+  membershipId: "m1",
+  role: "Owner" as const,
+  user: { id: "actor1", email: "admin@desta.works", name: "Admin" },
+};
+
 describe("adminUserService.list", () => {
   it("calls listUsers with forwarded headers and maps the DTOs", async () => {
     h.listUsers.mockResolvedValue({ users: [baseUser], total: 1 });
@@ -91,6 +106,21 @@ describe("adminUserService.list", () => {
 });
 
 describe("adminUserService.create", () => {
+  it("announces the ACTING admin's tenant, or RLS refuses the audit row", async () => {
+    announced.length = 0;
+    h.createUser.mockResolvedValue({ user: baseUser });
+
+    await adminUserService.create(
+      { name: "Ann Owner", email: "ann@desta.works", role: "Owner" },
+      adminCtx,
+    );
+
+    // This service holds no repository — only Better Auth plus six audit writes into
+    // `activity_log`, which is tenant-scoped with a WITH CHECK policy. Unannounced they are
+    // refused under RLS, and the admin surface fails with them.
+    expect(announced).toEqual(["t1"]);
+  });
+
   it("forwards the given password verbatim and returns no generated password", async () => {
     h.createUser.mockResolvedValue({ user: baseUser });
     const result = await adminUserService.create(
@@ -100,7 +130,7 @@ describe("adminUserService.create", () => {
         role: "Owner",
         password: "supplied-pw-123",
       },
-      "actor1",
+      adminCtx,
     );
     expect(h.createUser).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -118,7 +148,7 @@ describe("adminUserService.create", () => {
         email: "ann@desta.works",
         role: "Owner",
       },
-      "actor1",
+      adminCtx,
     );
     expect(result.generatedPassword).toBeTruthy();
     expect(h.createUser).toHaveBeenCalledWith(
@@ -137,7 +167,7 @@ describe("adminUserService.create", () => {
         role: "Owner",
         password: "supplied-pw-123",
       },
-      "actor1",
+      adminCtx,
     );
     expect(h.createUser).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -150,7 +180,7 @@ describe("adminUserService.create", () => {
     h.createUser.mockResolvedValue({ user: baseUser });
     await adminUserService.create(
       { name: "Ann Owner", email: "ann@desta.works", role: "Owner" },
-      "actor1",
+      adminCtx,
     );
     expect(h.writeAudit).toHaveBeenCalledWith(
       h.fakeTx,
@@ -167,7 +197,7 @@ describe("adminUserService.create", () => {
 describe("adminUserService.setRole", () => {
   it("calls setRole with userId + role, and audits the change", async () => {
     h.setRole.mockResolvedValue({ user: { ...baseUser, role: "Manager" } });
-    const result = await adminUserService.setRole("u1", "Manager", "actor1");
+    const result = await adminUserService.setRole("u1", "Manager", adminCtx);
     expect(h.setRole).toHaveBeenCalledWith(
       expect.objectContaining({ body: { userId: "u1", role: "Manager" } }),
     );
@@ -187,7 +217,7 @@ describe("adminUserService.setRole", () => {
 describe("adminUserService.ban / unban", () => {
   it("converts expiresInDays to banExpiresIn seconds, and audits the ban", async () => {
     h.banUser.mockResolvedValue({ user: { ...baseUser, banned: true } });
-    await adminUserService.ban("u1", { reason: "abuse", expiresInDays: 2 }, "actor1");
+    await adminUserService.ban("u1", { reason: "abuse", expiresInDays: 2 }, adminCtx);
     expect(h.banUser).toHaveBeenCalledWith(
       expect.objectContaining({
         body: { userId: "u1", banReason: "abuse", banExpiresIn: 2 * 86_400 },
@@ -201,7 +231,7 @@ describe("adminUserService.ban / unban", () => {
 
   it("unban calls unbanUser with the userId, and audits the unban", async () => {
     h.unbanUser.mockResolvedValue({ user: baseUser });
-    await adminUserService.unban("u1", "actor1");
+    await adminUserService.unban("u1", adminCtx);
     expect(h.unbanUser).toHaveBeenCalledWith(expect.objectContaining({ body: { userId: "u1" } }));
     expect(h.writeAudit).toHaveBeenCalledWith(
       h.fakeTx,
@@ -213,7 +243,7 @@ describe("adminUserService.ban / unban", () => {
 describe("adminUserService.resetPassword", () => {
   it("generates and returns a password once, and audits the reset without the password", async () => {
     h.setUserPassword.mockResolvedValue({ status: true });
-    const result = await adminUserService.resetPassword("u1", "actor1");
+    const result = await adminUserService.resetPassword("u1", adminCtx);
     expect(result.generatedPassword).toBeTruthy();
     expect(h.setUserPassword).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -237,7 +267,7 @@ describe("adminUserService.resetPassword", () => {
 describe("adminUserService.remove", () => {
   it("calls removeUser with the userId, and audits the removal", async () => {
     h.removeUser.mockResolvedValue({ success: true });
-    await adminUserService.remove("u1", "actor1");
+    await adminUserService.remove("u1", adminCtx);
     expect(h.removeUser).toHaveBeenCalledWith(expect.objectContaining({ body: { userId: "u1" } }));
     expect(h.writeAudit).toHaveBeenCalledWith(
       h.fakeTx,
