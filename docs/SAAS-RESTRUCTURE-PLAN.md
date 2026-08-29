@@ -765,30 +765,52 @@ anyway — so Option A means one surface to secure instead of two.
    in-process service calls; a naive port turns that into three HTTP round trips. Port each
    composite loader to one endpoint returning the composite, not N calls.
 
-- [ ] Record the isolation strategy: guards run in `apps/api` only, `db(ctx)` scopes every query,
-      RLS backstops it
-- [ ] **CI check: `apps/web` and `apps/admin` may not depend on `@destaworks/db` or
+- [x] Record the isolation strategy: guards run in `apps/api` only, `db(ctx)` scopes every query,
+      RLS backstops it — written up across 6.3 and 6.6 above, and enforced rather than described:
+      `pnpm tenant:check` for the seam, `pnpm rls:check` for the backstop
+- [x] **CI check: `apps/web` and `apps/admin` may not depend on `@destaworks/db` or
       `@destaworks/application`.** Without it Option B leaks back in the first time someone imports
-      a service directly, and there are two paths again with nobody having decided so
+      a service directly, and there are two paths again with nobody having decided so.
+      `web-read-path-is-http-only` in `check-architecture.mjs` enforces it — as a RATCHET, not a
+      ban, because 167 production files still import `application` today. It cannot rise, and 4.3's
+      traffic switch is what drives it to zero. Tests are exempt: 4.0 governs the runtime read path,
+      not the harness
 - [ ] Port composite loaders to composite endpoints as their routes migrate (4.3)
 - **Done-when:** the CI dependency check fails on a deliberate `apps/web` → `application` import
 
 ### 4.1 Scaffold
-- [ ] Create `apps/api` — NestJS + TypeScript
-- [ ] Module per domain area, mirroring the current service boundaries
-- [ ] Controllers depend only on `@destaworks/application` and `@destaworks/contracts`
-- [ ] CI check: `apps/api` never imports Prisma or `@destaworks/db` directly
+- [x] Create `apps/api` — NestJS + TypeScript
+- [x] Module per domain area, mirroring the current service boundaries — 24 modules derived from
+      service ownership, so a migrating route has exactly one module it can belong to
+- [x] Controllers depend only on `@destaworks/application` and `@destaworks/contracts` — services
+      are injected by branded token, never imported as singletons
+- [x] CI check: `apps/api` never imports Prisma or `@destaworks/db` directly — `db` is absent from
+      the api row of `ALLOWED_DEPENDENCIES` on purpose
 - **Done-when:** the app boots and serves one trivial endpoint end-to-end
 
 ### 4.2 Cross-cutting concerns — port before any route moves
-- [ ] Port `apiHandler` semantics to a Nest exception filter — the error envelope, the code union, and the rule that an unexpected error never leaks its message; 138 of 141 routes rely on it today
-- [ ] Request-id interceptor: generate, log, and return it as `ref` on 500s
-- [ ] Logging interceptor: one structured line per request with method, path, status, duration, `requestId`, `tenantId`
-- [ ] Port capability gating to a Nest guard — capabilities, never role names
-- [ ] Port rate limiting
-- [ ] Port the Better Auth integration, including `nextCookies()` session handling across the app boundary
-- [ ] Zod validation pipe bound to `@destaworks/contracts`
-- [ ] Audit logging on every mutation, matching current behaviour
+- [x] Port `apiHandler` semantics to a Nest exception filter — and SHARED with `apiHandler` rather
+      than reimplemented: both build the envelope from one `classifyError`/`errorEnvelope` pair, so
+      one deliberate break fails both frameworks' suites. Also maps Nest's own `HttpException`, or
+      an unmatched route answers 500 with a Sentry event instead of 404
+- [x] Request-id interceptor: generate, log, and return it as `ref` on 500s
+- [x] Logging interceptor: one structured line per request with method, route, status, durationMs
+      and `requestId`, verified in production log mode. `tenantId` arrives with 6.4's context; the
+      404 path is logged by the filter, since an unmatched route never reaches an interceptor
+- [x] Port capability gating to a Nest guard — capabilities, never role names. `CapabilityGuard`
+      DENIES a handler that declares no capability, so a forgotten decorator fails closed
+- [x] Port rate limiting — `RateLimitGuard`, bucket names byte-identical to the hand-built keys
+- [x] Port the Better Auth integration — the Nest guards call the same `requireUser` /
+      `requireCapability` the Next routes call, through the `RequestContext` port, so there is one
+      auth implementation rather than two. The `[...all]` catch-all stays in Next: Better Auth owns
+      its own transport and never answers through `json()`
+- [x] Zod validation pipe bound to `@destaworks/contracts` — bound per parameter with the route's
+      own schema, throwing the ZodError unformatted so the filter renders it in one place
+- [x] Audit logging on every mutation, matching current behaviour — deliberately NOT an
+      interceptor. All 89 `writeAudit` calls already pass `tx`, so the row commits with the mutation
+      it records; an interceptor runs outside that transaction and would audit rolled-back writes
+      and double every row. What was missing was attribution, so `AuditActorInterceptor` fails an
+      unattributed mutation closed instead, with opt-outs that require a stated reason
 - **Done-when:** an equivalence test proves a guarded endpoint behaves identically to its Next.js counterpart for authorized, unauthorized and unauthenticated callers
 
 ### 4.3 Route cutover
@@ -884,29 +906,55 @@ surface has had a security review.
 
 **Goal:** slow work leaves the request path. Built on NestJS now that Phase 4 has landed.
 
-- [ ] Choose the queue and document the choice; bind it through NestJS
-- [ ] Create `@destaworks/jobs` — background jobs, queues, schedulers, consuming `@destaworks/application`
+- [x] Choose the queue and document the choice; bind it through NestJS — **pg-boss on the existing
+      Postgres** (MIT, as are its three runtime deps). BullMQ was the obvious pick and cannot work:
+      the `@upstash/redis` already here is REST-based and BullMQ needs a TCP connection with
+      blocking commands, so it would mean new infrastructure and cost while the API host is still
+      undecided. The trade-off is recorded in `packages/jobs/src/queue.ts`, and the driver sits
+      behind a port so the decision stays revisitable. Bound through `JOB_QUEUE`
+- [x] Create `@destaworks/jobs` — one-way edge above `application`, enforced by the dependency law
+      (`application` importing `jobs` would let a service enqueue and hide a cycle from the graph)
 - [x] Move the ETL commit off the request path — it cannot finish inside `maxDuration = 300`
       *(`migration.commit`, `maxAttempts: 2`. `POST /migration/commit` stages the upload on a
       `migration_runs` row and answers `202 { runId, jobId, status }`; `GET /migration/runs/:runId`
       is the operator's read. Idempotent on `legacy_id`, resumable from `processedRows`, aborts at
       a row boundary. Both stacks changed together.)*
-- [ ] Give AI calls an overall deadline; they currently retry up to six times holding a function slot
-- [ ] Move brief generation and CSV export to jobs *(CSV export done: `reports.export.candidates`
+- [x] Give AI calls an overall deadline — the retry count was measured, not assumed: `maxRetries: 2`
+      is 3 attempts per model, repeated against the fallback model, so 6 provider calls and 12s of
+      backoff minimum, and the SDK honours `Retry-After` up to 60s per retry. `generateObject` has
+      no timeout option at all, only `abortSignal`. The budget covers the WHOLE operation including
+      retries — a per-attempt timeout multiplied by the retry count is the bug, not the fix — and
+      the test asserts a hanging provider is cut off before the first backoff has elapsed
+- [x] Move brief generation and CSV export to jobs *(CSV export: `reports.export.candidates`
   + `POST /reports/export/jobs` / `GET /reports/export/jobs/:id` on the API. The finished file goes
   to the PRIVATE `exports` bucket and is collected through a 5-minute signed URL minted per
   request — a job cannot stream into a response that has already returned. The Next.js
   `GET /api/reports/export` and its `<a href>` are unchanged and still synchronous: `apps/web` may
   not import `@destaworks/jobs` (web → api is HTTP), so the link moves to the async flow as part
-  of the 4.3 traffic switch. Brief generation not started.)*
+  of the 4.3 traffic switch.
+  Brief generation IS done — the note here said otherwise because it was written by the workstream
+  that could not see the one doing it. `briefs.daily.generate` / `briefs.weekly.generate` answer
+  202 with a job id, and the singleton key is the PERIOD rather than the user: two leads opening
+  the page in the same minute is likelier than one double-click, and both should collapse to one
+  paid LLM run. Output lands in new `draft` columns BESIDE the saved brief, never over it, so a job
+  finishing after someone saved that day's work offers a newer draft instead of destroying their
+  edits.)*
 - [x] Add the scheduler — nothing scheduled runs today *(`packages/jobs/src/{schedule,scheduler,
   schedules}.ts`. Schedules are data with a REQUIRED IANA `timeZone` — no default, no host zone;
   resolution goes through the real tz database so DST is right. Single-fire across N workers is a
   unique `(schedule, occurrenceAt)` claim in `schedule_runs`, not leader election and not the
   driver's `singletonKey` (which only dedupes still-pending jobs). The live registry is
   deliberately EMPTY — the mechanism ships, no recurring business job was invented to justify it.)*
-- [ ] Job observability: failures visible, retries bounded, dead-letter handling
-- **Done-when:** no request handler performs unbounded work; a failed job is visible and retryable
+- [x] Job observability: failures visible, retries bounded, dead-letter handling — failures are
+      classified by ERROR rather than attempt count, so a permanent one dead-letters immediately
+      instead of burning the budget. The stored failure is constructed, never serialized from the
+      error, because a raw message can carry Prisma field values and job rows outlive the request.
+      `pnpm jobs status` / `pnpm jobs retry` is the operator affordance; no HTTP surface was added
+- **Done-when:** no request handler performs unbounded work; a failed job is visible and retryable —
+  **every task is done; the done-when is not yet PROVEN.** All of it is unit-tested and the worker
+  boots and subscribes to its four jobs, but no job has run end to end — enqueue → worker executes →
+  result lands — because the three Phase 5 migrations are deliberately unapplied. That is one run
+  against a real database away, and it is owed before this phase is called finished.
 
 ---
 
@@ -1182,12 +1230,25 @@ export interface TenantContext {
 > See the NOTE on `ScopedTx` in `packages/db/src/tenant-scope.ts`.
 
 ### 6.4 Services and routes
-- [ ] Thread context through the 171 methods in `@destaworks/application`
-- [ ] `getCurrentUser` returns `TenantContext` — `{ tenantId, membershipId, user, role }`, role read from the membership
+- [x] Thread context through `@destaworks/application` — all 27 service modules, every public
+      method. They hold the context but do NOT yet pass it to the repositories: that call-site
+      sweep is the escape-hatch ratchet below, and doing it here would have rewritten the same
+      files twice
+- [x] `getCurrentUser` returns `AuthContext` (a `TenantContext` carrying the full identity) —
+      `{ tenantId, membershipId, user, role }`, role read from the MEMBERSHIP. `role` is deleted
+      from `AuthUser`, which is what makes reading authority off the identity a compile error
+      rather than a silent cross-tenant escalation
 - [ ] **Drop `User.role`, moved here from 6.2.** It is Better Auth's admin-plugin column and is cached in the session cookie, so it cannot be dropped before the role read moves to `Membership` — which is the bullet above. Everything it needs is already in place: the backfill copied every user's role onto a membership. The work is `auth.ts` (`user.additionalFields.role`, `adminPlugin({ adminRoles, defaultRole, roles })`), `guards.ts` (`session.user.role` → membership), `admin-user.service.ts` (`auth.api.setRole`) and `user.repository.ts` (`listByRole`, `findActor`)
-- [ ] Resolve the tenant in a Nest guard and pass it down; controllers stay thin
-- [ ] Verify the migrated controllers; most need no change, since no role names are hardcoded
-- **Done-when:** every endpoint resolves a tenant before touching data
+- [x] Resolve the tenant in a Nest guard and pass it down — `TenantGuard` resolves and re-verifies;
+      controllers stay thin and name no tenant
+- [x] Verify the migrated controllers — the claim held and was checked, not assumed: of 30, **26
+      changed only a type annotation** and 4 moved an identity read one level in. No guard,
+      decorator, capability or route table moved. Zero role names found, and the existing source
+      scan now covers the controllers so it stays that way
+- **Done-when:** every endpoint resolves a tenant before touching data — **resolution ✅, but the
+  data half is NOT met**: services hold the context and still reach repositories through the
+  compile-time bridge, so a query can still run unscoped. That is the ratchet below, and it is what
+  stands between this phase being written and being enforced
 
 ### 6.5 Tenant resolution and membership
 - [x] Resolve the active tenant from session plus subdomain, path segment or cookie
@@ -1246,7 +1307,28 @@ a brief for the same day. They belong in 6.2's re-keying as `@@unique([tenantId,
 - **Done-when:** no tenant role value, including Owner, can reach another tenant's data
 
 **Phase 6 done-when:** two tenants coexist on staging with isolation proven by the suite and by RLS
-independently.
+independently. **NOT met, and two distinct things stand in the way.**
+
+**Written, not yet enforced.** Every sub-phase's code is in and green — 2,451 tests, the seam, the
+guards, RLS, the isolation suite — but **222 escape-hatch uses across 80 files** remain. Services
+carry a `TenantContext` and still reach repositories through the compile-time bridge, which runs
+unscoped. Until that count is zero and the bridge is deleted, a query *can* skip the tenant filter;
+`pnpm tenant:check` ratchets it and fails if it rises. This is the phase's real remaining work.
+
+**Written, not yet applied.** Per the deferral decision, no migration has run: `tenantId` is still
+nullable, the uniqueness rules are still global, and RLS is inert. The isolation suite therefore
+proves isolation against a throwaway CI Postgres, not against staging — which is the second half of
+this done-when and cannot be closed until the migrations land.
+
+Three items are owed to someone other than the code:
+- **`DATABASE_URL`'s role must be neither `SUPERUSER` nor `BYPASSRLS`**, or RLS is decorative. The
+  suite refuses to trust its own results without checking, after a first run passed 195 assertions
+  with the policies entirely inert.
+- **`AiSettings`** is a tenant-scoped singleton keyed by a literal primary key: one row for the whole
+  installation, readable by tenant #1 alone. Re-key it or return it to the global allowlist — today
+  it is neither.
+- **`User.role`** still exists because it is Better Auth's column, cached in the session cookie. Its
+  removal is 6.4's last bullet and needs the auth surface changed, not just a migration.
 
 ---
 
