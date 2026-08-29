@@ -6,7 +6,7 @@ import { EmptyState } from "@destaworks/ui/empty-state";
 import { Table, Td } from "@destaworks/ui/table";
 import { ReportTabShell } from "./lib/report-tab-shell";
 import { buildReportQuery, useReportFetch, type ReportFilterState } from "./lib/use-report-fetch";
-import type { GetReportsSourceRoiResponse } from "@/app/api/reports/source-roi/route";
+import type { SourceRoiDTO as GetReportsSourceRoiResponse } from "@destaworks/contracts/validation/reports";
 
 // recharts is heavy — load it only once this tab actually renders (perf audit 2026-08-05).
 const SourceRoiChart = dynamic(() => import("./source-roi-chart").then((m) => m.SourceRoiChart));

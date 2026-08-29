@@ -21,8 +21,10 @@ import {
   type RoleMatchDTO,
   type SaveMatchProfileInput,
   type UpdateOpenRoleInput,
+  type DeleteRoleResponse,
+  type OpenRoleEnvelope,
 } from "@destaworks/contracts/validation/open-role";
-import type { GetClientMatchProfileResponse } from "@/app/api/client-match-profiles/[clientId]/route";
+import type { GetClientMatchProfileResponse } from "@destaworks/contracts/http/open-role";
 import { useApiForm } from "@/lib/forms/use-api-form";
 import { emptyToNull } from "@/lib/forms/empty-to-null";
 import {
@@ -33,10 +35,7 @@ import {
   postJson,
   putJson,
 } from "@/lib/api/client";
-import type { DeleteRoleResponse, PatchRoleResponse } from "@/app/api/roles/[id]/route";
-import type { PostRolePromoteResponse } from "@/app/api/roles/[id]/promote/route";
-import type { PostRoleNoteResponse } from "@/app/api/roles/[id]/notes/route";
-import type { DeleteRoleNoteResponse } from "@/app/api/roles/[id]/notes/[noteId]/route";
+import type { PromotedCandidateResponse as PostRolePromoteResponse } from "@destaworks/contracts/api";
 import { Badge } from "@destaworks/ui/badge";
 import { Button } from "@destaworks/ui/button";
 import { DetailTabs, type TabDef } from "@destaworks/ui/tabs";
@@ -235,7 +234,7 @@ function EditRoleForm({
       status: role.status,
       clientId: role.clientId,
     },
-    submit: (values) => patchJson<PatchRoleResponse>(`/api/roles/${role.id}`, values),
+    submit: (values) => patchJson<OpenRoleEnvelope>(`/api/roles/${role.id}`, values),
     onSuccess: (data) => {
       toast.success("Role updated");
       onSaved(data.role);
@@ -525,7 +524,7 @@ function NotesPanel({
 }) {
   const { form, pending, onSubmit } = useApiForm(addRoleNoteSchema, {
     defaultValues: { body: "", category: "General" },
-    submit: (values) => postJson<PostRoleNoteResponse>(`/api/roles/${role.id}/notes`, values),
+    submit: (values) => postJson<OpenRoleEnvelope>(`/api/roles/${role.id}/notes`, values),
     onSuccess: (data) => {
       onChanged(data.role);
       form.reset({ body: "", category: "General" });
@@ -533,7 +532,7 @@ function NotesPanel({
   });
 
   async function handleDelete(noteId: string) {
-    const res = await deleteJson<DeleteRoleNoteResponse>(`/api/roles/${role.id}/notes/${noteId}`);
+    const res = await deleteJson<OpenRoleEnvelope>(`/api/roles/${role.id}/notes/${noteId}`);
     if (res.ok) {
       onChanged(res.data.role);
     } else {

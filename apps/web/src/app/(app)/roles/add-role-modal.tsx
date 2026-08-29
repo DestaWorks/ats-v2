@@ -13,12 +13,12 @@ import {
 import {
   createOpenRoleSchema,
   type CreateOpenRoleInput,
+  type OpenRoleEnvelope as PostRoleResponse,
+  type ParsedJdDTO as PostRoleParseJdResponse,
 } from "@destaworks/contracts/validation/open-role";
 import { useApiForm } from "@/lib/forms/use-api-form";
 import { emptyToNull } from "@/lib/forms/empty-to-null";
 import { messageForFailure, postJson } from "@/lib/api/client";
-import type { PostRoleResponse } from "@/app/api/roles/route";
-import type { PostRoleParseJdResponse } from "@/app/api/roles/parse-jd/route";
 import { Button, type ButtonProps } from "@destaworks/ui/button";
 import { Field } from "@destaworks/ui/field";
 import { Input } from "@destaworks/ui/input";

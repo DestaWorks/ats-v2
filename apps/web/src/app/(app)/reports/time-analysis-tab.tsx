@@ -6,7 +6,7 @@ import { Card } from "@destaworks/ui/card";
 import { StatCard } from "../dashboard/stat-card";
 import { ReportTabShell } from "./lib/report-tab-shell";
 import { buildReportQuery, useReportFetch, type ReportFilterState } from "./lib/use-report-fetch";
-import type { GetReportsTimeAnalysisResponse } from "@/app/api/reports/time-analysis/route";
+import type { TimeAnalysisDTO as GetReportsTimeAnalysisResponse } from "@destaworks/contracts/validation/reports";
 
 // recharts is heavy — load it only once this tab actually renders (perf audit 2026-08-05).
 const TimeInStageChart = dynamic(() =>

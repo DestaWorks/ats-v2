@@ -15,7 +15,7 @@ import {
   type ClientProfileDTO,
   type UpdateClientInput,
 } from "@destaworks/contracts/validation/client";
-import type { PatchCrmClientResponse } from "@/app/api/crm/clients/[id]/route";
+import type { PatchCrmClientResponse } from "@destaworks/contracts/http/crm";
 import { useApiForm } from "@/lib/forms/use-api-form";
 import { emptyToNull } from "@/lib/forms/empty-to-null";
 import { patchJson } from "@/lib/api/client";

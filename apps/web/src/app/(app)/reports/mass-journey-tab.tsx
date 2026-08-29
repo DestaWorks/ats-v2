@@ -6,7 +6,7 @@ import { EmptyState } from "@destaworks/ui/empty-state";
 import { StatCard } from "../dashboard/stat-card";
 import { ReportTabShell } from "./lib/report-tab-shell";
 import { buildReportQuery, useReportFetch, type ReportFilterState } from "./lib/use-report-fetch";
-import type { GetReportsMassJourneyResponse } from "@/app/api/reports/mass-journey/route";
+import type { MassJourneyDTO as GetReportsMassJourneyResponse } from "@destaworks/contracts/validation/reports";
 
 /** One accent per active stage (order 0-8), cycling — a fixed, readable palette for the Gantt bars. */
 const SEGMENT_COLORS = [

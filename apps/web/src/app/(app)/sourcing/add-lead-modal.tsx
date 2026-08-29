@@ -3,12 +3,14 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { SOURCES } from "@destaworks/domain/constants";
-import { addLeadSchema } from "@destaworks/contracts/validation/lead";
+import {
+  addLeadSchema,
+  type LeadEnvelope as PostLeadResponse,
+} from "@destaworks/contracts/validation/lead";
 import { useApiForm } from "@/lib/forms/use-api-form";
 import { emptyToNull } from "@/lib/forms/empty-to-null";
 import { postJson } from "@/lib/api/client";
 import type { LeadDetailDTO } from "@destaworks/contracts/validation/lead";
-import type { PostLeadResponse } from "@/app/api/leads/route";
 import { Button, type ButtonProps } from "@destaworks/ui/button";
 import { Field } from "@destaworks/ui/field";
 import { Input } from "@destaworks/ui/input";

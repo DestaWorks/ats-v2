@@ -1,12 +1,12 @@
 import { DATE_KEY_RE, dateKeyForOffset } from "@destaworks/domain/daily";
-import type { DailyBriefDTO } from "@destaworks/contracts/validation/briefs";
+import type * as Contract from "@destaworks/contracts/http/briefs";
 import { requireCapability } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { viewerTzOffset } from "@destaworks/integrations/http/viewer-tz";
 import { briefService } from "@destaworks/application/brief.service";
 
 /** Response body of `GET /api/briefs/daily` — `null` when no brief is saved for that day. */
-export type GetBriefsDailyResponse = DailyBriefDTO | null;
+export type GetBriefsDailyResponse = Contract.GetBriefsDailyResponse;
 
 /**
  * GET /api/briefs/daily?date=YYYY-MM-DD — the saved brief for that day, or `null`. LEADERSHIP

@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from "react";
 import type { HealthScoreDTO, RevenueDTO } from "@destaworks/contracts/validation/crm-analytics";
-import type { GetCrmClientHealthResponse } from "@/app/api/crm/clients/[id]/health/route";
-import type { GetCrmClientRevenueResponse } from "@/app/api/crm/clients/[id]/revenue/route";
+import type {
+  GetCrmClientHealthResponse,
+  GetCrmClientRevenueResponse,
+} from "@destaworks/contracts/http/crm";
 import type { ClientHealthTier } from "@destaworks/domain/rules/client-health";
 import { getJson } from "@/lib/api/client";
 import { Badge, type BadgeTone } from "@destaworks/ui/badge";

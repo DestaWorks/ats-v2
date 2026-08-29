@@ -10,34 +10,23 @@ import type {
   ImportLeadRow,
   LogOutreachInput,
   UpdateOutreachInput,
+  LeadEnvelope,
 } from "@destaworks/contracts/validation/lead";
 import { type ApiResult, deleteJson, getJson, patchJson, postJson } from "@/lib/api/client";
-import type { DeleteLeadResponse, GetLeadResponse } from "@/app/api/leads/[id]/route";
-import type { PostLeadOutreachResponse } from "@/app/api/leads/[id]/outreach/route";
 import type {
-  DeleteLeadOutreachAttemptResponse,
-  PatchLeadOutreachAttemptResponse,
-} from "@/app/api/leads/[id]/outreach/[attemptId]/route";
-import type { PostLeadPromoteResponse } from "@/app/api/leads/[id]/promote/route";
-import type { PostLeadRespondResponse } from "@/app/api/leads/[id]/respond/route";
-import type { PostLeadRestoreResponse } from "@/app/api/leads/[id]/restore/route";
-import type { PostLeadSnoozeResponse } from "@/app/api/leads/[id]/snooze/route";
-import type { PostLeadBulkResponse } from "@/app/api/leads/bulk/route";
-import type { PostLeadImportResponse } from "@/app/api/leads/import/route";
+  SoftDeletedResponse as DeleteLeadResponse,
+  PromotedCandidateResponse as PostLeadPromoteResponse,
+  BulkActionCounts as PostLeadBulkResponse,
+  BulkAddCounts as PostLeadImportResponse,
+} from "@destaworks/contracts/api";
 
 /** Log an outreach attempt (advances the lead's status server-side). Returns the fresh detail. */
-export function postOutreach(
-  id: string,
-  body: LogOutreachInput,
-): Promise<ApiResult<PostLeadOutreachResponse>> {
+export function postOutreach(id: string, body: LogOutreachInput): Promise<ApiResult<LeadEnvelope>> {
   return postJson(`/api/leads/${id}/outreach`, body);
 }
 
 /** Mark the lead Responded (Hot/Cold). Returns the fresh detail. */
-export function postRespond(
-  id: string,
-  kind: "hot" | "cold",
-): Promise<ApiResult<PostLeadRespondResponse>> {
+export function postRespond(id: string, kind: "hot" | "cold"): Promise<ApiResult<LeadEnvelope>> {
   return postJson(`/api/leads/${id}/respond`, { kind });
 }
 
@@ -47,7 +36,7 @@ export function postPromote(id: string): Promise<ApiResult<PostLeadPromoteRespon
 }
 
 /** Restore a soft-deleted lead (clears the delete markers). Returns the fresh detail. */
-export function postRestore(id: string): Promise<ApiResult<PostLeadRestoreResponse>> {
+export function postRestore(id: string): Promise<ApiResult<LeadEnvelope>> {
   return postJson(`/api/leads/${id}/restore`, {});
 }
 
@@ -57,15 +46,12 @@ export function deleteLead(id: string): Promise<ApiResult<DeleteLeadResponse>> {
 }
 
 /** Load one lead's full detail (the outreach-history modal seeds from this). */
-export function getLeadDetail(id: string): Promise<ApiResult<GetLeadResponse>> {
+export function getLeadDetail(id: string): Promise<ApiResult<LeadEnvelope>> {
   return getJson(`/api/leads/${id}`);
 }
 
 /** Snooze (`until` a date) or wake (`until: null`) the lead. Returns the fresh detail. */
-export function postSnooze(
-  id: string,
-  until: string | null,
-): Promise<ApiResult<PostLeadSnoozeResponse>> {
+export function postSnooze(id: string, until: string | null): Promise<ApiResult<LeadEnvelope>> {
   return postJson(`/api/leads/${id}/snooze`, { until });
 }
 
@@ -74,7 +60,7 @@ export function patchOutreachAttempt(
   id: string,
   attemptId: string,
   body: UpdateOutreachInput,
-): Promise<ApiResult<PatchLeadOutreachAttemptResponse>> {
+): Promise<ApiResult<LeadEnvelope>> {
   return patchJson(`/api/leads/${id}/outreach/${attemptId}`, body);
 }
 
@@ -82,7 +68,7 @@ export function patchOutreachAttempt(
 export function deleteOutreachAttempt(
   id: string,
   attemptId: string,
-): Promise<ApiResult<DeleteLeadOutreachAttemptResponse>> {
+): Promise<ApiResult<LeadEnvelope>> {
   return deleteJson(`/api/leads/${id}/outreach/${attemptId}`);
 }
 

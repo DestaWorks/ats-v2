@@ -3,9 +3,11 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import type { AdminPortalContactDTO } from "@destaworks/contracts/validation/portal";
-import type { GetCrmPortalContactsResponse } from "@/app/api/crm/clients/[id]/portal/contacts/route";
-import type { PostCrmPortalTokenResponse } from "@/app/api/crm/clients/[id]/portal/contacts/[contactId]/tokens/route";
-import type { PostCrmPortalTokenRevokeResponse } from "@/app/api/crm/clients/[id]/portal/tokens/[tokenId]/revoke/route";
+import type {
+  GetCrmPortalContactsResponse,
+  PostCrmPortalTokenResponse,
+  PostCrmPortalTokenRevokeResponse,
+} from "@destaworks/contracts/http/crm";
 import { getJson, messageForFailure, postJson } from "@/lib/api/client";
 import { Badge } from "@destaworks/ui/badge";
 import { Button } from "@destaworks/ui/button";

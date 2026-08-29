@@ -2,8 +2,10 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { toast } from "sonner";
-import type { GetCandidateJourneyResponse } from "@/app/api/candidates/[id]/journey/route";
-import type { JourneyEventDTO } from "@destaworks/contracts/validation/journey";
+import type {
+  JourneyEventDTO,
+  JourneyDTO as GetCandidateJourneyResponse,
+} from "@destaworks/contracts/validation/journey";
 import { getJson, messageForFailure } from "@/lib/api/client";
 import { cn } from "@destaworks/domain/utils/cn";
 import { Button } from "@destaworks/ui/button";

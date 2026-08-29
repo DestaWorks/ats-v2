@@ -10,9 +10,11 @@ import {
   type DealDTO,
   type UpdateDealInput,
 } from "@destaworks/contracts/validation/client";
-import type { PatchCrmDealResponse } from "@/app/api/crm/clients/[id]/deals/[dealId]/route";
-import type { PostCrmDealBlockerResponse } from "@/app/api/crm/clients/[id]/deals/[dealId]/blockers/route";
-import type { PatchCrmDealBlockerResponse } from "@/app/api/crm/clients/[id]/deals/[dealId]/blockers/[blockerId]/route";
+import type {
+  PatchCrmDealResponse,
+  PostCrmDealBlockerResponse,
+  PatchCrmDealBlockerResponse,
+} from "@destaworks/contracts/http/crm";
 import { useZodForm } from "@/lib/forms/use-zod-form";
 import { deleteJson, messageForFailure, patchJson, postJson } from "@/lib/api/client";
 import { Button } from "@destaworks/ui/button";

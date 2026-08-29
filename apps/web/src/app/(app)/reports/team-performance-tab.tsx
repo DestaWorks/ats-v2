@@ -6,7 +6,7 @@ import { EmptyState } from "@destaworks/ui/empty-state";
 import { Table, Td } from "@destaworks/ui/table";
 import { ReportTabShell } from "./lib/report-tab-shell";
 import { buildReportQuery, useReportFetch, type ReportFilterState } from "./lib/use-report-fetch";
-import type { GetReportsTeamPerformanceResponse } from "@/app/api/reports/team-performance/route";
+import type { TeamPerformanceDTO as GetReportsTeamPerformanceResponse } from "@destaworks/contracts/validation/reports";
 
 // recharts is heavy — load it only once this tab actually renders (perf audit 2026-08-05).
 const TeamPerformanceChart = dynamic(() =>

@@ -5,7 +5,7 @@
  * `readFailure`/`postJson`/`messageForFailure`) lives in `@/lib/api/client`; only the route-specific
  * calls + the pure type-to-confirm gate live here (no server imports — safe to bundle client-side).
  */
-import type { PostCandidatePurgeResponse } from "@/app/api/candidates/[id]/purge/route";
+import type { CandidateAckEnvelope as PostCandidatePurgeResponse } from "@destaworks/contracts/validation/envelopes";
 import type { PostCandidateRestoreResponse } from "@/app/api/candidates/[id]/restore/route";
 import { postJson, type ApiResult } from "@/lib/api/client";
 

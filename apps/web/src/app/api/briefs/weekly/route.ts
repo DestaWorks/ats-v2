@@ -1,12 +1,12 @@
 import { DATE_KEY_RE, dateKeyForOffset, mondayOf } from "@destaworks/domain/daily";
-import type { WeeklyBriefDTO } from "@destaworks/contracts/validation/briefs";
+import type * as Contract from "@destaworks/contracts/http/briefs";
 import { requireCapability } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { viewerTzOffset } from "@destaworks/integrations/http/viewer-tz";
 import { briefService } from "@destaworks/application/brief.service";
 
 /** Response body of `GET /api/briefs/weekly` — `null` when no brief is saved for that week. */
-export type GetBriefsWeeklyResponse = WeeklyBriefDTO | null;
+export type GetBriefsWeeklyResponse = Contract.GetBriefsWeeklyResponse;
 
 /**
  * GET /api/briefs/weekly?weekStart=YYYY-MM-DD — the saved brief for that week, or `null`.

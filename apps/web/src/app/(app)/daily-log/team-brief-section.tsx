@@ -7,10 +7,8 @@ import type { DailyBriefAiOutput, DailyBriefDTO } from "@destaworks/contracts/va
 import type { DailyOverviewDTO } from "@destaworks/contracts/validation/daily";
 import { getJson, messageForFailure, postJson } from "@/lib/api/client";
 import { awaitBriefDraft } from "@/lib/api/await-brief-draft";
-import type { GetBriefsDailyResponse } from "@/app/api/briefs/daily/route";
-import type { PostBriefsDailyGenerateResponse } from "@/app/api/briefs/daily/generate/route";
-import type { PostBriefsDailySaveResponse } from "@/app/api/briefs/daily/save/route";
-import type { GetDailyOverviewResponse } from "@/app/api/daily/overview/route";
+import type { GetBriefsDailyResponse } from "@destaworks/contracts/http/briefs";
+import type { EnqueuedJobResponse as PostBriefsDailyGenerateResponse } from "@destaworks/contracts/validation/jobs";
 import { Button } from "@destaworks/ui/button";
 import { Card } from "@destaworks/ui/card";
 import { Field } from "@destaworks/ui/field";
@@ -105,7 +103,7 @@ export function TeamBriefSection() {
     setSaved(undefined);
     setDraft(null);
     const [ov, res] = await Promise.all([
-      getJson<GetDailyOverviewResponse>(`/api/daily/overview?date=${date}&tz=${tz}`),
+      getJson<DailyOverviewDTO>(`/api/daily/overview?date=${date}&tz=${tz}`),
       getJson<GetBriefsDailyResponse>(`/api/briefs/daily?date=${date}`),
     ]);
     if (ov.ok) setOverview(ov.data);
@@ -160,7 +158,7 @@ export function TeamBriefSection() {
   async function save() {
     if (!draft) return;
     setSavingBrief(true);
-    const res = await postJson<PostBriefsDailySaveResponse>("/api/briefs/daily/save", {
+    const res = await postJson<DailyBriefDTO>("/api/briefs/daily/save", {
       ...draft,
       date,
       priorityClientId: manual.priorityClientId || null,

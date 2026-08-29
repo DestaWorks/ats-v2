@@ -8,27 +8,21 @@ import type {
   AddProspectsFromSearchInput,
   BulkProspectActionInput,
   UpdateProspectInput,
+  ProspectEnvelope,
 } from "@destaworks/contracts/validation/prospect";
 import { type ApiResult, deleteJson, getJson, patchJson, postJson } from "@/lib/api/client";
 import type {
-  DeleteProspectResponse,
-  GetProspectResponse,
-  PatchProspectResponse,
-} from "@/app/api/prospects/[id]/route";
-import type { PostProspectContactResponse } from "@/app/api/prospects/[id]/contacts/route";
-import type { DeleteProspectContactResponse } from "@/app/api/prospects/[id]/contacts/[contactId]/route";
-import type { PostProspectEnrichResponse } from "@/app/api/prospects/[id]/enrich/route";
-import type { PostProspectEnrichHunterResponse } from "@/app/api/prospects/[id]/enrich-hunter/route";
-import type { PostProspectRestoreResponse } from "@/app/api/prospects/[id]/restore/route";
-import type { PostProspectBulkResponse } from "@/app/api/prospects/bulk/route";
-import type { PostProspectBulkAddResponse } from "@/app/api/prospects/bulk-add/route";
+  SoftDeletedResponse as DeleteProspectResponse,
+  BulkActionCounts as PostProspectBulkResponse,
+  BulkAddCounts as PostProspectBulkAddResponse,
+} from "@destaworks/contracts/api";
 
 /** Load one prospect's full detail (contacts + notes). `signal` lets the caller abort a
  *  StrictMode double-invoked fetch (see `getJson`'s doc comment). */
 export function getProspectDetail(
   id: string,
   signal?: AbortSignal,
-): Promise<ApiResult<GetProspectResponse>> {
+): Promise<ApiResult<ProspectEnvelope>> {
   return getJson(`/api/prospects/${id}`, signal);
 }
 
@@ -36,7 +30,7 @@ export function getProspectDetail(
 export function patchProspect(
   id: string,
   body: UpdateProspectInput,
-): Promise<ApiResult<PatchProspectResponse>> {
+): Promise<ApiResult<ProspectEnvelope>> {
   return patchJson(`/api/prospects/${id}`, body);
 }
 
@@ -46,7 +40,7 @@ export function deleteProspect(id: string): Promise<ApiResult<DeleteProspectResp
 }
 
 /** Restore a soft-deleted prospect. Returns the fresh detail. */
-export function postRestoreProspect(id: string): Promise<ApiResult<PostProspectRestoreResponse>> {
+export function postRestoreProspect(id: string): Promise<ApiResult<ProspectEnvelope>> {
   return postJson(`/api/prospects/${id}/restore`, {});
 }
 
@@ -58,12 +52,12 @@ export function postBulkProspectAction(
 }
 
 /** Find contacts at the prospect via Apollo. Returns the fresh detail. */
-export function postEnrichApollo(id: string): Promise<ApiResult<PostProspectEnrichResponse>> {
+export function postEnrichApollo(id: string): Promise<ApiResult<ProspectEnvelope>> {
   return postJson(`/api/prospects/${id}/enrich`, {});
 }
 
 /** Hunter.io fallback when Apollo has no result. Returns the fresh detail. */
-export function postEnrichHunter(id: string): Promise<ApiResult<PostProspectEnrichHunterResponse>> {
+export function postEnrichHunter(id: string): Promise<ApiResult<ProspectEnvelope>> {
   return postJson(`/api/prospects/${id}/enrich-hunter`, {});
 }
 
@@ -71,15 +65,12 @@ export function postEnrichHunter(id: string): Promise<ApiResult<PostProspectEnri
 export function postAddContact(
   id: string,
   body: AddProspectContactInput,
-): Promise<ApiResult<PostProspectContactResponse>> {
+): Promise<ApiResult<ProspectEnvelope>> {
   return postJson(`/api/prospects/${id}/contacts`, body);
 }
 
 /** Delete one contact, scoped to its prospect. Returns the fresh detail. */
-export function deleteContact(
-  id: string,
-  contactId: string,
-): Promise<ApiResult<DeleteProspectContactResponse>> {
+export function deleteContact(id: string, contactId: string): Promise<ApiResult<ProspectEnvelope>> {
   return deleteJson(`/api/prospects/${id}/contacts/${contactId}`);
 }
 

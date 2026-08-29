@@ -6,9 +6,9 @@ import { ROLES } from "@destaworks/domain/constants";
 import {
   approveRequestSchema,
   type AccessRequestDTO,
+  type GeneratedPasswordDTO as PostAdminAccessRequestApproveResponse,
 } from "@destaworks/contracts/validation/admin";
-import type { PostAdminAccessRequestApproveResponse } from "@/app/api/admin/access-requests/[id]/approve/route";
-import type { PostAdminAccessRequestDeclineResponse } from "@/app/api/admin/access-requests/[id]/decline/route";
+import type { AcknowledgedIdDTO as PostAdminAccessRequestDeclineResponse } from "@destaworks/contracts/api";
 import { useApiForm } from "@/lib/forms/use-api-form";
 import { messageForFailure, postJson } from "@/lib/api/client";
 import { Badge } from "@destaworks/ui/badge";
