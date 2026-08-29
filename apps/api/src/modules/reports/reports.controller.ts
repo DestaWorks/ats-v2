@@ -15,7 +15,7 @@ import {
   type TimeAnalysisDTO,
   type TrendsDTO,
 } from "@destaworks/contracts/validation/reports";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { AuthContext } from "@destaworks/auth/guards";
 import { logger } from "@destaworks/config/logger";
 import { reportExportJob } from "@destaworks/jobs/definitions/report-export.job";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
@@ -179,10 +179,10 @@ export class ReportsController {
    */
   @Post("export/jobs")
   async requestExport(
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
     @Filters() filters: ReportFilters,
   ): Promise<ReportExportDTO> {
-    const row = await this.exportJobs.request(user.id, filters);
+    const row = await this.exportJobs.request(user.user.id, filters);
     try {
       await this.queue.enqueue(reportExportJob, { exportId: row.id, filters });
     } catch (err) {
@@ -193,7 +193,7 @@ export class ReportsController {
       });
       throw err;
     }
-    return this.exportJobs.get(row.id, user.id);
+    return this.exportJobs.get(row.id, user.user.id);
   }
 
   /**
@@ -205,7 +205,7 @@ export class ReportsController {
    * additionally refuses an export the caller did not request.
    */
   @Get("export/jobs/:id")
-  getExport(@CurrentUser() user: AuthUser, @Param("id") id: string): Promise<ReportExportDTO> {
-    return this.exportJobs.get(id, user.id);
+  getExport(@CurrentUser() user: AuthContext, @Param("id") id: string): Promise<ReportExportDTO> {
+    return this.exportJobs.get(id, user.user.id);
   }
 }

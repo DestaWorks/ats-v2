@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { TenantContext } from "@destaworks/domain/tenant";
 
 /**
  * Proves `clientService`'s DTO shaping (list/detail), the pipeline-snapshot aggregate math
@@ -10,7 +10,12 @@ import type { AuthUser } from "@destaworks/auth/guards";
 
 const h = vi.hoisted(() => ({
   fakeTx: { __tx: true },
-  owner: { id: "u1", email: "o@desta.works", name: "Owner", role: "Owner" as const },
+  owner: {
+    tenantId: "t1",
+    membershipId: "u1-m",
+    user: { id: "u1", email: "o@desta.works", name: "Owner" },
+    role: "Owner" as const,
+  },
   clientRepo: {
     list: vi.fn(),
     contactCounts: vi.fn(),
@@ -378,7 +383,10 @@ describe("clientService.create", () => {
   it("inserts the client and audits `create` in one txn", async () => {
     h.clientRepo.create.mockResolvedValue(clientRow());
 
-    const out = await clientService.create({ name: "Sterling Institute" }, h.owner as AuthUser);
+    const out = await clientService.create(
+      { name: "Sterling Institute" },
+      h.owner as TenantContext,
+    );
 
     const [data, tx] = h.clientRepo.create.mock.calls[0]!;
     expect(tx).toBe(h.fakeTx);
@@ -394,7 +402,7 @@ describe("clientService.update", () => {
   it("throws NOT_FOUND for a missing client (no write)", async () => {
     h.clientRepo.findById.mockResolvedValue(null);
     await expect(
-      clientService.update("nope", { location: "Hartford, CT" }, h.owner as AuthUser),
+      clientService.update("nope", { location: "Hartford, CT" }, h.owner as TenantContext),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect(h.clientRepo.update).not.toHaveBeenCalled();
   });
@@ -403,7 +411,7 @@ describe("clientService.update", () => {
     h.clientRepo.findById.mockResolvedValue(clientRow());
     h.clientRepo.update.mockResolvedValue(clientRow({ location: "Hartford, CT" }));
 
-    await clientService.update("c1", { location: "Hartford, CT" }, h.owner as AuthUser);
+    await clientService.update("c1", { location: "Hartford, CT" }, h.owner as TenantContext);
 
     const [id, data, tx] = h.clientRepo.update.mock.calls[0]!;
     expect(id).toBe("c1");
@@ -420,7 +428,7 @@ describe("clientService.addContact", () => {
       clientService.addContact(
         "nope",
         { fullName: "Jane Doe", role: "unknown" },
-        h.owner as AuthUser,
+        h.owner as TenantContext,
       ),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect(h.contactRepo.create).not.toHaveBeenCalled();
@@ -433,7 +441,7 @@ describe("clientService.addContact", () => {
     const out = await clientService.addContact(
       "c1",
       { fullName: "Jane Doe", role: "decision_maker" },
-      h.owner as AuthUser,
+      h.owner as TenantContext,
     );
 
     const [data, tx] = h.contactRepo.create.mock.calls[0]!;
@@ -449,7 +457,12 @@ describe("clientService.updateContact", () => {
     h.clientRepo.findById.mockResolvedValue(clientRow());
     h.contactRepo.update.mockResolvedValue(0);
     await expect(
-      clientService.updateContact("c1", "cc-other-client", { status: "left" }, h.owner as AuthUser),
+      clientService.updateContact(
+        "c1",
+        "cc-other-client",
+        { status: "left" },
+        h.owner as TenantContext,
+      ),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 
@@ -462,7 +475,7 @@ describe("clientService.updateContact", () => {
       "c1",
       "cc1",
       { status: "left" },
-      h.owner as AuthUser,
+      h.owner as TenantContext,
     );
 
     expect(out.status).toBe("left");
@@ -475,7 +488,7 @@ describe("clientService.removeContact", () => {
     h.clientRepo.findById.mockResolvedValue(clientRow());
     h.contactRepo.softDelete.mockResolvedValue(0);
     await expect(
-      clientService.removeContact("c1", "cc-missing", h.owner as AuthUser),
+      clientService.removeContact("c1", "cc-missing", h.owner as TenantContext),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 
@@ -483,7 +496,7 @@ describe("clientService.removeContact", () => {
     h.clientRepo.findById.mockResolvedValue(clientRow());
     h.contactRepo.softDelete.mockResolvedValue(1);
 
-    await clientService.removeContact("c1", "cc1", h.owner as AuthUser);
+    await clientService.removeContact("c1", "cc1", h.owner as TenantContext);
 
     expect(h.contactRepo.softDelete).toHaveBeenCalledWith("c1", "cc1", "u1", h.fakeTx);
     expect(h.writeAudit).toHaveBeenCalledTimes(1);
@@ -494,7 +507,7 @@ describe("clientService.addTask", () => {
   it("throws NOT_FOUND when the client doesn't exist", async () => {
     h.clientRepo.findById.mockResolvedValue(null);
     await expect(
-      clientService.addTask("nope", { title: "Follow up" }, h.owner as AuthUser),
+      clientService.addTask("nope", { title: "Follow up" }, h.owner as TenantContext),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect(h.taskRepo.create).not.toHaveBeenCalled();
   });
@@ -503,7 +516,7 @@ describe("clientService.addTask", () => {
     h.clientRepo.findById.mockResolvedValue(clientRow());
     h.taskRepo.create.mockResolvedValue(taskRow());
 
-    const out = await clientService.addTask("c1", { title: "Follow up" }, h.owner as AuthUser);
+    const out = await clientService.addTask("c1", { title: "Follow up" }, h.owner as TenantContext);
 
     const [data, tx] = h.taskRepo.create.mock.calls[0]!;
     expect(tx).toBe(h.fakeTx);
@@ -518,7 +531,12 @@ describe("clientService.updateTask", () => {
     h.clientRepo.findById.mockResolvedValue(clientRow());
     h.taskRepo.update.mockResolvedValue(0);
     await expect(
-      clientService.updateTask("c1", "ct-other-client", { status: "done" }, h.owner as AuthUser),
+      clientService.updateTask(
+        "c1",
+        "ct-other-client",
+        { status: "done" },
+        h.owner as TenantContext,
+      ),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 
@@ -527,7 +545,7 @@ describe("clientService.updateTask", () => {
     h.taskRepo.update.mockResolvedValue(1);
     h.taskRepo.findById.mockResolvedValue(taskRow({ status: "done", completedAt: new Date() }));
 
-    await clientService.updateTask("c1", "ct1", { status: "done" }, h.owner as AuthUser);
+    await clientService.updateTask("c1", "ct1", { status: "done" }, h.owner as TenantContext);
 
     const [, , data] = h.taskRepo.update.mock.calls[0]!;
     expect(data.status).toBe("done");
@@ -539,7 +557,7 @@ describe("clientService.updateTask", () => {
     h.taskRepo.update.mockResolvedValue(1);
     h.taskRepo.findById.mockResolvedValue(taskRow({ status: "open", completedAt: null }));
 
-    await clientService.updateTask("c1", "ct1", { status: "open" }, h.owner as AuthUser);
+    await clientService.updateTask("c1", "ct1", { status: "open" }, h.owner as TenantContext);
 
     const [, , data] = h.taskRepo.update.mock.calls[0]!;
     expect(data.status).toBe("open");
@@ -551,7 +569,7 @@ describe("clientService.updateTask", () => {
     h.taskRepo.update.mockResolvedValue(1);
     h.taskRepo.findById.mockResolvedValue(taskRow({ title: "Renamed" }));
 
-    await clientService.updateTask("c1", "ct1", { title: "Renamed" }, h.owner as AuthUser);
+    await clientService.updateTask("c1", "ct1", { title: "Renamed" }, h.owner as TenantContext);
 
     const [, , data] = h.taskRepo.update.mock.calls[0]!;
     expect(data).not.toHaveProperty("completedAt");
@@ -563,7 +581,7 @@ describe("clientService.removeTask", () => {
     h.clientRepo.findById.mockResolvedValue(clientRow());
     h.taskRepo.softDelete.mockResolvedValue(0);
     await expect(
-      clientService.removeTask("c1", "ct-missing", h.owner as AuthUser),
+      clientService.removeTask("c1", "ct-missing", h.owner as TenantContext),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 
@@ -571,7 +589,7 @@ describe("clientService.removeTask", () => {
     h.clientRepo.findById.mockResolvedValue(clientRow());
     h.taskRepo.softDelete.mockResolvedValue(1);
 
-    await clientService.removeTask("c1", "ct1", h.owner as AuthUser);
+    await clientService.removeTask("c1", "ct1", h.owner as TenantContext);
 
     expect(h.taskRepo.softDelete).toHaveBeenCalledWith("c1", "ct1", "u1", h.fakeTx);
     expect(h.writeAudit).toHaveBeenCalledTimes(1);
@@ -582,7 +600,7 @@ describe("clientService.addMeeting", () => {
   it("throws NOT_FOUND when the client doesn't exist", async () => {
     h.clientRepo.findById.mockResolvedValue(null);
     await expect(
-      clientService.addMeeting("nope", { type: "qbr" }, h.owner as AuthUser),
+      clientService.addMeeting("nope", { type: "qbr" }, h.owner as TenantContext),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect(h.meetingRepo.create).not.toHaveBeenCalled();
   });
@@ -591,7 +609,7 @@ describe("clientService.addMeeting", () => {
     h.clientRepo.findById.mockResolvedValue(clientRow());
     h.meetingRepo.create.mockResolvedValue(meetingRow());
 
-    const out = await clientService.addMeeting("c1", { type: "qbr" }, h.owner as AuthUser);
+    const out = await clientService.addMeeting("c1", { type: "qbr" }, h.owner as TenantContext);
 
     const [data, tx] = h.meetingRepo.create.mock.calls[0]!;
     expect(tx).toBe(h.fakeTx);
@@ -606,7 +624,7 @@ describe("clientService.removeMeeting", () => {
     h.clientRepo.findById.mockResolvedValue(clientRow());
     h.meetingRepo.softDelete.mockResolvedValue(0);
     await expect(
-      clientService.removeMeeting("c1", "cm-missing", h.owner as AuthUser),
+      clientService.removeMeeting("c1", "cm-missing", h.owner as TenantContext),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 
@@ -614,7 +632,7 @@ describe("clientService.removeMeeting", () => {
     h.clientRepo.findById.mockResolvedValue(clientRow());
     h.meetingRepo.softDelete.mockResolvedValue(1);
 
-    await clientService.removeMeeting("c1", "cm1", h.owner as AuthUser);
+    await clientService.removeMeeting("c1", "cm1", h.owner as TenantContext);
 
     expect(h.meetingRepo.softDelete).toHaveBeenCalledWith("c1", "cm1", "u1", h.fakeTx);
     expect(h.writeAudit).toHaveBeenCalledTimes(1);
@@ -625,7 +643,7 @@ describe("clientService.addDeal", () => {
   it("throws NOT_FOUND when the client doesn't exist", async () => {
     h.clientRepo.findById.mockResolvedValue(null);
     await expect(
-      clientService.addDeal("nope", { name: "Q3 renewal" }, h.owner as AuthUser),
+      clientService.addDeal("nope", { name: "Q3 renewal" }, h.owner as TenantContext),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect(h.dealRepo.create).not.toHaveBeenCalled();
   });
@@ -634,7 +652,7 @@ describe("clientService.addDeal", () => {
     h.clientRepo.findById.mockResolvedValue(clientRow());
     h.dealRepo.create.mockResolvedValue(dealRow());
 
-    const out = await clientService.addDeal("c1", { name: "Q3 renewal" }, h.owner as AuthUser);
+    const out = await clientService.addDeal("c1", { name: "Q3 renewal" }, h.owner as TenantContext);
 
     const [data, tx] = h.dealRepo.create.mock.calls[0]!;
     expect(tx).toBe(h.fakeTx);
@@ -650,7 +668,12 @@ describe("clientService.updateDeal", () => {
     h.clientRepo.findById.mockResolvedValue(clientRow());
     h.dealRepo.update.mockResolvedValue(0);
     await expect(
-      clientService.updateDeal("c1", "cd-other-client", { stage: "Signed" }, h.owner as AuthUser),
+      clientService.updateDeal(
+        "c1",
+        "cd-other-client",
+        { stage: "Signed" },
+        h.owner as TenantContext,
+      ),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 
@@ -660,7 +683,7 @@ describe("clientService.updateDeal", () => {
     h.dealRepo.findById.mockResolvedValue(dealRow({ stage: "Signed", closedAt: new Date() }));
     h.blockerRepo.listForDeal.mockResolvedValue([]);
 
-    await clientService.updateDeal("c1", "cd1", { stage: "Signed" }, h.owner as AuthUser);
+    await clientService.updateDeal("c1", "cd1", { stage: "Signed" }, h.owner as TenantContext);
 
     const [, , data] = h.dealRepo.update.mock.calls[0]!;
     expect(data.stage).toBe("Signed");
@@ -673,7 +696,7 @@ describe("clientService.updateDeal", () => {
     h.dealRepo.findById.mockResolvedValue(dealRow({ stage: "Lost", closedAt: new Date() }));
     h.blockerRepo.listForDeal.mockResolvedValue([]);
 
-    await clientService.updateDeal("c1", "cd1", { stage: "Lost" }, h.owner as AuthUser);
+    await clientService.updateDeal("c1", "cd1", { stage: "Lost" }, h.owner as TenantContext);
 
     const [, , data] = h.dealRepo.update.mock.calls[0]!;
     expect(data.stage).toBe("Lost");
@@ -686,7 +709,7 @@ describe("clientService.updateDeal", () => {
     h.dealRepo.findById.mockResolvedValue(dealRow({ stage: "Negotiation", closedAt: null }));
     h.blockerRepo.listForDeal.mockResolvedValue([]);
 
-    await clientService.updateDeal("c1", "cd1", { stage: "Negotiation" }, h.owner as AuthUser);
+    await clientService.updateDeal("c1", "cd1", { stage: "Negotiation" }, h.owner as TenantContext);
 
     const [, , data] = h.dealRepo.update.mock.calls[0]!;
     expect(data.stage).toBe("Negotiation");
@@ -699,7 +722,7 @@ describe("clientService.updateDeal", () => {
     h.dealRepo.findById.mockResolvedValue(dealRow({ estValue: 75000 }));
     h.blockerRepo.listForDeal.mockResolvedValue([]);
 
-    await clientService.updateDeal("c1", "cd1", { estValue: 75000 }, h.owner as AuthUser);
+    await clientService.updateDeal("c1", "cd1", { estValue: 75000 }, h.owner as TenantContext);
 
     const [, , data] = h.dealRepo.update.mock.calls[0]!;
     expect(data).not.toHaveProperty("closedAt");
@@ -711,7 +734,7 @@ describe("clientService.removeDeal", () => {
     h.clientRepo.findById.mockResolvedValue(clientRow());
     h.dealRepo.softDelete.mockResolvedValue(0);
     await expect(
-      clientService.removeDeal("c1", "cd-missing", h.owner as AuthUser),
+      clientService.removeDeal("c1", "cd-missing", h.owner as TenantContext),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 
@@ -719,7 +742,7 @@ describe("clientService.removeDeal", () => {
     h.clientRepo.findById.mockResolvedValue(clientRow());
     h.dealRepo.softDelete.mockResolvedValue(1);
 
-    await clientService.removeDeal("c1", "cd1", h.owner as AuthUser);
+    await clientService.removeDeal("c1", "cd1", h.owner as TenantContext);
 
     expect(h.dealRepo.softDelete).toHaveBeenCalledWith("c1", "cd1", "u1", h.fakeTx);
     expect(h.writeAudit).toHaveBeenCalledTimes(1);
@@ -731,7 +754,7 @@ describe("clientService.addBlocker", () => {
     h.clientRepo.findById.mockResolvedValue(clientRow());
     h.dealRepo.findById.mockResolvedValue(dealRow({ clientId: "OTHER_CLIENT" }));
     await expect(
-      clientService.addBlocker("c1", "cd1", { text: "Blocked" }, h.owner as AuthUser),
+      clientService.addBlocker("c1", "cd1", { text: "Blocked" }, h.owner as TenantContext),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect(h.blockerRepo.create).not.toHaveBeenCalled();
   });
@@ -745,7 +768,7 @@ describe("clientService.addBlocker", () => {
       "c1",
       "cd1",
       { text: "Waiting on legal review" },
-      h.owner as AuthUser,
+      h.owner as TenantContext,
     );
 
     const [data, tx] = h.blockerRepo.create.mock.calls[0]!;
@@ -767,7 +790,7 @@ describe("clientService.updateBlocker", () => {
         "cd1",
         "db-missing",
         { resolved: true },
-        h.owner as AuthUser,
+        h.owner as TenantContext,
       ),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
@@ -780,7 +803,13 @@ describe("clientService.updateBlocker", () => {
       blockerRow({ resolved: true, resolvedAt: new Date() }),
     ]);
 
-    await clientService.updateBlocker("c1", "cd1", "db1", { resolved: true }, h.owner as AuthUser);
+    await clientService.updateBlocker(
+      "c1",
+      "cd1",
+      "db1",
+      { resolved: true },
+      h.owner as TenantContext,
+    );
 
     const [, , data] = h.blockerRepo.update.mock.calls[0]!;
     expect(data.resolved).toBe(true);
@@ -795,7 +824,13 @@ describe("clientService.updateBlocker", () => {
       blockerRow({ resolved: false, resolvedAt: null }),
     ]);
 
-    await clientService.updateBlocker("c1", "cd1", "db1", { resolved: false }, h.owner as AuthUser);
+    await clientService.updateBlocker(
+      "c1",
+      "cd1",
+      "db1",
+      { resolved: false },
+      h.owner as TenantContext,
+    );
 
     const [, , data] = h.blockerRepo.update.mock.calls[0]!;
     expect(data.resolved).toBe(false);
@@ -809,7 +844,7 @@ describe("clientService.removeBlocker", () => {
     h.dealRepo.findById.mockResolvedValue(dealRow());
     h.blockerRepo.delete.mockResolvedValue(0);
     await expect(
-      clientService.removeBlocker("c1", "cd1", "db-missing", h.owner as AuthUser),
+      clientService.removeBlocker("c1", "cd1", "db-missing", h.owner as TenantContext),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 
@@ -818,7 +853,7 @@ describe("clientService.removeBlocker", () => {
     h.dealRepo.findById.mockResolvedValue(dealRow());
     h.blockerRepo.delete.mockResolvedValue(1);
 
-    await clientService.removeBlocker("c1", "cd1", "db1", h.owner as AuthUser);
+    await clientService.removeBlocker("c1", "cd1", "db1", h.owner as TenantContext);
 
     expect(h.blockerRepo.delete).toHaveBeenCalledWith("cd1", "db1", h.fakeTx);
     expect(h.writeAudit).toHaveBeenCalledTimes(1);

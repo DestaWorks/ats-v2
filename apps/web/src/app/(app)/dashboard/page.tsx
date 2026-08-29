@@ -41,7 +41,7 @@ export default async function DashboardPage() {
   // Legacy Overview greeting: time-of-day + first name + "N candidates in pipeline · date".
   const hour = new Date().getHours();
   const timeOfDay = hour < 12 ? "morning" : hour < 18 ? "afternoon" : "evening";
-  const firstName = user.name.split(" ")[0] ?? user.name;
+  const firstName = user.user.name.split(" ")[0] ?? user.user.name;
   const today = new Date().toLocaleDateString("en-US", {
     weekday: "long",
     month: "long",
@@ -67,7 +67,7 @@ export default async function DashboardPage() {
         {...(initialDailyOverview !== undefined && { initial: initialDailyOverview })}
         {...(initialTz !== undefined && { initialTz })}
       />
-      <SinceYouClosed userId={user.id} />
+      <SinceYouClosed userId={user.user.id} />
 
       {/* Main (stats + distribution) + a sidebar (needs attention) — fills the width on wide
           screens instead of one narrow centered column with dead space on both sides. */}

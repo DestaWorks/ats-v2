@@ -42,6 +42,11 @@ const h = vi.hoisted(() => ({
 
 vi.mock("server-only", () => ({}));
 vi.mock("@destaworks/auth/auth", () => ({ auth: { api: { getSession: async () => h.session } } }));
+vi.mock("@destaworks/db/memberships", async () => ({
+  membershipReader: (
+    await import("@destaworks/auth/testing/membership-double")
+  ).singleTenantMembershipReader(() => h.session),
+}));
 vi.mock("@destaworks/db/prisma", () => ({ prisma: {} }));
 vi.mock("@destaworks/application/candidate.service", () => ({ candidateService: h.candidate }));
 vi.mock("@destaworks/application/note.service", () => ({ noteService: h.note }));
@@ -340,7 +345,7 @@ describe("candidate mutations", () => {
     const res = await api.request("/candidates/c1/notes", jsonBody({ body: "Called back" }));
     expect(res.status).toBe(201);
     expect(await res.json()).toEqual({ note: { id: "n1", body: "Called back" } });
-    expect(h.note.add.mock.calls[0]?.[2]).toMatchObject({ id: "u1" });
+    expect(h.note.add.mock.calls[0]?.[2]).toMatchObject({ user: { id: "u1" } });
   });
 
   it("refuses a client-supplied note author — `addNoteSchema` is strict", async () => {

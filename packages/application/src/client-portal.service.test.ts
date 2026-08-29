@@ -52,7 +52,12 @@ vi.mock("@destaworks/db/repositories/open-role.repository", () => ({
 
 import { clientPortalService } from "./client-portal.service";
 
-const actor = { id: "u1", email: "o@desta.works", name: "Owner", role: "Owner" as const };
+const actor = {
+  tenantId: "t1",
+  membershipId: "u1-m",
+  user: { id: "u1", email: "o@desta.works", name: "Owner" },
+  role: "Owner" as const,
+};
 const contact = {
   id: "c1",
   clientId: "cl1",

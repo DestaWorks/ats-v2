@@ -3,7 +3,7 @@ import type {
   SavedViewDTO,
 } from "@destaworks/contracts/validation/saved-view";
 import type { SavedViewScope } from "@destaworks/domain/constants";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { TenantContext } from "@destaworks/domain/tenant";
 import { writeAudit } from "@destaworks/db/audit";
 import { withTransaction } from "@destaworks/db/with-transaction";
 import {
@@ -31,15 +31,15 @@ function toDTO(row: SavedViewRow): SavedViewDTO {
  * (per-user localStorage) and the DailyTarget/JournalEntry precedent.
  */
 export const savedViewService = {
-  async list(scope: SavedViewScope, user: AuthUser): Promise<SavedViewDTO[]> {
-    const rows = await savedViewRepository.listByUser(user.id, scope);
+  async list(scope: SavedViewScope, ctx: TenantContext): Promise<SavedViewDTO[]> {
+    const rows = await savedViewRepository.listByUser(ctx.user.id, scope);
     return rows.map(toDTO);
   },
 
-  async create(input: CreateSavedViewInput, user: AuthUser): Promise<SavedViewDTO> {
+  async create(input: CreateSavedViewInput, ctx: TenantContext): Promise<SavedViewDTO> {
     const query = input.query.replace(/^\?+/, "");
     const existing = await savedViewRepository.findByUserScopeName(
-      user.id,
+      ctx.user.id,
       input.scope,
       input.name,
     );
@@ -49,13 +49,13 @@ export const savedViewService = {
 
     const row = await withTransaction(async (tx) => {
       const created = await savedViewRepository.create(
-        { userId: user.id, scope: input.scope, name: input.name, query },
+        { userId: ctx.user.id, scope: input.scope, name: input.name, query },
         tx,
       );
       await writeAudit(tx, {
         entity: "saved_view",
         entityId: created.id,
-        actor: user.id,
+        actor: ctx.user.id,
         action: "create",
         after: { scope: created.scope, name: created.name },
       });
@@ -66,14 +66,14 @@ export const savedViewService = {
 
   /** NOT_FOUND (not FORBIDDEN) whether the id doesn't exist or belongs to another user —
    *  deliberately indistinguishable, so the error can't be used to enumerate other users' ids. */
-  async remove(id: string, user: AuthUser): Promise<{ id: string }> {
+  async remove(id: string, ctx: TenantContext): Promise<{ id: string }> {
     await withTransaction(async (tx) => {
-      const { count } = await savedViewRepository.deleteOwned(id, user.id, tx);
+      const { count } = await savedViewRepository.deleteOwned(id, ctx.user.id, tx);
       if (count === 0) throw new AppError("NOT_FOUND", "Saved view not found");
       await writeAudit(tx, {
         entity: "saved_view",
         entityId: id,
-        actor: user.id,
+        actor: ctx.user.id,
         action: "delete",
       });
     });

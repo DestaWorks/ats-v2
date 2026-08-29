@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { TenantContext } from "@destaworks/domain/tenant";
 
 /**
  * Proves the candidate service's transition rules WITHOUT a DB: the stage gate is
@@ -11,8 +11,18 @@ import type { AuthUser } from "@destaworks/auth/guards";
 
 const h = vi.hoisted(() => ({
   fakeTx: { __tx: true },
-  user: { id: "u1", email: "u@desta.works", name: "Test User", role: "Associate" as const },
-  owner: { id: "o1", email: "o@desta.works", name: "Owner", role: "Owner" as const },
+  user: {
+    tenantId: "t1",
+    membershipId: "u1-m",
+    user: { id: "u1", email: "u@desta.works", name: "Test User" },
+    role: "Associate" as const,
+  },
+  owner: {
+    tenantId: "t1",
+    membershipId: "o1-m",
+    user: { id: "o1", email: "o@desta.works", name: "Owner" },
+    role: "Owner" as const,
+  },
   candidateRepo: {
     findById: vi.fn(),
     create: vi.fn(),
@@ -181,7 +191,7 @@ describe("candidateService.move", () => {
   it("throws NOT_FOUND when the candidate does not exist", async () => {
     h.candidateRepo.findById.mockResolvedValue(null);
     await expect(
-      candidateService.move("missing", "CLIENT_INTERVIEW", h.user as AuthUser),
+      candidateService.move("missing", "CLIENT_INTERVIEW", h.user as TenantContext),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect(h.candidateRepo.update).not.toHaveBeenCalled();
   });
@@ -191,7 +201,7 @@ describe("candidateService.move", () => {
     h.candidateRepo.findById.mockResolvedValue(candidate({ credential: null, licenseState: null }));
 
     await expect(
-      candidateService.move("c1", "QUALIFIED_PRESCREEN", h.user as AuthUser),
+      candidateService.move("c1", "QUALIFIED_PRESCREEN", h.user as TenantContext),
     ).rejects.toMatchObject({ code: "STAGE_BLOCKED" });
 
     expect(h.candidateRepo.update).not.toHaveBeenCalled();
@@ -203,7 +213,7 @@ describe("candidateService.move", () => {
     h.candidateRepo.findById.mockResolvedValue(candidate());
     h.candidateRepo.update.mockResolvedValue({ id: "c1", status: "CLIENT_INTERVIEW" });
 
-    await candidateService.move("c1", "CLIENT_INTERVIEW", h.user as AuthUser);
+    await candidateService.move("c1", "CLIENT_INTERVIEW", h.user as TenantContext);
 
     // candidate update — denormalized pipeline columns, using the shared tx
     expect(h.candidateRepo.update).toHaveBeenCalledTimes(1);
@@ -245,7 +255,7 @@ describe("candidateService.move", () => {
     );
     h.candidateRepo.update.mockResolvedValue({ id: "c1" });
 
-    await candidateService.move("c1", "STARTED_DAY1", h.user as AuthUser);
+    await candidateService.move("c1", "STARTED_DAY1", h.user as TenantContext);
 
     const [, data] = h.candidateRepo.update.mock.calls[0]!;
     expect(data.placedAt).toBeInstanceOf(Date);
@@ -260,7 +270,7 @@ describe("candidateService.move", () => {
     );
     h.candidateRepo.update.mockResolvedValue({ id: "c1" });
 
-    await candidateService.move("c1", "STARTED_DAY1", h.user as AuthUser);
+    await candidateService.move("c1", "STARTED_DAY1", h.user as TenantContext);
 
     const [, data] = h.candidateRepo.update.mock.calls[0]!;
     expect(data.placedAt).toBe(originalPlacedAt); // NOT overwritten with now()
@@ -270,7 +280,7 @@ describe("candidateService.move", () => {
     h.candidateRepo.findById.mockResolvedValue(candidate());
     await expect(
       // @ts-expect-error — exercising the runtime guard at a route-like boundary
-      candidateService.move("c1", "NOT_A_REAL_STATUS", h.user as AuthUser),
+      candidateService.move("c1", "NOT_A_REAL_STATUS", h.user as TenantContext),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
     expect(h.candidateRepo.update).not.toHaveBeenCalled();
   });
@@ -290,7 +300,7 @@ describe("candidateService.bulkMove", () => {
     const result = await candidateService.bulkMove(
       ["ok", "bad"],
       "QUALIFIED_PRESCREEN",
-      h.user as AuthUser,
+      h.user as TenantContext,
     );
 
     expect(result.moved).toEqual(["ok"]);
@@ -314,7 +324,7 @@ describe("candidateService.bulkMove", () => {
     const result = await candidateService.bulkMove(
       ["missing", "c1"],
       "CLIENT_INTERVIEW",
-      h.user as AuthUser,
+      h.user as TenantContext,
     );
 
     expect(result.moved).toEqual(["c1"]);
@@ -365,7 +375,7 @@ describe("candidateService.restore", () => {
     );
     h.candidateRepo.restore.mockResolvedValue({ id: "c1", status: "CLIENT_INTERVIEW" });
 
-    await candidateService.restore("c1", h.owner as AuthUser);
+    await candidateService.restore("c1", h.owner as TenantContext);
 
     // loads WITH includeDeleted (default read excludes trashed rows)
     expect(h.candidateRepo.findById).toHaveBeenCalledWith("c1", { includeDeleted: true });
@@ -379,7 +389,7 @@ describe("candidateService.restore", () => {
 
   it("throws CONFLICT restoring a live (non-trashed) candidate", async () => {
     h.candidateRepo.findById.mockResolvedValue(candidate({ deletedAt: null }));
-    await expect(candidateService.restore("c1", h.owner as AuthUser)).rejects.toMatchObject({
+    await expect(candidateService.restore("c1", h.owner as TenantContext)).rejects.toMatchObject({
       code: "CONFLICT",
     });
     expect(h.candidateRepo.restore).not.toHaveBeenCalled();
@@ -388,7 +398,9 @@ describe("candidateService.restore", () => {
 
   it("throws NOT_FOUND when the candidate does not exist", async () => {
     h.candidateRepo.findById.mockResolvedValue(null);
-    await expect(candidateService.restore("missing", h.owner as AuthUser)).rejects.toMatchObject({
+    await expect(
+      candidateService.restore("missing", h.owner as TenantContext),
+    ).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
     expect(h.candidateRepo.restore).not.toHaveBeenCalled();
@@ -398,7 +410,7 @@ describe("candidateService.restore", () => {
 describe("candidateService.purge", () => {
   it("requires purgeCandidate — a non-holder gets FORBIDDEN and the candidate is untouched", async () => {
     // h.user is an Associate (no purgeCandidate). Guard fires BEFORE any read/mutation.
-    await expect(candidateService.purge("c1", h.user as AuthUser)).rejects.toMatchObject({
+    await expect(candidateService.purge("c1", h.user as TenantContext)).rejects.toMatchObject({
       code: "FORBIDDEN",
     });
     expect(h.candidateRepo.findById).not.toHaveBeenCalled();
@@ -407,7 +419,7 @@ describe("candidateService.purge", () => {
 
   it("throws CONFLICT purging a live (non-trashed) candidate (two-step gate)", async () => {
     h.candidateRepo.findById.mockResolvedValue(candidate({ deletedAt: null }));
-    await expect(candidateService.purge("c1", h.owner as AuthUser)).rejects.toMatchObject({
+    await expect(candidateService.purge("c1", h.owner as TenantContext)).rejects.toMatchObject({
       code: "CONFLICT",
     });
     expect(h.candidateRepo.purge).not.toHaveBeenCalled();
@@ -416,9 +428,11 @@ describe("candidateService.purge", () => {
 
   it("throws NOT_FOUND when the candidate does not exist", async () => {
     h.candidateRepo.findById.mockResolvedValue(null);
-    await expect(candidateService.purge("missing", h.owner as AuthUser)).rejects.toMatchObject({
-      code: "NOT_FOUND",
-    });
+    await expect(candidateService.purge("missing", h.owner as TenantContext)).rejects.toMatchObject(
+      {
+        code: "NOT_FOUND",
+      },
+    );
     expect(h.candidateRepo.purge).not.toHaveBeenCalled();
   });
 
@@ -428,7 +442,7 @@ describe("candidateService.purge", () => {
     );
     h.candidateRepo.purge.mockResolvedValue({ id: "c1" });
 
-    const result = await candidateService.purge("c1", h.owner as AuthUser);
+    const result = await candidateService.purge("c1", h.owner as TenantContext);
     expect(result).toEqual({ id: "c1" });
 
     // audit is written BEFORE the delete, same tx (survives the cascade — no FK)
@@ -464,7 +478,7 @@ describe("candidateService.listTrash", () => {
     h.userRepo.namesByIds.mockResolvedValue(new Map([["u9", "Deleter Person"]]));
 
     // Viewer WITHOUT viewCredentials (Associate) → licenseNumber must be gated out.
-    const trash = await candidateService.listTrash(h.user as AuthUser);
+    const trash = await candidateService.listTrash(h.user as TenantContext);
 
     expect(h.candidateRepo.listDeleted).toHaveBeenCalledTimes(1);
     // single batched name lookup for the actor ids
@@ -498,7 +512,7 @@ describe("candidateService.listTrash", () => {
     ]);
     h.userRepo.namesByIds.mockResolvedValue(new Map());
 
-    const trash = await candidateService.listTrash(h.owner as AuthUser);
+    const trash = await candidateService.listTrash(h.owner as TenantContext);
     expect(trash.items[0]!.deletedByName).toBeNull();
     expect(trash.items[0]!.clientName).toBeNull();
   });
@@ -531,7 +545,7 @@ describe("candidateService.getProfile", () => {
   it("returns just the PII-gated profile fields (no documents/notes/history/outreach reads)", async () => {
     h.candidateRepo.findById.mockResolvedValue(fullCandidate());
 
-    const profile = await candidateService.getProfile("c1", h.owner as AuthUser);
+    const profile = await candidateService.getProfile("c1", h.owner as TenantContext);
 
     expect(profile.id).toBe("c1");
     expect(profile.email).toBeDefined();
@@ -542,7 +556,9 @@ describe("candidateService.getProfile", () => {
 
   it("throws NOT_FOUND for a missing candidate", async () => {
     h.candidateRepo.findById.mockResolvedValue(null);
-    await expect(candidateService.getProfile("nope", h.owner as AuthUser)).rejects.toMatchObject({
+    await expect(
+      candidateService.getProfile("nope", h.owner as TenantContext),
+    ).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
   });
@@ -574,7 +590,7 @@ describe("candidateService.getCandidateDetail", () => {
       },
     ]);
 
-    const detail = await candidateService.getCandidateDetail("c1", h.owner as AuthUser);
+    const detail = await candidateService.getCandidateDetail("c1", h.owner as TenantContext);
 
     expect(detail.clientName).toBe("Acme Health");
     expect(detail.candidate.id).toBe("c1");
@@ -599,7 +615,7 @@ describe("candidateService.getCandidateDetail", () => {
     h.candidateRepo.findById.mockResolvedValue(fullCandidate());
     h.docRepo.listByCandidate.mockResolvedValue([documentRow()]);
 
-    const detail = await candidateService.getCandidateDetail("c1", h.owner as AuthUser);
+    const detail = await candidateService.getCandidateDetail("c1", h.owner as TenantContext);
 
     expect(detail.canVerifyCredentials).toBe(true);
     expect(detail.candidate.licenseNumber).toBe("LIC-SECRET-123");
@@ -611,7 +627,7 @@ describe("candidateService.getCandidateDetail", () => {
     h.candidateRepo.findById.mockResolvedValue(fullCandidate());
     h.docRepo.listByCandidate.mockResolvedValue([documentRow()]);
 
-    const detail = await candidateService.getCandidateDetail("c1", h.user as AuthUser);
+    const detail = await candidateService.getCandidateDetail("c1", h.user as TenantContext);
 
     expect(detail.canVerifyCredentials).toBe(false);
     expect("licenseNumber" in detail.candidate).toBe(false);
@@ -627,7 +643,7 @@ describe("candidateService.getCandidateDetail", () => {
     h.noteRepo.listByCandidate.mockResolvedValue([]);
     h.stageRepo.listByCandidate.mockResolvedValue([]);
     await expect(
-      candidateService.getCandidateDetail("missing", h.owner as AuthUser),
+      candidateService.getCandidateDetail("missing", h.owner as TenantContext),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 
@@ -644,20 +660,20 @@ describe("candidateService.getCandidateDetail", () => {
         actorId: "u1",
       })),
     );
-    const detail = await candidateService.getCandidateDetail("c1", h.owner as AuthUser);
+    const detail = await candidateService.getCandidateDetail("c1", h.owner as TenantContext);
     expect(detail.stageHistory).toHaveLength(10);
   });
 
   it("null clientName when the candidate has no client", async () => {
     h.candidateRepo.findById.mockResolvedValue(fullCandidate({ clientId: null }));
-    const detail = await candidateService.getCandidateDetail("c1", h.owner as AuthUser);
+    const detail = await candidateService.getCandidateDetail("c1", h.owner as TenantContext);
     expect(detail.clientName).toBeNull();
   });
 
   it("throws NOT_FOUND when the candidate is missing/soft-deleted", async () => {
     h.candidateRepo.findById.mockResolvedValue(null);
     await expect(
-      candidateService.getCandidateDetail("missing", h.owner as AuthUser),
+      candidateService.getCandidateDetail("missing", h.owner as TenantContext),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 
@@ -665,7 +681,7 @@ describe("candidateService.getCandidateDetail", () => {
     // NJ / PMHNP / Active vs NJ+PMHNP rules → state 30 + cred 30 + license 10 = 70/70 → pct 100.
     h.candidateRepo.findById.mockResolvedValue(fullCandidate());
     h.clientRulesRepo.list.mockResolvedValue([acmeRules()]);
-    const detail = await candidateService.getCandidateDetail("c1", h.owner as AuthUser);
+    const detail = await candidateService.getCandidateDetail("c1", h.owner as TenantContext);
     expect(detail.scoring).not.toBeNull();
     expect(detail.scoring!.pct).toBe(100);
     expect(detail.scoring!.max).toBe(70);
@@ -677,7 +693,7 @@ describe("candidateService.getCandidateDetail", () => {
   it("populates scoring.autoDisqualify (advisory) for an expired-license candidate", async () => {
     h.candidateRepo.findById.mockResolvedValue(fullCandidate({ licenseStatus: "Expired" }));
     h.clientRulesRepo.list.mockResolvedValue([acmeRules()]);
-    const detail = await candidateService.getCandidateDetail("c1", h.owner as AuthUser);
+    const detail = await candidateService.getCandidateDetail("c1", h.owner as TenantContext);
     expect(detail.scoring!.autoDisqualify).toContain("License expired");
     expect(detail.scoring!.flags).toContain("License expired");
   });
@@ -685,14 +701,14 @@ describe("candidateService.getCandidateDetail", () => {
   it("scoring is null when the candidate has no client", async () => {
     h.candidateRepo.findById.mockResolvedValue(fullCandidate({ clientId: null }));
     h.clientRulesRepo.list.mockResolvedValue([acmeRules()]);
-    const detail = await candidateService.getCandidateDetail("c1", h.owner as AuthUser);
+    const detail = await candidateService.getCandidateDetail("c1", h.owner as TenantContext);
     expect(detail.scoring).toBeNull();
   });
 
   it("scoring is null when the assigned client has no rules row", async () => {
     h.candidateRepo.findById.mockResolvedValue(fullCandidate());
     h.clientRulesRepo.list.mockResolvedValue([]); // no rules seeded
-    const detail = await candidateService.getCandidateDetail("c1", h.owner as AuthUser);
+    const detail = await candidateService.getCandidateDetail("c1", h.owner as TenantContext);
     expect(detail.scoring).toBeNull();
   });
 
@@ -716,7 +732,7 @@ describe("candidateService.getCandidateDetail", () => {
     ]);
     h.userRepo.namesByIds.mockResolvedValue(new Map([["u1", "Test User"]]));
 
-    const detail = await candidateService.getCandidateDetail("c1", h.owner as AuthUser);
+    const detail = await candidateService.getCandidateDetail("c1", h.owner as TenantContext);
 
     expect(h.outreachRepo.listForCandidate).toHaveBeenCalledWith("c1");
     expect(h.userRepo.namesByIds).toHaveBeenCalledWith(["u1", "u2"]);
@@ -756,7 +772,7 @@ describe("candidateService.logOutreach", () => {
     const dto = await candidateService.logOutreach(
       "c1",
       { channel: "phone", note: "Left a voicemail" },
-      h.user as AuthUser,
+      h.user as TenantContext,
     );
 
     // insert — actor from the SESSION user, on the shared tx.
@@ -792,7 +808,7 @@ describe("candidateService.logOutreach", () => {
   it("throws NOT_FOUND (no writes) when the candidate is missing/soft-deleted", async () => {
     h.candidateRepo.findById.mockResolvedValue(null);
     await expect(
-      candidateService.logOutreach("missing", { channel: "email" }, h.user as AuthUser),
+      candidateService.logOutreach("missing", { channel: "email" }, h.user as TenantContext),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect(h.outreachRepo.createForCandidate).not.toHaveBeenCalled();
     expect(h.candidateRepo.incrementOutreach).not.toHaveBeenCalled();
@@ -806,7 +822,11 @@ describe("candidateService.update", () => {
     h.candidateRepo.findById.mockResolvedValue(existing);
     h.candidateRepo.update.mockResolvedValue(fullCandidate({ name: "New Name", city: "Trenton" }));
 
-    await candidateService.update("c1", { name: "New Name", city: "Trenton" }, h.owner as AuthUser);
+    await candidateService.update(
+      "c1",
+      { name: "New Name", city: "Trenton" },
+      h.owner as TenantContext,
+    );
 
     // repo update — the exact profile input, on the shared tx.
     expect(h.candidateRepo.update).toHaveBeenCalledTimes(1);
@@ -832,7 +852,7 @@ describe("candidateService.update", () => {
   it("throws NOT_FOUND when the candidate is missing and writes nothing", async () => {
     h.candidateRepo.findById.mockResolvedValue(null);
     await expect(
-      candidateService.update("missing", { name: "X" }, h.owner as AuthUser),
+      candidateService.update("missing", { name: "X" }, h.owner as TenantContext),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect(h.candidateRepo.update).not.toHaveBeenCalled();
     expect(h.writeAudit).not.toHaveBeenCalled();
@@ -844,7 +864,11 @@ describe("candidateService.verifyLicense", () => {
     h.candidateRepo.findById.mockResolvedValue(fullCandidate({ licenseStatus: "Not Verified" }));
     h.candidateRepo.update.mockResolvedValue(fullCandidate({ licenseStatus: "Active" }));
 
-    await candidateService.verifyLicense("c1", { licenseStatus: "Active" }, h.user as AuthUser);
+    await candidateService.verifyLicense(
+      "c1",
+      { licenseStatus: "Active" },
+      h.user as TenantContext,
+    );
 
     expect(h.candidateRepo.update).toHaveBeenCalledTimes(1);
     const [uid, data, utx] = h.candidateRepo.update.mock.calls[0]!;
@@ -870,7 +894,7 @@ describe("candidateService.verifyLicense", () => {
     await candidateService.verifyLicense(
       "c1",
       { licenseStatus: "Active", licenseExpiry: expiry, licenseNumber: "LIC-999" },
-      h.owner as AuthUser,
+      h.owner as TenantContext,
     );
 
     const [, data] = h.candidateRepo.update.mock.calls[0]!;
@@ -881,7 +905,11 @@ describe("candidateService.verifyLicense", () => {
   it("throws NOT_FOUND when the candidate is missing", async () => {
     h.candidateRepo.findById.mockResolvedValue(null);
     await expect(
-      candidateService.verifyLicense("missing", { licenseStatus: "Active" }, h.user as AuthUser),
+      candidateService.verifyLicense(
+        "missing",
+        { licenseStatus: "Active" },
+        h.user as TenantContext,
+      ),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect(h.candidateRepo.update).not.toHaveBeenCalled();
   });
@@ -934,7 +962,7 @@ describe("candidateService.getJourney", () => {
       ]),
     );
 
-    const journey = await candidateService.getJourney("c1", h.owner as AuthUser);
+    const journey = await candidateService.getJourney("c1", h.owner as TenantContext);
 
     expect(journey.events.map((e) => e.kind)).toEqual([
       "sourced",
@@ -975,7 +1003,7 @@ describe("candidateService.getJourney", () => {
       },
     ]);
 
-    const journey = await candidateService.getJourney("c1", h.user as AuthUser);
+    const journey = await candidateService.getJourney("c1", h.user as TenantContext);
     const notes = journey.events.filter((e) => e.kind === "note");
     expect(notes).toHaveLength(1);
     expect(notes[0]!.detail).toBe("internal ok");
@@ -983,7 +1011,7 @@ describe("candidateService.getJourney", () => {
 
   it("a candidate with no lead gets a 'created' origin event instead", async () => {
     h.candidateRepo.findById.mockResolvedValue(fullCandidate());
-    const journey = await candidateService.getJourney("c1", h.owner as AuthUser);
+    const journey = await candidateService.getJourney("c1", h.owner as TenantContext);
     expect(journey.events[0]).toMatchObject({ kind: "created", detail: "Referral" });
     expect(journey.events.some((e) => e.kind === "sourced" || e.kind === "promoted")).toBe(false);
   });

@@ -18,7 +18,7 @@ import type {
   WeeklyPatternsInput,
 } from "@destaworks/contracts/validation/briefs";
 import { toIso } from "@destaworks/domain/utils/iso";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { TenantContext } from "@destaworks/domain/tenant";
 import type { AiCallOptions } from "@destaworks/integrations/ai/deadline";
 import { writeAudit } from "@destaworks/db/audit";
 import { withTransaction } from "@destaworks/db/with-transaction";
@@ -228,7 +228,7 @@ export const briefService = {
   },
 
   /** Persist the (possibly edited) draft + manual inputs (legacy `daily_brief_save`). */
-  async saveDaily(input: SaveDailyBriefInput, user: AuthUser): Promise<DailyBriefDTO> {
+  async saveDaily(input: SaveDailyBriefInput, ctx: TenantContext): Promise<DailyBriefDTO> {
     const row = await withTransaction(async (tx) => {
       const saved = await briefRepository.upsertDaily(
         {
@@ -243,7 +243,7 @@ export const briefService = {
           shiftA: input.shiftA ?? null,
           shiftB: input.shiftB ?? null,
           watchItems: input.watchItems ?? null,
-          savedById: user.id,
+          savedById: ctx.user.id,
           savedAt: new Date(),
         },
         tx,
@@ -251,13 +251,13 @@ export const briefService = {
       await writeAudit(tx, {
         entity: "daily_brief",
         entityId: saved.id,
-        actor: user.id,
+        actor: ctx.user.id,
         action: "save_daily_brief",
         after: { date: input.date },
       });
       return saved;
     });
-    return toDailyDTO(row, user.name);
+    return toDailyDTO(row, ctx.user.name);
   },
 
   async getDaily(date: string): Promise<DailyBriefDTO | null> {
@@ -330,7 +330,7 @@ export const briefService = {
     await briefRepository.upsertWeeklyDraft(mondayOf(input.weekStart), draft);
   },
 
-  async saveWeekly(input: SaveWeeklyBriefInput, user: AuthUser): Promise<WeeklyBriefDTO> {
+  async saveWeekly(input: SaveWeeklyBriefInput, ctx: TenantContext): Promise<WeeklyBriefDTO> {
     const weekStart = mondayOf(input.weekStart);
     const row = await withTransaction(async (tx) => {
       const saved = await briefRepository.upsertWeekly(
@@ -345,7 +345,7 @@ export const briefService = {
           highlights: input.highlights,
           blockers: input.blockers,
           statsSnapshot: {},
-          savedById: user.id,
+          savedById: ctx.user.id,
           savedAt: new Date(),
         },
         tx,
@@ -353,13 +353,13 @@ export const briefService = {
       await writeAudit(tx, {
         entity: "weekly_brief",
         entityId: saved.id,
-        actor: user.id,
+        actor: ctx.user.id,
         action: "save_weekly_brief",
         after: { weekStart },
       });
       return saved;
     });
-    return toWeeklyDTO(row, user.name);
+    return toWeeklyDTO(row, ctx.user.name);
   },
 
   async getWeekly(weekStart: string): Promise<WeeklyBriefDTO | null> {

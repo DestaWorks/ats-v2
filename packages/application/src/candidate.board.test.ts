@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { TenantContext } from "@destaworks/domain/tenant";
 import { decodeCursor } from "@destaworks/contracts/validation/cursor";
 
 /**
@@ -57,7 +57,12 @@ vi.mock("@destaworks/db/repositories/client-rules.repository", async () => {
 
 import { candidateService } from "./candidate.service";
 
-const viewer: AuthUser = { id: "u1", email: "u@desta.works", name: "U", role: "Associate" };
+const viewer: TenantContext = {
+  tenantId: "t1",
+  membershipId: "u1-m",
+  user: { id: "u1", email: "u@desta.works", name: "U" },
+  role: "Associate",
+};
 
 const DAY = 86_400_000;
 function daysAgo(n: number) {

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { TenantContext } from "@destaworks/domain/tenant";
 
 /**
  * Proves the Client Discovery service's writes and search/dedupe logic WITHOUT a DB or a real
@@ -10,7 +10,12 @@ import type { AuthUser } from "@destaworks/auth/guards";
 
 const h = vi.hoisted(() => ({
   fakeTx: { __tx: true },
-  associate: { id: "u1", email: "u@desta.works", name: "Test User", role: "Associate" as const },
+  associate: {
+    tenantId: "t1",
+    membershipId: "u1-m",
+    user: { id: "u1", email: "u@desta.works", name: "Test User" },
+    role: "Associate" as const,
+  },
   prospectRepo: {
     create: vi.fn(),
     findById: vi.fn(),
@@ -56,7 +61,7 @@ vi.mock("@destaworks/db/with-transaction", () => ({
 
 import { prospectService } from "./prospect.service";
 
-const associate = h.associate as AuthUser;
+const associate = h.associate as TenantContext;
 
 function prospect(overrides: Record<string, unknown> = {}) {
   return {

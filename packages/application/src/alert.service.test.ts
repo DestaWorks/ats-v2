@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { TenantContext } from "@destaworks/domain/tenant";
 
 /**
  * Proves the alerts composite WITHOUT a DB: buckets are requested for the VIEWER's id (never a
@@ -8,7 +8,12 @@ import type { AuthUser } from "@destaworks/auth/guards";
  */
 
 const h = vi.hoisted(() => ({
-  user: { id: "u1", email: "u@desta.works", name: "Test User", role: "Associate" as const },
+  user: {
+    tenantId: "t1",
+    membershipId: "u1-m",
+    user: { id: "u1", email: "u@desta.works", name: "Test User" },
+    role: "Associate" as const,
+  },
   candidateRepo: { alertBuckets: vi.fn() },
   clientRepo: {
     list: vi.fn(),
@@ -48,7 +53,7 @@ beforeEach(() => {
 
 describe("alertService.forViewer", () => {
   it("scopes the buckets to the SESSION user's id and caps at 5 rows", async () => {
-    await alertService.forViewer(h.user as AuthUser);
+    await alertService.forViewer(h.user as TenantContext);
     expect(h.candidateRepo.alertBuckets).toHaveBeenCalledWith("u1", 5, expect.any(Date));
   });
 
@@ -79,7 +84,7 @@ describe("alertService.forViewer", () => {
       verificationPending: EMPTY_BUCKET,
     });
 
-    const out = await alertService.forViewer(h.user as AuthUser);
+    const out = await alertService.forViewer(h.user as TenantContext);
 
     expect(out.overdue.count).toBe(12); // true count, not the capped row count
     expect(out.overdue.items).toEqual([
@@ -109,7 +114,7 @@ describe("alertService.forViewer", () => {
       newToReview: EMPTY_BUCKET,
       verificationPending: EMPTY_BUCKET,
     });
-    const out = await alertService.forViewer(h.user as AuthUser);
+    const out = await alertService.forViewer(h.user as TenantContext);
     expect(out.unread).toBe(4);
   });
 });

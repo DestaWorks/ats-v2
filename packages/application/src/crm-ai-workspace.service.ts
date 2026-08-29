@@ -4,7 +4,7 @@ import type {
   WorkspaceResultDTO,
 } from "@destaworks/contracts/validation/crm-ai-workspace";
 import { defined } from "@destaworks/domain/utils/defined";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { TenantContext } from "@destaworks/domain/tenant";
 import {
   generateWorkspaceText,
   type WorkspaceContext,
@@ -68,7 +68,7 @@ export const crmAiWorkspaceService = {
     return generateWorkspaceText(ctx, defined(input));
   },
 
-  async logNote(clientId: string, text: string, user: AuthUser): Promise<ClientNoteDTO> {
-    return clientNoteService.create(clientId, { text }, user);
+  async logNote(clientId: string, text: string, ctx: TenantContext): Promise<ClientNoteDTO> {
+    return clientNoteService.create(clientId, { text }, ctx);
   },
 };

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { TenantContext } from "@destaworks/domain/tenant";
 
 /**
  * Proves saved-view ownership isolation (a user can only ever list/delete their own rows — the
@@ -10,8 +10,18 @@ import type { AuthUser } from "@destaworks/auth/guards";
 
 const h = vi.hoisted(() => ({
   fakeTx: { __tx: true },
-  associate: { id: "u1", email: "u@desta.works", name: "Test User", role: "Associate" as const },
-  other: { id: "u2", email: "other@desta.works", name: "Other User", role: "Associate" as const },
+  associate: {
+    tenantId: "t1",
+    membershipId: "u1-m",
+    user: { id: "u1", email: "u@desta.works", name: "Test User" },
+    role: "Associate" as const,
+  },
+  other: {
+    tenantId: "t1",
+    membershipId: "u2-m",
+    user: { id: "u2", email: "other@desta.works", name: "Other User" },
+    role: "Associate" as const,
+  },
   repo: {
     listByUser: vi.fn(),
     findByUserScopeName: vi.fn(),
@@ -32,8 +42,8 @@ vi.mock("@destaworks/db/with-transaction", () => ({
 
 import { savedViewService } from "./saved-view.service";
 
-const associate = h.associate as AuthUser;
-const other = h.other as AuthUser;
+const associate = h.associate as TenantContext;
+const other = h.other as TenantContext;
 
 beforeEach(() => {
   vi.clearAllMocks();

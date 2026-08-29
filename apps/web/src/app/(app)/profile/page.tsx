@@ -20,10 +20,10 @@ export default async function ProfilePage() {
         </p>
       </header>
       <ProfileView
-        userName={user.name}
-        userEmail={user.email}
+        userName={user.user.name}
+        userEmail={user.user.email}
         userRole={user.role}
-        userImage={user.image ?? null}
+        userImage={user.user.image ?? null}
         preferences={preferences}
       />
     </div>

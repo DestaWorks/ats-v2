@@ -9,7 +9,7 @@ import type {
   ResumeUploadUrlDTO,
 } from "@destaworks/contracts/validation/resume";
 import type { ResumeSaveEnvelope } from "@destaworks/application/candidate.wire";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { AuthContext } from "@destaworks/auth/guards";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { RateLimit } from "../../common/decorators/rate-limit.decorator";
 import { RateLimitGuard } from "../../common/guards/rate-limit.guard";
@@ -56,7 +56,7 @@ export class ResumeController {
   async save(
     @Body(new ZodValidationPipe(saveResumeInputSchema))
     body: ContractOutput<typeof saveResumeInputSchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<ResumeSaveEnvelope> {
     return this.resumes.save(body, user);
   }

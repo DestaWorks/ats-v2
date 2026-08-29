@@ -18,7 +18,7 @@ import type {
   GetSavedViewsResponse,
   PostSavedViewResponse,
 } from "@destaworks/contracts/http/saved-view";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { AuthContext } from "@destaworks/auth/guards";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { SessionAuthGuard } from "../../common/guards/session-auth.guard";
 import { ZodValidationPipe, type ContractOutput } from "../../common/pipes/zod-validation.pipe";
@@ -42,7 +42,7 @@ export class SavedViewsController {
   async list(
     @Query(new ZodValidationPipe(savedViewListQuerySchema))
     query: ContractOutput<typeof savedViewListQuerySchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<GetSavedViewsResponse> {
     return { savedViews: await this.savedViews.list(query.scope, user) };
   }
@@ -51,7 +51,7 @@ export class SavedViewsController {
   async create(
     @Body(new ZodValidationPipe(createSavedViewSchema))
     body: ContractOutput<typeof createSavedViewSchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<PostSavedViewResponse> {
     return { savedView: await this.savedViews.create(body, user) };
   }
@@ -59,7 +59,7 @@ export class SavedViewsController {
   @Delete(":id")
   async remove(
     @Param("id") id: string,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<DeleteSavedViewResponse> {
     return this.savedViews.remove(id, user);
   }

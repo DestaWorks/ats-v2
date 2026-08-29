@@ -10,7 +10,7 @@ import {
   type SaveResumeInput,
 } from "@destaworks/contracts/validation/resume";
 import { parseResume } from "@destaworks/integrations/ai/parse-resume";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { TenantContext } from "@destaworks/domain/tenant";
 import { writeAudit } from "@destaworks/db/audit";
 import { withTransaction } from "@destaworks/db/with-transaction";
 import { candidateRepository } from "@destaworks/db/repositories/candidate.repository";
@@ -19,7 +19,9 @@ import { AppError } from "@destaworks/integrations/http/app-error";
 import {
   createSignedUploadUrl,
   getSignedDownloadUrl,
+  persistedStorageKey,
   RESUME_BUCKET,
+  unscopedStorageKey,
 } from "@destaworks/integrations/storage";
 import { toCandidateDTO } from "./candidate.dto";
 import { toDocumentDTO } from "./document.dto";
@@ -88,7 +90,7 @@ export const resumeService = {
    * `auto`/`confirm`. A below-threshold or absent confirmation creates a NEW candidate — the
    * client's match is never trusted.
    */
-  async save(input: SaveResumeInput, user: AuthUser) {
+  async save(input: SaveResumeInput, ctx: TenantContext) {
     // Re-validate the (client-editable) structured data against the variant's schema.
     const data = resumeSchemaFor(input.variant).parse(input.data);
 
@@ -143,7 +145,7 @@ export const resumeService = {
             ...mapped,
             status: "NEW_CANDIDATE",
             stageOrder: statusOrder("NEW_CANDIDATE"),
-            createdById: user.id,
+            createdById: ctx.user.id,
           },
           tx,
         );
@@ -159,7 +161,7 @@ export const resumeService = {
           extractedText: input.extractedText,
           extractedData: data,
           storageKey: input.storageKey ?? null,
-          uploadedById: user.id,
+          uploadedById: ctx.user.id,
         },
         tx,
       );
@@ -167,13 +169,13 @@ export const resumeService = {
       await writeAudit(tx, {
         entity: "document",
         entityId: document.id,
-        actor: user.id,
+        actor: ctx.user.id,
         action,
       });
 
       return {
-        candidate: toCandidateDTO(candidate, user),
-        document: toDocumentDTO(document, user),
+        candidate: toCandidateDTO(candidate, ctx),
+        document: toDocumentDTO(document, ctx),
       };
     });
   },
@@ -184,7 +186,11 @@ export const resumeService = {
    * extraction; this just persists whatever text/storage key the browser already produced
    * (pdf.js text extraction + an optional Storage PUT) as a new `Document`.
    */
-  async attachToCandidate(candidateId: string, input: UploadCandidateResumeInput, user: AuthUser) {
+  async attachToCandidate(
+    candidateId: string,
+    input: UploadCandidateResumeInput,
+    ctx: TenantContext,
+  ) {
     const candidate = await candidateRepository.findById(candidateId);
     if (!candidate) throw new AppError("NOT_FOUND", "Candidate not found");
 
@@ -197,17 +203,17 @@ export const resumeService = {
           mimeType: input.mimeType,
           extractedText: input.extractedText ?? null,
           storageKey: input.storageKey ?? null,
-          uploadedById: user.id,
+          uploadedById: ctx.user.id,
         },
         tx,
       );
       await writeAudit(tx, {
         entity: "document",
         entityId: document.id,
-        actor: user.id,
+        actor: ctx.user.id,
         action: "upload",
       });
-      return toDocumentDTO(document, user);
+      return toDocumentDTO(document, ctx);
     });
   },
 
@@ -217,9 +223,15 @@ export const resumeService = {
    * once the upload succeeds and the user confirms.
    */
   async requestUploadUrl(input: RequestResumeUploadUrlInput): Promise<ResumeUploadUrlDTO> {
-    const storageKey = `${randomUUID()}-${sanitizeFilename(input.filename)}`;
-    const { signedUrl } = await createSignedUploadUrl(RESUME_BUCKET, storageKey, input.mimeType);
-    return { signedUrl, storageKey };
+    // 6.6: this belongs at `t/<tenantId>/<uuid>-<filename>`, which becomes a one-line change
+    // (`tenantStorageKey(ctx.tenantId, …)`) the moment 6.5 gives this method a tenant. Until then
+    // the exception is declared rather than assumed — see `unscopedStorageKey`.
+    const key = unscopedStorageKey(
+      `${randomUUID()}-${sanitizeFilename(input.filename)}`,
+      "resume-upload-awaiting-6.5-tenant-resolution",
+    );
+    const { signedUrl } = await createSignedUploadUrl(RESUME_BUCKET, key, input.mimeType);
+    return { signedUrl, storageKey: key };
   },
 
   /**
@@ -230,7 +242,7 @@ export const resumeService = {
   async getDownloadUrl(documentId: string): Promise<{ url: string }> {
     const doc = await documentRepository.findById(documentId);
     if (!doc?.storageKey) throw new AppError("NOT_FOUND", "No stored file for this document");
-    const url = await getSignedDownloadUrl(RESUME_BUCKET, doc.storageKey, 300);
+    const url = await getSignedDownloadUrl(RESUME_BUCKET, persistedStorageKey(doc.storageKey), 300);
     return { url };
   },
 };

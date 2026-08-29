@@ -16,7 +16,7 @@ import type {
 } from "@destaworks/contracts/validation/portal";
 import { toIso, isoOrNull } from "@destaworks/domain/utils/iso";
 import { defined } from "@destaworks/domain/utils/defined";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { TenantContext } from "@destaworks/domain/tenant";
 import type { PortalContext } from "@destaworks/auth/portal-guards";
 import { hashPortalToken } from "@destaworks/auth/portal-guards";
 import { writeAudit } from "@destaworks/db/audit";
@@ -124,7 +124,7 @@ export const clientPortalService = {
   async generateLink(
     clientId: string,
     contactId: string,
-    actor: AuthUser,
+    actor: TenantContext,
   ): Promise<GeneratedPortalLinkDTO> {
     await requireContactInClient(clientId, contactId);
     const rawToken = generateRawToken();
@@ -134,14 +134,14 @@ export const clientPortalService = {
     const { contact, token } = await withTransaction(async (tx) => {
       await clientPortalTokenRepository.revokeAllForContact(contactId, tx);
       const tokenRow = await clientPortalTokenRepository.create(
-        { contactId, tokenHash, expiresAt, createdById: actor.id },
+        { contactId, tokenHash, expiresAt, createdById: actor.user.id },
         tx,
       );
       await clientContactRepository.update(clientId, contactId, { portalEnabled: true }, tx);
       await writeAudit(tx, {
         entity: "client_portal_token",
         entityId: tokenRow.id,
-        actor: actor.id,
+        actor: actor.user.id,
         action: "generate_portal_link",
         after: { clientId, contactId },
       });
@@ -153,7 +153,7 @@ export const clientPortalService = {
     return { contact: toAdminContactDTO(contact, token), token: rawToken };
   },
 
-  async revokeLink(clientId: string, tokenId: string, actor: AuthUser): Promise<void> {
+  async revokeLink(clientId: string, tokenId: string, actor: TenantContext): Promise<void> {
     const tokenRow = await clientPortalTokenRepository.findById(tokenId);
     if (!tokenRow || tokenRow.contact.clientId !== clientId) {
       throw new AppError("NOT_FOUND", "Portal link not found");
@@ -164,7 +164,7 @@ export const clientPortalService = {
       await writeAudit(tx, {
         entity: "client_portal_token",
         entityId: tokenId,
-        actor: actor.id,
+        actor: actor.user.id,
         action: "revoke_portal_link",
         after: { clientId, contactId: tokenRow.contactId },
       });

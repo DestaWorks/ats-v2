@@ -59,11 +59,21 @@ export interface UnattributedAllowance {
 
 const MUTATING_METHODS: ReadonlySet<string> = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
-/** The resolved actor id, or `null` if the request carries no usable principal. */
+/**
+ * The resolved actor id, or `null` if the request carries no usable principal.
+ *
+ * The principal is the request's `TenantContext` since 6.4, so the identity sits one level in, at
+ * `user.user.id`. The narrowing stays hand-rolled and total — the field is typed `unknown`
+ * because `getRequest<T>()` is an unchecked assertion, and this interceptor exists precisely for
+ * the case where the guard that was supposed to populate it did not run.
+ */
 function resolvedActorId(user: unknown): string | null {
   if (typeof user !== "object" || user === null) return null;
-  if (!("id" in user)) return null;
-  const id: unknown = user.id;
+  if (!("user" in user)) return null;
+  const identity: unknown = user.user;
+  if (typeof identity !== "object" || identity === null) return null;
+  if (!("id" in identity)) return null;
+  const id: unknown = identity.id;
   return typeof id === "string" && id.length > 0 ? id : null;
 }
 

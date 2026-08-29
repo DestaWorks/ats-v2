@@ -17,12 +17,17 @@ const h = vi.hoisted(() => ({
 vi.mock("server-only", () => ({}));
 vi.mock("@sentry/node", () => ({ captureException: vi.fn() }));
 vi.mock("@destaworks/auth/auth", () => ({ auth: { api: { getSession: async () => h.session } } }));
+vi.mock("@destaworks/db/memberships", async () => ({
+  membershipReader: (
+    await import("@destaworks/auth/testing/membership-double")
+  ).singleTenantMembershipReader(() => h.session),
+}));
 vi.mock("@destaworks/application/access-request.service", () => ({ accessRequestService: h }));
 vi.mock("@destaworks/application/admin-user.service", () => ({ adminUserService: {} }));
 vi.mock("@destaworks/application/ai-ops.service", () => ({ aiOpsService: {} }));
 
 import { AppError } from "@destaworks/integrations/http/app-error";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { AuthContext } from "@destaworks/auth/guards";
 import { installNestRequestContext } from "../../common/request-context/nest-request-context";
 import type { AuthenticatedRequest } from "../../common/guards/authenticated-request";
 import { ZodValidationPipe } from "../../common/pipes/zod-validation.pipe";
@@ -58,7 +63,7 @@ const controller = (): AdminAccessRequestsController =>
     submit: vi.fn(),
   });
 
-async function admitted(handlerName: string): Promise<AuthUser> {
+async function admitted(handlerName: string): Promise<AuthContext> {
   h.session = { user: { id: "owner1", email: "o@desta.works", name: "O", role: "Owner" } };
   const request: AuthenticatedRequest = { headers: {} };
   await runDeclaredGuards(AdminAccessRequestsController, handlerName, request);

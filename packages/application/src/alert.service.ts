@@ -4,7 +4,7 @@ import type {
   AlertCandidateDTO,
   AlertsDTO,
 } from "@destaworks/contracts/validation/alerts";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { TenantContext } from "@destaworks/domain/tenant";
 import { candidateRepository } from "@destaworks/db/repositories/candidate.repository";
 import { clientRepository } from "@destaworks/db/repositories/client.repository";
 import { mentionService } from "./mention.service";
@@ -47,10 +47,10 @@ function toBucketDTO(
  * agree on who is overdue.
  */
 export const alertService = {
-  async forViewer(user: AuthUser): Promise<AlertsDTO> {
+  async forViewer(ctx: TenantContext): Promise<AlertsDTO> {
     const [mentionList, buckets, clientNames] = await Promise.all([
-      mentionService.listMine(user),
-      candidateRepository.alertBuckets(user.id, BUCKET_ROWS, new Date()),
+      mentionService.listMine(ctx),
+      candidateRepository.alertBuckets(ctx.user.id, BUCKET_ROWS, new Date()),
       clientRepository.nameMap(),
     ]);
     return {

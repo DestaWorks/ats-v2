@@ -8,9 +8,14 @@ const h = vi.hoisted(() => ({
 
 vi.mock("server-only", () => ({}));
 vi.mock("@destaworks/config/request-context", () => ({
-  requestContext: () => ({ headers: async () => new Headers() }),
+  requestContext: () => ({ headers: async () => new Headers(), cookie: async () => undefined }),
 }));
 vi.mock("@destaworks/auth/auth", () => ({ auth: { api: { getSession: async () => h.session } } }));
+vi.mock("@destaworks/db/memberships", async () => ({
+  membershipReader: (
+    await import("@destaworks/auth/testing/membership-double")
+  ).singleTenantMembershipReader(() => h.session),
+}));
 vi.mock("@destaworks/db/prisma", () => ({ prisma: {} }));
 vi.mock("@destaworks/application/ai-ops.service", () => ({
   aiOpsService: { getSettings: h.getSettings, setDisabled: h.setDisabled },
@@ -67,7 +72,7 @@ describe("PATCH /api/admin/ai/settings", () => {
     expect(res.status).toBe(200);
     expect(h.setDisabled).toHaveBeenCalledWith(
       true,
-      expect.objectContaining({ id: "u1", role: "Owner" }),
+      expect.objectContaining({ user: expect.objectContaining({ id: "u1" }), role: "Owner" }),
       "incident",
     );
   });

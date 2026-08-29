@@ -23,6 +23,11 @@ vi.mock("@destaworks/config/request-context", () => ({
   installRequestContext: () => {},
 }));
 vi.mock("@destaworks/auth/auth", () => ({ auth: { api: { getSession: async () => h.session } } }));
+vi.mock("@destaworks/db/memberships", async () => ({
+  membershipReader: (
+    await import("@destaworks/auth/testing/membership-double")
+  ).singleTenantMembershipReader(() => h.session),
+}));
 vi.mock("@destaworks/db/prisma", () => ({ prisma: {} }));
 vi.mock("@destaworks/application/discover.service", () => ({ discoverService: h.discover }));
 vi.mock("@destaworks/application/saved-icp.service", () => ({ savedIcpService: h.savedIcp }));
@@ -30,7 +35,7 @@ vi.mock("@destaworks/application/saved-icp.service", () => ({ savedIcpService: h
 import { AppError } from "@destaworks/integrations/http/app-error";
 import { discoverService } from "@destaworks/application/discover.service";
 import { savedIcpService } from "@destaworks/application/saved-icp.service";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { AuthContext } from "@destaworks/auth/guards";
 import {
   guardOutcome,
   handlerOutcome,
@@ -74,7 +79,7 @@ interface ParityCase {
   readonly spy: Mock;
   readonly result: unknown;
   readonly viaRoute: () => Response | Promise<Response>;
-  readonly viaController: (user: AuthUser) => Promise<unknown>;
+  readonly viaController: (user: AuthContext) => Promise<unknown>;
   /** A signed-in role that lacks the route's capability, or `null` when it declares none. */
   readonly deniedRole: string | null;
 }
@@ -186,8 +191,8 @@ function signIn(role: string): void {
   h.session = { user: { id: "u1", email: "u@desta.works", name: "U", role } };
 }
 
-async function authorize(testCase: ParityCase): Promise<AuthUser> {
-  const request: { headers: Record<string, string>; user?: AuthUser } = { headers: {} };
+async function authorize(testCase: ParityCase): Promise<AuthContext> {
+  const request: { headers: Record<string, string>; user?: AuthContext } = { headers: {} };
   expect(await guardOutcome(testCase.controller, testCase.handler, request)).toBeNull();
   if (!request.user) throw new Error(`${testCase.name}: guards attached no user`);
   return request.user;

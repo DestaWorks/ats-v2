@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { TenantContext } from "@destaworks/domain/tenant";
 
 /**
  * Proves `similarityService.findSimilar`'s taxonomy-gate, exact-desc precision filter,
@@ -10,7 +10,12 @@ import type { AuthUser } from "@destaworks/auth/guards";
  */
 
 const h = vi.hoisted(() => ({
-  user: { id: "u1", email: "u@desta.works", name: "Test User", role: "Associate" as const },
+  user: {
+    tenantId: "t1",
+    membershipId: "u1-m",
+    user: { id: "u1", email: "u@desta.works", name: "Test User" },
+    role: "Associate" as const,
+  },
   leadRepo: { findManyByNpis: vi.fn(), findManyByNames: vi.fn() },
   candidateRepo: { findManyByNames: vi.fn() },
   searchNppes: vi.fn(),
@@ -26,7 +31,7 @@ vi.mock("@destaworks/integrations/http/rate-limit", () => ({ checkRateLimit: vi.
 
 import { similarityService } from "./similarity.service";
 
-const user = h.user as AuthUser;
+const user = h.user as TenantContext;
 
 /** `desc` defaults to the REAL, verified PMHNP taxonomy description (see `constants/nppes.ts`'s
  *  `matchDesc` for "pmhnp") — NOT the display-string format the old, broken `query` used. */

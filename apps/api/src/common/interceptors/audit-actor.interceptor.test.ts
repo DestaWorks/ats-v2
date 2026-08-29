@@ -27,7 +27,15 @@ describe("AuditActorInterceptor", () => {
       const next = handler();
 
       const result = new AuditActorInterceptor().intercept(
-        contextFor({ method: "POST", user: { id: "usr_1", role: "Owner" } }),
+        contextFor({
+          method: "POST",
+          user: {
+            tenantId: "t1",
+            membershipId: "m1",
+            user: { id: "usr_1", email: "o@desta.works", name: "O" },
+            role: "Owner",
+          },
+        }),
         next,
       );
 
@@ -50,10 +58,15 @@ describe("AuditActorInterceptor", () => {
     );
 
     it.each([
-      ["a principal with no id", {}],
-      ["an empty id", { id: "" }],
-      ["a non-string id", { id: 7 }],
+      ["a principal with no identity", {}],
+      ["a principal with no id", { user: {} }],
+      ["an empty id", { user: { id: "" } }],
+      ["a non-string id", { user: { id: 7 } }],
+      ["a null identity", { user: null }],
       ["a null principal", null],
+      // The pre-6.4 flat shape: an identity at the top level is no longer an actor, and must not
+      // be accepted as one by a stale caller that never learned about the tenant context.
+      ["the old flat principal", { id: "usr_1", role: "Owner" }],
     ])("rejects %s", (_label, user) => {
       const next = handler();
       const interceptor = new AuditActorInterceptor();

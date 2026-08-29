@@ -23,6 +23,11 @@ vi.mock("@destaworks/config/request-context", () => ({
   installRequestContext: () => {},
 }));
 vi.mock("@destaworks/auth/auth", () => ({ auth: { api: { getSession: async () => h.session } } }));
+vi.mock("@destaworks/db/memberships", async () => ({
+  membershipReader: (
+    await import("@destaworks/auth/testing/membership-double")
+  ).singleTenantMembershipReader(() => h.session),
+}));
 vi.mock("@destaworks/db/prisma", () => ({ prisma: {} }));
 vi.mock("@destaworks/application/saved-view.service", () => ({
   savedViewService: { list: h.list, create: h.create, remove: h.remove },
@@ -30,7 +35,7 @@ vi.mock("@destaworks/application/saved-view.service", () => ({
 
 import { AppError } from "@destaworks/integrations/http/app-error";
 import { savedViewService } from "@destaworks/application/saved-view.service";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { AuthContext } from "@destaworks/auth/guards";
 import {
   savedViewListQuerySchema,
   type SavedViewDTO,
@@ -63,8 +68,8 @@ function signIn(role = "Screener"): void {
 }
 
 /** Run the controller's guards; return the user they attached, failing loudly if they refused. */
-async function authorize(handlerName: string): Promise<AuthUser> {
-  const request: { headers: Record<string, string>; user?: AuthUser } = { headers: {} };
+async function authorize(handlerName: string): Promise<AuthContext> {
+  const request: { headers: Record<string, string>; user?: AuthContext } = { headers: {} };
   const refusal = await guardOutcome(SavedViewsController, handlerName, request);
   expect(refusal).toBeNull();
   if (!request.user) throw new Error("guards passed without attaching a user");

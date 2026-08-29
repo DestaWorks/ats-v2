@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { TenantContext } from "@destaworks/domain/tenant";
 
 /**
  * Proves discoverService's NPPES→DTO mapping, dedupe composition, and the add-to-sourcing write
@@ -9,7 +9,12 @@ import type { AuthUser } from "@destaworks/auth/guards";
 
 const h = vi.hoisted(() => ({
   fakeTx: { __tx: true },
-  user: { id: "u1", email: "u@desta.works", name: "Test User", role: "Associate" as const },
+  user: {
+    tenantId: "t1",
+    membershipId: "u1-m",
+    user: { id: "u1", email: "u@desta.works", name: "Test User" },
+    role: "Associate" as const,
+  },
   leadRepo: {
     findManyByNpis: vi.fn(),
     findManyByNames: vi.fn(),
@@ -44,7 +49,7 @@ vi.mock("@destaworks/integrations/http/rate-limit", () => ({ checkRateLimit: vi.
 
 import { discoverService } from "./discover.service";
 
-const user = h.user as AuthUser;
+const user = h.user as TenantContext;
 
 function rawResult(overrides: Record<string, unknown> = {}) {
   return {

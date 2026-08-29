@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { TenantContext } from "@destaworks/domain/tenant";
 import type { ClinicalResume } from "@destaworks/contracts/validation/resume";
 
 /**
@@ -11,7 +11,12 @@ import type { ClinicalResume } from "@destaworks/contracts/validation/resume";
 
 const h = vi.hoisted(() => ({
   fakeTx: { __tx: true, $executeRaw: vi.fn() },
-  user: { id: "u1", email: "u@desta.works", name: "Test User", role: "Associate" as const },
+  user: {
+    tenantId: "t1",
+    membershipId: "u1-m",
+    user: { id: "u1", email: "u@desta.works", name: "Test User" },
+    role: "Associate" as const,
+  },
   parseResume: vi.fn(),
   candidateRepo: {
     list: vi.fn(),
@@ -37,8 +42,10 @@ vi.mock("@destaworks/db/audit", () => ({ writeAudit: h.writeAudit }));
 vi.mock("@destaworks/db/with-transaction", () => ({
   withTransaction: (fn: (tx: unknown) => unknown) => fn(h.fakeTx),
 }));
-vi.mock("@destaworks/integrations/storage", () => ({
-  RESUME_BUCKET: "resumes",
+// Only the two functions that would talk to S3 are stubbed. The key constructors are pure and
+// come through untouched, so what these tests assert about a key is the real key scheme.
+vi.mock("@destaworks/integrations/storage", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@destaworks/integrations/storage")>()),
   createSignedUploadUrl: h.createSignedUploadUrl,
   getSignedDownloadUrl: h.getSignedDownloadUrl,
 }));
@@ -167,7 +174,7 @@ describe("resumeService.save", () => {
     h.candidateRepo.update.mockResolvedValue({ id: "c1", name: "Jane Doe" });
     h.documentRepo.create.mockResolvedValue({ id: "d1", candidateId: "c1", type: "resume" });
 
-    await resumeService.save(saveInput(), h.user as AuthUser);
+    await resumeService.save(saveInput(), h.user as TenantContext);
 
     // Attached to c1 via the shared tx; fills are empty-only (never overwrites name).
     const [uid, fills, utx] = h.candidateRepo.update.mock.calls[0]!;
@@ -201,7 +208,7 @@ describe("resumeService.save", () => {
     h.candidateRepo.update.mockResolvedValue({ id: "c2" });
     h.documentRepo.create.mockResolvedValue({ id: "d2", candidateId: "c2", type: "resume" });
 
-    await resumeService.save(saveInput({ confirmedCandidateId: "c2" }), h.user as AuthUser);
+    await resumeService.save(saveInput({ confirmedCandidateId: "c2" }), h.user as TenantContext);
 
     expect(h.candidateRepo.findById).toHaveBeenCalledWith("c2", undefined, h.fakeTx);
     expect(h.candidateRepo.create).not.toHaveBeenCalled();
@@ -213,7 +220,7 @@ describe("resumeService.save", () => {
     h.candidateRepo.create.mockResolvedValue({ id: "new5", name: "Jane Doe" });
     h.documentRepo.create.mockResolvedValue({ id: "d7", candidateId: "new5", type: "resume" });
 
-    await resumeService.save(saveInput(), h.user as AuthUser);
+    await resumeService.save(saveInput(), h.user as TenantContext);
 
     expect(h.fakeTx.$executeRaw).not.toHaveBeenCalled();
     expect(h.candidateRepo.findById).not.toHaveBeenCalled();
@@ -227,7 +234,7 @@ describe("resumeService.save", () => {
     h.candidateRepo.create.mockResolvedValue({ id: "new1", name: "Jane Doe" });
     h.documentRepo.create.mockResolvedValue({ id: "d3", candidateId: "new1", type: "resume" });
 
-    await resumeService.save(saveInput(), h.user as AuthUser);
+    await resumeService.save(saveInput(), h.user as TenantContext);
 
     const [createData, ctx] = h.candidateRepo.create.mock.calls[0]!;
     expect(ctx).toBe(h.fakeTx);
@@ -256,7 +263,7 @@ describe("resumeService.save", () => {
       type: "resume",
     });
 
-    await resumeService.save(saveInput(), h.user as AuthUser);
+    await resumeService.save(saveInput(), h.user as TenantContext);
 
     expect(h.fakeTx.$executeRaw).toHaveBeenCalled();
     expect(h.candidateRepo.create).not.toHaveBeenCalled();
@@ -274,7 +281,7 @@ describe("resumeService.save", () => {
     h.candidateRepo.create.mockResolvedValue({ id: "new2", name: "Jane Doe" });
     h.documentRepo.create.mockResolvedValue({ id: "d4", candidateId: "new2", type: "resume" });
 
-    await resumeService.save(saveInput({ confirmedCandidateId: "c9" }), h.user as AuthUser);
+    await resumeService.save(saveInput({ confirmedCandidateId: "c9" }), h.user as TenantContext);
 
     expect(h.candidateRepo.create).toHaveBeenCalledTimes(1); // no silent wrong-person attach
     expect(h.candidateRepo.findById).not.toHaveBeenCalled();
@@ -287,7 +294,7 @@ describe("resumeService.save", () => {
     h.candidateRepo.create.mockResolvedValue({ id: "new3", name: "Jane Doe" });
     h.documentRepo.create.mockResolvedValue({ id: "d5", candidateId: "new3", type: "resume" });
 
-    await resumeService.save(saveInput({ storageKey: "abc-jane.pdf" }), h.user as AuthUser);
+    await resumeService.save(saveInput({ storageKey: "abc-jane.pdf" }), h.user as TenantContext);
 
     const [docData] = h.documentRepo.create.mock.calls[0]!;
     expect(docData).toMatchObject({ storageKey: "abc-jane.pdf" });
@@ -298,7 +305,7 @@ describe("resumeService.save", () => {
     h.candidateRepo.create.mockResolvedValue({ id: "new4", name: "Jane Doe" });
     h.documentRepo.create.mockResolvedValue({ id: "d6", candidateId: "new4", type: "resume" });
 
-    await resumeService.save(saveInput(), h.user as AuthUser);
+    await resumeService.save(saveInput(), h.user as TenantContext);
 
     const [docData] = h.documentRepo.create.mock.calls[0]!;
     expect(docData).toMatchObject({ storageKey: null });
@@ -370,7 +377,7 @@ describe("resumeService.attachToCandidate", () => {
         extractedText: "some text",
         storageKey: "k1-jane.pdf",
       },
-      h.user as AuthUser,
+      h.user as TenantContext,
     );
 
     expect(h.documentRepo.create).toHaveBeenCalledWith(
@@ -399,7 +406,7 @@ describe("resumeService.attachToCandidate", () => {
     await resumeService.attachToCandidate(
       "c1",
       { originalFilename: "scan.pdf", mimeType: "application/pdf" },
-      h.user as AuthUser,
+      h.user as TenantContext,
     );
 
     expect(h.documentRepo.create).toHaveBeenCalledWith(
@@ -415,7 +422,7 @@ describe("resumeService.attachToCandidate", () => {
       resumeService.attachToCandidate(
         "missing",
         { originalFilename: "jane.pdf", mimeType: "application/pdf" },
-        h.user as AuthUser,
+        h.user as TenantContext,
       ),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect(h.documentRepo.create).not.toHaveBeenCalled();

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { TenantContext } from "@destaworks/domain/tenant";
 
 /**
  * Proves the mention read-side WITHOUT a DB: `listMine` returns the viewer's rows (serialized,
@@ -8,7 +8,12 @@ import type { AuthUser } from "@destaworks/auth/guards";
  */
 
 const h = vi.hoisted(() => ({
-  user: { id: "u1", email: "u@desta.works", name: "Test User", role: "Associate" as const },
+  user: {
+    tenantId: "t1",
+    membershipId: "u1-m",
+    user: { id: "u1", email: "u@desta.works", name: "Test User" },
+    role: "Associate" as const,
+  },
   repo: {
     listForRecipient: vi.fn(),
     countUnread: vi.fn(),
@@ -57,7 +62,7 @@ describe("mentionService.listMine", () => {
     h.repo.listForRecipient.mockResolvedValue([mentionRow()]);
     h.repo.countUnread.mockResolvedValue(3);
 
-    const out = await mentionService.listMine(h.user as AuthUser);
+    const out = await mentionService.listMine(h.user as TenantContext);
 
     expect(h.repo.listForRecipient).toHaveBeenCalledWith("u1", expect.any(Number));
     expect(out.unread).toBe(3);
@@ -87,7 +92,7 @@ describe("mentionService.listMine", () => {
         },
       }),
     ]);
-    const out = await mentionService.listMine(h.user as AuthUser);
+    const out = await mentionService.listMine(h.user as TenantContext);
     expect(out.mentions[0]!.excerpt.length).toBeLessThanOrEqual(140);
     expect(out.mentions[0]!.excerpt.endsWith("…")).toBe(true);
   });
@@ -98,7 +103,10 @@ describe("mentionService.markRead", () => {
     h.repo.markRead.mockResolvedValue(1);
     h.repo.countUnread.mockResolvedValue(0);
 
-    const out = await mentionService.markRead({ mentionId: "m1", all: false }, h.user as AuthUser);
+    const out = await mentionService.markRead(
+      { mentionId: "m1", all: false },
+      h.user as TenantContext,
+    );
 
     expect(h.repo.markRead).toHaveBeenCalledWith("m1", "u1");
     expect(out).toEqual({ unread: 0 });
@@ -109,7 +117,7 @@ describe("mentionService.markRead", () => {
     h.repo.existsForRecipient.mockResolvedValue(true);
 
     await expect(
-      mentionService.markRead({ mentionId: "m1", all: false }, h.user as AuthUser),
+      mentionService.markRead({ mentionId: "m1", all: false }, h.user as TenantContext),
     ).resolves.toEqual({ unread: 0 });
   });
 
@@ -118,7 +126,7 @@ describe("mentionService.markRead", () => {
     h.repo.existsForRecipient.mockResolvedValue(true);
 
     await expect(
-      mentionService.markRead({ mentionId: "old-m1", all: false }, h.user as AuthUser),
+      mentionService.markRead({ mentionId: "old-m1", all: false }, h.user as TenantContext),
     ).resolves.toEqual({ unread: 0 });
     expect(h.repo.existsForRecipient).toHaveBeenCalledWith("old-m1", "u1");
     expect(h.repo.listForRecipient).not.toHaveBeenCalled();
@@ -129,7 +137,7 @@ describe("mentionService.markRead", () => {
     h.repo.existsForRecipient.mockResolvedValue(false);
 
     await expect(
-      mentionService.markRead({ mentionId: "not-mine", all: false }, h.user as AuthUser),
+      mentionService.markRead({ mentionId: "not-mine", all: false }, h.user as TenantContext),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 
@@ -137,7 +145,10 @@ describe("mentionService.markRead", () => {
     h.repo.markAllRead.mockResolvedValue(4);
     h.repo.countUnread.mockResolvedValue(0);
 
-    const out = await mentionService.markRead({ mentionId: null, all: true }, h.user as AuthUser);
+    const out = await mentionService.markRead(
+      { mentionId: null, all: true },
+      h.user as TenantContext,
+    );
 
     expect(h.repo.markAllRead).toHaveBeenCalledWith("u1");
     expect(h.repo.markRead).not.toHaveBeenCalled();

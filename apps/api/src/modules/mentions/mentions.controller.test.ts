@@ -15,12 +15,17 @@ const h = vi.hoisted(() => ({
 vi.mock("server-only", () => ({}));
 vi.mock("@sentry/node", () => ({ captureException: vi.fn() }));
 vi.mock("@destaworks/auth/auth", () => ({ auth: { api: { getSession: async () => h.session } } }));
+vi.mock("@destaworks/db/memberships", async () => ({
+  membershipReader: (
+    await import("@destaworks/auth/testing/membership-double")
+  ).singleTenantMembershipReader(() => h.session),
+}));
 vi.mock("@destaworks/application/mention.service", () => ({
   mentionService: { listMine: h.listMine, markRead: h.markRead },
 }));
 
 import { AppError } from "@destaworks/integrations/http/app-error";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { AuthContext } from "@destaworks/auth/guards";
 import { installNestRequestContext } from "../../common/request-context/nest-request-context";
 import type { AuthenticatedRequest } from "../../common/guards/authenticated-request";
 import { ZodValidationPipe } from "../../common/pipes/zod-validation.pipe";
@@ -39,7 +44,7 @@ installNestRequestContext();
 const controller = (): MentionsController =>
   new MentionsController({ listMine: h.listMine, markRead: h.markRead });
 
-async function admitted(handlerName: string): Promise<AuthUser> {
+async function admitted(handlerName: string): Promise<AuthContext> {
   h.session = { user: { id: "u1", email: "a@desta.works", name: "A", role: "Associate" } };
   const request: AuthenticatedRequest = { headers: {} };
   await runDeclaredGuards(MentionsController, handlerName, request);

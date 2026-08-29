@@ -14,6 +14,6 @@ export type PostPipelineHealthResponse = PipelineHealthDTO;
  */
 export const POST = apiHandler(async () => {
   const user = await requireUser();
-  await checkRateLimit(`pipeline-health:${user.id}`, { limit: 20, windowMs: 60_000 });
+  await checkRateLimit(`pipeline-health:${user.user.id}`, { limit: 20, windowMs: 60_000 });
   return json<PostPipelineHealthResponse>(await pipelineHealthService.generate());
 });

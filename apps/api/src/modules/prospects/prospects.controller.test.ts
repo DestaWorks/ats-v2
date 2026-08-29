@@ -22,9 +22,14 @@ const h = vi.hoisted(() => ({
 vi.mock("@destaworks/auth/auth", () => ({
   auth: { api: { getSession: async () => h.session } },
 }));
+vi.mock("@destaworks/db/memberships", async () => ({
+  membershipReader: (
+    await import("@destaworks/auth/testing/membership-double")
+  ).singleTenantMembershipReader(() => h.session),
+}));
 vi.mock("@destaworks/application/prospect.service", () => ({ prospectService: {} }));
 
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { AuthContext } from "@destaworks/auth/guards";
 import { installNestRequestContext } from "../../common/request-context/nest-request-context";
 import { CapabilityGuard } from "../../common/guards/capability.guard";
 import {
@@ -42,7 +47,12 @@ function controllerWith(methods: Partial<ProspectService>): ProspectsController 
   return new ProspectsController(serviceStub<ProspectService>(methods));
 }
 
-const USER: AuthUser = { id: "u1", email: "lead@desta.works", name: "Director", role: "Director" };
+const USER: AuthContext = {
+  tenantId: "t1",
+  membershipId: "u1-m",
+  user: { id: "u1", email: "lead@desta.works", name: "Director" },
+  role: "Director",
+};
 const PROSPECT = { id: "pros_1", name: "Bright Clinic" };
 
 function signInAs(role: string): void {

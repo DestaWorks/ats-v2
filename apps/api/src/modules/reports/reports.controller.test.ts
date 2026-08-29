@@ -35,6 +35,11 @@ const h = vi.hoisted(() => ({
 }));
 
 vi.mock("@destaworks/auth/auth", () => ({ auth: { api: { getSession: async () => h.session } } }));
+vi.mock("@destaworks/db/memberships", async () => ({
+  membershipReader: (
+    await import("@destaworks/auth/testing/membership-double")
+  ).singleTenantMembershipReader(() => h.session),
+}));
 
 import { installNestRequestContext } from "../../common/request-context/nest-request-context";
 import { provideFakeService, startTestApi, type TestApi } from "../../common/testing/nest-app";

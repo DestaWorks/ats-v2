@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { TenantContext } from "@destaworks/domain/tenant";
 import type { SaveScreeningInput } from "@destaworks/contracts/validation/screening";
 
 /**
@@ -12,7 +12,12 @@ import type { SaveScreeningInput } from "@destaworks/contracts/validation/screen
 
 const h = vi.hoisted(() => ({
   fakeTx: { __tx: true },
-  user: { id: "u1", email: "u@desta.works", name: "Test User", role: "Associate" as const },
+  user: {
+    tenantId: "t1",
+    membershipId: "u1-m",
+    user: { id: "u1", email: "u@desta.works", name: "Test User" },
+    role: "Associate" as const,
+  },
   candidateRepo: { list: vi.fn(), findById: vi.fn() },
   clientRepo: { nameMap: vi.fn() },
   clientRulesRepo: { list: vi.fn() },
@@ -46,7 +51,7 @@ vi.mock("@destaworks/db/with-transaction", () => ({
 
 import { screeningService } from "./screening.service";
 
-const user = h.user as AuthUser;
+const user = h.user as TenantContext;
 
 function candidateRow(overrides: Record<string, unknown> = {}) {
   return {

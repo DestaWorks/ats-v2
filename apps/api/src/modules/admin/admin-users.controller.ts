@@ -20,7 +20,7 @@ import {
   type ResetPasswordDTO,
 } from "@destaworks/contracts/validation/admin";
 import type { AcknowledgedIdDTO } from "@destaworks/contracts/api";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { AuthContext } from "@destaworks/auth/guards";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { RequireCapability } from "../../common/decorators/require-capability.decorator";
 import { CapabilityGuard } from "../../common/guards/capability.guard";
@@ -58,19 +58,19 @@ export class AdminUsersController {
   @Post()
   @RequireCapability("manageUsers")
   async create(
-    @CurrentUser() actor: AuthUser,
+    @CurrentUser() actor: AuthContext,
     @Body(new ZodValidationPipe(createUserSchema)) body: ContractOutput<typeof createUserSchema>,
   ): Promise<GeneratedPasswordDTO> {
-    return await this.users.create(body, actor.id);
+    return await this.users.create(body, actor.user.id);
   }
 
   @Delete(":id")
   @RequireCapability("manageUsers")
   async remove(
-    @CurrentUser() actor: AuthUser,
+    @CurrentUser() actor: AuthContext,
     @Param("id") id: string,
   ): Promise<AcknowledgedIdDTO> {
-    await this.users.remove(id, actor.id);
+    await this.users.remove(id, actor.user.id);
     return { ok: true, id };
   }
 
@@ -78,41 +78,41 @@ export class AdminUsersController {
   @HttpCode(200)
   @RequireCapability("manageUsers")
   async ban(
-    @CurrentUser() actor: AuthUser,
+    @CurrentUser() actor: AuthContext,
     @Param("id") id: string,
     @Body(new ZodValidationPipe(banUserSchema)) body: ContractOutput<typeof banUserSchema>,
   ): Promise<AdminUserEnvelopeDTO> {
-    return { user: await this.users.ban(id, body, actor.id) };
+    return { user: await this.users.ban(id, body, actor.user.id) };
   }
 
   @Post(":id/unban")
   @HttpCode(200)
   @RequireCapability("manageUsers")
   async unban(
-    @CurrentUser() actor: AuthUser,
+    @CurrentUser() actor: AuthContext,
     @Param("id") id: string,
   ): Promise<AdminUserEnvelopeDTO> {
-    return { user: await this.users.unban(id, actor.id) };
+    return { user: await this.users.unban(id, actor.user.id) };
   }
 
   /** `manageRoles`, not `manageUsers` — this is the privilege-escalation surface. */
   @Patch(":id/role")
   @RequireCapability("manageRoles")
   async setRole(
-    @CurrentUser() actor: AuthUser,
+    @CurrentUser() actor: AuthContext,
     @Param("id") id: string,
     @Body(new ZodValidationPipe(setRoleSchema)) body: ContractOutput<typeof setRoleSchema>,
   ): Promise<AdminUserEnvelopeDTO> {
-    return { user: await this.users.setRole(id, body.role, actor.id) };
+    return { user: await this.users.setRole(id, body.role, actor.user.id) };
   }
 
   @Post(":id/reset-password")
   @HttpCode(200)
   @RequireCapability("manageUsers")
   async resetPassword(
-    @CurrentUser() actor: AuthUser,
+    @CurrentUser() actor: AuthContext,
     @Param("id") id: string,
   ): Promise<ResetPasswordDTO> {
-    return await this.users.resetPassword(id, actor.id);
+    return await this.users.resetPassword(id, actor.user.id);
   }
 }

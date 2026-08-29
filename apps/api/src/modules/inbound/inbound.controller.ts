@@ -7,7 +7,7 @@ import {
   type PostInboundSaveResponse,
   type PostInboundTriageResponse,
 } from "@destaworks/contracts/validation/inbound";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { AuthContext } from "@destaworks/auth/guards";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { RateLimit } from "../../common/decorators/rate-limit.decorator";
 import { RateLimitGuard } from "../../common/guards/rate-limit.guard";
@@ -51,7 +51,7 @@ export class InboundController {
   async attach(
     @Body(new ZodValidationPipe(attachInboundSchema))
     body: ContractOutput<typeof attachInboundSchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<PostInboundAttachResponse> {
     return { lead: await this.inbound.attach(body, user) };
   }
@@ -61,7 +61,7 @@ export class InboundController {
   async save(
     @Body(new ZodValidationPipe(saveInboundLeadSchema))
     body: ContractOutput<typeof saveInboundLeadSchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<PostInboundSaveResponse> {
     return { lead: await this.inbound.saveAsLead(body, user) };
   }

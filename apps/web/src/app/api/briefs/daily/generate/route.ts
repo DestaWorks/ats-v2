@@ -22,7 +22,7 @@ export type PostBriefsDailyGenerateResponse = EnqueuedJobResponse;
  */
 export const POST = apiHandler(async (req: Request) => {
   const user = await requireCapability("viewReports");
-  await checkRateLimit(`briefs-daily-generate:${user.id}`, { limit: 20, windowMs: 60_000 });
+  await checkRateLimit(`briefs-daily-generate:${user.user.id}`, { limit: 20, windowMs: 60_000 });
   const input = generateDailyBriefRequestSchema.parse(await req.json());
   const queued = await requireBriefGenerationEnqueuer().daily(input);
   return json<PostBriefsDailyGenerateResponse>(queued, 202);

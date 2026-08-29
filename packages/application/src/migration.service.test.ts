@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { toLegacyStatusLabel } from "@destaworks/domain/constants";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { TenantContext } from "@destaworks/domain/tenant";
 
 /**
  * Migration service (Wave 1.3 §10) WITHOUT a DB: the pure pipeline (sheet-parse + transform +
@@ -39,8 +39,18 @@ vi.mock("@destaworks/integrations/http/rate-limit", () => ({ checkRateLimit: h.c
 
 import { migrationService } from "./migration.service";
 
-const owner: AuthUser = { id: "u1", email: "o@desta.works", name: "Owner", role: "Owner" };
-const associate: AuthUser = { id: "u2", email: "a@desta.works", name: "Assoc", role: "Associate" };
+const owner: TenantContext = {
+  tenantId: "t1",
+  membershipId: "u1-m",
+  user: { id: "u1", email: "o@desta.works", name: "Owner" },
+  role: "Owner",
+};
+const associate: TenantContext = {
+  tenantId: "t1",
+  membershipId: "u2-m",
+  user: { id: "u2", email: "a@desta.works", name: "Assoc" },
+  role: "Associate",
+};
 
 const NEW = toLegacyStatusLabel("NEW_CANDIDATE");
 

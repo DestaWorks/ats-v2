@@ -4,7 +4,7 @@ import type {
   GetCrmClientNotesResponse,
   PostCrmClientNoteResponse,
 } from "@destaworks/contracts/http/crm";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { AuthContext } from "@destaworks/auth/guards";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { RequireCapability } from "../../common/decorators/require-capability.decorator";
 import { CapabilityGuard } from "../../common/guards/capability.guard";
@@ -36,7 +36,7 @@ export class CrmClientNotesController {
     @Param("id") clientId: string,
     @Body(new ZodValidationPipe(createClientNoteSchema))
     body: ContractOutput<typeof createClientNoteSchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<PostCrmClientNoteResponse> {
     return { note: await this.notes.create(clientId, body, user) };
   }

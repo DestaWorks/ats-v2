@@ -25,7 +25,7 @@ export type PostMigrationCommitResponse = MigrationCommitAccepted;
  */
 export const POST = apiHandler(async (req: Request) => {
   const user = await requireCapability("bulkImport");
-  await checkRateLimit(`migration-commit:${user.id}`, { limit: 10, windowMs: 60_000 });
+  await checkRateLimit(`migration-commit:${user.user.id}`, { limit: 10, windowMs: 60_000 });
   const input = importInputSchema.parse(await req.json());
   const accepted = await migrationRunService.start(input, user);
   return json<PostMigrationCommitResponse>(accepted, 202);

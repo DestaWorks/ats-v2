@@ -2,9 +2,9 @@ import {
   hasCapability,
   type CandidateStatus,
   type LicenseStatus,
-  type Role,
   type Track,
 } from "@destaworks/domain/constants";
+import type { CapabilityViewer } from "@destaworks/domain/tenant";
 import type { CandidateRow } from "@destaworks/db/repositories/candidate.repository";
 import type { RuleCandidate } from "@destaworks/domain/rules/types";
 import type {
@@ -17,9 +17,7 @@ import { isoOrNull, toIso } from "@destaworks/domain/utils/iso";
 import type { DocumentDTO } from "./document.dto";
 
 /** Minimal viewer shape the DTO needs — only the role drives the PII gate. */
-export interface DtoViewer {
-  role: Role;
-}
+export type DtoViewer = CapabilityViewer;
 
 /**
  * THE PUBLISHED SURFACE: the candidate columns every viewer may see, named one by one. This list

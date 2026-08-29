@@ -19,7 +19,7 @@ export type PostResumeExtractResponse = ExtractResumeResponse;
  */
 export const POST = apiHandler(async (req: Request) => {
   const user = await requireUser();
-  await checkRateLimit(`resume-extract:${user.id}`, { limit: 20, windowMs: 60_000 });
+  await checkRateLimit(`resume-extract:${user.user.id}`, { limit: 20, windowMs: 60_000 });
   const input = parseResumeInputSchema.parse(await req.json());
   const result = await resumeService.extract(input);
   return json<PostResumeExtractResponse>(result);

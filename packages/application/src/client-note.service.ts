@@ -3,7 +3,7 @@ import type {
   CreateClientNoteInput,
 } from "@destaworks/contracts/validation/client-note";
 import { toIso } from "@destaworks/domain/utils/iso";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { TenantContext } from "@destaworks/domain/tenant";
 import { writeAudit } from "@destaworks/db/audit";
 import { withTransaction } from "@destaworks/db/with-transaction";
 import { clientRepository } from "@destaworks/db/repositories/client.repository";
@@ -51,36 +51,36 @@ export const clientNoteService = {
   async create(
     clientId: string,
     input: CreateClientNoteInput,
-    user: AuthUser,
+    ctx: TenantContext,
   ): Promise<ClientNoteDTO> {
     await requireClient(clientId);
     const created = await withTransaction(async (tx) => {
       const row = await clientNoteRepository.create(
-        { ...input, clientId, loggedById: user.id },
+        { ...input, clientId, loggedById: ctx.user.id },
         tx,
       );
       await writeAudit(tx, {
         entity: "client_note",
         entityId: row.id,
-        actor: user.id,
+        actor: ctx.user.id,
         action: "add_note",
         after: { clientId },
       });
       return row;
     });
-    const userNames = await userRepository.namesByIds([user.id]);
+    const userNames = await userRepository.namesByIds([ctx.user.id]);
     return toClientNoteDTO(created, userNames);
   },
 
-  async remove(clientId: string, noteId: string, user: AuthUser): Promise<void> {
+  async remove(clientId: string, noteId: string, ctx: TenantContext): Promise<void> {
     await requireClient(clientId);
     await withTransaction(async (tx) => {
-      const count = await clientNoteRepository.softDelete(clientId, noteId, user.id, tx);
+      const count = await clientNoteRepository.softDelete(clientId, noteId, ctx.user.id, tx);
       if (count === 0) throw new AppError("NOT_FOUND", "Note not found");
       await writeAudit(tx, {
         entity: "client_note",
         entityId: noteId,
-        actor: user.id,
+        actor: ctx.user.id,
         action: "remove_note",
         after: { clientId },
       });

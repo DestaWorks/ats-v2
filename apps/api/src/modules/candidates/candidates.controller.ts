@@ -31,7 +31,7 @@ import { defined } from "@destaworks/domain/utils/defined";
 import { toIso } from "@destaworks/domain/utils/iso";
 import { AppError } from "@destaworks/integrations/http/app-error";
 import { toCandidateDTO, toDocumentSummaryDTO } from "@destaworks/application/candidate.dto";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { AuthContext } from "@destaworks/auth/guards";
 import type { CandidateListDTO } from "@destaworks/contracts/validation/candidate";
 import type { JourneyDTO } from "@destaworks/contracts/validation/journey";
 import type {
@@ -107,7 +107,7 @@ export class CandidatesController {
   async list(
     @Query(flatQuery, new ZodValidationPipe(boardQuerySchema))
     query: ContractOutput<typeof boardQuerySchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<BoardOrColumnPage> {
     const { includeTerminal, column, cursor, ...filters } = query;
     return column === undefined
@@ -125,7 +125,7 @@ export class CandidatesController {
   async create(
     @Body(new ZodValidationPipe(createCandidateSchema))
     body: ContractOutput<typeof createCandidateSchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<CandidateEnvelope> {
     this.assertMayWriteLicenseNumber(body.licenseNumber, user, "set");
     const created = await this.candidates.create(defined(body));
@@ -140,7 +140,7 @@ export class CandidatesController {
   async browse(
     @Query(flatQuery, new ZodValidationPipe(listQuerySchema))
     query: ContractOutput<typeof listQuerySchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<CandidateListDTO> {
     return this.candidates.listCandidates(defined(query), user);
   }
@@ -155,7 +155,7 @@ export class CandidatesController {
   async bulkMove(
     @Body(new ZodValidationPipe(bulkMoveInputSchema))
     body: ContractOutput<typeof bulkMoveInputSchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<BulkMoveResponse> {
     return this.candidates.bulkMove(body.ids, body.toStatus, user);
   }
@@ -167,7 +167,7 @@ export class CandidatesController {
   @Get(":id")
   async profile(
     @Param("id") id: string,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<CandidateProfileEnvelope> {
     return { candidate: await this.candidates.getProfile(id, user) };
   }
@@ -182,7 +182,7 @@ export class CandidatesController {
     @Param("id") id: string,
     @Body(new ZodValidationPipe(updateCandidateSchema))
     body: ContractOutput<typeof updateCandidateSchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<CandidateEnvelope> {
     this.assertMayWriteLicenseNumber(body.licenseNumber, user, "edit");
     const updated = await this.candidates.update(id, body, user);
@@ -201,7 +201,7 @@ export class CandidatesController {
 
   /** GET /candidates/:id/journey — the full oldest-first timeline, notes scoped to the viewer. */
   @Get(":id/journey")
-  async journey(@Param("id") id: string, @CurrentUser() user: AuthUser): Promise<JourneyDTO> {
+  async journey(@Param("id") id: string, @CurrentUser() user: AuthContext): Promise<JourneyDTO> {
     return this.candidates.getJourney(id, user);
   }
 
@@ -214,7 +214,7 @@ export class CandidatesController {
   async move(
     @Param("id") id: string,
     @Body(new ZodValidationPipe(moveInputSchema)) body: ContractOutput<typeof moveInputSchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<MovedCandidateEnvelope> {
     const updated = await this.candidates.move(id, body.toStatus, user);
     return {
@@ -234,7 +234,7 @@ export class CandidatesController {
   @Get(":id/notes")
   async listNotes(
     @Param("id") id: string,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<NoteListEnvelope> {
     return { notes: await this.notes.listByCandidate(id, user) };
   }
@@ -247,7 +247,7 @@ export class CandidatesController {
   async addNote(
     @Param("id") id: string,
     @Body(new ZodValidationPipe(addNoteSchema)) body: ContractOutput<typeof addNoteSchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<NoteEnvelope> {
     return { note: await this.notes.add(id, body, user) };
   }
@@ -257,7 +257,7 @@ export class CandidatesController {
   async logOutreach(
     @Param("id") id: string,
     @Body(new ZodValidationPipe(logOutreachSchema)) body: ContractOutput<typeof logOutreachSchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<OutreachAttemptEnvelope> {
     return { attempt: await this.candidates.logOutreach(id, body, user) };
   }
@@ -273,7 +273,7 @@ export class CandidatesController {
   @RequireCapability("purgeCandidate")
   async purge(
     @Param("id") id: string,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<CandidateAckEnvelope> {
     await this.candidates.purge(id, user);
     return { ok: true, id };
@@ -284,7 +284,7 @@ export class CandidatesController {
   @HttpCode(200)
   async restore(
     @Param("id") id: string,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<CandidateEnvelope> {
     const restored = await this.candidates.restore(id, user);
     return { candidate: toCandidateDTO(restored, user) };
@@ -301,7 +301,7 @@ export class CandidatesController {
     @Param("id") id: string,
     @Body(new ZodValidationPipe(uploadCandidateResumeSchema))
     body: ContractOutput<typeof uploadCandidateResumeSchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<DocumentSummaryEnvelope> {
     const document = await this.resumes.attachToCandidate(id, body, user);
     return { document: toDocumentSummaryDTO(document) };
@@ -319,7 +319,7 @@ export class CandidatesController {
     @Param("id") id: string,
     @Body(new ZodValidationPipe(verifyLicenseSchema))
     body: ContractOutput<typeof verifyLicenseSchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<CandidateEnvelope> {
     this.assertMayWriteLicenseNumber(body.licenseNumber, user, "edit");
     const updated = await this.candidates.verifyLicense(id, body, user);
@@ -333,7 +333,7 @@ export class CandidatesController {
    */
   private assertMayWriteLicenseNumber(
     licenseNumber: string | null | undefined,
-    user: AuthUser,
+    user: AuthContext,
     verb: "set" | "edit",
   ): void {
     if (licenseNumber === undefined) return;
@@ -345,7 +345,7 @@ export class CandidatesController {
   private async readBoard(
     filters: BoardFilters,
     includeTerminal: boolean,
-    user: AuthUser,
+    user: AuthContext,
   ): Promise<BoardResponse> {
     return this.candidates.listBoard(defined(filters), user, defined({ includeTerminal }));
   }
@@ -355,7 +355,7 @@ export class CandidatesController {
     column: BoardColumn,
     cursor: string | undefined,
     filters: BoardFilters,
-    user: AuthUser,
+    user: AuthContext,
   ): Promise<ColumnPageDTO> {
     let decoded;
     if (cursor) {

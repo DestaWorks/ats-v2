@@ -30,7 +30,7 @@ export class RateLimitGuard implements CanActivate {
     ]);
     if (rule === undefined) return true;
     const request = context.switchToHttp().getRequest<AuthenticatedRequest & PortalRequest>();
-    const identity = request.user?.id ?? request.portal?.contactId;
+    const identity = request.user?.user.id ?? request.portal?.contactId;
     const key = identity === undefined ? rule.name : `${rule.name}:${identity}`;
     await checkRateLimit(key, { limit: rule.limit, windowMs: rule.windowMs });
     return true;

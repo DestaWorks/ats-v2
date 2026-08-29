@@ -32,7 +32,7 @@ import {
   type TeamBreakdownDTO,
 } from "@destaworks/contracts/validation/daily";
 import { MS_PER_DAY, systemClock, type Clock } from "@destaworks/domain/clock";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { AuthContext } from "@destaworks/auth/guards";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { SessionAuthGuard } from "../../common/guards/session-auth.guard";
 import { ZodValidationPipe, type ContractOutput } from "../../common/pipes/zod-validation.pipe";
@@ -87,7 +87,7 @@ export class DailyController {
   async log(
     @Query("date") date: string | undefined,
     @Query("tz") tz: string | undefined,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<DailyLogViewDTO> {
     const offset = await resolveViewerTz(tz);
     return this.daily.logView(user, viewerDay(date, offset), offset);
@@ -100,7 +100,7 @@ export class DailyController {
   @Post("log")
   async submitLog(
     @Body(submitLogPipe) body: ContractOutput<typeof submitLogSchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<SubmittedLogDTO> {
     return { log: await this.daily.submitLog(body, user) };
   }
@@ -110,7 +110,7 @@ export class DailyController {
   async overview(
     @Query("date") date: string | undefined,
     @Query("tz") tz: string | undefined,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<DailyOverviewDTO> {
     const offset = await resolveViewerTz(tz);
     return this.daily.overview(user, viewerDay(date, offset), offset);
@@ -121,7 +121,7 @@ export class DailyController {
   @HttpCode(HttpStatus.OK)
   async actuals(
     @Body(saveActualsPipe) body: ContractOutput<typeof saveActualsSchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<AcknowledgedDTO> {
     await this.daily.saveActuals(body, user);
     return ACKNOWLEDGED;
@@ -132,7 +132,7 @@ export class DailyController {
   @HttpCode(HttpStatus.OK)
   async setTarget(
     @Body(setTargetPipe) body: ContractOutput<typeof setTargetSchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<AcknowledgedDTO> {
     await this.daily.setTarget(body, user);
     return ACKNOWLEDGED;
@@ -143,7 +143,7 @@ export class DailyController {
   @HttpCode(HttpStatus.OK)
   async managerFeedback(
     @Body(addFeedbackPipe) body: ContractOutput<typeof addFeedbackSchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<AcknowledgedDTO> {
     await this.daily.addFeedback(body, user);
     return ACKNOWLEDGED;
@@ -162,7 +162,7 @@ export class DailyController {
   @Get("team-breakdown")
   teamBreakdown(
     @Query(teamBreakdownPipe) query: ContractOutput<typeof teamBreakdownQuerySchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<TeamBreakdownDTO> {
     return this.daily.teamBreakdown(query.weekStart, user);
   }
@@ -171,7 +171,7 @@ export class DailyController {
   @Post("journal/entries")
   async addEntry(
     @Body(journalEntryPipe) body: ContractOutput<typeof journalEntrySchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<CreatedJournalEntryDTO> {
     return { entry: await this.daily.addEntry(body.date, body.text, user) };
   }
@@ -180,7 +180,7 @@ export class DailyController {
   @Post("journal/goals")
   async addGoal(
     @Body(journalGoalPipe) body: ContractOutput<typeof journalGoalSchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<CreatedJournalGoalDTO> {
     return { goal: await this.daily.addGoal(body.weekStart, body.text, user) };
   }
@@ -193,7 +193,7 @@ export class DailyController {
   async toggleGoal(
     @Param("id") id: string,
     @Body(toggleGoalPipe) body: ContractOutput<typeof toggleGoalSchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<AcknowledgedDTO> {
     await this.daily.setGoalDone(id, body.done, user);
     return ACKNOWLEDGED;

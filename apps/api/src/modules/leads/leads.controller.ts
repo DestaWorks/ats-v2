@@ -36,7 +36,7 @@ import {
   type PostLeadSnoozeResponse,
 } from "@destaworks/contracts/validation/lead";
 import { defined } from "@destaworks/domain/utils/defined";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { AuthContext } from "@destaworks/auth/guards";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { SessionAuthGuard } from "../../common/guards/session-auth.guard";
 import { ZodValidationPipe, type ContractOutput } from "../../common/pipes/zod-validation.pipe";
@@ -65,7 +65,7 @@ export class LeadsController {
   @Post()
   async create(
     @Body(new ZodValidationPipe(addLeadSchema)) body: ContractOutput<typeof addLeadSchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<PostLeadResponse> {
     return { lead: await this.leads.create(body, user) };
   }
@@ -91,7 +91,7 @@ export class LeadsController {
   async bulk(
     @Body(new ZodValidationPipe(bulkLeadActionSchema))
     body: ContractOutput<typeof bulkLeadActionSchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<PostLeadBulkResponse> {
     return await this.leads.bulkAction(body, user);
   }
@@ -101,7 +101,7 @@ export class LeadsController {
   @HttpCode(HttpStatus.OK)
   async import(
     @Body(new ZodValidationPipe(importLeadsSchema)) body: ContractOutput<typeof importLeadsSchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<PostLeadImportResponse> {
     return await this.leads.importLeads(body, user);
   }
@@ -116,7 +116,7 @@ export class LeadsController {
   @Delete(":id")
   async remove(
     @Param("id") id: string,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<DeleteLeadResponse> {
     const { id: deleted } = await this.leads.softDelete(id, user);
     return { ok: true, id: deleted };
@@ -127,7 +127,7 @@ export class LeadsController {
   @HttpCode(HttpStatus.OK)
   async promote(
     @Param("id") id: string,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<PostLeadPromoteResponse> {
     return await this.leads.promote(id, user);
   }
@@ -138,7 +138,7 @@ export class LeadsController {
   async respond(
     @Param("id") id: string,
     @Body(new ZodValidationPipe(respondSchema)) body: ContractOutput<typeof respondSchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<PostLeadRespondResponse> {
     return { lead: await this.leads.respond(id, body.kind, user) };
   }
@@ -149,7 +149,7 @@ export class LeadsController {
   async snooze(
     @Param("id") id: string,
     @Body(new ZodValidationPipe(snoozeLeadSchema)) body: ContractOutput<typeof snoozeLeadSchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<PostLeadSnoozeResponse> {
     return { lead: await this.leads.snooze(id, body.until, user) };
   }
@@ -159,7 +159,7 @@ export class LeadsController {
   @HttpCode(HttpStatus.OK)
   async restore(
     @Param("id") id: string,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<PostLeadRestoreResponse> {
     return { lead: await this.leads.restore(id, user) };
   }
@@ -170,7 +170,7 @@ export class LeadsController {
   async logOutreach(
     @Param("id") id: string,
     @Body(new ZodValidationPipe(logOutreachSchema)) body: ContractOutput<typeof logOutreachSchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<PostLeadOutreachResponse> {
     return { lead: await this.leads.logOutreach(id, body, user) };
   }
@@ -182,7 +182,7 @@ export class LeadsController {
     @Param("attemptId") attemptId: string,
     @Body(new ZodValidationPipe(updateOutreachSchema))
     body: ContractOutput<typeof updateOutreachSchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<PatchLeadOutreachAttemptResponse> {
     return { lead: await this.leads.updateOutreach(id, attemptId, body, user) };
   }
@@ -192,7 +192,7 @@ export class LeadsController {
   async deleteOutreach(
     @Param("id") id: string,
     @Param("attemptId") attemptId: string,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<DeleteLeadOutreachAttemptResponse> {
     return { lead: await this.leads.deleteOutreach(id, attemptId, user) };
   }

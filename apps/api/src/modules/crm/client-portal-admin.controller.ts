@@ -4,7 +4,7 @@ import type {
   PostCrmPortalTokenResponse,
   PostCrmPortalTokenRevokeResponse,
 } from "@destaworks/contracts/http/crm";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { AuthContext } from "@destaworks/auth/guards";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { RequireCapability } from "../../common/decorators/require-capability.decorator";
 import { CapabilityGuard } from "../../common/guards/capability.guard";
@@ -37,7 +37,7 @@ export class CrmClientPortalAdminController {
   async generateLink(
     @Param("id") clientId: string,
     @Param("contactId") contactId: string,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<PostCrmPortalTokenResponse> {
     return this.portal.generateLink(clientId, contactId, user);
   }
@@ -47,7 +47,7 @@ export class CrmClientPortalAdminController {
   async revokeLink(
     @Param("id") clientId: string,
     @Param("tokenId") tokenId: string,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<PostCrmPortalTokenRevokeResponse> {
     await this.portal.revokeLink(clientId, tokenId, user);
     return { ok: true, id: tokenId };

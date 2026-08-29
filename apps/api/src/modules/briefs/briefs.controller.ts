@@ -24,7 +24,7 @@ import {
   enqueueWeeklyBriefGeneration,
 } from "@destaworks/jobs/enqueue/briefs";
 import { mondayOf } from "@destaworks/domain/daily";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { AuthContext } from "@destaworks/auth/guards";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { RateLimit } from "../../common/decorators/rate-limit.decorator";
 import { RequireCapability } from "../../common/decorators/require-capability.decorator";
@@ -101,7 +101,7 @@ export class BriefsController {
   @HttpCode(HttpStatus.OK)
   saveDaily(
     @Body(saveDailyPipe) body: ContractOutput<typeof saveDailyBriefSchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ) {
     return this.briefs.saveDaily(body, user);
   }
@@ -131,7 +131,7 @@ export class BriefsController {
   @HttpCode(HttpStatus.OK)
   saveWeekly(
     @Body(saveWeeklyPipe) body: ContractOutput<typeof saveWeeklyBriefSchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ) {
     return this.briefs.saveWeekly(body, user);
   }

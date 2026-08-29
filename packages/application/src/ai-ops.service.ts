@@ -3,7 +3,7 @@ import { aiUsageEventRepository } from "@destaworks/db/repositories/ai-usage-eve
 import { writeAudit } from "@destaworks/db/audit";
 import { withTransaction } from "@destaworks/db/with-transaction";
 import { toIso } from "@destaworks/domain/utils/iso";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { TenantContext } from "@destaworks/domain/tenant";
 import type { AiSettingsDTO, AiUsageOverviewDTO } from "@destaworks/contracts/validation/ai-ops";
 
 const USAGE_WINDOW_HOURS = 24;
@@ -16,17 +16,17 @@ export const aiOpsService = {
 
   async setDisabled(
     disabled: boolean,
-    actor: AuthUser,
+    actor: TenantContext,
     reason?: string | null,
   ): Promise<AiSettingsDTO> {
     const trimmedReason = reason?.trim();
     const disabledReason = disabled && trimmedReason ? trimmedReason : null;
     await withTransaction(async (tx) => {
-      await aiSettingsRepository.setDisabled(disabled, actor.id, disabledReason, tx);
+      await aiSettingsRepository.setDisabled(disabled, actor.user.id, disabledReason, tx);
       await writeAudit(tx, {
         entity: "ai_settings",
         entityId: "singleton",
-        actor: actor.id,
+        actor: actor.user.id,
         action: disabled ? "disable" : "enable",
         after: { disabledReason },
       });

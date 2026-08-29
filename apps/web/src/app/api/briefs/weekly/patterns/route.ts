@@ -18,7 +18,7 @@ export type PostBriefsWeeklyPatternsResponse = WeeklyPatternsAiOutput;
  */
 export const POST = apiHandler(async (req: Request) => {
   const user = await requireCapability("viewReports");
-  await checkRateLimit(`briefs-weekly-patterns:${user.id}`, { limit: 10, windowMs: 60_000 });
+  await checkRateLimit(`briefs-weekly-patterns:${user.user.id}`, { limit: 10, windowMs: 60_000 });
   const input = weeklyPatternsSchema.parse(await req.json());
   return json<PostBriefsWeeklyPatternsResponse>(await briefService.generatePatterns(input));
 });

@@ -14,9 +14,14 @@ const h = vi.hoisted(() => ({
 
 vi.mock("server-only", () => ({}));
 vi.mock("@destaworks/config/request-context", () => ({
-  requestContext: () => ({ headers: async () => new Headers() }),
+  requestContext: () => ({ headers: async () => new Headers(), cookie: async () => undefined }),
 }));
 vi.mock("@destaworks/auth/auth", () => ({ auth: { api: { getSession: async () => h.session } } }));
+vi.mock("@destaworks/db/memberships", async () => ({
+  membershipReader: (
+    await import("@destaworks/auth/testing/membership-double")
+  ).singleTenantMembershipReader(() => h.session),
+}));
 vi.mock("@destaworks/db/prisma", () => ({ prisma: {} }));
 vi.mock("@destaworks/application/candidate.service", () => ({
   candidateService: { restore: h.restore },
@@ -53,7 +58,10 @@ describe("POST /api/candidates/:id/restore", () => {
     });
     const res = await POST(req(), ctx);
     expect(res.status).toBe(200);
-    expect(h.restore).toHaveBeenCalledWith("c1", expect.objectContaining({ id: "u1" }));
+    expect(h.restore).toHaveBeenCalledWith(
+      "c1",
+      expect.objectContaining({ user: expect.objectContaining({ id: "u1" }) }),
+    );
     const body = await res.json();
     // Associate has no viewCredentials → licenseNumber stripped on the way out.
     expect(body.candidate.name).toBe("Jane");

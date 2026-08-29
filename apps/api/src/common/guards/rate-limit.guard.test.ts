@@ -32,7 +32,12 @@ function handlerLimitedTo(name: string, limit: number): () => void {
 function userRequest(id: string): AuthenticatedRequest {
   return {
     headers: {},
-    user: { id, email: `${id}@desta.works`, name: "Test User", role: "Associate" },
+    user: {
+      tenantId: "t1",
+      membershipId: `${id}-m`,
+      user: { id, email: `${id}@desta.works`, name: "Test User" },
+      role: "Associate",
+    },
   };
 }
 

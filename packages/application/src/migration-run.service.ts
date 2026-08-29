@@ -1,4 +1,4 @@
-import { isRole } from "@destaworks/domain/constants";
+import { toRole } from "@destaworks/domain/constants";
 import {
   importFormatSchema,
   isMigrationRunStatus,
@@ -8,8 +8,9 @@ import {
   type MigrationCommitAccepted,
   type MigrationRunState,
 } from "@destaworks/contracts/validation/migration";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { TenantContext } from "@destaworks/domain/tenant";
 import { logger } from "@destaworks/config/logger";
+import { membershipReader } from "@destaworks/db/memberships";
 import { migrationRunRepository } from "@destaworks/db/repositories/migration-run.repository";
 import { userRepository } from "@destaworks/db/repositories/user.repository";
 import { AppError } from "@destaworks/integrations/http/app-error";
@@ -32,7 +33,7 @@ export interface ClaimedMigrationRun {
   runId: string;
   attempt: number;
   input: ImportInput;
-  actor: AuthUser;
+  actor: TenantContext;
   /** Writable rows a previous attempt already committed. 0 on a first attempt. */
   resumeFromRow: number;
   totalRows: number;
@@ -108,8 +109,8 @@ export const migrationRunService = {
    * and re-queueable, unlike the opposite order, which would hand a worker a run id that does not
    * exist yet.
    */
-  async start(input: ImportInput, user: AuthUser): Promise<MigrationCommitAccepted> {
-    assertCanImport(user);
+  async start(input: ImportInput, ctx: TenantContext): Promise<MigrationCommitAccepted> {
+    assertCanImport(ctx);
 
     const run = await migrationRunRepository.create({
       checksum: contentChecksum(input.content),
@@ -118,19 +119,19 @@ export const migrationRunService = {
       extractWithAi: input.extractWithAi ?? false,
       content: input.content,
       resumes: input.resumes ?? [],
-      startedById: user.id,
+      startedById: ctx.user.id,
     });
 
     const jobId = await requireMigrationCommitEnqueuer()(run.id);
     await migrationRunRepository.setJobId(run.id, jobId);
 
-    logger.info("migration.run.queued", { runId: run.id, jobId, actorId: user.id });
+    logger.info("migration.run.queued", { runId: run.id, jobId, actorId: ctx.user.id });
     return { runId: run.id, jobId, status: "queued" };
   },
 
   /** The operator's read. Same `bulkImport` gate as starting one — a run report lists candidates. */
-  async state(runId: string, user: AuthUser): Promise<MigrationRunState> {
-    assertCanImport(user);
+  async state(runId: string, ctx: TenantContext): Promise<MigrationRunState> {
+    assertCanImport(ctx);
     const run = await migrationRunRepository.findById(runId);
     if (!run) throw new AppError("NOT_FOUND", "Import run not found");
     return toState(run);
@@ -140,9 +141,16 @@ export const migrationRunService = {
    * Take one attempt at a run, or return `null` if there is nothing to do (already finished, or
    * another worker holds it). Called only by the job handler.
    *
-   * The actor is re-read from the user table rather than restored from the request: a job can run
-   * long after the session that queued it, and a user who lost `bulkImport` in between must not
-   * have an import still running under the old grant. A deleted or demoted actor fails the run.
+   * The actor is re-read rather than restored from the request: a job can run long after the
+   * session that queued it, and a user who lost `bulkImport` in between must not have an import
+   * still running under the old grant. A deleted or demoted actor fails the run.
+   *
+   * Both halves of the context are re-derived, not just the identity. The tenant comes from the
+   * run row — the job is work for one tenant and must stay in it however the queue is drained —
+   * and the role from that tenant's membership. A worker is the one place with no request to
+   * resolve a tenant from, so it is also the one place where "which tenant" could silently become
+   * "whichever the actor happens to default to"; reading it from the row it is doing work for is
+   * what stops that. A run staged before 6.2's backfill carries no tenant and cannot be resumed.
    */
   async claim(runId: string, attempt: number): Promise<ClaimedMigrationRun | null> {
     const run = await migrationRunRepository.claimForAttempt(runId, attempt, new Date());
@@ -150,16 +158,22 @@ export const migrationRunService = {
     if (run.content === null) {
       throw new AppError("INTERNAL", "The staged import is no longer available.");
     }
+    if (run.tenantId === null) {
+      throw new AppError("INTERNAL", "The staged import is not attributed to a workspace.");
+    }
 
     const actorRow = await userRepository.findActorById(run.startedById);
-    if (!actorRow || !isRole(actorRow.role)) {
+    const membership = (await membershipReader.listActiveForUser(run.startedById)).find(
+      (m) => m.tenantId === run.tenantId,
+    );
+    if (!actorRow || !membership) {
       throw new AppError("FORBIDDEN", "The account that started this import can no longer run it.");
     }
-    const actor: AuthUser = {
-      id: actorRow.id,
-      email: actorRow.email,
-      name: actorRow.name,
-      role: actorRow.role,
+    const actor: TenantContext = {
+      tenantId: membership.tenantId,
+      membershipId: membership.id,
+      user: { id: actorRow.id, email: actorRow.email, name: actorRow.name },
+      role: toRole(membership.role),
     };
     assertCanImport(actor);
 

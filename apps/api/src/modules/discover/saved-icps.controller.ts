@@ -5,7 +5,7 @@ import type {
   GetSavedIcpsResponse,
   PostSavedIcpResponse,
 } from "@destaworks/contracts/http/saved-icp";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { AuthContext } from "@destaworks/auth/guards";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { RequireCapability } from "../../common/decorators/require-capability.decorator";
 import { CapabilityGuard } from "../../common/guards/capability.guard";
@@ -30,7 +30,7 @@ export class SavedIcpsController {
   ) {}
 
   @Get()
-  async list(@CurrentUser() user: AuthUser): Promise<GetSavedIcpsResponse> {
+  async list(@CurrentUser() user: AuthContext): Promise<GetSavedIcpsResponse> {
     return { savedIcps: await this.savedIcps.list(user) };
   }
 
@@ -38,7 +38,7 @@ export class SavedIcpsController {
   async create(
     @Body(new ZodValidationPipe(createSavedIcpSchema))
     body: ContractOutput<typeof createSavedIcpSchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<PostSavedIcpResponse> {
     return { savedIcp: await this.savedIcps.create(body, user) };
   }
@@ -46,7 +46,7 @@ export class SavedIcpsController {
   @Delete(":id")
   async remove(
     @Param("id") id: string,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<DeleteSavedIcpResponse> {
     return this.savedIcps.remove(id, user);
   }

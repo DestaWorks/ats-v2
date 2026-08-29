@@ -20,6 +20,11 @@ let mockSession: { user: { id: string; email: string; name: string; role?: strin
 vi.mock("@destaworks/auth/auth", () => ({
   auth: { api: { getSession: async () => mockSession } },
 }));
+vi.mock("@destaworks/db/memberships", async () => ({
+  membershipReader: (
+    await import("@destaworks/auth/testing/membership-double")
+  ).singleTenantMembershipReader(() => mockSession),
+}));
 
 import { ROLES } from "@destaworks/domain/constants";
 import { installNestRequestContext } from "../request-context/nest-request-context";
@@ -113,7 +118,11 @@ describe("CapabilityGuard — grant", () => {
     const context = executionContextFor({ request, handler: handlerRequiring("viewReports") });
 
     expect(await guard.canActivate(context)).toBe(true);
-    expect(request.user).toMatchObject({ id: "u1", role: "Owner" });
+    expect(request.user).toMatchObject({
+      tenantId: "t1",
+      user: { id: "u1" },
+      role: "Owner",
+    });
   });
 
   it("reads the capability from the controller when the handler declares none", async () => {
@@ -141,6 +150,34 @@ describe("the guards name no roles", () => {
 
     // Load-bearing: Phase 6 moves `role` onto a membership. That is a change to `hasCapability`
     // and nothing else only for as long as no guard has an opinion about role names.
+    expect(offenders).toEqual([]);
+  });
+
+  /**
+   * The same rule, extended to the controllers in 6.4 — where the claim that moving `role` onto a
+   * membership costs nothing above the guard was actually cashed in, and so is worth a check
+   * rather than a note.
+   *
+   * The criterion is looser than for a guard on purpose: a controller's doc comment may explain a
+   * policy in terms of who it affects ("Screeners hold no `viewCredentials`"), which is prose
+   * about a capability, not a decision made on a name. What must not appear is a role as a
+   * VALUE — a string literal — because that is the only form that can gate anything.
+   */
+  it("contains no role literal in any controller source", () => {
+    const modules = join(dirname(dirname(dirname(fileURLToPath(import.meta.url)))), "modules");
+    const controllers = readdirSync(modules, { recursive: true, encoding: "utf8" })
+      .filter((f) => f.endsWith(".controller.ts"))
+      .map((f) => join(modules, f));
+
+    expect(controllers.length).toBeGreaterThan(20);
+
+    const offenders = controllers.flatMap((file) => {
+      const source = readFileSync(file, "utf8");
+      return ROLES.filter((role) => new RegExp(`["'\`]${role}["'\`]`).test(source)).map(
+        (role) => `${file}: ${role}`,
+      );
+    });
+
     expect(offenders).toEqual([]);
   });
 });

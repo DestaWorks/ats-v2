@@ -5,9 +5,9 @@ import type {
 } from "@destaworks/contracts/validation/user-preferences";
 import { defined } from "@destaworks/domain/utils/defined";
 import { userRepository } from "@destaworks/db/repositories/user.repository";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { TenantContext } from "@destaworks/domain/tenant";
 import { AppError } from "@destaworks/integrations/http/app-error";
-import { AVATAR_BUCKET, uploadPublic } from "@destaworks/integrations/storage";
+import { AVATAR_BUCKET, uploadPublic, userStorageKey } from "@destaworks/integrations/storage";
 
 /** `data:<mime>;base64,<payload>` — the shape `resizeToDataUrl` (profile-view.tsx) always
  *  produces (JPEG). Mime is restricted to raster types with no active-content risk — an avatar
@@ -22,23 +22,28 @@ const DATA_URL_RE = /^data:(image\/(?:jpeg|png|webp));base64,(.+)$/;
  * matches legacy, which never tracked these at all).
  */
 export const userPreferencesService = {
-  async getMine(user: AuthUser): Promise<UserPreferencesDTO> {
-    const row = await userRepository.findPreferences(user.id);
+  async getMine(ctx: TenantContext): Promise<UserPreferencesDTO> {
+    const row = await userRepository.findPreferences(ctx.user.id);
     if (!row) throw new AppError("NOT_FOUND", "User not found");
     return row;
   },
 
-  async updateMine(user: AuthUser, input: UpdatePreferencesInput): Promise<UserPreferencesDTO> {
-    return userRepository.updatePreferences(user.id, defined(input));
+  async updateMine(ctx: TenantContext, input: UpdatePreferencesInput): Promise<UserPreferencesDTO> {
+    return userRepository.updatePreferences(ctx.user.id, defined(input));
   },
 
   /**
    * Upload a resized avatar image to Storage (Wave 6, D8) and return its permanent public URL —
    * the caller still writes it onto `User.image` itself via Better Auth's own `updateUser`
    * (that's a client-side call this server-only service can't make). One object per user
-   * (`{userId}.jpg`, upserted), so a re-upload replaces the old file rather than accumulating.
+   * (`u/{userId}/avatar.jpg`, upserted), so a re-upload replaces the old file rather than
+   * accumulating.
+   *
+   * USER-scoped, not tenant-scoped (6.6): `User` is a global model, so one human has one avatar
+   * across every tenant they belong to. Prefixing by tenant would duplicate the file per
+   * membership and make "the user's picture" ambiguous.
    */
-  async uploadAvatar(user: AuthUser, input: UploadAvatarInput): Promise<{ url: string }> {
+  async uploadAvatar(ctx: TenantContext, input: UploadAvatarInput): Promise<{ url: string }> {
     const match = DATA_URL_RE.exec(input.dataUrl);
     if (!match) throw new AppError("BAD_REQUEST", "Invalid image data");
     const [, contentType, base64] = match;
@@ -46,7 +51,8 @@ export const userPreferencesService = {
       throw new AppError("BAD_REQUEST", "Invalid image data");
     }
     const bytes = Buffer.from(base64, "base64");
-    const url = await uploadPublic(AVATAR_BUCKET, `${user.id}.jpg`, bytes, contentType);
+    const key = userStorageKey(ctx.user.id, "avatar.jpg");
+    const url = await uploadPublic(AVATAR_BUCKET, key, bytes, contentType);
     return { url };
   },
 };

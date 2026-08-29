@@ -13,9 +13,14 @@ const h = vi.hoisted(() => ({
 
 vi.mock("server-only", () => ({}));
 vi.mock("@destaworks/config/request-context", () => ({
-  requestContext: () => ({ headers: async () => new Headers() }),
+  requestContext: () => ({ headers: async () => new Headers(), cookie: async () => undefined }),
 }));
 vi.mock("@destaworks/auth/auth", () => ({ auth: { api: { getSession: async () => h.session } } }));
+vi.mock("@destaworks/db/memberships", async () => ({
+  membershipReader: (
+    await import("@destaworks/auth/testing/membership-double")
+  ).singleTenantMembershipReader(() => h.session),
+}));
 vi.mock("@destaworks/application/resume.service", () => ({ resumeService: { save: h.save } }));
 
 import { POST } from "./route";
@@ -55,6 +60,6 @@ describe("POST /api/resume/save", () => {
     expect(await res.json()).toEqual({ candidate: { id: "c1" }, document: { id: "d1" } });
     // The route forwards the authenticated user to the service.
     const [, user] = h.save.mock.calls[0]!;
-    expect(user).toMatchObject({ id: "u1", role: "Owner" });
+    expect(user).toMatchObject({ user: { id: "u1" }, role: "Owner" });
   });
 });

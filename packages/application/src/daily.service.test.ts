@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { Prisma } from "@destaworks/db/generated/prisma/client";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { TenantContext } from "@destaworks/domain/tenant";
 
 /**
  * Proves the daily-loop service WITHOUT a DB: target-setting is capability-gated server-side,
@@ -10,8 +10,18 @@ import type { AuthUser } from "@destaworks/auth/guards";
 
 const h = vi.hoisted(() => ({
   fakeTx: { __tx: true },
-  user: { id: "u1", email: "u@desta.works", name: "Test User", role: "Associate" as const },
-  owner: { id: "o1", email: "o@desta.works", name: "Owner", role: "Owner" as const },
+  user: {
+    tenantId: "t1",
+    membershipId: "u1-m",
+    user: { id: "u1", email: "u@desta.works", name: "Test User" },
+    role: "Associate" as const,
+  },
+  owner: {
+    tenantId: "t1",
+    membershipId: "o1-m",
+    user: { id: "o1", email: "o@desta.works", name: "Owner" },
+    role: "Owner" as const,
+  },
   repo: {
     upsertTarget: vi.fn(),
     targetFor: vi.fn(),
@@ -121,7 +131,7 @@ describe("dailyService.setTarget", () => {
   };
 
   it("FORBIDDEN for a non-leadership caller (server-side gate, no writes)", async () => {
-    await expect(dailyService.setTarget(input, h.user as AuthUser)).rejects.toMatchObject({
+    await expect(dailyService.setTarget(input, h.user as TenantContext)).rejects.toMatchObject({
       code: "FORBIDDEN",
     });
     expect(h.repo.upsertTarget).not.toHaveBeenCalled();
@@ -131,7 +141,7 @@ describe("dailyService.setTarget", () => {
     h.userRepo.namesByIds.mockResolvedValue(new Map([["u1", "Test User"]]));
     h.repo.upsertTarget.mockResolvedValue({ id: "t1" });
 
-    await dailyService.setTarget(input, h.owner as AuthUser);
+    await dailyService.setTarget(input, h.owner as TenantContext);
 
     const [data, tx] = h.repo.upsertTarget.mock.calls[0]!;
     expect(tx).toBe(h.fakeTx);
@@ -146,7 +156,7 @@ describe("dailyService.setTarget", () => {
   it("unknown associate → NOT_FOUND", async () => {
     h.userRepo.namesByIds.mockResolvedValue(new Map());
     await expect(
-      dailyService.setTarget({ ...input, userId: "ghost" }, h.owner as AuthUser),
+      dailyService.setTarget({ ...input, userId: "ghost" }, h.owner as TenantContext),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 });
@@ -172,7 +182,7 @@ describe("dailyService.submitLog", () => {
       Promise.resolve({ ...data, id: "dl1", blocker: null, notes: null, shiftHandoff: null }),
     );
 
-    const dto = await dailyService.submitLog(input, h.user as AuthUser);
+    const dto = await dailyService.submitLog(input, h.user as TenantContext);
 
     const [data, tx] = h.repo.createLog.mock.calls[0]!;
     expect(tx).toBe(h.fakeTx);
@@ -189,7 +199,7 @@ describe("dailyService.submitLog", () => {
 
   it("a second submit for the same day → CONFLICT (no writes)", async () => {
     h.repo.logFor.mockResolvedValue({ id: "dl1" });
-    await expect(dailyService.submitLog(input, h.user as AuthUser)).rejects.toMatchObject({
+    await expect(dailyService.submitLog(input, h.user as TenantContext)).rejects.toMatchObject({
       code: "CONFLICT",
     });
     expect(h.repo.createLog).not.toHaveBeenCalled();
@@ -205,7 +215,7 @@ describe("dailyService.submitLog", () => {
         { code: "P2002", clientVersion: "test" },
       ),
     );
-    await expect(dailyService.submitLog(input, h.user as AuthUser)).rejects.toMatchObject({
+    await expect(dailyService.submitLog(input, h.user as TenantContext)).rejects.toMatchObject({
       code: "CONFLICT",
     });
   });
@@ -220,7 +230,7 @@ describe("dailyService.logView", () => {
       { date: "2026-07-10", sourced: 2, outreach: 0, responses: 0, screenings: 0, submitted: 0 },
     ]);
 
-    const view = await dailyService.logView(h.user as AuthUser, "2026-07-13", 0);
+    const view = await dailyService.logView(h.user as TenantContext, "2026-07-13", 0);
 
     expect(view.ramp).toMatchObject({ weekNum: 2, sourced: 15 });
     expect(view.streak).toBe(2); // 12th + 11th hit, 10th missed
@@ -231,12 +241,12 @@ describe("dailyService.logView", () => {
 describe("dailyService.setGoalDone", () => {
   it("owner-scoped real update; someone else's goal → NOT_FOUND", async () => {
     h.repo.setGoalDone.mockResolvedValue(1);
-    await dailyService.setGoalDone("g1", true, h.user as AuthUser);
+    await dailyService.setGoalDone("g1", true, h.user as TenantContext);
     expect(h.repo.setGoalDone).toHaveBeenCalledWith("g1", "u1", true);
 
     h.repo.setGoalDone.mockResolvedValue(0);
     await expect(
-      dailyService.setGoalDone("not-mine", true, h.user as AuthUser),
+      dailyService.setGoalDone("not-mine", true, h.user as TenantContext),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 });
@@ -288,7 +298,7 @@ describe("dailyService.addFeedback — Wave 3.1 backlog", () => {
   const input = { userId: "u2", body: "Great week sourcing!" };
 
   it("FORBIDDEN for a non-leadership caller (server-side gate, no writes)", async () => {
-    await expect(dailyService.addFeedback(input, h.user as AuthUser)).rejects.toMatchObject({
+    await expect(dailyService.addFeedback(input, h.user as TenantContext)).rejects.toMatchObject({
       code: "FORBIDDEN",
     });
     expect(h.repo.createFeedback).not.toHaveBeenCalled();
@@ -298,7 +308,7 @@ describe("dailyService.addFeedback — Wave 3.1 backlog", () => {
     h.userRepo.namesByIds.mockResolvedValue(new Map([["u2", "Associate Two"]]));
     h.repo.createFeedback.mockResolvedValue({ id: "f1" });
 
-    await dailyService.addFeedback(input, h.owner as AuthUser);
+    await dailyService.addFeedback(input, h.owner as TenantContext);
 
     const [data, tx] = h.repo.createFeedback.mock.calls[0]!;
     expect(tx).toBe(h.fakeTx);
@@ -318,7 +328,7 @@ describe("dailyService.addFeedback — Wave 3.1 backlog", () => {
   it("unknown associate → NOT_FOUND", async () => {
     h.userRepo.namesByIds.mockResolvedValue(new Map());
     await expect(
-      dailyService.addFeedback({ ...input, userId: "ghost" }, h.owner as AuthUser),
+      dailyService.addFeedback({ ...input, userId: "ghost" }, h.owner as TenantContext),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 });
@@ -326,7 +336,7 @@ describe("dailyService.addFeedback — Wave 3.1 backlog", () => {
 describe("dailyService.teamBreakdown — Wave 3.1 backlog", () => {
   it("FORBIDDEN for a non-leadership caller (server-side gate, no query)", async () => {
     await expect(
-      dailyService.teamBreakdown("2026-07-13", h.user as AuthUser),
+      dailyService.teamBreakdown("2026-07-13", h.user as TenantContext),
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
     expect(h.repo.logsForDateRange).not.toHaveBeenCalled();
   });
@@ -370,7 +380,7 @@ describe("dailyService.teamBreakdown — Wave 3.1 backlog", () => {
       { id: "u2", name: "Associate Two" },
     ]);
 
-    const out = await dailyService.teamBreakdown("2026-07-15", h.owner as AuthUser);
+    const out = await dailyService.teamBreakdown("2026-07-15", h.owner as TenantContext);
 
     expect(out.weekStart).toBe("2026-07-13"); // normalized to the Monday
     expect(out.rows).toEqual([
@@ -409,7 +419,7 @@ describe("dailyService.teamBreakdown — Wave 3.1 backlog", () => {
     h.repo.logsForDateRange.mockResolvedValue([]);
     h.userRepo.list.mockResolvedValue([{ id: "u1", name: "Test User" }]);
     h.userRepo.listByRole.mockResolvedValue([{ id: "u1", name: "Test User" }]);
-    const out = await dailyService.teamBreakdown("2026-07-13", h.owner as AuthUser);
+    const out = await dailyService.teamBreakdown("2026-07-13", h.owner as TenantContext);
     expect(out.rows).toEqual([]);
     expect(out.teammates).toEqual([{ id: "u1", name: "Test User" }]);
   });
@@ -435,7 +445,7 @@ describe("dailyService.teamBreakdown — Wave 3.1 backlog", () => {
     ]);
     h.userRepo.listByRole.mockResolvedValue([{ id: "u1", name: "Test User" }]);
 
-    const out = await dailyService.teamBreakdown("2026-07-13", h.owner as AuthUser);
+    const out = await dailyService.teamBreakdown("2026-07-13", h.owner as TenantContext);
 
     expect(out.rows).toEqual([expect.objectContaining({ userId: "owner1", name: "The Owner" })]);
     expect(out.teammates).toEqual([{ id: "u1", name: "Test User" }]);
@@ -445,7 +455,7 @@ describe("dailyService.teamBreakdown — Wave 3.1 backlog", () => {
 
 describe("dailyService.overview — target roster (design pass 2026-08-04)", () => {
   it("omits the roster entirely for a non-leadership caller (no extra queries)", async () => {
-    const out = await dailyService.overview(h.user as AuthUser, "2026-07-15", 0);
+    const out = await dailyService.overview(h.user as TenantContext, "2026-07-15", 0);
     expect(out.canSetTargets).toBe(false);
     expect(out.teammates).toBeUndefined();
     expect(h.repo.targetsForDate).not.toHaveBeenCalled();
@@ -464,7 +474,7 @@ describe("dailyService.overview — target roster (design pass 2026-08-04)", () 
       { userId: "u2", date: "2026-07-13", sourced: 20, outreach: 10 },
     ]);
 
-    const out = await dailyService.overview(h.owner as AuthUser, "2026-07-15", 0);
+    const out = await dailyService.overview(h.owner as TenantContext, "2026-07-15", 0);
 
     expect(out.teammates).toEqual([
       {
@@ -495,7 +505,7 @@ describe("dailyService.overview — target roster (design pass 2026-08-04)", () 
     h.repo.targetsForDate.mockResolvedValue([]);
     h.repo.logsForDateRange.mockResolvedValue([]);
 
-    const out = await dailyService.overview(h.owner as AuthUser, "2026-07-15", 0);
+    const out = await dailyService.overview(h.owner as TenantContext, "2026-07-15", 0);
 
     expect(out.teammates).toEqual([
       {

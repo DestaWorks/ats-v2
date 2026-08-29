@@ -33,7 +33,7 @@ import {
   type PostProspectRestoreResponse,
 } from "@destaworks/contracts/validation/prospect";
 import { defined } from "@destaworks/domain/utils/defined";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { AuthContext } from "@destaworks/auth/guards";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { RequireCapability } from "../../common/decorators/require-capability.decorator";
 import { CapabilityGuard } from "../../common/guards/capability.guard";
@@ -64,7 +64,7 @@ export class ProspectsController {
   @Post()
   async create(
     @Body(new ZodValidationPipe(addProspectSchema)) body: ContractOutput<typeof addProspectSchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<PostProspectResponse> {
     return { prospect: await this.prospects.create(body, user) };
   }
@@ -85,7 +85,7 @@ export class ProspectsController {
   async bulk(
     @Body(new ZodValidationPipe(bulkProspectActionSchema))
     body: ContractOutput<typeof bulkProspectActionSchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<PostProspectBulkResponse> {
     return await this.prospects.bulkAction(body, user);
   }
@@ -96,7 +96,7 @@ export class ProspectsController {
   async bulkAdd(
     @Body(new ZodValidationPipe(addProspectsFromSearchSchema))
     body: ContractOutput<typeof addProspectsFromSearchSchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<PostProspectBulkAddResponse> {
     return await this.prospects.addFromSearch(body, user);
   }
@@ -113,7 +113,7 @@ export class ProspectsController {
     @Param("id") id: string,
     @Body(new ZodValidationPipe(updateProspectSchema))
     body: ContractOutput<typeof updateProspectSchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<PatchProspectResponse> {
     return { prospect: await this.prospects.update(id, body, user) };
   }
@@ -122,7 +122,7 @@ export class ProspectsController {
   @Delete(":id")
   async remove(
     @Param("id") id: string,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<DeleteProspectResponse> {
     const { id: deleted } = await this.prospects.softDelete(id, user);
     return { ok: true, id: deleted };
@@ -134,7 +134,7 @@ export class ProspectsController {
     @Param("id") id: string,
     @Body(new ZodValidationPipe(addProspectContactSchema))
     body: ContractOutput<typeof addProspectContactSchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<PostProspectContactResponse> {
     return { prospect: await this.prospects.addContactManual(id, body, user) };
   }
@@ -144,7 +144,7 @@ export class ProspectsController {
   async deleteContact(
     @Param("id") id: string,
     @Param("contactId") contactId: string,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<DeleteProspectContactResponse> {
     return { prospect: await this.prospects.deleteContact(id, contactId, user) };
   }
@@ -154,7 +154,7 @@ export class ProspectsController {
   @HttpCode(HttpStatus.OK)
   async enrich(
     @Param("id") id: string,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<PostProspectEnrichResponse> {
     return { prospect: await this.prospects.enrichContacts(id, user) };
   }
@@ -164,7 +164,7 @@ export class ProspectsController {
   @HttpCode(HttpStatus.OK)
   async enrichHunter(
     @Param("id") id: string,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<PostProspectEnrichHunterResponse> {
     return { prospect: await this.prospects.findContactsHunter(id, user) };
   }
@@ -174,7 +174,7 @@ export class ProspectsController {
   @HttpCode(HttpStatus.OK)
   async restore(
     @Param("id") id: string,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<PostProspectRestoreResponse> {
     return { prospect: await this.prospects.restore(id, user) };
   }

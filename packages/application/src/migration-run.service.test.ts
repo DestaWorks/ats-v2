@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { TenantContext } from "@destaworks/domain/tenant";
 
 /**
  * The run lifecycle around the ETL (Phase 5): staging + enqueue, the capability gate on both ends,
@@ -18,6 +18,7 @@ const h = vi.hoisted(() => ({
     markInterrupted: vi.fn(),
   },
   userRepo: { findActorById: vi.fn() },
+  membershipRepo: { listActiveForUser: vi.fn() },
 }));
 
 vi.mock("server-only", () => ({}));
@@ -25,6 +26,7 @@ vi.mock("@destaworks/db/repositories/migration-run.repository", () => ({
   migrationRunRepository: h.runRepo,
 }));
 vi.mock("@destaworks/db/repositories/user.repository", () => ({ userRepository: h.userRepo }));
+vi.mock("@destaworks/db/memberships", () => ({ membershipReader: h.membershipRepo }));
 
 import { migrationRunService } from "./migration-run.service";
 import {
@@ -32,8 +34,18 @@ import {
   registerMigrationCommitEnqueuer,
 } from "./migration-commit.port";
 
-const owner: AuthUser = { id: "u1", email: "o@desta.works", name: "Owner", role: "Owner" };
-const associate: AuthUser = { id: "u2", email: "a@desta.works", name: "A", role: "Associate" };
+const owner: TenantContext = {
+  tenantId: "t1",
+  membershipId: "u1-m",
+  user: { id: "u1", email: "o@desta.works", name: "Owner" },
+  role: "Owner",
+};
+const associate: TenantContext = {
+  tenantId: "t1",
+  membershipId: "u2-m",
+  user: { id: "u2", email: "a@desta.works", name: "A" },
+  role: "Associate",
+};
 
 const CONTENT = "ID,Name,Status\nL-1,Jane,0 - New Candidate\n";
 const NOW = new Date("2026-08-28T10:00:00.000Z");
@@ -55,6 +67,7 @@ function runRow(overrides: Record<string, unknown> = {}) {
     report: null,
     failureCode: null,
     startedById: "u1",
+    tenantId: "t1",
     createdAt: NOW,
     updatedAt: NOW,
     startedAt: NOW,
@@ -66,8 +79,24 @@ function runRow(overrides: Record<string, unknown> = {}) {
 beforeEach(() => {
   for (const fn of Object.values(h.runRepo)) fn.mockReset();
   h.userRepo.findActorById.mockReset();
+  h.membershipRepo.listActiveForUser.mockReset();
   clearMigrationCommitEnqueuer();
 });
+
+/** The actor as the worker re-reads them: identity from the user row, role from the membership. */
+function actorIs(role: string, tenantId = "t1"): void {
+  h.userRepo.findActorById.mockResolvedValue({
+    id: "u1",
+    email: "o@desta.works",
+    name: "Owner",
+    // Still on the user row and deliberately contradicting the membership below, so a test that
+    // passes could not be reading it.
+    role: "Owner",
+  });
+  h.membershipRepo.listActiveForUser.mockResolvedValue([
+    { id: "u1-m", tenantId, tenantSlug: tenantId, tenantName: tenantId, role },
+  ]);
+}
 
 describe("start", () => {
   it("stages the upload, queues it, and answers with the run id", async () => {
@@ -145,12 +174,7 @@ describe("claim", () => {
 
   it("rebuilds the input and re-reads the actor's CURRENT role", async () => {
     h.runRepo.claimForAttempt.mockResolvedValue(runRow({ extractWithAi: true }));
-    h.userRepo.findActorById.mockResolvedValue({
-      id: "u1",
-      email: "o@desta.works",
-      name: "Owner",
-      role: "Owner",
-    });
+    actorIs("Owner");
 
     const claimed = await migrationRunService.claim("run-1", 2);
 
@@ -165,14 +189,37 @@ describe("claim", () => {
     expect(claimed?.actor.role).toBe("Owner");
   });
 
-  it("refuses a run whose actor lost the capability after it was queued", async () => {
-    h.runRepo.claimForAttempt.mockResolvedValue(runRow());
+  it("resumes inside the run's OWN tenant, not whichever the actor defaults to", async () => {
+    h.runRepo.claimForAttempt.mockResolvedValue(runRow({ tenantId: "t2" }));
     h.userRepo.findActorById.mockResolvedValue({
       id: "u1",
       email: "o@desta.works",
       name: "Owner",
-      role: "Associate",
+      role: "Owner",
     });
+    // Owner in the tenant they usually work in, Screener in the one this run belongs to.
+    h.membershipRepo.listActiveForUser.mockResolvedValue([
+      { id: "u1-m1", tenantId: "t1", tenantSlug: "t1", tenantName: "t1", role: "Owner" },
+      { id: "u1-m2", tenantId: "t2", tenantSlug: "t2", tenantName: "t2", role: "Screener" },
+    ]);
+
+    // A Screener holds no `bulkImport`, so picking the run's tenant is what refuses this.
+    await expect(migrationRunService.claim("run-1", 1)).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+  });
+
+  it("refuses a run whose actor lost the capability after it was queued", async () => {
+    h.runRepo.claimForAttempt.mockResolvedValue(runRow());
+    actorIs("Associate");
+    await expect(migrationRunService.claim("run-1", 1)).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+  });
+
+  it("refuses a run whose actor is no longer a member of its tenant", async () => {
+    h.runRepo.claimForAttempt.mockResolvedValue(runRow());
+    actorIs("Owner", "some-other-tenant");
     await expect(migrationRunService.claim("run-1", 1)).rejects.toMatchObject({
       code: "FORBIDDEN",
     });

@@ -19,6 +19,11 @@ const h = vi.hoisted(() => ({
 vi.mock("server-only", () => ({}));
 vi.mock("@sentry/node", () => ({ captureException: vi.fn() }));
 vi.mock("@destaworks/auth/auth", () => ({ auth: { api: { getSession: async () => h.session } } }));
+vi.mock("@destaworks/db/memberships", async () => ({
+  membershipReader: (
+    await import("@destaworks/auth/testing/membership-double")
+  ).singleTenantMembershipReader(() => h.session),
+}));
 vi.mock("@destaworks/application/audit.service", () => ({
   auditService: { listActivity: h.listActivity, getActivityDetail: h.getActivityDetail },
 }));
@@ -115,7 +120,7 @@ describe("GET /activity — denial", () => {
     h.session = { user: { id: "u1", email: "o@desta.works", name: "O", role: "Owner" } };
     const request: AuthenticatedRequest = { headers: {} };
     await runDeclaredGuards(ActivityController, "list", request);
-    expect(request.user).toMatchObject({ id: "u1", role: "Owner" });
+    expect(request.user).toMatchObject({ user: { id: "u1" }, role: "Owner" });
   });
 });
 

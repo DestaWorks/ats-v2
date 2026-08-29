@@ -16,6 +16,11 @@ const h = vi.hoisted(() => ({
 
 vi.mock("server-only", () => ({}));
 vi.mock("@destaworks/auth/auth", () => ({ auth: { api: { getSession: async () => h.session } } }));
+vi.mock("@destaworks/db/memberships", async () => ({
+  membershipReader: (
+    await import("@destaworks/auth/testing/membership-double")
+  ).singleTenantMembershipReader(() => h.session),
+}));
 vi.mock("@destaworks/db/prisma", () => ({ prisma: {} }));
 vi.mock("@destaworks/application/screening.service", () => ({ screeningService: h.screening }));
 
@@ -78,7 +83,7 @@ describe("POST /screening/:candidateId", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ scorecard: { id: "s1", candidateId: "c1" } });
     expect(h.screening.saveAndMaybeMove.mock.calls[0]?.[0]).toBe("c1");
-    expect(h.screening.saveAndMaybeMove.mock.calls[0]?.[2]).toMatchObject({ id: "u1" });
+    expect(h.screening.saveAndMaybeMove.mock.calls[0]?.[2]).toMatchObject({ user: { id: "u1" } });
   });
 
   it("rejects an unknown action with 422 and saves nothing", async () => {

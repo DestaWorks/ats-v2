@@ -13,9 +13,14 @@ const h = vi.hoisted(() => ({
 
 vi.mock("server-only", () => ({}));
 vi.mock("@destaworks/config/request-context", () => ({
-  requestContext: () => ({ headers: async () => new Headers() }),
+  requestContext: () => ({ headers: async () => new Headers(), cookie: async () => undefined }),
 }));
 vi.mock("@destaworks/auth/auth", () => ({ auth: { api: { getSession: async () => h.session } } }));
+vi.mock("@destaworks/db/memberships", async () => ({
+  membershipReader: (
+    await import("@destaworks/auth/testing/membership-double")
+  ).singleTenantMembershipReader(() => h.session),
+}));
 vi.mock("@destaworks/db/prisma", () => ({ prisma: {} }));
 vi.mock("@destaworks/application/lead.service", () => ({ leadService: { respond: h.respond } }));
 
@@ -46,7 +51,11 @@ describe("POST /api/leads/:id/respond", () => {
     h.respond.mockResolvedValue({ id: "l1", status: "Responded — Hot" });
     const res = await POST(req({ kind: "hot" }), ctx);
     expect(res.status).toBe(200);
-    expect(h.respond).toHaveBeenCalledWith("l1", "hot", expect.objectContaining({ id: "u1" }));
+    expect(h.respond).toHaveBeenCalledWith(
+      "l1",
+      "hot",
+      expect.objectContaining({ user: expect.objectContaining({ id: "u1" }) }),
+    );
     expect((await res.json()).lead.status).toBe("Responded — Hot");
   });
 

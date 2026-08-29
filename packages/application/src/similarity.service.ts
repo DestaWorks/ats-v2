@@ -7,7 +7,7 @@ import type {
   FindSimilarResultDTO,
   SimilarProviderDTO,
 } from "@destaworks/contracts/validation/similarity";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { TenantContext } from "@destaworks/domain/tenant";
 import { checkRateLimit } from "@destaworks/integrations/http/rate-limit";
 import { AppError } from "@destaworks/integrations/http/app-error";
 import { mapResult, buildDupSets, type MappedRow } from "./discover.service";
@@ -40,13 +40,13 @@ function toSimilarProviderDTO(row: MappedRow, similarityScore: number): SimilarP
  * kept in its own service rather than folded into `discoverService` or `open-role.service.ts`.
  */
 export const similarityService = {
-  async findSimilar(input: FindSimilarInput, user: AuthUser): Promise<FindSimilarResultDTO> {
+  async findSimilar(input: FindSimilarInput, ctx: TenantContext): Promise<FindSimilarResultDTO> {
     const taxonomyOpt = taxonomyForCredential(input.credential ?? null);
     if (!taxonomyOpt) {
       throw new AppError("BAD_REQUEST", "No similarity search available for this credential yet");
     }
 
-    await checkRateLimit(`similarity-search:${user.id}`, { limit: 20, windowMs: 60_000 });
+    await checkRateLimit(`similarity-search:${ctx.user.id}`, { limit: 20, windowMs: 60_000 });
 
     const { results } = await searchNppes({ taxonomyDescription: taxonomyOpt.query });
     const mapped = results

@@ -13,9 +13,14 @@ const h = vi.hoisted(() => ({
 
 vi.mock("server-only", () => ({}));
 vi.mock("@destaworks/config/request-context", () => ({
-  requestContext: () => ({ headers: async () => new Headers() }),
+  requestContext: () => ({ headers: async () => new Headers(), cookie: async () => undefined }),
 }));
 vi.mock("@destaworks/auth/auth", () => ({ auth: { api: { getSession: async () => h.session } } }));
+vi.mock("@destaworks/db/memberships", async () => ({
+  membershipReader: (
+    await import("@destaworks/auth/testing/membership-double")
+  ).singleTenantMembershipReader(() => h.session),
+}));
 vi.mock("@destaworks/db/prisma", () => ({ prisma: {} }));
 vi.mock("@destaworks/application/lead.service", () => ({
   leadService: { softDelete: h.softDelete },
@@ -46,7 +51,10 @@ describe("DELETE /api/leads/:id", () => {
     const res = await DELETE(req(), ctx);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true, id: "l1" });
-    expect(h.softDelete).toHaveBeenCalledWith("l1", expect.objectContaining({ id: "u1" }));
+    expect(h.softDelete).toHaveBeenCalledWith(
+      "l1",
+      expect.objectContaining({ user: expect.objectContaining({ id: "u1" }) }),
+    );
   });
 
   it("maps a service NOT_FOUND to 404", async () => {

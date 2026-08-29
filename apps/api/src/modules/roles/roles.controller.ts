@@ -33,7 +33,7 @@ import {
   type PostRoleResponse,
 } from "@destaworks/contracts/validation/open-role";
 import { defined } from "@destaworks/domain/utils/defined";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { AuthContext } from "@destaworks/auth/guards";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { RateLimit } from "../../common/decorators/rate-limit.decorator";
 import { RequireCapability } from "../../common/decorators/require-capability.decorator";
@@ -66,7 +66,7 @@ export class RolesController {
   async create(
     @Body(new ZodValidationPipe(createOpenRoleSchema))
     body: ContractOutput<typeof createOpenRoleSchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<PostRoleResponse> {
     return { role: await this.roles.create(body, user) };
   }
@@ -114,7 +114,7 @@ export class RolesController {
     @Param("id") id: string,
     @Body(new ZodValidationPipe(updateOpenRoleSchema))
     body: ContractOutput<typeof updateOpenRoleSchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<PatchRoleResponse> {
     return { role: await this.roles.update(id, body, user) };
   }
@@ -125,7 +125,7 @@ export class RolesController {
   @RequireCapability("deleteOpenRole")
   async remove(
     @Param("id") id: string,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<DeleteRoleResponse> {
     return await this.roles.remove(id, user);
   }
@@ -137,7 +137,7 @@ export class RolesController {
     @Param("id") id: string,
     @Body(new ZodValidationPipe(promoteFromMatchSchema))
     body: ContractOutput<typeof promoteFromMatchSchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<PostRolePromoteResponse> {
     return await this.roles.promote(id, body, user);
   }
@@ -159,7 +159,7 @@ export class RolesController {
   async addNote(
     @Param("id") id: string,
     @Body(new ZodValidationPipe(addRoleNoteSchema)) body: ContractOutput<typeof addRoleNoteSchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<PostRoleNoteResponse> {
     return { role: await this.roles.addNote(id, body, user) };
   }
@@ -169,7 +169,7 @@ export class RolesController {
   async deleteNote(
     @Param("id") id: string,
     @Param("noteId") noteId: string,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<DeleteRoleNoteResponse> {
     return { role: await this.roles.deleteNote(id, noteId, user) };
   }

@@ -13,9 +13,14 @@ const h = vi.hoisted(() => ({
 
 vi.mock("server-only", () => ({}));
 vi.mock("@destaworks/config/request-context", () => ({
-  requestContext: () => ({ headers: async () => new Headers() }),
+  requestContext: () => ({ headers: async () => new Headers(), cookie: async () => undefined }),
 }));
 vi.mock("@destaworks/auth/auth", () => ({ auth: { api: { getSession: async () => h.session } } }));
+vi.mock("@destaworks/db/memberships", async () => ({
+  membershipReader: (
+    await import("@destaworks/auth/testing/membership-double")
+  ).singleTenantMembershipReader(() => h.session),
+}));
 vi.mock("@destaworks/application/user-preferences.service", () => ({
   userPreferencesService: { uploadAvatar: h.uploadAvatar },
 }));
@@ -56,7 +61,7 @@ describe("POST /api/me/avatar", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ url: "https://cdn.example.com/avatars/u1.jpg" });
     const [user, input] = h.uploadAvatar.mock.calls[0]!;
-    expect(user).toMatchObject({ id: "u1" });
+    expect(user).toMatchObject({ user: { id: "u1" } });
     expect(input).toEqual(validBody);
   });
 

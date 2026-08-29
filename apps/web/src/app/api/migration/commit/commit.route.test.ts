@@ -13,9 +13,14 @@ const h = vi.hoisted(() => ({
 
 vi.mock("server-only", () => ({}));
 vi.mock("@destaworks/config/request-context", () => ({
-  requestContext: () => ({ headers: async () => new Headers() }),
+  requestContext: () => ({ headers: async () => new Headers(), cookie: async () => undefined }),
 }));
 vi.mock("@destaworks/auth/auth", () => ({ auth: { api: { getSession: async () => h.session } } }));
+vi.mock("@destaworks/db/memberships", async () => ({
+  membershipReader: (
+    await import("@destaworks/auth/testing/membership-double")
+  ).singleTenantMembershipReader(() => h.session),
+}));
 vi.mock("@destaworks/application/migration-run.service", () => ({
   migrationRunService: { start: h.start },
 }));
@@ -57,6 +62,6 @@ describe("POST /api/migration/commit", () => {
     expect(res.status).toBe(202);
     expect(await res.json()).toEqual({ runId: "run-1", jobId: "job-1", status: "queued" });
     const [, user] = h.start.mock.calls[0]!;
-    expect(user).toMatchObject({ id: "u1", role: "Owner" });
+    expect(user).toMatchObject({ user: { id: "u1" }, role: "Owner" });
   });
 });

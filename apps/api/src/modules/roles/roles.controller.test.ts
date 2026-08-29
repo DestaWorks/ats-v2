@@ -21,12 +21,17 @@ const h = vi.hoisted(() => ({
 vi.mock("@destaworks/auth/auth", () => ({
   auth: { api: { getSession: async () => h.session } },
 }));
+vi.mock("@destaworks/db/memberships", async () => ({
+  membershipReader: (
+    await import("@destaworks/auth/testing/membership-double")
+  ).singleTenantMembershipReader(() => h.session),
+}));
 vi.mock("@destaworks/application/open-role.service", () => ({ openRoleService: {} }));
 vi.mock("@destaworks/integrations/http/rate-limit", () => ({
   checkRateLimit: (...args: unknown[]) => h.checkRateLimit(...args),
 }));
 
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { AuthContext } from "@destaworks/auth/guards";
 import { installNestRequestContext } from "../../common/request-context/nest-request-context";
 import { CapabilityGuard } from "../../common/guards/capability.guard";
 import { RateLimitGuard } from "../../common/guards/rate-limit.guard";
@@ -46,7 +51,12 @@ function controllerWith(methods: Partial<OpenRoleService>): RolesController {
   return new RolesController(serviceStub<OpenRoleService>(methods));
 }
 
-const USER: AuthUser = { id: "u1", email: "op@desta.works", name: "Operator", role: "Associate" };
+const USER: AuthContext = {
+  tenantId: "t1",
+  membershipId: "u1-m",
+  user: { id: "u1", email: "op@desta.works", name: "Operator" },
+  role: "Associate",
+};
 const ROLE = { id: "role_1", title: "PMHNP — Telehealth" };
 
 function signInAs(role: string): void {

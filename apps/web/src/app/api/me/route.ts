@@ -13,9 +13,9 @@ export type GetMeResponse = SessionUserDTO;
 export const GET = apiHandler(async () => {
   const user = await requireUser();
   return json<GetMeResponse>({
-    id: user.id,
-    email: user.email,
-    name: user.name,
+    id: user.user.id,
+    email: user.user.email,
+    name: user.user.name,
     role: user.role,
   });
 });

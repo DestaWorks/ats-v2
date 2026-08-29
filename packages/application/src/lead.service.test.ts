@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { Prisma } from "@destaworks/db/generated/prisma/client";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { TenantContext } from "@destaworks/domain/tenant";
 
 /**
  * Proves the source-lead service's state-machine writes WITHOUT a DB. The pure `lead-lifecycle`
@@ -12,7 +12,12 @@ import type { AuthUser } from "@destaworks/auth/guards";
 
 const h = vi.hoisted(() => ({
   fakeTx: { __tx: true },
-  user: { id: "u1", email: "u@desta.works", name: "Test User", role: "Associate" as const },
+  user: {
+    tenantId: "t1",
+    membershipId: "u1-m",
+    user: { id: "u1", email: "u@desta.works", name: "Test User" },
+    role: "Associate" as const,
+  },
   leadRepo: {
     create: vi.fn(),
     findById: vi.fn(),
@@ -107,7 +112,7 @@ describe("leadService.create", () => {
     h.leadRepo.create.mockResolvedValue(lead());
     const detail = await leadService.create(
       { name: "Jane Doe", email: "jane@example.com", source: "LinkedIn" },
-      h.user as AuthUser,
+      h.user as TenantContext,
     );
 
     const [data, ctx] = h.leadRepo.create.mock.calls[0]!;
@@ -189,7 +194,7 @@ describe("leadService.logOutreach", () => {
       lead: lead({ status: "Outreach 1", outreachCount: 1 }),
     });
 
-    await leadService.logOutreach("l1", { channel: "email", note: "hi" }, h.user as AuthUser);
+    await leadService.logOutreach("l1", { channel: "email", note: "hi" }, h.user as TenantContext);
 
     const [params, ltx] = h.leadRepo.logOutreach.mock.calls[0]!;
     expect(ltx).toBe(h.fakeTx);
@@ -218,7 +223,7 @@ describe("leadService.logOutreach", () => {
       lead: lead({ status: "Outreach 3 (Final)", outreachCount: 4 }),
     });
 
-    await leadService.logOutreach("l1", { channel: "phone" }, h.user as AuthUser);
+    await leadService.logOutreach("l1", { channel: "phone" }, h.user as TenantContext);
 
     const [params] = h.leadRepo.logOutreach.mock.calls[0]!;
     expect(params.status).toBe("Outreach 3 (Final)"); // capped — status holds
@@ -228,7 +233,7 @@ describe("leadService.logOutreach", () => {
   it("throws CONFLICT (no write) when the lead is already Promoted", async () => {
     h.leadRepo.findById.mockResolvedValue(lead({ status: "Promoted" }));
     await expect(
-      leadService.logOutreach("l1", { channel: "email" }, h.user as AuthUser),
+      leadService.logOutreach("l1", { channel: "email" }, h.user as TenantContext),
     ).rejects.toMatchObject({ code: "CONFLICT" });
     expect(h.leadRepo.logOutreach).not.toHaveBeenCalled();
     expect(h.writeAudit).not.toHaveBeenCalled();
@@ -237,7 +242,7 @@ describe("leadService.logOutreach", () => {
   it("throws NOT_FOUND when the lead is missing/soft-deleted", async () => {
     h.leadRepo.findById.mockResolvedValue(null);
     await expect(
-      leadService.logOutreach("missing", { channel: "email" }, h.user as AuthUser),
+      leadService.logOutreach("missing", { channel: "email" }, h.user as TenantContext),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect(h.leadRepo.logOutreach).not.toHaveBeenCalled();
   });
@@ -248,7 +253,7 @@ describe("leadService.respond", () => {
     h.leadRepo.findById.mockResolvedValue(lead({ status: "Outreach 2", respondedAt: null }));
     h.leadRepo.update.mockResolvedValue(lead({ status: "Responded — Hot" }));
 
-    await leadService.respond("l1", "hot", h.user as AuthUser);
+    await leadService.respond("l1", "hot", h.user as TenantContext);
 
     const [uid, data, utx] = h.leadRepo.update.mock.calls[0]!;
     expect(uid).toBe("l1");
@@ -266,7 +271,7 @@ describe("leadService.respond", () => {
     h.leadRepo.findById.mockResolvedValue(lead({ status: "Responded — Hot", respondedAt }));
     h.leadRepo.update.mockResolvedValue(lead({ status: "Responded — Cold", respondedAt }));
 
-    await leadService.respond("l1", "cold", h.user as AuthUser);
+    await leadService.respond("l1", "cold", h.user as TenantContext);
 
     const [, data] = h.leadRepo.update.mock.calls[0]!;
     expect(data.status).toBe("Responded — Cold");
@@ -275,7 +280,7 @@ describe("leadService.respond", () => {
 
   it("throws CONFLICT (no write) on a Promoted lead", async () => {
     h.leadRepo.findById.mockResolvedValue(lead({ status: "Promoted" }));
-    await expect(leadService.respond("l1", "hot", h.user as AuthUser)).rejects.toMatchObject({
+    await expect(leadService.respond("l1", "hot", h.user as TenantContext)).rejects.toMatchObject({
       code: "CONFLICT",
     });
     expect(h.leadRepo.update).not.toHaveBeenCalled();
@@ -286,7 +291,7 @@ describe("leadService.respond", () => {
     h.leadRepo.update.mockResolvedValue(lead({ status: "Responded — Hot" }));
     h.leadRepo.findMostRecentUnresponded.mockResolvedValue({ id: "a1", response: null });
 
-    await leadService.respond("l1", "hot", h.user as AuthUser);
+    await leadService.respond("l1", "hot", h.user as TenantContext);
 
     expect(h.leadRepo.findMostRecentUnresponded).toHaveBeenCalledWith("l1", h.fakeTx);
     const [uid, aid, data, utx] = h.leadRepo.updateOutreachAttempt.mock.calls[0]!;
@@ -302,7 +307,7 @@ describe("leadService.respond", () => {
     h.leadRepo.update.mockResolvedValue(lead({ status: "Responded — Hot" }));
     h.leadRepo.findMostRecentUnresponded.mockResolvedValue(null);
 
-    await leadService.respond("l1", "hot", h.user as AuthUser);
+    await leadService.respond("l1", "hot", h.user as TenantContext);
 
     expect(h.leadRepo.updateOutreachAttempt).not.toHaveBeenCalled();
   });
@@ -314,7 +319,7 @@ describe("leadService.promote", () => {
     h.candidateService.create.mockResolvedValue({ id: "c-new", status: "NEW_CANDIDATE" });
     h.leadRepo.markPromoted.mockResolvedValue(1); // won the flip
 
-    const result = await leadService.promote("l1", h.user as AuthUser);
+    const result = await leadService.promote("l1", h.user as TenantContext);
     expect(result).toEqual({ candidateId: "c-new" });
 
     // candidate create — composed inside the promote tx, with the authed user (forced-field contract reused)
@@ -342,7 +347,7 @@ describe("leadService.promote", () => {
     h.leadRepo.findById.mockResolvedValue(
       lead({ status: "Promoted", promotedCandidateId: "c-old" }),
     );
-    await expect(leadService.promote("l1", h.user as AuthUser)).rejects.toMatchObject({
+    await expect(leadService.promote("l1", h.user as TenantContext)).rejects.toMatchObject({
       code: "CONFLICT",
     });
     expect(h.candidateService.create).not.toHaveBeenCalled();
@@ -356,7 +361,7 @@ describe("leadService.promote", () => {
     h.candidateService.create.mockResolvedValue({ id: "c-new", status: "NEW_CANDIDATE" });
     h.leadRepo.markPromoted.mockResolvedValue(0); // lost the race
 
-    await expect(leadService.promote("l1", h.user as AuthUser)).rejects.toMatchObject({
+    await expect(leadService.promote("l1", h.user as TenantContext)).rejects.toMatchObject({
       code: "CONFLICT",
     });
     // the candidate create ran but the CONFLICT throw rolls back the whole tx (no orphan); no audit
@@ -365,7 +370,7 @@ describe("leadService.promote", () => {
 
   it("throws NOT_FOUND on a missing/soft-deleted lead", async () => {
     h.leadRepo.findById.mockResolvedValue(null);
-    await expect(leadService.promote("missing", h.user as AuthUser)).rejects.toMatchObject({
+    await expect(leadService.promote("missing", h.user as TenantContext)).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
     expect(h.candidateService.create).not.toHaveBeenCalled();
@@ -378,7 +383,7 @@ describe("leadService.softDelete", () => {
     h.leadRepo.findById.mockResolvedValue(lead({ status: "Outreach 1" }));
     h.leadRepo.softDelete.mockResolvedValue(lead({ deletedAt, deletedById: "u1" }));
 
-    const result = await leadService.softDelete("l1", h.user as AuthUser);
+    const result = await leadService.softDelete("l1", h.user as TenantContext);
     expect(result).toEqual({ id: "l1" });
 
     const [sid, actor, stx] = h.leadRepo.softDelete.mock.calls[0]!;
@@ -397,7 +402,7 @@ describe("leadService.softDelete", () => {
 
   it("throws NOT_FOUND when missing or already-trashed (idempotent)", async () => {
     h.leadRepo.findById.mockResolvedValue(null);
-    await expect(leadService.softDelete("missing", h.user as AuthUser)).rejects.toMatchObject({
+    await expect(leadService.softDelete("missing", h.user as TenantContext)).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
     expect(h.leadRepo.softDelete).not.toHaveBeenCalled();
@@ -413,7 +418,7 @@ describe("leadService.restore", () => {
     );
     h.leadRepo.restore.mockResolvedValue(lead({ status: "Outreach 2" }));
 
-    const detail = await leadService.restore("l1", h.user as AuthUser);
+    const detail = await leadService.restore("l1", h.user as TenantContext);
     expect(detail.status).toBe("Outreach 2"); // exactly as it left
     expect(detail.deletedAt).toBeNull();
 
@@ -435,12 +440,12 @@ describe("leadService.restore", () => {
 
   it("NOT_FOUND when missing; CONFLICT when the lead is not deleted", async () => {
     h.leadRepo.findById.mockResolvedValue(null);
-    await expect(leadService.restore("missing", h.user as AuthUser)).rejects.toMatchObject({
+    await expect(leadService.restore("missing", h.user as TenantContext)).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
 
     h.leadRepo.findById.mockResolvedValue(lead()); // live lead — deletedAt null
-    await expect(leadService.restore("l1", h.user as AuthUser)).rejects.toMatchObject({
+    await expect(leadService.restore("l1", h.user as TenantContext)).rejects.toMatchObject({
       code: "CONFLICT",
     });
     expect(h.leadRepo.restore).not.toHaveBeenCalled();
@@ -454,23 +459,25 @@ describe("leadService.snooze", () => {
     h.leadRepo.findById.mockResolvedValue(lead());
     h.leadRepo.update.mockResolvedValue(lead({ snoozedUntil: until }));
 
-    const detail = await leadService.snooze("l1", until, h.user as AuthUser);
+    const detail = await leadService.snooze("l1", until, h.user as TenantContext);
     expect(h.leadRepo.update).toHaveBeenCalledWith("l1", { snoozedUntil: until }, h.fakeTx);
     expect(h.writeAudit.mock.calls[0]![1]).toMatchObject({ action: "snooze" });
     expect(detail.snoozedUntil).toBe("2026-07-20T00:00:00.000Z");
 
     h.leadRepo.update.mockResolvedValue(lead({ snoozedUntil: null }));
-    await leadService.snooze("l1", null, h.user as AuthUser);
+    await leadService.snooze("l1", null, h.user as TenantContext);
     expect(h.writeAudit.mock.calls[1]![1]).toMatchObject({ action: "wake" });
   });
 
   it("rejects snoozing a Promoted lead (CONFLICT); wake stays allowed", async () => {
     h.leadRepo.findById.mockResolvedValue(lead({ status: "Promoted" }));
-    await expect(leadService.snooze("l1", new Date(), h.user as AuthUser)).rejects.toMatchObject({
+    await expect(
+      leadService.snooze("l1", new Date(), h.user as TenantContext),
+    ).rejects.toMatchObject({
       code: "CONFLICT",
     });
     h.leadRepo.update.mockResolvedValue(lead({ status: "Promoted", snoozedUntil: null }));
-    await expect(leadService.snooze("l1", null, h.user as AuthUser)).resolves.toBeTruthy();
+    await expect(leadService.snooze("l1", null, h.user as TenantContext)).resolves.toBeTruthy();
   });
 });
 
@@ -480,7 +487,7 @@ describe("leadService outreach edit/delete", () => {
     h.leadRepo.updateOutreachAttempt.mockResolvedValue(1);
     h.leadRepo.syncOutreachDenorm.mockResolvedValue(lead({ status: "Outreach 2" }));
 
-    await leadService.updateOutreach("l1", "a1", { note: "corrected" }, h.user as AuthUser);
+    await leadService.updateOutreach("l1", "a1", { note: "corrected" }, h.user as TenantContext);
     expect(h.leadRepo.updateOutreachAttempt).toHaveBeenCalledWith(
       "l1",
       "a1",
@@ -495,7 +502,7 @@ describe("leadService outreach edit/delete", () => {
     h.leadRepo.findById.mockResolvedValue(lead());
     h.leadRepo.updateOutreachAttempt.mockResolvedValue(0);
     await expect(
-      leadService.updateOutreach("l1", "not-mine", { note: "x" }, h.user as AuthUser),
+      leadService.updateOutreach("l1", "not-mine", { note: "x" }, h.user as TenantContext),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 
@@ -506,7 +513,7 @@ describe("leadService outreach edit/delete", () => {
       lead({ status: "Outreach 3", outreachCount: 2 }),
     );
 
-    const detail = await leadService.deleteOutreach("l1", "a1", h.user as AuthUser);
+    const detail = await leadService.deleteOutreach("l1", "a1", h.user as TenantContext);
     expect(h.leadRepo.deleteOutreachAttempt).toHaveBeenCalledWith("l1", "a1", h.fakeTx);
     expect(detail.status).toBe("Outreach 3"); // never regressed by a delete
     expect(h.writeAudit.mock.calls[0]![1]).toMatchObject({ action: "delete_outreach" });
@@ -523,7 +530,7 @@ describe("leadService.bulkAction", () => {
 
     const out = await leadService.bulkAction(
       { action: "status", ids: ["l1", "l2", "l1"], value: "Outreach 1" },
-      h.user as AuthUser,
+      h.user as TenantContext,
     );
 
     expect(out).toEqual({ affected: 1, skipped: 1 }); // duplicate id collapsed; Promoted skipped
@@ -542,13 +549,16 @@ describe("leadService.bulkAction", () => {
 
     await leadService.bulkAction(
       { action: "assign", ids: ["l1"], value: "u2" },
-      h.user as AuthUser,
+      h.user as TenantContext,
     );
     expect(h.leadRepo.update).toHaveBeenCalledWith("l1", { createdById: "u2" }, h.fakeTx);
 
     h.userRepo.namesByIds.mockResolvedValue(new Map());
     await expect(
-      leadService.bulkAction({ action: "assign", ids: ["l1"], value: "ghost" }, h.user as AuthUser),
+      leadService.bulkAction(
+        { action: "assign", ids: ["l1"], value: "ghost" },
+        h.user as TenantContext,
+      ),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 
@@ -561,7 +571,7 @@ describe("leadService.bulkAction", () => {
 
     const out = await leadService.bulkAction(
       { action: "restore", ids: ["l1", "l2"] },
-      h.user as AuthUser,
+      h.user as TenantContext,
     );
     expect(out).toEqual({ affected: 1, skipped: 1 });
     expect(h.leadRepo.restore).toHaveBeenCalledWith("l1", h.fakeTx);
@@ -578,7 +588,7 @@ describe("leadService.bulkAction", () => {
 
     await leadService.bulkAction(
       { action: "outreach", ids: ["l1", "l2"], channel: "email", note: null },
-      h.user as AuthUser,
+      h.user as TenantContext,
     );
 
     const statuses = h.leadRepo.logOutreach.mock.calls.map((c) => c[0].status);
@@ -606,7 +616,7 @@ describe("leadService.importLeads", () => {
           { name: "Fresh Nameless", clientName: "acme health" }, // kept, client resolved
         ],
       },
-      h.user as AuthUser,
+      h.user as TenantContext,
     );
 
     expect(out).toEqual({ added: 2, skipped: 3 });
@@ -642,7 +652,7 @@ describe("leadService.importLeads", () => {
           },
         ],
       },
-      h.user as AuthUser,
+      h.user as TenantContext,
     );
 
     expect(out).toEqual({ added: 2, skipped: 0 });
@@ -698,7 +708,7 @@ describe("leadService.importLeads", () => {
       {
         rows: [{ name: "Raced Out", email: "raced@x.com", priorOutreachNotes: ["Mike: hi"] }],
       },
-      h.user as AuthUser,
+      h.user as TenantContext,
     );
 
     expect(out).toEqual({ added: 0, skipped: 1 });
@@ -713,7 +723,7 @@ describe("leadService.importLeads", () => {
     await expect(
       leadService.importLeads(
         { rows: [{ name: "X", priorOutreachNotes: ["Mike: hi"] }] },
-        h.user as AuthUser,
+        h.user as TenantContext,
       ),
     ).rejects.toThrow("connection reset");
   });

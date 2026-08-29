@@ -4,7 +4,7 @@ import {
   type MentionListDTO,
   type MentionUnreadDTO,
 } from "@destaworks/contracts/validation/mention";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { AuthContext } from "@destaworks/auth/guards";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { SessionAuthGuard } from "../../common/guards/session-auth.guard";
 import { ZodValidationPipe, type ContractOutput } from "../../common/pipes/zod-validation.pipe";
@@ -26,7 +26,7 @@ export class MentionsController {
   ) {}
 
   @Get()
-  async listMine(@CurrentUser() user: AuthUser): Promise<MentionListDTO> {
+  async listMine(@CurrentUser() user: AuthContext): Promise<MentionListDTO> {
     return await this.mentions.listMine(user);
   }
 
@@ -34,7 +34,7 @@ export class MentionsController {
   @Post("read")
   @HttpCode(200)
   async markRead(
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
     @Body(new ZodValidationPipe(markMentionReadSchema))
     body: ContractOutput<typeof markMentionReadSchema>,
   ): Promise<MentionUnreadDTO> {

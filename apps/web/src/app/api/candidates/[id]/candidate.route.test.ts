@@ -17,9 +17,14 @@ const h = vi.hoisted(() => ({
 
 vi.mock("server-only", () => ({}));
 vi.mock("@destaworks/config/request-context", () => ({
-  requestContext: () => ({ headers: async () => new Headers() }),
+  requestContext: () => ({ headers: async () => new Headers(), cookie: async () => undefined }),
 }));
 vi.mock("@destaworks/auth/auth", () => ({ auth: { api: { getSession: async () => h.session } } }));
+vi.mock("@destaworks/db/memberships", async () => ({
+  membershipReader: (
+    await import("@destaworks/auth/testing/membership-double")
+  ).singleTenantMembershipReader(() => h.session),
+}));
 vi.mock("@destaworks/db/prisma", () => ({ prisma: {} }));
 vi.mock("@destaworks/application/candidate.service", () => ({
   candidateService: { update: h.update, softDelete: h.softDelete, getProfile: h.getProfile },
@@ -57,7 +62,10 @@ describe("GET /api/candidates/:id", () => {
     expect(await res.json()).toEqual({
       candidate: { id: "c1", name: "Jane Doe", email: "jane@example.com" },
     });
-    expect(h.getProfile).toHaveBeenCalledWith("c1", expect.objectContaining({ id: "u1" }));
+    expect(h.getProfile).toHaveBeenCalledWith(
+      "c1",
+      expect.objectContaining({ user: expect.objectContaining({ id: "u1" }) }),
+    );
   });
 
   it("maps a service NOT_FOUND to 404", async () => {
@@ -89,7 +97,7 @@ describe("PATCH /api/candidates/:id", () => {
     expect(h.update).toHaveBeenCalledWith(
       "c1",
       { name: "New", city: "Trenton" },
-      expect.objectContaining({ id: "u1", role: "Associate" }),
+      expect.objectContaining({ user: expect.objectContaining({ id: "u1" }), role: "Associate" }),
     );
     const body = await res.json();
     // Associate has no viewCredentials → licenseNumber must be stripped on the way out.

@@ -17,6 +17,26 @@ export function isRole(value: string): value is Role {
   return (ROLES as readonly string[]).includes(value);
 }
 
+/**
+ * The role a caller collapses to when the stored value is missing or is not one of the six.
+ *
+ * It is a named constant rather than a literal at each call site so that the guards, which must
+ * name no role (see the source scan in `apps/api/src/common/guards/capability.guard.test.ts`),
+ * can still fail closed. Changing it is a single, reviewable edit in the one file that is
+ * allowed to have an opinion about role names.
+ */
+export const LEAST_PRIVILEGED_ROLE: Role = "Associate";
+
+/**
+ * Coerce a stored role string to a `Role`, least-privilege on anything unrecognised.
+ *
+ * A role now arrives from a `Membership` row rather than the user, but the rule is unchanged and
+ * deliberately paranoid: an unknown, renamed or forged value must narrow access, never widen it.
+ */
+export function toRole(value: string | null | undefined): Role {
+  return typeof value === "string" && isRole(value) ? value : LEAST_PRIVILEGED_ROLE;
+}
+
 export const CAPABILITIES = [
   // Leadership capabilities (legacy: unlocked for Owner/Director/Manager/Admin)
   "viewReports",

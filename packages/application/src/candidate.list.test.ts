@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { TenantContext } from "@destaworks/domain/tenant";
 
 /**
  * Proves `candidateService.listCandidates` builds the PII-gated `/candidates` browse list WITHOUT a
@@ -54,8 +54,18 @@ import { candidateService } from "./candidate.service";
 
 const PAGE_SIZE = 25;
 
-const associate: AuthUser = { id: "u1", email: "u@desta.works", name: "U", role: "Associate" };
-const owner: AuthUser = { id: "o1", email: "o@desta.works", name: "O", role: "Owner" };
+const associate: TenantContext = {
+  tenantId: "t1",
+  membershipId: "u1-m",
+  user: { id: "u1", email: "u@desta.works", name: "U" },
+  role: "Associate",
+};
+const owner: TenantContext = {
+  tenantId: "t1",
+  membershipId: "o1-m",
+  user: { id: "o1", email: "o@desta.works", name: "O" },
+  role: "Owner",
+};
 
 const DAY = 86_400_000;
 

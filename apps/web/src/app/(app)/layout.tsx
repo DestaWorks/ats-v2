@@ -77,10 +77,10 @@ export default async function AppLayout({
       </a>
       <div className="flex min-h-screen flex-col">
         <AppHeader
-          userName={user.name}
-          userEmail={user.email}
+          userName={user.user.name}
+          userEmail={user.user.email}
           userRole={user.role}
-          userImage={user.image ?? null}
+          userImage={user.user.image ?? null}
         />
         <div className="flex flex-1 flex-col md:flex-row">
           <AppNav

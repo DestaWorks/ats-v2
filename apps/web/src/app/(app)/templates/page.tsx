@@ -34,7 +34,7 @@ export default async function TemplatesPage() {
 
       <TemplatesWorkspace
         clients={clients}
-        recruiterName={user.name}
+        recruiterName={user.user.name}
         canViewPerformance={hasCapability(user.role, "viewAnalytics")}
         initialSignature={preferences.emailSignature}
       />

@@ -4,7 +4,7 @@ import type {
   DeleteCrmClientMeetingResponse,
   PostCrmClientMeetingResponse,
 } from "@destaworks/contracts/http/crm";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { AuthContext } from "@destaworks/auth/guards";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { RequireCapability } from "../../common/decorators/require-capability.decorator";
 import { CapabilityGuard } from "../../common/guards/capability.guard";
@@ -31,7 +31,7 @@ export class CrmClientMeetingsController {
     @Param("id") clientId: string,
     @Body(new ZodValidationPipe(addMeetingSchema))
     body: ContractOutput<typeof addMeetingSchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<PostCrmClientMeetingResponse> {
     return { meeting: await this.clients.addMeeting(clientId, body, user) };
   }
@@ -40,7 +40,7 @@ export class CrmClientMeetingsController {
   async remove(
     @Param("id") clientId: string,
     @Param("meetingId") meetingId: string,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<DeleteCrmClientMeetingResponse> {
     await this.clients.removeMeeting(clientId, meetingId, user);
     return { ok: true, id: meetingId };

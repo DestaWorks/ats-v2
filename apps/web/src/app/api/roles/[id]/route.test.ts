@@ -17,9 +17,14 @@ const h = vi.hoisted(() => ({
 
 vi.mock("server-only", () => ({}));
 vi.mock("@destaworks/config/request-context", () => ({
-  requestContext: () => ({ headers: async () => new Headers() }),
+  requestContext: () => ({ headers: async () => new Headers(), cookie: async () => undefined }),
 }));
 vi.mock("@destaworks/auth/auth", () => ({ auth: { api: { getSession: async () => h.session } } }));
+vi.mock("@destaworks/db/memberships", async () => ({
+  membershipReader: (
+    await import("@destaworks/auth/testing/membership-double")
+  ).singleTenantMembershipReader(() => h.session),
+}));
 vi.mock("@destaworks/db/prisma", () => ({ prisma: {} }));
 vi.mock("@destaworks/application/open-role.service", () => ({
   openRoleService: { detail: h.detail, update: h.update, remove: h.remove },
@@ -101,7 +106,7 @@ describe("DELETE /api/roles/:id", () => {
     expect(res.status).toBe(200);
     expect(h.remove).toHaveBeenCalledWith(
       "r1",
-      expect.objectContaining({ id: "o1", role: "Owner" }),
+      expect.objectContaining({ user: expect.objectContaining({ id: "o1" }), role: "Owner" }),
     );
   });
 

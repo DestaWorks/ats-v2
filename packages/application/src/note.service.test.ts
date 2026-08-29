@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { TenantContext } from "@destaworks/domain/tenant";
 
 /**
  * Proves the note service WITHOUT a DB: bodies are stored RAW (no HTML stripping — the XSS defense
@@ -12,8 +12,18 @@ import type { AuthUser } from "@destaworks/auth/guards";
 
 const h = vi.hoisted(() => ({
   fakeTx: { __tx: true },
-  user: { id: "u1", email: "u@desta.works", name: "Test User", role: "Associate" as const },
-  owner: { id: "o1", email: "o@desta.works", name: "Owner", role: "Owner" as const },
+  user: {
+    tenantId: "t1",
+    membershipId: "u1-m",
+    user: { id: "u1", email: "u@desta.works", name: "Test User" },
+    role: "Associate" as const,
+  },
+  owner: {
+    tenantId: "t1",
+    membershipId: "o1-m",
+    user: { id: "o1", email: "o@desta.works", name: "Owner" },
+    role: "Owner" as const,
+  },
   candidateRepo: { findById: vi.fn() },
   noteRepo: { create: vi.fn(), listByCandidate: vi.fn() },
   mentionRepo: { createMany: vi.fn() },
@@ -78,7 +88,11 @@ describe("noteService.add", () => {
     h.candidateRepo.findById.mockResolvedValue({ id: "c1" });
     h.noteRepo.create.mockResolvedValue(noteRow({ body: xss, noteType: "client" }));
 
-    const dto = await noteService.add("c1", { body: xss, noteType: "client" }, h.user as AuthUser);
+    const dto = await noteService.add(
+      "c1",
+      { body: xss, noteType: "client" },
+      h.user as TenantContext,
+    );
 
     // Body passed to the repo is BYTE-FOR-BYTE what was submitted — no sanitization at rest.
     expect(h.noteRepo.create).toHaveBeenCalledTimes(1);
@@ -98,7 +112,7 @@ describe("noteService.add", () => {
     h.candidateRepo.findById.mockResolvedValue({ id: "c1" });
     h.noteRepo.create.mockResolvedValue(noteRow());
 
-    await noteService.add("c1", { body: "hi", noteType: "internal" }, h.user as AuthUser);
+    await noteService.add("c1", { body: "hi", noteType: "internal" }, h.user as TenantContext);
 
     expect(h.writeAudit).toHaveBeenCalledTimes(1);
     const [atx, params] = h.writeAudit.mock.calls[0]!;
@@ -123,7 +137,7 @@ describe("noteService.add", () => {
     await noteService.add(
       "c1",
       { body: "@Biruh @Test see this", noteType: "internal" },
-      h.user as AuthUser,
+      h.user as TenantContext,
     );
 
     expect(h.mentionRepo.createMany).toHaveBeenCalledWith(
@@ -139,7 +153,7 @@ describe("noteService.add", () => {
   it("throws NOT_FOUND when the candidate is missing/soft-deleted and writes nothing", async () => {
     h.candidateRepo.findById.mockResolvedValue(null);
     await expect(
-      noteService.add("missing", { body: "hi", noteType: "internal" }, h.user as AuthUser),
+      noteService.add("missing", { body: "hi", noteType: "internal" }, h.user as TenantContext),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect(h.noteRepo.create).not.toHaveBeenCalled();
     expect(h.mentionRepo.createMany).not.toHaveBeenCalled();
@@ -155,7 +169,7 @@ describe("noteService.add", () => {
     await noteService.add(
       "c1",
       { body: "@Biruh see this", noteType: "internal" },
-      h.user as AuthUser,
+      h.user as TenantContext,
     );
 
     expect(h.userRepo.emailsByIds).toHaveBeenCalledWith(["u2"]);
@@ -175,7 +189,7 @@ describe("noteService.add", () => {
     await noteService.add(
       "c1",
       { body: "@Biruh see this", noteType: "internal" },
-      h.user as AuthUser,
+      h.user as TenantContext,
     );
 
     expect(h.sendEmail).not.toHaveBeenCalled();
@@ -188,7 +202,7 @@ describe("noteService.add", () => {
     await noteService.add(
       "c1",
       { body: "no mentions here", noteType: "internal" },
-      h.user as AuthUser,
+      h.user as TenantContext,
     );
 
     expect(h.userRepo.emailsByIds).not.toHaveBeenCalled();
@@ -205,7 +219,7 @@ describe("noteService.add", () => {
     const dto = await noteService.add(
       "c1",
       { body: "@Biruh see this", noteType: "internal" },
-      h.user as AuthUser,
+      h.user as TenantContext,
     );
 
     expect(dto.id).toBe("n1"); // the note itself still saved successfully
@@ -246,19 +260,19 @@ describe("visibleNotes (server-authoritative)", () => {
 
   it("a viewAllNoteTypes holder (Owner/Admin tier) sees all 5 types", () => {
     expect(visibleNotes(notes, h.owner).map((n) => n.id)).toEqual(["n1", "n2", "n3", "n4", "n5"]);
-    expect(
-      visibleNotes(notes, { id: "a1", name: "Admin", role: "Admin" }).map((n) => n.id),
-    ).toEqual(["n1", "n2", "n3", "n4", "n5"]);
+    expect(visibleNotes(notes, { role: "Admin" }).map((n) => n.id)).toEqual([
+      "n1",
+      "n2",
+      "n3",
+      "n4",
+      "n5",
+    ]);
   });
 
   it("non-holders (incl. Director/Manager — legacy parity) see ONLY internal", () => {
     expect(visibleNotes(notes, h.user).map((n) => n.id)).toEqual(["n1"]);
-    expect(
-      visibleNotes(notes, { id: "d1", name: "Dir", role: "Director" }).map((n) => n.id),
-    ).toEqual(["n1"]);
-    expect(
-      visibleNotes(notes, { id: "m1", name: "Mgr", role: "Manager" }).map((n) => n.id),
-    ).toEqual(["n1"]);
+    expect(visibleNotes(notes, { role: "Director" }).map((n) => n.id)).toEqual(["n1"]);
+    expect(visibleNotes(notes, { role: "Manager" }).map((n) => n.id)).toEqual(["n1"]);
   });
 });
 

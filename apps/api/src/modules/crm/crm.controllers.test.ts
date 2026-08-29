@@ -47,6 +47,11 @@ vi.mock("@destaworks/config/request-context", () => ({
   installRequestContext: () => {},
 }));
 vi.mock("@destaworks/auth/auth", () => ({ auth: { api: { getSession: async () => h.session } } }));
+vi.mock("@destaworks/db/memberships", async () => ({
+  membershipReader: (
+    await import("@destaworks/auth/testing/membership-double")
+  ).singleTenantMembershipReader(() => h.session),
+}));
 vi.mock("@destaworks/db/prisma", () => ({ prisma: {} }));
 vi.mock("@destaworks/application/client.service", () => ({ clientService: h.client }));
 vi.mock("@destaworks/application/client-note.service", () => ({ clientNoteService: h.note }));
@@ -66,7 +71,7 @@ import { clientNoteService } from "@destaworks/application/client-note.service";
 import { crmAnalyticsService } from "@destaworks/application/crm-analytics.service";
 import { crmAiWorkspaceService } from "@destaworks/application/crm-ai-workspace.service";
 import { clientPortalService } from "@destaworks/application/client-portal.service";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { AuthContext } from "@destaworks/auth/guards";
 import {
   guardOutcome,
   handlerOutcome,
@@ -188,7 +193,7 @@ interface ParityCase {
   /** What that method resolves to on the happy path. */
   readonly result: unknown;
   readonly viaRoute: () => Response | Promise<Response>;
-  readonly viaController: (user: AuthUser) => Promise<unknown>;
+  readonly viaController: (user: AuthContext) => Promise<unknown>;
   /** A signed-in role that lacks this route's capability. */
   readonly deniedRole: string;
 }
@@ -603,8 +608,8 @@ function signIn(role: string): void {
 }
 
 /** Run one case's guards and hand back the user they attached, failing if they refused. */
-async function authorize(testCase: ParityCase): Promise<AuthUser> {
-  const request: { headers: Record<string, string>; user?: AuthUser } = { headers: {} };
+async function authorize(testCase: ParityCase): Promise<AuthContext> {
+  const request: { headers: Record<string, string>; user?: AuthContext } = { headers: {} };
   expect(await guardOutcome(testCase.controller, testCase.handler, request)).toBeNull();
   if (!request.user) throw new Error(`${testCase.name}: guards attached no user`);
   return request.user;

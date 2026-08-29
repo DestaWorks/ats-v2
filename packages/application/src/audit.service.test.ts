@@ -18,11 +18,16 @@ let mockSession: { user: { id: string; email: string; name: string; role?: strin
 vi.mock("server-only", () => ({}));
 
 vi.mock("@destaworks/config/request-context", () => ({
-  requestContext: () => ({ headers: async () => new Headers() }),
+  requestContext: () => ({ headers: async () => new Headers(), cookie: async () => undefined }),
 }));
 
 vi.mock("@destaworks/auth/auth", () => ({
   auth: { api: { getSession: async () => mockSession } },
+}));
+vi.mock("@destaworks/db/memberships", async () => ({
+  membershipReader: (
+    await import("@destaworks/auth/testing/membership-double")
+  ).singleTenantMembershipReader(() => mockSession),
 }));
 
 const listForEntity = vi.fn();

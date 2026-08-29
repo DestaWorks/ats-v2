@@ -10,7 +10,7 @@ import {
   type UserPreferencesDTO,
 } from "@destaworks/contracts/validation/user-preferences";
 import type { SessionUserDTO } from "@destaworks/contracts/validation/auth";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { AuthContext } from "@destaworks/auth/guards";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { SessionAuthGuard } from "../../common/guards/session-auth.guard";
 import { ZodValidationPipe, type ContractOutput } from "../../common/pipes/zod-validation.pipe";
@@ -36,18 +36,18 @@ export class MeController {
 
   /** The current authenticated user — identity and role, nothing else off the session record. */
   @Get()
-  me(@CurrentUser() user: AuthUser): SessionUserDTO {
-    return { id: user.id, email: user.email, name: user.name, role: user.role };
+  me(@CurrentUser() user: AuthContext): SessionUserDTO {
+    return { id: user.user.id, email: user.user.email, name: user.user.name, role: user.role };
   }
 
   @Get("preferences")
-  async getPreferences(@CurrentUser() user: AuthUser): Promise<UserPreferencesDTO> {
+  async getPreferences(@CurrentUser() user: AuthContext): Promise<UserPreferencesDTO> {
     return await this.preferences.getMine(user);
   }
 
   @Patch("preferences")
   async updatePreferences(
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
     @Body(new ZodValidationPipe(updatePreferencesSchema))
     body: ContractOutput<typeof updatePreferencesSchema>,
   ): Promise<UserPreferencesDTO> {
@@ -58,7 +58,7 @@ export class MeController {
   @Post("avatar")
   @HttpCode(200)
   async uploadAvatar(
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
     @Body(new ZodValidationPipe(uploadAvatarSchema))
     body: ContractOutput<typeof uploadAvatarSchema>,
   ): Promise<AvatarUploadedDTO> {
@@ -66,13 +66,13 @@ export class MeController {
   }
 
   @Get("learn-progress")
-  async getLearnProgress(@CurrentUser() user: AuthUser): Promise<LearnProgressDTO> {
+  async getLearnProgress(@CurrentUser() user: AuthContext): Promise<LearnProgressDTO> {
     return await this.learn.getMine(user);
   }
 
   @Patch("learn-progress")
   async updateLearnProgress(
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
     @Body(new ZodValidationPipe(updateLearnProgressSchema))
     body: ContractOutput<typeof updateLearnProgressSchema>,
   ): Promise<LearnProgressDTO> {

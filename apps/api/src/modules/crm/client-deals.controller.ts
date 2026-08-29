@@ -13,7 +13,7 @@ import type {
   PostCrmDealBlockerResponse,
   PostCrmDealResponse,
 } from "@destaworks/contracts/http/crm";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { AuthContext } from "@destaworks/auth/guards";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { RequireCapability } from "../../common/decorators/require-capability.decorator";
 import { CapabilityGuard } from "../../common/guards/capability.guard";
@@ -41,7 +41,7 @@ export class CrmClientDealsController {
     @Param("id") clientId: string,
     @Body(new ZodValidationPipe(createDealSchema))
     body: ContractOutput<typeof createDealSchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<PostCrmDealResponse> {
     return { deal: await this.clients.addDeal(clientId, body, user) };
   }
@@ -52,7 +52,7 @@ export class CrmClientDealsController {
     @Param("dealId") dealId: string,
     @Body(new ZodValidationPipe(updateDealSchema))
     body: ContractOutput<typeof updateDealSchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<PatchCrmDealResponse> {
     return { deal: await this.clients.updateDeal(clientId, dealId, body, user) };
   }
@@ -61,7 +61,7 @@ export class CrmClientDealsController {
   async remove(
     @Param("id") clientId: string,
     @Param("dealId") dealId: string,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<DeleteCrmDealResponse> {
     await this.clients.removeDeal(clientId, dealId, user);
     return { ok: true, id: dealId };
@@ -73,7 +73,7 @@ export class CrmClientDealsController {
     @Param("dealId") dealId: string,
     @Body(new ZodValidationPipe(addBlockerSchema))
     body: ContractOutput<typeof addBlockerSchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<PostCrmDealBlockerResponse> {
     return { blocker: await this.clients.addBlocker(clientId, dealId, body, user) };
   }
@@ -85,7 +85,7 @@ export class CrmClientDealsController {
     @Param("blockerId") blockerId: string,
     @Body(new ZodValidationPipe(updateBlockerSchema))
     body: ContractOutput<typeof updateBlockerSchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<PatchCrmDealBlockerResponse> {
     return {
       blocker: await this.clients.updateBlocker(clientId, dealId, blockerId, body, user),
@@ -97,7 +97,7 @@ export class CrmClientDealsController {
     @Param("id") clientId: string,
     @Param("dealId") dealId: string,
     @Param("blockerId") blockerId: string,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<DeleteCrmDealBlockerResponse> {
     await this.clients.removeBlocker(clientId, dealId, blockerId, user);
     return { ok: true, id: blockerId };

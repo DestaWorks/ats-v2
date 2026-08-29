@@ -12,7 +12,7 @@ import { writeAudit } from "@destaworks/db/audit";
 import { withTransaction } from "@destaworks/db/with-transaction";
 import { checkRateLimit } from "@destaworks/integrations/http/rate-limit";
 import { AppError } from "@destaworks/integrations/http/app-error";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { TenantContext } from "@destaworks/domain/tenant";
 import type {
   CoverageGapRowDTO,
   CoverageGapSupplyDTO,
@@ -95,8 +95,8 @@ export const discoverService = {
   /** Search NPPES and classify every result against existing leads/candidates. Rate-limited
    *  per-user (unlike other RSC-read services) since this has real external-API cost/abuse
    *  surface a normal DB read doesn't. */
-  async search(query: DiscoverSearchQuery, user: AuthUser): Promise<DiscoverSearchResultDTO> {
-    await checkRateLimit(`discover-search:${user.id}`, { limit: 20, windowMs: 60_000 });
+  async search(query: DiscoverSearchQuery, ctx: TenantContext): Promise<DiscoverSearchResultDTO> {
+    await checkRateLimit(`discover-search:${ctx.user.id}`, { limit: 20, windowMs: 60_000 });
 
     const taxonomyOpt = TAXONOMY_OPTIONS.find((t) => t.value === query.taxonomy);
     const { resultCount, results } = await searchNppes(
@@ -148,9 +148,9 @@ export const discoverService = {
    *  trusting the client's `dupStatus` from the search response. */
   async addToSourcing(
     input: DiscoverAddToSourcingInput,
-    user: AuthUser,
+    ctx: TenantContext,
   ): Promise<{ added: number; skipped: number }> {
-    await checkRateLimit(`discover-add:${user.id}`, { limit: 10, windowMs: 60_000 });
+    await checkRateLimit(`discover-add:${ctx.user.id}`, { limit: 10, windowMs: 60_000 });
 
     const npis = input.rows.map((r) => r.npi);
     const names = input.rows.map((r) => r.name.trim().toLowerCase());
@@ -187,7 +187,7 @@ export const discoverService = {
                 .join(" · ") || null,
             status: "Sourced",
             outreachCount: 0,
-            createdById: user.id,
+            createdById: ctx.user.id,
           })),
           tx,
           { skipDuplicates: true },
@@ -195,7 +195,7 @@ export const discoverService = {
         await writeAudit(tx, {
           entity: "source_lead",
           entityId: "bulk",
-          actor: user.id,
+          actor: ctx.user.id,
           action: "add_from_discover",
           after: { count: kept.length, source: "NPPES" },
         });
@@ -245,14 +245,14 @@ export const discoverService = {
   /** Live NPPES supply for one (credential, state) combo — lazy/on-demand, rate-limited. */
   async supplyForCombo(
     query: CoverageGapSupplyQuery,
-    user: AuthUser,
+    ctx: TenantContext,
   ): Promise<CoverageGapSupplyDTO> {
     const taxonomyOpt = taxonomyForCredential(query.credential);
     if (!taxonomyOpt) {
       throw new AppError("BAD_REQUEST", "No NPPES supply lookup available for this credential yet");
     }
 
-    await checkRateLimit(`discover-supply:${user.id}`, { limit: 20, windowMs: 60_000 });
+    await checkRateLimit(`discover-supply:${ctx.user.id}`, { limit: 20, windowMs: 60_000 });
 
     const { results } = await searchNppes({
       taxonomyDescription: taxonomyOpt.query,

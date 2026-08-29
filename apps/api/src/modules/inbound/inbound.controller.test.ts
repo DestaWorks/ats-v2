@@ -20,12 +20,17 @@ const h = vi.hoisted(() => ({
 vi.mock("@destaworks/auth/auth", () => ({
   auth: { api: { getSession: async () => h.session } },
 }));
+vi.mock("@destaworks/db/memberships", async () => ({
+  membershipReader: (
+    await import("@destaworks/auth/testing/membership-double")
+  ).singleTenantMembershipReader(() => h.session),
+}));
 vi.mock("@destaworks/application/inbound.service", () => ({ inboundService: {} }));
 vi.mock("@destaworks/integrations/http/rate-limit", () => ({
   checkRateLimit: (...args: unknown[]) => h.checkRateLimit(...args),
 }));
 
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { AuthContext } from "@destaworks/auth/guards";
 import { installNestRequestContext } from "../../common/request-context/nest-request-context";
 import { RateLimitGuard } from "../../common/guards/rate-limit.guard";
 import { SessionAuthGuard } from "../../common/guards/session-auth.guard";
@@ -44,7 +49,12 @@ function controllerWith(methods: Partial<InboundService>): InboundController {
   return new InboundController(serviceStub<InboundService>(methods));
 }
 
-const USER: AuthUser = { id: "u1", email: "op@desta.works", name: "Operator", role: "Associate" };
+const USER: AuthContext = {
+  tenantId: "t1",
+  membershipId: "u1-m",
+  user: { id: "u1", email: "op@desta.works", name: "Operator" },
+  role: "Associate",
+};
 const LEAD = { id: "lead_1", name: "A. Bekele" };
 
 beforeEach(() => {

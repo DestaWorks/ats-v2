@@ -25,7 +25,7 @@ import type {
 } from "@destaworks/contracts/validation/client";
 import { toIso, isoOrNull } from "@destaworks/domain/utils/iso";
 import { defined } from "@destaworks/domain/utils/defined";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { TenantContext } from "@destaworks/domain/tenant";
 import { writeAudit } from "@destaworks/db/audit";
 import { withTransaction } from "@destaworks/db/with-transaction";
 import { clientRepository, type ClientRow } from "@destaworks/db/repositories/client.repository";
@@ -253,7 +253,7 @@ async function requireClient(id: string): Promise<ClientRow> {
  * Client CRM service (Wave 4.2, slice 1). AuthZ: `requireCapability("viewCrm")` runs at the
  * ROUTE/page boundary (matches `credentialsIntelligenceService`'s pattern — capability checks
  * aren't duplicated inside services in this codebase); every mutating method here still takes
- * the acting `AuthUser` for `writeAudit`/`addedById`.
+ * the acting `TenantContext` for `writeAudit`/`addedById`.
  */
 export const clientService = {
   async list(): Promise<ClientListDTO> {
@@ -315,13 +315,13 @@ export const clientService = {
     };
   },
 
-  async create(input: CreateClientInput, user: AuthUser): Promise<ClientProfileDTO> {
+  async create(input: CreateClientInput, ctx: TenantContext): Promise<ClientProfileDTO> {
     const created = await withTransaction(async (tx) => {
       const row = await clientRepository.create(defined(input), tx);
       await writeAudit(tx, {
         entity: "client",
         entityId: row.id,
-        actor: user.id,
+        actor: ctx.user.id,
         action: "create",
         after: { name: row.name },
       });
@@ -330,14 +330,18 @@ export const clientService = {
     return toClientProfile(created);
   },
 
-  async update(id: string, input: UpdateClientInput, user: AuthUser): Promise<ClientProfileDTO> {
+  async update(
+    id: string,
+    input: UpdateClientInput,
+    ctx: TenantContext,
+  ): Promise<ClientProfileDTO> {
     const existing = await requireClient(id);
     const updated = await withTransaction(async (tx) => {
       const row = await clientRepository.update(id, defined(input), tx);
       await writeAudit(tx, {
         entity: "client",
         entityId: id,
-        actor: user.id,
+        actor: ctx.user.id,
         action: "update",
         before: { name: existing.name },
         after: { name: row.name },
@@ -350,24 +354,24 @@ export const clientService = {
   async addContact(
     clientId: string,
     input: AddContactInput,
-    user: AuthUser,
+    ctx: TenantContext,
   ): Promise<ClientContactDTO> {
     await requireClient(clientId);
     const created = await withTransaction(async (tx) => {
       const row = await clientContactRepository.create(
-        { ...defined(input), clientId, addedById: user.id },
+        { ...defined(input), clientId, addedById: ctx.user.id },
         tx,
       );
       await writeAudit(tx, {
         entity: "client_contact",
         entityId: row.id,
-        actor: user.id,
+        actor: ctx.user.id,
         action: "add_contact",
         after: { clientId, fullName: row.fullName, role: row.role },
       });
       return row;
     });
-    const userNames = await userRepository.namesByIds([user.id]);
+    const userNames = await userRepository.namesByIds([ctx.user.id]);
     return toContactDTO(created, userNames);
   },
 
@@ -375,7 +379,7 @@ export const clientService = {
     clientId: string,
     contactId: string,
     input: UpdateContactInput,
-    user: AuthUser,
+    ctx: TenantContext,
   ): Promise<ClientContactDTO> {
     await requireClient(clientId);
     const updated = await withTransaction(async (tx) => {
@@ -386,7 +390,7 @@ export const clientService = {
       await writeAudit(tx, {
         entity: "client_contact",
         entityId: contactId,
-        actor: user.id,
+        actor: ctx.user.id,
         action: "update_contact",
         after: { clientId, ...input },
       });
@@ -396,15 +400,15 @@ export const clientService = {
     return toContactDTO(updated, userNames);
   },
 
-  async removeContact(clientId: string, contactId: string, user: AuthUser): Promise<void> {
+  async removeContact(clientId: string, contactId: string, ctx: TenantContext): Promise<void> {
     await requireClient(clientId);
     await withTransaction(async (tx) => {
-      const count = await clientContactRepository.softDelete(clientId, contactId, user.id, tx);
+      const count = await clientContactRepository.softDelete(clientId, contactId, ctx.user.id, tx);
       if (count === 0) throw new AppError("NOT_FOUND", "Contact not found");
       await writeAudit(tx, {
         entity: "client_contact",
         entityId: contactId,
-        actor: user.id,
+        actor: ctx.user.id,
         action: "remove_contact",
         after: { clientId },
       });
@@ -413,17 +417,17 @@ export const clientService = {
 
   // --- Tasks (Wave 4.2 slice 2) ------------------------------------------
 
-  async addTask(clientId: string, input: AddTaskInput, user: AuthUser): Promise<ClientTaskDTO> {
+  async addTask(clientId: string, input: AddTaskInput, ctx: TenantContext): Promise<ClientTaskDTO> {
     await requireClient(clientId);
     const created = await withTransaction(async (tx) => {
       const row = await clientTaskRepository.create(
-        { ...defined(input), clientId, createdById: user.id },
+        { ...defined(input), clientId, createdById: ctx.user.id },
         tx,
       );
       await writeAudit(tx, {
         entity: "client_task",
         entityId: row.id,
-        actor: user.id,
+        actor: ctx.user.id,
         action: "add_task",
         after: { clientId, title: row.title },
       });
@@ -440,7 +444,7 @@ export const clientService = {
     clientId: string,
     taskId: string,
     input: UpdateTaskInput,
-    user: AuthUser,
+    ctx: TenantContext,
   ): Promise<ClientTaskDTO> {
     await requireClient(clientId);
     const updated = await withTransaction(async (tx) => {
@@ -454,7 +458,7 @@ export const clientService = {
       await writeAudit(tx, {
         entity: "client_task",
         entityId: taskId,
-        actor: user.id,
+        actor: ctx.user.id,
         action: "update_task",
         after: { clientId, ...input },
       });
@@ -463,15 +467,15 @@ export const clientService = {
     return toTaskDTO(updated);
   },
 
-  async removeTask(clientId: string, taskId: string, user: AuthUser): Promise<void> {
+  async removeTask(clientId: string, taskId: string, ctx: TenantContext): Promise<void> {
     await requireClient(clientId);
     await withTransaction(async (tx) => {
-      const count = await clientTaskRepository.softDelete(clientId, taskId, user.id, tx);
+      const count = await clientTaskRepository.softDelete(clientId, taskId, ctx.user.id, tx);
       if (count === 0) throw new AppError("NOT_FOUND", "Task not found");
       await writeAudit(tx, {
         entity: "client_task",
         entityId: taskId,
-        actor: user.id,
+        actor: ctx.user.id,
         action: "remove_task",
         after: { clientId },
       });
@@ -483,18 +487,18 @@ export const clientService = {
   async addMeeting(
     clientId: string,
     input: AddMeetingInput,
-    user: AuthUser,
+    ctx: TenantContext,
   ): Promise<ClientMeetingDTO> {
     await requireClient(clientId);
     const created = await withTransaction(async (tx) => {
       const row = await clientMeetingRepository.create(
-        { ...defined(input), clientId, loggedById: user.id },
+        { ...defined(input), clientId, loggedById: ctx.user.id },
         tx,
       );
       await writeAudit(tx, {
         entity: "client_meeting",
         entityId: row.id,
-        actor: user.id,
+        actor: ctx.user.id,
         action: "add_meeting",
         after: { clientId, type: row.type },
       });
@@ -503,15 +507,15 @@ export const clientService = {
     return toMeetingDTO(created);
   },
 
-  async removeMeeting(clientId: string, meetingId: string, user: AuthUser): Promise<void> {
+  async removeMeeting(clientId: string, meetingId: string, ctx: TenantContext): Promise<void> {
     await requireClient(clientId);
     await withTransaction(async (tx) => {
-      const count = await clientMeetingRepository.softDelete(clientId, meetingId, user.id, tx);
+      const count = await clientMeetingRepository.softDelete(clientId, meetingId, ctx.user.id, tx);
       if (count === 0) throw new AppError("NOT_FOUND", "Meeting not found");
       await writeAudit(tx, {
         entity: "client_meeting",
         entityId: meetingId,
-        actor: user.id,
+        actor: ctx.user.id,
         action: "remove_meeting",
         after: { clientId },
       });
@@ -520,17 +524,17 @@ export const clientService = {
 
   // --- Deals (Wave 4.2 slice 3) --------------------------------------------
 
-  async addDeal(clientId: string, input: CreateDealInput, user: AuthUser): Promise<DealDTO> {
+  async addDeal(clientId: string, input: CreateDealInput, ctx: TenantContext): Promise<DealDTO> {
     await requireClient(clientId);
     const created = await withTransaction(async (tx) => {
       const row = await dealRepository.create(
-        { ...defined(input), clientId, createdById: user.id },
+        { ...defined(input), clientId, createdById: ctx.user.id },
         tx,
       );
       await writeAudit(tx, {
         entity: "deal",
         entityId: row.id,
-        actor: user.id,
+        actor: ctx.user.id,
         action: "add_deal",
         after: { clientId, name: row.name },
       });
@@ -547,7 +551,7 @@ export const clientService = {
     clientId: string,
     dealId: string,
     input: UpdateDealInput,
-    user: AuthUser,
+    ctx: TenantContext,
   ): Promise<DealDTO> {
     await requireClient(clientId);
     const updated = await withTransaction(async (tx) => {
@@ -560,7 +564,7 @@ export const clientService = {
       await writeAudit(tx, {
         entity: "deal",
         entityId: dealId,
-        actor: user.id,
+        actor: ctx.user.id,
         action: "update_deal",
         after: { clientId, ...input },
       });
@@ -570,15 +574,15 @@ export const clientService = {
     return toDealDTO(updated, blockers);
   },
 
-  async removeDeal(clientId: string, dealId: string, user: AuthUser): Promise<void> {
+  async removeDeal(clientId: string, dealId: string, ctx: TenantContext): Promise<void> {
     await requireClient(clientId);
     await withTransaction(async (tx) => {
-      const count = await dealRepository.softDelete(clientId, dealId, user.id, tx);
+      const count = await dealRepository.softDelete(clientId, dealId, ctx.user.id, tx);
       if (count === 0) throw new AppError("NOT_FOUND", "Deal not found");
       await writeAudit(tx, {
         entity: "deal",
         entityId: dealId,
-        actor: user.id,
+        actor: ctx.user.id,
         action: "remove_deal",
         after: { clientId },
       });
@@ -591,7 +595,7 @@ export const clientService = {
     clientId: string,
     dealId: string,
     input: AddBlockerInput,
-    user: AuthUser,
+    ctx: TenantContext,
   ): Promise<DealBlockerDTO> {
     await requireClient(clientId);
     const deal = await dealRepository.findById(dealId);
@@ -601,7 +605,7 @@ export const clientService = {
       await writeAudit(tx, {
         entity: "deal_blocker",
         entityId: row.id,
-        actor: user.id,
+        actor: ctx.user.id,
         action: "add_blocker",
         after: { dealId, text: row.text },
       });
@@ -616,7 +620,7 @@ export const clientService = {
     dealId: string,
     blockerId: string,
     input: UpdateBlockerInput,
-    user: AuthUser,
+    ctx: TenantContext,
   ): Promise<DealBlockerDTO> {
     await requireClient(clientId);
     const deal = await dealRepository.findById(dealId);
@@ -635,7 +639,7 @@ export const clientService = {
       await writeAudit(tx, {
         entity: "deal_blocker",
         entityId: blockerId,
-        actor: user.id,
+        actor: ctx.user.id,
         action: "update_blocker",
         after: { dealId, resolved: input.resolved },
       });
@@ -648,7 +652,7 @@ export const clientService = {
     clientId: string,
     dealId: string,
     blockerId: string,
-    user: AuthUser,
+    ctx: TenantContext,
   ): Promise<void> {
     await requireClient(clientId);
     const deal = await dealRepository.findById(dealId);
@@ -659,7 +663,7 @@ export const clientService = {
       await writeAudit(tx, {
         entity: "deal_blocker",
         entityId: blockerId,
-        actor: user.id,
+        actor: ctx.user.id,
         action: "remove_blocker",
         after: { dealId },
       });

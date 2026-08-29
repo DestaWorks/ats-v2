@@ -22,7 +22,7 @@ import type {
 import { toIso, isoOrNull } from "@destaworks/domain/utils/iso";
 import { defined } from "@destaworks/domain/utils/defined";
 import { pageMeta } from "@destaworks/domain/pagination";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { TenantContext } from "@destaworks/domain/tenant";
 import { writeAudit } from "@destaworks/db/audit";
 import { withTransaction } from "@destaworks/db/with-transaction";
 import {
@@ -152,7 +152,7 @@ export const leadService = {
    * body); `outreachCount: 0`; `createdById = user.id`. The insert + a `create` audit run in one
    * transaction so the trail can't drift. Returns the fresh detail (empty attempt log).
    */
-  async create(input: CreateLeadInput, user: AuthUser): Promise<LeadDetailDTO> {
+  async create(input: CreateLeadInput, ctx: TenantContext): Promise<LeadDetailDTO> {
     const lead = await withTransaction(async (tx) => {
       const created = await leadRepository.create(
         {
@@ -169,14 +169,14 @@ export const leadService = {
           // Canonical default (validated vs LEAD_STATUSES); normalizeLeadStatus is the ETL/import path.
           status: normalizeLeadStatus("Sourced"),
           outreachCount: 0,
-          createdById: user.id,
+          createdById: ctx.user.id,
         },
         tx,
       );
       await writeAudit(tx, {
         entity: "source_lead",
         entityId: created.id,
-        actor: user.id,
+        actor: ctx.user.id,
         action: "create",
         after: { status: created.status, source: created.source },
       });
@@ -223,7 +223,11 @@ export const leadService = {
    * 3; HELD for a responded lead — the attempt still counts), bump `outreachCount`/`lastOutreachAt`,
    * and audit `log_outreach`. Returns the fresh detail (new status/count + the appended attempt).
    */
-  async logOutreach(id: string, input: LogOutreachInput, user: AuthUser): Promise<LeadDetailDTO> {
+  async logOutreach(
+    id: string,
+    input: LogOutreachInput,
+    ctx: TenantContext,
+  ): Promise<LeadDetailDTO> {
     const existing = await requireLead(id);
     const status = existing.status as LeadStatus;
     if (!canLogOutreach(status)) throw new AppError("CONFLICT", "Lead already promoted");
@@ -236,7 +240,7 @@ export const leadService = {
           channel: input.channel,
           ...(input.note !== undefined && { note: input.note }),
           at,
-          actorId: user.id,
+          actorId: ctx.user.id,
           status: next,
           ...(input.templateId !== undefined && { templateId: input.templateId }),
         },
@@ -245,7 +249,7 @@ export const leadService = {
       await writeAudit(tx, {
         entity: "source_lead",
         entityId: id,
-        actor: user.id,
+        actor: ctx.user.id,
         action: "log_outreach",
         before: { status, outreachCount: existing.outreachCount },
         after: { status: next, channel: input.channel },
@@ -267,7 +271,7 @@ export const leadService = {
    * Scoped to attempts with `response: null`, so a later `respond()` call never re-touches an
    * attempt that was already backfilled or manually set.
    */
-  async respond(id: string, kind: "hot" | "cold", user: AuthUser): Promise<LeadDetailDTO> {
+  async respond(id: string, kind: "hot" | "cold", ctx: TenantContext): Promise<LeadDetailDTO> {
     const existing = await requireLead(id);
     const status = existing.status as LeadStatus;
     if (!canRespond(status)) throw new AppError("CONFLICT", "Lead already promoted");
@@ -291,7 +295,7 @@ export const leadService = {
       await writeAudit(tx, {
         entity: "source_lead",
         entityId: id,
-        actor: user.id,
+        actor: ctx.user.id,
         action: "respond",
         before: { status },
         after: { status: next },
@@ -315,7 +319,7 @@ export const leadService = {
    */
   async promote(
     id: string,
-    user: AuthUser,
+    ctx: TenantContext,
     opts?: { filledFromRoleId?: string },
   ): Promise<{ candidateId: string }> {
     const existing = await requireLead(id);
@@ -327,7 +331,7 @@ export const leadService = {
       filledFromRoleId: opts?.filledFromRoleId ?? null,
     };
     return withTransaction(async (tx) => {
-      const candidate = await candidateService.create(input, { user, tx });
+      const candidate = await candidateService.create(input, { user: ctx, tx });
       // Guarded flip INSIDE the tx: if a concurrent promote already flipped this lead, we update 0
       // rows → throw CONFLICT, which rolls back the candidate we just created (no orphan candidate).
       const flipped = await leadRepository.markPromoted(id, candidate.id, tx);
@@ -337,7 +341,7 @@ export const leadService = {
       await writeAudit(tx, {
         entity: "source_lead",
         entityId: id,
-        actor: user.id,
+        actor: ctx.user.id,
         action: "promote",
         before: { status: existing.status },
         after: { status: "Promoted", candidateId: candidate.id },
@@ -351,17 +355,17 @@ export const leadService = {
    * existence/idempotency guard — a missing OR already-trashed lead → NOT_FOUND. The repo `softDelete`
    * + a `delete` audit run in one transaction. Returns `{ id }` (never echoes lead PII).
    */
-  async softDelete(id: string, user: AuthUser): Promise<{ id: string }> {
+  async softDelete(id: string, ctx: TenantContext): Promise<{ id: string }> {
     const existing = await requireLead(id);
     await withTransaction(async (tx) => {
-      const deleted = await leadRepository.softDelete(id, user.id, tx);
+      const deleted = await leadRepository.softDelete(id, ctx.user.id, tx);
       await writeAudit(tx, {
         entity: "source_lead",
         entityId: id,
-        actor: user.id,
+        actor: ctx.user.id,
         action: "delete",
         before: { deletedAt: null },
-        after: { deletedAt: deleted.deletedAt, deletedById: user.id, status: existing.status },
+        after: { deletedAt: deleted.deletedAt, deletedById: ctx.user.id, status: existing.status },
       });
     });
     return { id };
@@ -372,7 +376,7 @@ export const leadService = {
    * it was (status/outreach untouched; only the delete markers clear). A missing lead → NOT_FOUND;
    * a live (not-deleted) lead → CONFLICT. Repo `restore` + a `restore` audit in one transaction.
    */
-  async restore(id: string, user: AuthUser): Promise<LeadDetailDTO> {
+  async restore(id: string, ctx: TenantContext): Promise<LeadDetailDTO> {
     const existing = await leadRepository.findById(id, { includeDeleted: true });
     if (!existing) throw new AppError("NOT_FOUND", "Lead not found");
     if (existing.deletedAt === null) throw new AppError("CONFLICT", "Lead is not deleted");
@@ -381,7 +385,7 @@ export const leadService = {
       await writeAudit(tx, {
         entity: "source_lead",
         entityId: id,
-        actor: user.id,
+        actor: ctx.user.id,
         action: "restore",
         before: { deletedAt: existing.deletedAt, deletedById: existing.deletedById },
         after: { deletedAt: null, status: lead.status },
@@ -404,7 +408,7 @@ export const leadService = {
    * legacy brief treated any non-empty value as snoozed forever — that bug stops here). A
    * Promoted lead can't be snoozed (its lifecycle is closed). Audited `snooze`/`wake`.
    */
-  async snooze(id: string, until: Date | null, user: AuthUser): Promise<LeadDetailDTO> {
+  async snooze(id: string, until: Date | null, ctx: TenantContext): Promise<LeadDetailDTO> {
     const existing = await requireLead(id);
     if (until && existing.status === "Promoted") {
       throw new AppError("CONFLICT", "Lead already promoted");
@@ -414,7 +418,7 @@ export const leadService = {
       await writeAudit(tx, {
         entity: "source_lead",
         entityId: id,
-        actor: user.id,
+        actor: ctx.user.id,
         action: until ? "snooze" : "wake",
         before: { snoozedUntil: existing.snoozedUntil },
         after: { snoozedUntil: until },
@@ -434,7 +438,7 @@ export const leadService = {
     id: string,
     attemptId: string,
     input: UpdateOutreachInput,
-    user: AuthUser,
+    ctx: TenantContext,
   ): Promise<LeadDetailDTO> {
     await requireLead(id);
     const lead = await withTransaction(async (tx) => {
@@ -455,7 +459,7 @@ export const leadService = {
       await writeAudit(tx, {
         entity: "source_lead",
         entityId: id,
-        actor: user.id,
+        actor: ctx.user.id,
         action: "edit_outreach",
         after: { attemptId, ...input },
       });
@@ -469,7 +473,7 @@ export const leadService = {
    * The denormalized count/lastOutreachAt re-sync from the table; the lead's STATUS is NOT
    * regressed (legacy parity — un-advancing the funnel stays a manual status change).
    */
-  async deleteOutreach(id: string, attemptId: string, user: AuthUser): Promise<LeadDetailDTO> {
+  async deleteOutreach(id: string, attemptId: string, ctx: TenantContext): Promise<LeadDetailDTO> {
     await requireLead(id);
     const lead = await withTransaction(async (tx) => {
       const count = await leadRepository.deleteOutreachAttempt(id, attemptId, tx);
@@ -478,7 +482,7 @@ export const leadService = {
       await writeAudit(tx, {
         entity: "source_lead",
         entityId: id,
-        actor: user.id,
+        actor: ctx.user.id,
         action: "delete_outreach",
         after: { attemptId },
       });
@@ -496,7 +500,7 @@ export const leadService = {
    */
   async bulkAction(
     input: BulkLeadActionInput,
-    user: AuthUser,
+    ctx: TenantContext,
   ): Promise<{ affected: number; skipped: number }> {
     const uniqueIds = [...new Set(input.ids)];
     const rows = await leadRepository.findManyByIds(uniqueIds, {
@@ -531,7 +535,7 @@ export const leadService = {
         const { id } = row;
         switch (input.action) {
           case "delete":
-            await leadRepository.softDelete(id, user.id, tx);
+            await leadRepository.softDelete(id, ctx.user.id, tx);
             break;
           case "restore":
             await leadRepository.restore(id, tx);
@@ -553,7 +557,7 @@ export const leadService = {
                 channel: input.channel,
                 note: input.note ?? null,
                 at,
-                actorId: user.id,
+                actorId: ctx.user.id,
                 status: advanceOnOutreach(row.status as LeadStatus),
               },
               tx,
@@ -564,7 +568,7 @@ export const leadService = {
         await writeAudit(tx, {
           entity: "source_lead",
           entityId: id,
-          actor: user.id,
+          actor: ctx.user.id,
           action: `bulk_${input.action}`,
           before: { status: row.status, deletedAt: row.deletedAt },
           after:
@@ -600,7 +604,7 @@ export const leadService = {
    */
   async importLeads(
     input: ImportLeadsInput,
-    user: AuthUser,
+    ctx: TenantContext,
   ): Promise<{ added: number; skipped: number }> {
     const emails = input.rows.map((r) => r.email?.toLowerCase()).filter((e): e is string => !!e);
     const namesForEmailless = input.rows
@@ -641,7 +645,7 @@ export const leadService = {
           ? (clientByName.get(row.clientName.trim().toLowerCase()) ?? null)
           : null,
         status: normalizeLeadStatus(row.status ?? "Sourced"),
-        createdById: user.id,
+        createdById: ctx.user.id,
       };
     }
 
@@ -689,7 +693,7 @@ export const leadService = {
             channel: "linkedin",
             note,
             at,
-            actorId: user.id,
+            actorId: ctx.user.id,
           })),
           tx,
         );
@@ -697,7 +701,7 @@ export const leadService = {
       await writeAudit(tx, {
         entity: "source_lead",
         entityId: "bulk",
-        actor: user.id,
+        actor: ctx.user.id,
         action: "bulk_import",
         after: { added: insertedCount, skipped: input.rows.length - insertedCount },
       });

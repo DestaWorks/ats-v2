@@ -4,7 +4,7 @@ import {
   type AiSettingsDTO,
   type AiUsageOverviewDTO,
 } from "@destaworks/contracts/validation/ai-ops";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { AuthContext } from "@destaworks/auth/guards";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { RequireCapability } from "../../common/decorators/require-capability.decorator";
 import { CapabilityGuard } from "../../common/guards/capability.guard";
@@ -33,7 +33,7 @@ export class AdminAiController {
   @Patch("settings")
   @RequireCapability("manageAiSettings")
   async setSettings(
-    @CurrentUser() actor: AuthUser,
+    @CurrentUser() actor: AuthContext,
     @Body(new ZodValidationPipe(setAiDisabledSchema))
     body: ContractOutput<typeof setAiDisabledSchema>,
   ): Promise<AiSettingsDTO> {

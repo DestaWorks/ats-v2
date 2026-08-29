@@ -23,7 +23,7 @@ export default async function ResumePage() {
         </p>
       </header>
       <ResumeFlow
-        recruiterName={user.name}
+        recruiterName={user.user.name}
         resumeExtractionEnabled={resumeExtractionEnabled}
         resumeStorageEnabled={storageEnabled}
       />

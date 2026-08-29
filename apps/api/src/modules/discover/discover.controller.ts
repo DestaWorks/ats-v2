@@ -7,7 +7,7 @@ import type {
   GetDiscoverCoverageGapSupplyResponse,
   PostDiscoverAddResponse,
 } from "@destaworks/contracts/http/discover";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { AuthContext } from "@destaworks/auth/guards";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { SessionAuthGuard } from "../../common/guards/session-auth.guard";
 import { ZodValidationPipe, type ContractOutput } from "../../common/pipes/zod-validation.pipe";
@@ -35,7 +35,7 @@ export class DiscoverController {
   async addToSourcing(
     @Body(new ZodValidationPipe(discoverAddToSourcingSchema))
     body: ContractOutput<typeof discoverAddToSourcingSchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<PostDiscoverAddResponse> {
     return this.discover.addToSourcing(body, user);
   }
@@ -44,7 +44,7 @@ export class DiscoverController {
   async coverageGapSupply(
     @Query(new ZodValidationPipe(coverageGapSupplyQuerySchema))
     query: ContractOutput<typeof coverageGapSupplyQuerySchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<GetDiscoverCoverageGapSupplyResponse> {
     return this.discover.supplyForCombo(query, user);
   }

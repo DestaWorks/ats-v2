@@ -5,7 +5,7 @@ import type {
   GetClientMatchProfileResponse,
   PutClientMatchProfileResponse,
 } from "@destaworks/contracts/http/open-role";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { AuthContext } from "@destaworks/auth/guards";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { SessionAuthGuard } from "../../common/guards/session-auth.guard";
 import { ZodValidationPipe, type ContractOutput } from "../../common/pipes/zod-validation.pipe";
@@ -38,7 +38,7 @@ export class ClientMatchProfilesController {
     @Param("clientId") clientId: string,
     @Body(new ZodValidationPipe(saveMatchProfileSchema))
     body: ContractOutput<typeof saveMatchProfileSchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<PutClientMatchProfileResponse> {
     return this.openRoles.saveMatchProfile(clientId, body, user);
   }
@@ -46,7 +46,7 @@ export class ClientMatchProfilesController {
   @Delete(":clientId")
   async reset(
     @Param("clientId") clientId: string,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<DeleteClientMatchProfileResponse> {
     return this.openRoles.deleteMatchProfile(clientId, user);
   }

@@ -4,7 +4,7 @@ import type {
   MentionDTO,
   MentionListDTO,
 } from "@destaworks/contracts/validation/mention";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { TenantContext } from "@destaworks/domain/tenant";
 import { mentionRepository, type MentionRow } from "@destaworks/db/repositories/mention.repository";
 import { AppError } from "@destaworks/integrations/http/app-error";
 import { toIso } from "@destaworks/domain/utils/iso";
@@ -36,10 +36,10 @@ function toMentionDTO(row: MentionRow): MentionDTO {
  */
 export const mentionService = {
   /** The viewer's recent mentions (newest first) + the true unread badge count. */
-  async listMine(user: AuthUser): Promise<MentionListDTO> {
+  async listMine(ctx: TenantContext): Promise<MentionListDTO> {
     const [rows, unread] = await Promise.all([
-      mentionRepository.listForRecipient(user.id, MENTIONS_PAGE),
-      mentionRepository.countUnread(user.id),
+      mentionRepository.listForRecipient(ctx.user.id, MENTIONS_PAGE),
+      mentionRepository.countUnread(ctx.user.id),
     ]);
     return { mentions: rows.map(toMentionDTO), unread };
   },
@@ -50,18 +50,18 @@ export const mentionService = {
    * Marking an already-read mention is a no-op success (idempotent). Returns the fresh unread
    * count so the bell can re-render without a second round trip.
    */
-  async markRead(input: MarkMentionReadInput, user: AuthUser): Promise<{ unread: number }> {
+  async markRead(input: MarkMentionReadInput, ctx: TenantContext): Promise<{ unread: number }> {
     if (input.all) {
-      await mentionRepository.markAllRead(user.id);
+      await mentionRepository.markAllRead(ctx.user.id);
     } else {
-      const count = await mentionRepository.markRead(input.mentionId, user.id);
+      const count = await mentionRepository.markRead(input.mentionId, ctx.user.id);
       if (count === 0) {
-        const exists = await mentionRepository.existsForRecipient(input.mentionId, user.id);
+        const exists = await mentionRepository.existsForRecipient(input.mentionId, ctx.user.id);
         if (!exists) {
           throw new AppError("NOT_FOUND", "Mention not found");
         }
       }
     }
-    return { unread: await mentionRepository.countUnread(user.id) };
+    return { unread: await mentionRepository.countUnread(ctx.user.id) };
   },
 };

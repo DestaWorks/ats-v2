@@ -13,9 +13,14 @@ const h = vi.hoisted(() => ({
 
 vi.mock("server-only", () => ({}));
 vi.mock("@destaworks/config/request-context", () => ({
-  requestContext: () => ({ headers: async () => new Headers() }),
+  requestContext: () => ({ headers: async () => new Headers(), cookie: async () => undefined }),
 }));
 vi.mock("@destaworks/auth/auth", () => ({ auth: { api: { getSession: async () => h.session } } }));
+vi.mock("@destaworks/db/memberships", async () => ({
+  membershipReader: (
+    await import("@destaworks/auth/testing/membership-double")
+  ).singleTenantMembershipReader(() => h.session),
+}));
 vi.mock("@destaworks/db/prisma", () => ({ prisma: {} }));
 vi.mock("@destaworks/application/candidate.service", () => ({
   candidateService: { bulkMove: h.bulkMove },
@@ -58,7 +63,7 @@ describe("POST /api/candidates/bulk-move", () => {
     expect(h.bulkMove).toHaveBeenCalledWith(
       ["a", "b"],
       "QUALIFIED_PRESCREEN",
-      expect.objectContaining({ id: "u1" }),
+      expect.objectContaining({ user: expect.objectContaining({ id: "u1" }) }),
     );
   });
 });

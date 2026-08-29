@@ -5,7 +5,7 @@ import type {
   PatchCrmClientContactResponse,
   PostCrmClientContactResponse,
 } from "@destaworks/contracts/http/crm";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { AuthContext } from "@destaworks/auth/guards";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { RequireCapability } from "../../common/decorators/require-capability.decorator";
 import { CapabilityGuard } from "../../common/guards/capability.guard";
@@ -32,7 +32,7 @@ export class CrmClientContactsController {
     @Param("id") clientId: string,
     @Body(new ZodValidationPipe(addContactSchema))
     body: ContractOutput<typeof addContactSchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<PostCrmClientContactResponse> {
     return { contact: await this.clients.addContact(clientId, body, user) };
   }
@@ -43,7 +43,7 @@ export class CrmClientContactsController {
     @Param("contactId") contactId: string,
     @Body(new ZodValidationPipe(updateContactSchema))
     body: ContractOutput<typeof updateContactSchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<PatchCrmClientContactResponse> {
     return { contact: await this.clients.updateContact(clientId, contactId, body, user) };
   }
@@ -52,7 +52,7 @@ export class CrmClientContactsController {
   async remove(
     @Param("id") clientId: string,
     @Param("contactId") contactId: string,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<DeleteCrmClientContactResponse> {
     await this.clients.removeContact(clientId, contactId, user);
     return { ok: true, id: contactId };

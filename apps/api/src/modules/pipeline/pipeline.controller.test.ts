@@ -19,6 +19,11 @@ const h = vi.hoisted(() => ({
 vi.mock("@destaworks/auth/auth", () => ({
   auth: { api: { getSession: async () => h.session } },
 }));
+vi.mock("@destaworks/db/memberships", async () => ({
+  membershipReader: (
+    await import("@destaworks/auth/testing/membership-double")
+  ).singleTenantMembershipReader(() => h.session),
+}));
 vi.mock("@destaworks/application/pipeline-health.service", () => ({ pipelineHealthService: {} }));
 vi.mock("@destaworks/integrations/http/rate-limit", () => ({
   checkRateLimit: (...args: unknown[]) => h.checkRateLimit(...args),

@@ -4,7 +4,7 @@ import { clientPortalService } from "./client-portal.service";
 import { AppError } from "@destaworks/integrations/http/app-error";
 import { toIso } from "@destaworks/domain/utils/iso";
 import { defined } from "@destaworks/domain/utils/defined";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { TenantContext } from "@destaworks/domain/tenant";
 import type {
   ApprovePortalRequestInput,
   GeneratedPortalLinkDTO,
@@ -62,7 +62,7 @@ export const portalAccessRequestService = {
   async approve(
     id: string,
     input: ApprovePortalRequestInput,
-    actor: AuthUser,
+    actor: TenantContext,
   ): Promise<GeneratedPortalLinkDTO> {
     const request = await portalAccessRequestRepository.findById(id);
     if (!request) throw new AppError("NOT_FOUND", "Access request not found");
@@ -81,7 +81,7 @@ export const portalAccessRequestService = {
               fullName: request.name,
               email: request.email,
               role: "unknown",
-              addedById: actor.id,
+              addedById: actor.user.id,
             })
           ).id;
 

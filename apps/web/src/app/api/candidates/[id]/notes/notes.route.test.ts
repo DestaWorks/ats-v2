@@ -15,9 +15,14 @@ const h = vi.hoisted(() => ({
 
 vi.mock("server-only", () => ({}));
 vi.mock("@destaworks/config/request-context", () => ({
-  requestContext: () => ({ headers: async () => new Headers() }),
+  requestContext: () => ({ headers: async () => new Headers(), cookie: async () => undefined }),
 }));
 vi.mock("@destaworks/auth/auth", () => ({ auth: { api: { getSession: async () => h.session } } }));
+vi.mock("@destaworks/db/memberships", async () => ({
+  membershipReader: (
+    await import("@destaworks/auth/testing/membership-double")
+  ).singleTenantMembershipReader(() => h.session),
+}));
 vi.mock("@destaworks/db/prisma", () => ({ prisma: {} }));
 vi.mock("@destaworks/application/note.service", () => ({
   noteService: { add: h.add, listByCandidate: h.listByCandidate },
@@ -62,7 +67,7 @@ describe("POST /api/candidates/:id/notes", () => {
     expect(h.add).toHaveBeenCalledWith(
       "c1",
       { body: "hi", noteType: "call" },
-      expect.objectContaining({ id: "u1", name: "Test User" }),
+      expect.objectContaining({ user: expect.objectContaining({ id: "u1", name: "Test User" }) }),
     );
     expect((await res.json()).note.id).toBe("n1");
   });
@@ -109,7 +114,10 @@ describe("GET /api/candidates/:id/notes", () => {
     h.listByCandidate.mockResolvedValue([{ id: "n1", noteType: "internal" }]);
     const res = await GET(getReq, ctx);
     expect(res.status).toBe(200);
-    expect(h.listByCandidate).toHaveBeenCalledWith("c1", expect.objectContaining({ id: "u1" }));
+    expect(h.listByCandidate).toHaveBeenCalledWith(
+      "c1",
+      expect.objectContaining({ user: expect.objectContaining({ id: "u1" }) }),
+    );
     expect((await res.json()).notes).toHaveLength(1);
   });
 });

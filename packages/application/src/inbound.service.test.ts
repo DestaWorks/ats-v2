@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { TenantContext } from "@destaworks/domain/tenant";
 
 /**
  * Proves the inbound-triage pipeline WITHOUT a DB or a real model call: `extractInbound` is
@@ -9,7 +9,12 @@ import type { AuthUser } from "@destaworks/auth/guards";
  */
 
 const h = vi.hoisted(() => ({
-  user: { id: "u1", email: "u@desta.works", name: "Test User", role: "Associate" as const },
+  user: {
+    tenantId: "t1",
+    membershipId: "u1-m",
+    user: { id: "u1", email: "u@desta.works", name: "Test User" },
+    role: "Associate" as const,
+  },
   extractInbound: vi.fn(),
   candidateRepo: { findManyByEmails: vi.fn() },
   leadRepo: { findManyByEmails: vi.fn(), findManyByNames: vi.fn() },
@@ -73,7 +78,7 @@ function extracted(overrides: Record<string, unknown> = {}) {
   };
 }
 
-const user = h.user as AuthUser;
+const user = h.user as TenantContext;
 
 beforeEach(() => {
   vi.clearAllMocks();

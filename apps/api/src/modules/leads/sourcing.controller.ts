@@ -3,7 +3,7 @@ import {
   findSimilarSchema,
   type PostSourcingSimilarResponse,
 } from "@destaworks/contracts/validation/similarity";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { AuthContext } from "@destaworks/auth/guards";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { SessionAuthGuard } from "../../common/guards/session-auth.guard";
 import { ZodValidationPipe, type ContractOutput } from "../../common/pipes/zod-validation.pipe";
@@ -33,7 +33,7 @@ export class SourcingController {
   @HttpCode(HttpStatus.OK)
   async similar(
     @Body(new ZodValidationPipe(findSimilarSchema)) body: ContractOutput<typeof findSimilarSchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<PostSourcingSimilarResponse> {
     return await this.similarity.findSimilar(body, user);
   }

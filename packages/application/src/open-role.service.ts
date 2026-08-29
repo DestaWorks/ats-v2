@@ -28,7 +28,7 @@ import type {
 import { toIso, isoOrNull } from "@destaworks/domain/utils/iso";
 import { defined } from "@destaworks/domain/utils/defined";
 import { pageMeta } from "@destaworks/domain/pagination";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { TenantContext } from "@destaworks/domain/tenant";
 import { writeAudit } from "@destaworks/db/audit";
 import { withTransaction } from "@destaworks/db/with-transaction";
 import { extractJd } from "@destaworks/integrations/ai/extract-jd";
@@ -149,7 +149,7 @@ function toProfileDTO(
  * `viewReports` (leadership) since it retunes scoring for every recruiter working that client.
  */
 export const openRoleService = {
-  async create(input: CreateOpenRoleInput, user: AuthUser): Promise<OpenRoleDetailDTO> {
+  async create(input: CreateOpenRoleInput, ctx: TenantContext): Promise<OpenRoleDetailDTO> {
     const role = await withTransaction(async (tx) => {
       const created = await openRoleRepository.create(
         {
@@ -163,14 +163,14 @@ export const openRoleService = {
           rate: input.rate ?? null,
           description: input.description ?? null,
           priority: input.priority,
-          createdById: user.id,
+          createdById: ctx.user.id,
         },
         tx,
       );
       await writeAudit(tx, {
         entity: "open_role",
         entityId: created.id,
-        actor: user.id,
+        actor: ctx.user.id,
         action: "create",
         after: { title: created.title, clientId: created.clientId, priority: created.priority },
       });
@@ -259,7 +259,11 @@ export const openRoleService = {
     };
   },
 
-  async update(id: string, input: UpdateOpenRoleInput, user: AuthUser): Promise<OpenRoleDetailDTO> {
+  async update(
+    id: string,
+    input: UpdateOpenRoleInput,
+    ctx: TenantContext,
+  ): Promise<OpenRoleDetailDTO> {
     const existing = await requireRole(id);
     const closingNow =
       input.status !== undefined &&
@@ -285,7 +289,7 @@ export const openRoleService = {
       await writeAudit(tx, {
         entity: "open_role",
         entityId: id,
-        actor: user.id,
+        actor: ctx.user.id,
         action: "update",
         before: { status: existing.status, priority: existing.priority },
         after: { status: updated.status, priority: updated.priority },
@@ -295,14 +299,14 @@ export const openRoleService = {
   },
 
   /** Hard delete (legacy `open_role_delete` parity — no undo). */
-  async remove(id: string, user: AuthUser): Promise<{ id: string }> {
+  async remove(id: string, ctx: TenantContext): Promise<{ id: string }> {
     const existing = await requireRole(id);
     await withTransaction(async (tx) => {
       await openRoleRepository.delete(id, tx);
       await writeAudit(tx, {
         entity: "open_role",
         entityId: id,
-        actor: user.id,
+        actor: ctx.user.id,
         action: "delete",
         before: { title: existing.title, clientId: existing.clientId },
       });
@@ -310,14 +314,18 @@ export const openRoleService = {
     return { id };
   },
 
-  async addNote(id: string, input: AddRoleNoteInput, user: AuthUser): Promise<OpenRoleDetailDTO> {
+  async addNote(
+    id: string,
+    input: AddRoleNoteInput,
+    ctx: TenantContext,
+  ): Promise<OpenRoleDetailDTO> {
     await requireRole(id);
     await withTransaction(async (tx) => {
       const note = await openRoleRepository.createNote(
         {
           roleId: id,
-          authorId: user.id,
-          authorName: user.name,
+          authorId: ctx.user.id,
+          authorName: ctx.user.name,
           body: input.body,
           category: input.category,
         },
@@ -326,7 +334,7 @@ export const openRoleService = {
       await writeAudit(tx, {
         entity: "open_role",
         entityId: id,
-        actor: user.id,
+        actor: ctx.user.id,
         action: "add_note",
         after: { noteId: note.id, category: input.category },
       });
@@ -334,15 +342,15 @@ export const openRoleService = {
     return this.detail(id);
   },
 
-  async deleteNote(id: string, noteId: string, user: AuthUser): Promise<OpenRoleDetailDTO> {
+  async deleteNote(id: string, noteId: string, ctx: TenantContext): Promise<OpenRoleDetailDTO> {
     await requireRole(id);
     await withTransaction(async (tx) => {
-      const { count } = await openRoleRepository.softDeleteNote(noteId, id, user.id, tx);
+      const { count } = await openRoleRepository.softDeleteNote(noteId, id, ctx.user.id, tx);
       if (count === 0) throw new AppError("NOT_FOUND", "Note not found");
       await writeAudit(tx, {
         entity: "open_role",
         entityId: id,
-        actor: user.id,
+        actor: ctx.user.id,
         action: "delete_note",
         after: { noteId },
       });
@@ -359,10 +367,10 @@ export const openRoleService = {
   async promote(
     id: string,
     input: PromoteFromMatchInput,
-    user: AuthUser,
+    ctx: TenantContext,
   ): Promise<{ candidateId: string }> {
     await requireRole(id);
-    return leadService.promote(input.leadId, user, { filledFromRoleId: id });
+    return leadService.promote(input.leadId, ctx, { filledFromRoleId: id });
   },
 
   /** Top 3 "roles to work now" across every active (non-Filled/Closed) role. */
@@ -420,21 +428,21 @@ export const openRoleService = {
   async saveMatchProfile(
     clientId: string,
     input: SaveMatchProfileInput,
-    user: AuthUser,
+    ctx: TenantContext,
   ): Promise<ClientMatchProfileDTO> {
-    if (!hasCapability(user.role, MATCH_PROFILE_CAP)) {
+    if (!hasCapability(ctx.role, MATCH_PROFILE_CAP)) {
       throw new AppError("FORBIDDEN", "Only leadership can retune client matching weights");
     }
     const row = await withTransaction(async (tx) => {
       const saved = await clientMatchProfileRepository.upsert(
         clientId,
-        { ...input, updatedById: user.id },
+        { ...input, updatedById: ctx.user.id },
         tx,
       );
       await writeAudit(tx, {
         entity: "client_match_profile",
         entityId: clientId,
-        actor: user.id,
+        actor: ctx.user.id,
         action: "save",
         after: input,
       });
@@ -444,8 +452,8 @@ export const openRoleService = {
   },
 
   /** Leadership-only: reset a client to the system default weights. */
-  async deleteMatchProfile(clientId: string, user: AuthUser): Promise<ClientMatchProfileDTO> {
-    if (!hasCapability(user.role, MATCH_PROFILE_CAP)) {
+  async deleteMatchProfile(clientId: string, ctx: TenantContext): Promise<ClientMatchProfileDTO> {
+    if (!hasCapability(ctx.role, MATCH_PROFILE_CAP)) {
       throw new AppError("FORBIDDEN", "Only leadership can retune client matching weights");
     }
     const existing = await clientMatchProfileRepository.findByClientId(clientId);
@@ -455,7 +463,7 @@ export const openRoleService = {
         await writeAudit(tx, {
           entity: "client_match_profile",
           entityId: clientId,
-          actor: user.id,
+          actor: ctx.user.id,
           action: "reset",
         });
       });

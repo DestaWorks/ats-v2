@@ -28,7 +28,7 @@ import type {
   TeamBreakdownDTO,
 } from "@destaworks/contracts/validation/daily";
 import { toIso } from "@destaworks/domain/utils/iso";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { TenantContext } from "@destaworks/domain/tenant";
 import { writeAudit } from "@destaworks/db/audit";
 import { withTransaction } from "@destaworks/db/with-transaction";
 import {
@@ -130,13 +130,13 @@ export const dailyService = {
    * grid, reusing the same week-to-date aggregation shape `teamBreakdown` already does (Monday
    * through TODAY here, not the full week, since this drives an in-progress "WTD" summary).
    */
-  async overview(user: AuthUser, date: string, tz: number): Promise<DailyOverviewDTO> {
-    const canSetTargets = hasCapability(user.role, SET_TARGETS_CAP);
+  async overview(ctx: TenantContext, date: string, tz: number): Promise<DailyOverviewDTO> {
+    const canSetTargets = hasCapability(ctx.role, SET_TARGETS_CAP);
     const monday = mondayOf(date);
     const [target, live, actual, clients, users, targetsToday, weekLogs] = await Promise.all([
-      dailyRepository.targetFor(user.id, date),
-      this.liveActuals(user.id, date, tz),
-      dailyRepository.actualFor(user.id, date),
+      dailyRepository.targetFor(ctx.user.id, date),
+      this.liveActuals(ctx.user.id, date, tz),
+      dailyRepository.actualFor(ctx.user.id, date),
       clientRepository.list(),
       canSetTargets ? userRepository.listByRole("Associate") : Promise.resolve(undefined),
       canSetTargets ? dailyRepository.targetsForDate(date) : Promise.resolve(undefined),
@@ -182,8 +182,8 @@ export const dailyService = {
   },
 
   /** Set/replace one associate's targets for a day — LEADERSHIP only (audited). */
-  async setTarget(input: SetTargetInput, user: AuthUser): Promise<void> {
-    if (!hasCapability(user.role, SET_TARGETS_CAP)) {
+  async setTarget(input: SetTargetInput, ctx: TenantContext): Promise<void> {
+    if (!hasCapability(ctx.role, SET_TARGETS_CAP)) {
       throw new AppError("FORBIDDEN", "Only leadership can set targets");
     }
     const names = await userRepository.namesByIds([input.userId]);
@@ -203,14 +203,14 @@ export const dailyService = {
           priorityState: input.priorityState ?? null,
           notesFromYesterday: input.notesFromYesterday ?? null,
           watchFor: input.watchFor ?? null,
-          setById: user.id,
+          setById: ctx.user.id,
         },
         tx,
       );
       await writeAudit(tx, {
         entity: "daily_target",
         entityId: row.id,
-        actor: user.id,
+        actor: ctx.user.id,
         action: "set_targets",
         after: { userId: input.userId, date: input.date, sourcing: input.sourcing },
       });
@@ -218,11 +218,11 @@ export const dailyService = {
   },
 
   /** End of Shift — upsert the SESSION user's confirmed actuals for the day (audited). */
-  async saveActuals(input: SaveActualsInput, user: AuthUser): Promise<void> {
+  async saveActuals(input: SaveActualsInput, ctx: TenantContext): Promise<void> {
     await withTransaction(async (tx) => {
       const row = await dailyRepository.upsertActual(
         {
-          userId: user.id,
+          userId: ctx.user.id,
           date: input.date,
           sourcing: input.sourcing,
           outreach: input.outreach,
@@ -238,7 +238,7 @@ export const dailyService = {
       await writeAudit(tx, {
         entity: "daily_actual",
         entityId: row.id,
-        actor: user.id,
+        actor: ctx.user.id,
         action: "save_actuals",
         after: { date: input.date, sourcing: input.sourcing, outreach: input.outreach },
       });
@@ -266,7 +266,7 @@ export const dailyService = {
 
   /** The Daily Log page composite for the SESSION user. */
   async logView(
-    user: AuthUser,
+    ctx: TenantContext,
     date: string,
     tz: number,
     clock: Clock = systemClock,
@@ -285,17 +285,17 @@ export const dailyService = {
       feedback,
       goals,
     ] = await Promise.all([
-      dailyRepository.logFor(user.id, date),
-      dailyRepository.countCandidatesAdded(user.id, w),
-      dailyRepository.countAuditAction(user.id, "move", w),
-      dailyRepository.countAuditAction(user.id, "add_note", w),
-      dailyRepository.countAuditAction(user.id, "verify_license", w),
-      dailyRepository.logsForUser(user.id, 15),
-      dailyRepository.entriesForUser(user.id, 20),
-      userRepository.findTenureBasis(user.id),
+      dailyRepository.logFor(ctx.user.id, date),
+      dailyRepository.countCandidatesAdded(ctx.user.id, w),
+      dailyRepository.countAuditAction(ctx.user.id, "move", w),
+      dailyRepository.countAuditAction(ctx.user.id, "add_note", w),
+      dailyRepository.countAuditAction(ctx.user.id, "verify_license", w),
+      dailyRepository.logsForUser(ctx.user.id, 15),
+      dailyRepository.entriesForUser(ctx.user.id, 20),
+      userRepository.findTenureBasis(ctx.user.id),
       clientRepository.list(),
-      dailyRepository.feedbackForUser(user.id, 2),
-      dailyRepository.goalsForWeek(user.id, mondayOf(date)),
+      dailyRepository.feedbackForUser(ctx.user.id, 2),
+      dailyRepository.goalsForWeek(ctx.user.id, mondayOf(date)),
     ]);
     const weekNum = tenureWeek(userRow?.createdAt ?? clock.now(), date);
     const ramp = rampFor(weekNum);
@@ -335,21 +335,21 @@ export const dailyService = {
   },
 
   /** Submit the day's self-report (ONE per user/day — a resubmit is a 409; autos snapshot here). */
-  async submitLog(input: SubmitLogInput, user: AuthUser): Promise<DailyLogDTO> {
-    const existing = await dailyRepository.logFor(user.id, input.date);
+  async submitLog(input: SubmitLogInput, ctx: TenantContext): Promise<DailyLogDTO> {
+    const existing = await dailyRepository.logFor(ctx.user.id, input.date);
     if (existing) throw new AppError("CONFLICT", "Today's log is already submitted");
     const w = dayWindow(input.date, input.tz);
     const [added, moved, notes] = await Promise.all([
-      dailyRepository.countCandidatesAdded(user.id, w),
-      dailyRepository.countAuditAction(user.id, "move", w),
-      dailyRepository.countAuditAction(user.id, "add_note", w),
+      dailyRepository.countCandidatesAdded(ctx.user.id, w),
+      dailyRepository.countAuditAction(ctx.user.id, "move", w),
+      dailyRepository.countAuditAction(ctx.user.id, "add_note", w),
     ]);
     let row;
     try {
       row = await withTransaction(async (tx) => {
         const created = await dailyRepository.createLog(
           {
-            userId: user.id,
+            userId: ctx.user.id,
             date: input.date,
             sourced: input.sourced,
             outreach: input.outreach,
@@ -369,7 +369,7 @@ export const dailyService = {
         await writeAudit(tx, {
           entity: "daily_log",
           entityId: created.id,
-          actor: user.id,
+          actor: ctx.user.id,
           action: "submit_log",
           after: { date: input.date, sourced: input.sourced },
         });
@@ -390,13 +390,13 @@ export const dailyService = {
   },
 
   /** Add a journal note (personal; audited lightly). */
-  async addEntry(date: string, text: string, user: AuthUser): Promise<JournalEntryDTO> {
+  async addEntry(date: string, text: string, ctx: TenantContext): Promise<JournalEntryDTO> {
     const row = await withTransaction(async (tx) => {
-      const created = await dailyRepository.createEntry({ userId: user.id, date, text }, tx);
+      const created = await dailyRepository.createEntry({ userId: ctx.user.id, date, text }, tx);
       await writeAudit(tx, {
         entity: "journal",
         entityId: created.id,
-        actor: user.id,
+        actor: ctx.user.id,
         action: "journal_entry",
         after: { date },
       });
@@ -406,17 +406,17 @@ export const dailyService = {
   },
 
   /** Add a weekly goal (weekStart is normalized to the Monday of its week). */
-  async addGoal(weekStart: string, text: string, user: AuthUser): Promise<JournalGoalDTO> {
+  async addGoal(weekStart: string, text: string, ctx: TenantContext): Promise<JournalGoalDTO> {
     const monday = mondayOf(weekStart);
     const row = await withTransaction(async (tx) => {
       const created = await dailyRepository.createGoal(
-        { userId: user.id, weekStart: monday, text },
+        { userId: ctx.user.id, weekStart: monday, text },
         tx,
       );
       await writeAudit(tx, {
         entity: "journal",
         entityId: created.id,
-        actor: user.id,
+        actor: ctx.user.id,
         action: "journal_goal",
         after: { weekStart: monday },
       });
@@ -426,8 +426,8 @@ export const dailyService = {
   },
 
   /** Toggle a goal done/undone — a REAL update (the legacy append-duplicate bug stops here). */
-  async setGoalDone(id: string, done: boolean, user: AuthUser): Promise<void> {
-    const count = await dailyRepository.setGoalDone(id, user.id, done);
+  async setGoalDone(id: string, done: boolean, ctx: TenantContext): Promise<void> {
+    const count = await dailyRepository.setGoalDone(id, ctx.user.id, done);
     if (count === 0) throw new AppError("NOT_FOUND", "Goal not found");
   },
 
@@ -435,8 +435,8 @@ export const dailyService = {
    * Manager → associate feedback note (Wave 3.1 backlog, legacy `mgr_feedback`) — LEADERSHIP
    * only, same tier as `setTarget` (never Owner/Admin-only `manageUsers`). Audited.
    */
-  async addFeedback(input: AddFeedbackInput, user: AuthUser): Promise<void> {
-    if (!hasCapability(user.role, SET_TARGETS_CAP)) {
+  async addFeedback(input: AddFeedbackInput, ctx: TenantContext): Promise<void> {
+    if (!hasCapability(ctx.role, SET_TARGETS_CAP)) {
       throw new AppError("FORBIDDEN", "Only leadership can post feedback");
     }
     const names = await userRepository.namesByIds([input.userId]);
@@ -444,8 +444,8 @@ export const dailyService = {
     await withTransaction(async (tx) => {
       const row = await dailyRepository.createFeedback(
         {
-          authorId: user.id,
-          authorName: user.name,
+          authorId: ctx.user.id,
+          authorName: ctx.user.name,
           targetUserId: input.userId,
           body: input.body,
         },
@@ -454,7 +454,7 @@ export const dailyService = {
       await writeAudit(tx, {
         entity: "manager_feedback",
         entityId: row.id,
-        actor: user.id,
+        actor: ctx.user.id,
         action: "mgr_feedback",
         after: { targetUserId: input.userId },
       });
@@ -466,8 +466,8 @@ export const dailyService = {
    * per-associate weekly rollup built from real self-reported `DailyLog` rows (NOT event-derived
    * live counts, matching legacy's own inputs). LEADERSHIP only, same tier as `setTarget`.
    */
-  async teamBreakdown(weekStart: string, user: AuthUser): Promise<TeamBreakdownDTO> {
-    if (!hasCapability(user.role, SET_TARGETS_CAP)) {
+  async teamBreakdown(weekStart: string, ctx: TenantContext): Promise<TeamBreakdownDTO> {
+    if (!hasCapability(ctx.role, SET_TARGETS_CAP)) {
       throw new AppError("FORBIDDEN", "Only leadership can view the team breakdown");
     }
     const monday = mondayOf(weekStart);

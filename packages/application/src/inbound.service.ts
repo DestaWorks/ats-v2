@@ -11,7 +11,7 @@ import type {
   TriageResultDTO,
 } from "@destaworks/contracts/validation/inbound";
 import type { LeadDetailDTO } from "@destaworks/contracts/validation/lead";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { TenantContext } from "@destaworks/domain/tenant";
 import { extractInbound } from "@destaworks/integrations/ai/extract-inbound";
 import { candidateRepository } from "@destaworks/db/repositories/candidate.repository";
 import { toClientRules } from "@destaworks/db/repositories/client-rules.repository";
@@ -153,7 +153,7 @@ export const inboundService = {
    * message as the first outreach attempt (channel "other", truncated to 500 chars — legacy parity)
    * → mark Responded Hot. Three `leadService` calls, each independently audited.
    */
-  async saveAsLead(input: SaveInboundLeadInput, user: AuthUser): Promise<LeadDetailDTO> {
+  async saveAsLead(input: SaveInboundLeadInput, ctx: TenantContext): Promise<LeadDetailDTO> {
     const created = await leadService.create(
       {
         name: input.name,
@@ -166,14 +166,14 @@ export const inboundService = {
         clientId: input.clientId ?? null,
         notes: input.summary ?? null,
       },
-      user,
+      ctx,
     );
     await leadService.logOutreach(
       created.id,
       { channel: "other", note: `Inbound reply: "${truncateMessage(input.message)}"` },
-      user,
+      ctx,
     );
-    return leadService.respond(created.id, "hot", user);
+    return leadService.respond(created.id, "hot", ctx);
   },
 
   /**
@@ -186,7 +186,7 @@ export const inboundService = {
    * refuse to attach unless it independently resolves to the SAME lead — never trust `leadId`
    * alone (same posture as the resume-match flow's server-side re-classification).
    */
-  async attach(input: AttachInboundInput, user: AuthUser): Promise<LeadDetailDTO> {
+  async attach(input: AttachInboundInput, ctx: TenantContext): Promise<LeadDetailDTO> {
     const reMatch = await findExisting({ name: input.name, email: input.email ?? null });
     if (reMatch?.kind !== "lead" || reMatch.id !== input.leadId) {
       throw new AppError(
@@ -197,8 +197,8 @@ export const inboundService = {
     await leadService.logOutreach(
       input.leadId,
       { channel: "other", note: `Inbound reply: "${truncateMessage(input.message)}"` },
-      user,
+      ctx,
     );
-    return leadService.respond(input.leadId, "hot", user);
+    return leadService.respond(input.leadId, "hot", ctx);
   },
 };

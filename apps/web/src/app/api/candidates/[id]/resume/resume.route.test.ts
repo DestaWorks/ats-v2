@@ -14,9 +14,14 @@ const h = vi.hoisted(() => ({
 
 vi.mock("server-only", () => ({}));
 vi.mock("@destaworks/config/request-context", () => ({
-  requestContext: () => ({ headers: async () => new Headers() }),
+  requestContext: () => ({ headers: async () => new Headers(), cookie: async () => undefined }),
 }));
 vi.mock("@destaworks/auth/auth", () => ({ auth: { api: { getSession: async () => h.session } } }));
+vi.mock("@destaworks/db/memberships", async () => ({
+  membershipReader: (
+    await import("@destaworks/auth/testing/membership-double")
+  ).singleTenantMembershipReader(() => h.session),
+}));
 vi.mock("@destaworks/application/resume.service", () => ({
   resumeService: { attachToCandidate: h.attachToCandidate },
 }));
@@ -63,7 +68,7 @@ describe("POST /api/candidates/:id/resume", () => {
     expect(h.attachToCandidate).toHaveBeenCalledWith(
       "c1",
       { ...validBody, storageKey: "k1.pdf" },
-      expect.objectContaining({ id: "u1", name: "Test User" }),
+      expect.objectContaining({ user: expect.objectContaining({ id: "u1", name: "Test User" }) }),
     );
     expect((await res.json()).document).toMatchObject({ id: "d1", storageKey: "k1.pdf" });
   });

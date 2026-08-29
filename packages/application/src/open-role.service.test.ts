@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { TenantContext } from "@destaworks/domain/tenant";
 
 /**
  * Proves the Open Roles service's DTO shaping, the matching/triage composition (weight
@@ -11,8 +11,18 @@ import type { AuthUser } from "@destaworks/auth/guards";
 
 const h = vi.hoisted(() => ({
   fakeTx: { __tx: true },
-  associate: { id: "u1", email: "u@desta.works", name: "Test User", role: "Associate" as const },
-  owner: { id: "o1", email: "o@desta.works", name: "Owner", role: "Owner" as const },
+  associate: {
+    tenantId: "t1",
+    membershipId: "u1-m",
+    user: { id: "u1", email: "u@desta.works", name: "Test User" },
+    role: "Associate" as const,
+  },
+  owner: {
+    tenantId: "t1",
+    membershipId: "o1-m",
+    user: { id: "o1", email: "o@desta.works", name: "Owner" },
+    role: "Owner" as const,
+  },
   roleRepo: {
     create: vi.fn(),
     findById: vi.fn(),
@@ -69,8 +79,8 @@ vi.mock("@destaworks/db/with-transaction", () => ({
 
 import { openRoleService } from "./open-role.service";
 
-const associate = h.associate as AuthUser;
-const owner = h.owner as AuthUser;
+const associate = h.associate as TenantContext;
+const owner = h.owner as TenantContext;
 
 /** A role row with the fields the service reads. */
 function role(overrides: Record<string, unknown> = {}) {
@@ -234,7 +244,7 @@ describe("openRoleService.deleteNote", () => {
     h.roleRepo.findById.mockResolvedValue(role());
     h.roleRepo.softDeleteNote.mockResolvedValue({ count: 1 });
     await openRoleService.deleteNote("r1", "n1", associate);
-    expect(h.roleRepo.softDeleteNote).toHaveBeenCalledWith("n1", "r1", associate.id, h.fakeTx);
+    expect(h.roleRepo.softDeleteNote).toHaveBeenCalledWith("n1", "r1", associate.user.id, h.fakeTx);
     expect(h.writeAudit).toHaveBeenCalledWith(
       h.fakeTx,
       expect.objectContaining({ action: "delete_note", after: { noteId: "n1" } }),
@@ -250,7 +260,7 @@ describe("openRoleService.deleteNote", () => {
     expect(h.roleRepo.softDeleteNote).toHaveBeenCalledWith(
       "note-belongs-to-other-role",
       "r1",
-      associate.id,
+      associate.user.id,
       h.fakeTx,
     );
   });
@@ -311,7 +321,11 @@ describe("client match profile — leadership gate", () => {
       penaltyCold: 1,
       minScore: 1,
     };
-    h.profileRepo.upsert.mockResolvedValue({ clientId: "c1", ...weights, updatedById: owner.id });
+    h.profileRepo.upsert.mockResolvedValue({
+      clientId: "c1",
+      ...weights,
+      updatedById: owner.user.id,
+    });
     const saved = await openRoleService.saveMatchProfile("c1", weights, owner);
     expect(h.profileRepo.upsert).toHaveBeenCalledWith(
       "c1",

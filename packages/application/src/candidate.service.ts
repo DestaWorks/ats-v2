@@ -40,9 +40,11 @@ import { pageMeta } from "@destaworks/domain/pagination";
 import { listSortToOrderBy, type ListSort } from "@destaworks/contracts/validation/pipeline";
 import type { LogOutreachInput, OutreachAttemptDTO } from "@destaworks/contracts/validation/lead";
 import type { JourneyDTO, JourneyEventDTO } from "@destaworks/contracts/validation/journey";
-import { requireUser, type AuthUser } from "@destaworks/auth/guards";
+import { requireUser } from "@destaworks/auth/guards";
+import type { TenantContext } from "@destaworks/domain/tenant";
 import { writeAudit } from "@destaworks/db/audit";
 import { withTransaction } from "@destaworks/db/with-transaction";
+import type { ScopedTx } from "@destaworks/db/tenant-scope";
 import {
   candidateRepository,
   type CandidateRow,
@@ -129,10 +131,10 @@ export interface ListFilters extends SharedListFilters {
  * viewer's id server-side (the ONLY place `createdById` is set from a session, never the client).
  * `status` is threaded through separately by each caller (the list keeps it; the board strips it).
  */
-function toRepoFilters(filters: SharedListFilters, viewer: AuthUser) {
+function toRepoFilters(filters: SharedListFilters, viewer: TenantContext) {
   // `mine` always resolves to the SESSION user (never a client-supplied id); the explicit
   // view-as `ownerId` filter is just a filter over data every operator can already see.
-  const createdById = filters.mine ? viewer.id : filters.ownerId;
+  const createdById = filters.mine ? viewer.user.id : filters.ownerId;
   return {
     ...(filters.track !== undefined && { track: filters.track }),
     ...(filters.clientId !== undefined && { clientId: filters.clientId }),
@@ -414,7 +416,7 @@ function pickAudited(row: CandidateRow, input: CandidateUpdateInput): Record<str
  * AUTHZ: there is no candidate-specific capability — working the pipeline (create / edit / move /
  * soft-delete) is open to any signed-in user (Screener / Associate are the primary pipeline
  * workers and hold no capabilities). So `create`/`update`/`softDelete` gate with `requireUser()`;
- * `move` receives the already-authenticated `AuthUser` from its caller (the drag / bulk-move
+ * `move` receives the already-authenticated `TenantContext` from its caller (the drag / bulk-move
  * handler). Hard purge — the capability-gated (`purgeCandidate`) destructive path — lands in
  * Wave 2.5, separate from this soft delete.
  */
@@ -431,23 +433,20 @@ export const candidateService = {
    * and skip the gate. NOW audited (action `create`) so a manually-created OR promoted candidate has
    * a creation trail (interactive create previously wrote none — OQ-2).
    */
-  async create(
-    input: CandidateCreateInput,
-    opts?: { user?: AuthUser; tx?: Prisma.TransactionClient },
-  ) {
+  async create(input: CandidateCreateInput, opts?: { user?: TenantContext; tx?: ScopedTx }) {
     const user = opts?.user ?? (await requireUser());
     const data: Prisma.CandidateUncheckedCreateInput = {
       ...input,
       status: "NEW_CANDIDATE",
       stageOrder: statusOrder("NEW_CANDIDATE"),
-      createdById: user.id,
+      createdById: user.user.id,
     };
-    const run = async (tx: Prisma.TransactionClient) => {
+    const run = async (tx: ScopedTx) => {
       const created = await candidateRepository.create(data, tx);
       await writeAudit(tx, {
         entity: "candidate",
         entityId: created.id,
-        actor: user.id,
+        actor: user.user.id,
         action: "create",
         after: { status: created.status, clientId: created.clientId },
       });
@@ -466,7 +465,7 @@ export const candidateService = {
    * transaction. `user` is the acting caller (route `requireUser()`); the `licenseNumber` gate is
    * enforced at the route before this is reached (design D-5).
    */
-  async update(id: string, input: UpdateCandidateInput, user: AuthUser) {
+  async update(id: string, input: UpdateCandidateInput, ctx: TenantContext) {
     const existing = await candidateRepository.findById(id);
     if (!existing) throw new AppError("NOT_FOUND", "Candidate not found");
     const data = defined(input);
@@ -475,7 +474,7 @@ export const candidateService = {
       await writeAudit(tx, {
         entity: "candidate",
         entityId: id,
-        actor: user.id,
+        actor: ctx.user.id,
         action: "update",
         before: pickAudited(existing, data),
         after: pickAudited(updated, data),
@@ -496,14 +495,14 @@ export const candidateService = {
     const existing = await candidateRepository.findById(id);
     if (!existing) throw new AppError("NOT_FOUND", "Candidate not found");
     return withTransaction(async (tx) => {
-      const deleted = await candidateRepository.softDelete(id, user.id, tx);
+      const deleted = await candidateRepository.softDelete(id, user.user.id, tx);
       await writeAudit(tx, {
         entity: "candidate",
         entityId: id,
-        actor: user.id,
+        actor: user.user.id,
         action: "delete",
         before: { deletedAt: null },
-        after: { deletedAt: deleted.deletedAt, deletedById: user.id, status: existing.status },
+        after: { deletedAt: deleted.deletedAt, deletedById: user.user.id, status: existing.status },
       });
       return deleted;
     });
@@ -517,7 +516,7 @@ export const candidateService = {
    * candidate returns to EXACTLY the stage it left (status/stageOrder/stageEnteredAt untouched, D-9).
    * Audited (action `restore`) in the same transaction as the repo `restore`.
    */
-  async restore(id: string, user: AuthUser) {
+  async restore(id: string, ctx: TenantContext) {
     const existing = await candidateRepository.findById(id, { includeDeleted: true });
     if (!existing) throw new AppError("NOT_FOUND", "Candidate not found");
     if (existing.deletedAt === null) throw new AppError("CONFLICT", "Candidate is not in Trash");
@@ -526,7 +525,7 @@ export const candidateService = {
       await writeAudit(tx, {
         entity: "candidate",
         entityId: id,
-        actor: user.id,
+        actor: ctx.user.id,
         action: "restore",
         before: { deletedAt: existing.deletedAt, deletedById: existing.deletedById },
         after: { deletedAt: null, status: restored.status },
@@ -545,8 +544,8 @@ export const candidateService = {
    * `Candidate`, so the permanent-deletion event survives the cascade. Returns only `{ id }` (the
    * record is gone — never echo PII).
    */
-  async purge(id: string, user: AuthUser) {
-    if (!hasCapability(user.role, "purgeCandidate")) {
+  async purge(id: string, ctx: TenantContext) {
+    if (!hasCapability(ctx.role, "purgeCandidate")) {
       throw new AppError("FORBIDDEN", "You don't have permission to purge candidates");
     }
     const existing = await candidateRepository.findById(id, { includeDeleted: true });
@@ -558,7 +557,7 @@ export const candidateService = {
       await writeAudit(tx, {
         entity: "candidate",
         entityId: id,
-        actor: user.id,
+        actor: ctx.user.id,
         action: "purge",
         before: { name: existing.name, status: existing.status, deletedAt: existing.deletedAt },
       });
@@ -574,7 +573,7 @@ export const candidateService = {
    * one-shot client map; `deletedByName` from a SINGLE batched user-name lookup
    * (`userRepository.namesByIds`) rather than N per-row queries.
    */
-  async listTrash(viewer: AuthUser): Promise<CandidateTrashDTO> {
+  async listTrash(viewer: TenantContext): Promise<CandidateTrashDTO> {
     const rows = await candidateRepository.listDeleted(TRASH_PAGE);
     const clientNames = await cachedClientNameMap();
     const actorIds = rows.map((r) => r.deletedById).filter((id): id is string => id !== null);
@@ -592,7 +591,7 @@ export const candidateService = {
    * doesn't carry. Deliberately NOT `getCandidateDetail` below — that composite also loads
    * documents/notes/history/outreach, all unused here.
    */
-  async getProfile(id: string, viewer: AuthUser): Promise<CandidateProfileDTO> {
+  async getProfile(id: string, viewer: TenantContext): Promise<CandidateProfileDTO> {
     const candidate = await candidateRepository.findById(id);
     if (!candidate) throw new AppError("NOT_FOUND", "Candidate not found");
     return toCandidateProfileDTO(toCandidateDTO(candidate, viewer));
@@ -608,7 +607,7 @@ export const candidateService = {
    */
   async getCandidateDetail(
     id: string,
-    viewer: AuthUser,
+    viewer: TenantContext,
     clock: Clock = systemClock,
   ): Promise<CandidateDetailDTO> {
     // `findById` doesn't gate the other 6 reads — none of them depend on its result, only on the
@@ -670,7 +669,7 @@ export const candidateService = {
    * leak a note type the tabs hide) + the merged outreach log, oldest first. Actor names resolve
    * in one batched read. `spanDays` = first→last event, for the "N events · spans N days" line.
    */
-  async getJourney(id: string, viewer: AuthUser): Promise<JourneyDTO> {
+  async getJourney(id: string, viewer: TenantContext): Promise<JourneyDTO> {
     const candidate = await candidateRepository.findById(id);
     if (!candidate) throw new AppError("NOT_FOUND", "Candidate not found");
 
@@ -769,7 +768,7 @@ export const candidateService = {
   async logOutreach(
     id: string,
     input: LogOutreachInput,
-    user: AuthUser,
+    ctx: TenantContext,
   ): Promise<OutreachAttemptDTO> {
     const existing = await candidateRepository.findById(id);
     if (!existing) throw new AppError("NOT_FOUND", "Candidate not found");
@@ -779,7 +778,7 @@ export const candidateService = {
         {
           channel: input.channel,
           note: input.note ?? null,
-          actorId: user.id,
+          actorId: ctx.user.id,
           templateId: input.templateId ?? null,
         },
         tx,
@@ -788,7 +787,7 @@ export const candidateService = {
       await writeAudit(tx, {
         entity: "candidate",
         entityId: id,
-        actor: user.id,
+        actor: ctx.user.id,
         action: "log_outreach",
         before: null,
         after: { channel: input.channel, attemptId: created.id },
@@ -807,7 +806,7 @@ export const candidateService = {
    * `licenseNumber` still requires `viewCredentials` (enforced at the route, design D-6). The update
    * + audit run in one transaction.
    */
-  async verifyLicense(id: string, input: VerifyLicenseInput, user: AuthUser) {
+  async verifyLicense(id: string, input: VerifyLicenseInput, ctx: TenantContext) {
     const existing = await candidateRepository.findById(id);
     if (!existing) throw new AppError("NOT_FOUND", "Candidate not found");
     const now = new Date();
@@ -819,14 +818,14 @@ export const candidateService = {
           ...(input.licenseExpiry !== undefined ? { licenseExpiry: input.licenseExpiry } : {}),
           ...(input.licenseNumber !== undefined ? { licenseNumber: input.licenseNumber } : {}),
           licenseVerifiedAt: now,
-          licenseVerifiedById: user.id,
+          licenseVerifiedById: ctx.user.id,
         },
         tx,
       );
       await writeAudit(tx, {
         entity: "candidate",
         entityId: id,
-        actor: user.id,
+        actor: ctx.user.id,
         action: "verify_license",
         before: { licenseStatus: existing.licenseStatus, licenseExpiry: existing.licenseExpiry },
         after: { licenseStatus: updated.licenseStatus, licenseExpiry: updated.licenseExpiry },
@@ -851,7 +850,10 @@ export const candidateService = {
    * `total` is the true post-filter count (the Hot filter's denominator is the in-memory count).
    * `page` is clamped to `[1, totalPages]`. `clientName` is a one-shot in-memory join over `clients`.
    */
-  async listCandidates(filters: ListFilters = {}, viewer: AuthUser): Promise<CandidateListDTO> {
+  async listCandidates(
+    filters: ListFilters = {},
+    viewer: TenantContext,
+  ): Promise<CandidateListDTO> {
     const now = new Date();
     const sort: ListSort = filters.sort ?? "newest";
     const hot = filters.hot ?? false;
@@ -992,7 +994,7 @@ export const candidateService = {
    */
   async listBoard(
     filters: BoardFilters = {},
-    viewer: AuthUser,
+    viewer: TenantContext,
     opts: { includeTerminal?: boolean } = {},
   ): Promise<BoardResponse> {
     const now = new Date();
@@ -1097,7 +1099,7 @@ export const candidateService = {
   async listColumn(
     status: CandidateStatus,
     filters: BoardFilters = {},
-    viewer: AuthUser,
+    viewer: TenantContext,
     cursor?: PageCursor,
   ): Promise<ColumnPageDTO> {
     const now = new Date();
@@ -1139,13 +1141,13 @@ export const candidateService = {
   async bulkMove(
     ids: string[],
     toStatus: CandidateStatus,
-    user: AuthUser,
+    ctx: TenantContext,
   ): Promise<BulkMoveResponse> {
     const moved: string[] = [];
     const blocked: { id: string; reason: string }[] = [];
     for (const id of ids) {
       try {
-        await candidateService.move(id, toStatus, user);
+        await candidateService.move(id, toStatus, ctx);
         moved.push(id);
       } catch (err) {
         // Expected per-candidate outcomes (gate block, not found, unknown status) are collected,
@@ -1169,7 +1171,12 @@ export const candidateService = {
    * pipeline columns, (2) appends a `stage_history` row, and (3) writes the audit entry — all in
    * one transaction so the trail can never drift from the data.
    */
-  async move(id: string, toStatus: CandidateStatus, user: AuthUser, clock: Clock = systemClock) {
+  async move(
+    id: string,
+    toStatus: CandidateStatus,
+    ctx: TenantContext,
+    clock: Clock = systemClock,
+  ) {
     // Defense-in-depth: `toStatus` is typed, but at a route boundary it's whatever the client
     // sent. Reject an unknown code before it reaches `statusOrder()` (which would throw on undefined).
     if (!isCandidateStatus(toStatus)) {
@@ -1201,14 +1208,14 @@ export const candidateService = {
           toStatus,
           fromStageOrder: existing.stageOrder,
           toStageOrder,
-          actorId: user.id,
+          actorId: ctx.user.id,
         },
         tx,
       );
       await writeAudit(tx, {
         entity: "candidate",
         entityId: id,
-        actor: user.id,
+        actor: ctx.user.id,
         action: "move",
         before: { status: existing.status, stageOrder: existing.stageOrder },
         after: { status: toStatus, stageOrder: toStageOrder },

@@ -6,6 +6,7 @@ import {
 } from "@destaworks/contracts/validation/reports";
 import { logger } from "@destaworks/config/logger";
 import type { Prisma } from "@destaworks/db/generated/prisma/client";
+import type { ScopedTx } from "@destaworks/db/tenant-scope";
 import {
   reportExportRepository,
   type ReportExportRow,
@@ -14,7 +15,10 @@ import { AppError } from "@destaworks/integrations/http/app-error";
 import {
   EXPORT_BUCKET,
   getSignedDownloadUrl,
+  persistedStorageKey,
+  type ScopedStorageKey,
   storageEnabled,
+  unscopedStorageKey,
   uploadPrivate,
 } from "@destaworks/integrations/storage";
 import { exportService } from "./export.service";
@@ -54,9 +58,17 @@ function toStatus(raw: string): ReportExportStatusValue {
  * the bucket were ever misconfigured — defence in depth behind the private bucket, not instead
  * of it. No candidate name, client or filter value appears in it: a key is metadata that leaks
  * into storage logs and provider dashboards.
+ *
+ * 6.6: this belongs at `t/<tenantId>/candidates/<exportId>.csv`, which becomes a one-line change
+ * (`tenantStorageKey(ctx.tenantId, "candidates", …)`) once 6.5 resolves a tenant for the job that
+ * calls `fulfil`. Declared as an exception rather than left to look intentional — see
+ * `unscopedStorageKey`.
  */
-function storageKeyFor(exportId: string): string {
-  return `candidates/${exportId}.csv`;
+function storageKeyFor(exportId: string): ScopedStorageKey {
+  return unscopedStorageKey(
+    `candidates/${exportId}.csv`,
+    "report-export-awaiting-6.5-tenant-resolution",
+  );
 }
 
 function toDto(row: ReportExportRow, downloadUrl?: string): ReportExportDTO {
@@ -82,7 +94,7 @@ export const reportExportService = {
   async request(
     requestedById: string,
     filters: ReportFilters,
-    tx?: Prisma.TransactionClient,
+    tx?: ScopedTx,
   ): Promise<ReportExportRow> {
     if (!storageEnabled) {
       throw new AppError("FEATURE_DISABLED", "Object storage is not configured");
@@ -106,7 +118,11 @@ export const reportExportService = {
       throw new AppError("NOT_FOUND", "Export not found");
     }
     if (row.status !== "ready" || !row.storageKey) return toDto(row);
-    const url = await getSignedDownloadUrl(EXPORT_BUCKET, row.storageKey, DOWNLOAD_URL_TTL_SECONDS);
+    const url = await getSignedDownloadUrl(
+      EXPORT_BUCKET,
+      persistedStorageKey(row.storageKey),
+      DOWNLOAD_URL_TTL_SECONDS,
+    );
     return toDto(row, url);
   },
 

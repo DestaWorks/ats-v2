@@ -13,9 +13,14 @@ const h = vi.hoisted(() => ({
 
 vi.mock("server-only", () => ({}));
 vi.mock("@destaworks/config/request-context", () => ({
-  requestContext: () => ({ headers: async () => new Headers() }),
+  requestContext: () => ({ headers: async () => new Headers(), cookie: async () => undefined }),
 }));
 vi.mock("@destaworks/auth/auth", () => ({ auth: { api: { getSession: async () => h.session } } }));
+vi.mock("@destaworks/db/memberships", async () => ({
+  membershipReader: (
+    await import("@destaworks/auth/testing/membership-double")
+  ).singleTenantMembershipReader(() => h.session),
+}));
 vi.mock("@destaworks/db/prisma", () => ({ prisma: {} }));
 vi.mock("@destaworks/application/discover.service", () => ({
   discoverService: { addToSourcing: h.addToSourcing },
@@ -53,7 +58,7 @@ describe("POST /api/discover/add", () => {
     expect(body).toEqual({ added: 1, skipped: 0 });
     expect(h.addToSourcing).toHaveBeenCalledWith(
       { rows: [goodRow], clientId: "cl1" },
-      expect.objectContaining({ id: "u1" }),
+      expect.objectContaining({ user: expect.objectContaining({ id: "u1" }) }),
     );
   });
 

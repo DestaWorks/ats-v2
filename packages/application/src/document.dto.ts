@@ -1,10 +1,9 @@
-import { hasCapability, type Role } from "@destaworks/domain/constants";
+import { hasCapability } from "@destaworks/domain/constants";
+import type { CapabilityViewer } from "@destaworks/domain/tenant";
 import type { DocumentRow } from "@destaworks/db/repositories/document.repository";
 
 /** Minimal viewer shape the DTO needs — only the role drives the PII gate. */
-export interface DtoViewer {
-  role: Role;
-}
+export type DtoViewer = CapabilityViewer;
 
 /**
  * THE PUBLISHED SURFACE: the document columns every viewer may see, named one by one. This list

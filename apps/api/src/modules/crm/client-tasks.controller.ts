@@ -5,7 +5,7 @@ import type {
   PatchCrmClientTaskResponse,
   PostCrmClientTaskResponse,
 } from "@destaworks/contracts/http/crm";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { AuthContext } from "@destaworks/auth/guards";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { RequireCapability } from "../../common/decorators/require-capability.decorator";
 import { CapabilityGuard } from "../../common/guards/capability.guard";
@@ -33,7 +33,7 @@ export class CrmClientTasksController {
     @Param("id") clientId: string,
     @Body(new ZodValidationPipe(addTaskSchema))
     body: ContractOutput<typeof addTaskSchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<PostCrmClientTaskResponse> {
     return { task: await this.clients.addTask(clientId, body, user) };
   }
@@ -44,7 +44,7 @@ export class CrmClientTasksController {
     @Param("taskId") taskId: string,
     @Body(new ZodValidationPipe(updateTaskSchema))
     body: ContractOutput<typeof updateTaskSchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<PatchCrmClientTaskResponse> {
     return { task: await this.clients.updateTask(clientId, taskId, body, user) };
   }
@@ -53,7 +53,7 @@ export class CrmClientTasksController {
   async remove(
     @Param("id") clientId: string,
     @Param("taskId") taskId: string,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<DeleteCrmClientTaskResponse> {
     await this.clients.removeTask(clientId, taskId, user);
     return { ok: true, id: taskId };

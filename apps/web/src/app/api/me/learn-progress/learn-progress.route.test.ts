@@ -14,9 +14,14 @@ const h = vi.hoisted(() => ({
 
 vi.mock("server-only", () => ({}));
 vi.mock("@destaworks/config/request-context", () => ({
-  requestContext: () => ({ headers: async () => new Headers() }),
+  requestContext: () => ({ headers: async () => new Headers(), cookie: async () => undefined }),
 }));
 vi.mock("@destaworks/auth/auth", () => ({ auth: { api: { getSession: async () => h.session } } }));
+vi.mock("@destaworks/db/memberships", async () => ({
+  membershipReader: (
+    await import("@destaworks/auth/testing/membership-double")
+  ).singleTenantMembershipReader(() => h.session),
+}));
 vi.mock("@destaworks/db/prisma", () => ({ prisma: {} }));
 vi.mock("@destaworks/application/learn.service", () => ({
   learnService: { getMine: h.getMine, setChapter: h.setChapter },
@@ -51,7 +56,9 @@ describe("GET /api/me/learn-progress", () => {
     const res = await GET(getReq(), undefined);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ overview: "2026-07-01T00:00:00.000Z" });
-    expect(h.getMine).toHaveBeenCalledWith(expect.objectContaining({ id: "u1" }));
+    expect(h.getMine).toHaveBeenCalledWith(
+      expect.objectContaining({ user: expect.objectContaining({ id: "u1" }) }),
+    );
   });
 });
 
@@ -68,7 +75,7 @@ describe("PATCH /api/me/learn-progress", () => {
     const res = await PATCH(patchReq({ chapterId: "overview", done: true }), undefined);
     expect(res.status).toBe(200);
     expect(h.setChapter).toHaveBeenCalledWith(
-      expect.objectContaining({ id: "u1" }),
+      expect.objectContaining({ user: expect.objectContaining({ id: "u1" }) }),
       "overview",
       true,
     );

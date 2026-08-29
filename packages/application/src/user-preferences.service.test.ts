@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { TenantContext } from "@destaworks/domain/tenant";
 
 /**
  * Proves `userPreferencesService` reads/writes exactly the SESSION user's own row — never an id
@@ -8,15 +8,22 @@ import type { AuthUser } from "@destaworks/auth/guards";
  */
 
 const h = vi.hoisted(() => ({
-  user: { id: "u1", email: "u@desta.works", name: "Test User", role: "Associate" as const },
+  user: {
+    tenantId: "t1",
+    membershipId: "u1-m",
+    user: { id: "u1", email: "u@desta.works", name: "Test User" },
+    role: "Associate" as const,
+  },
   userRepo: { findPreferences: vi.fn(), updatePreferences: vi.fn() },
   uploadPublic: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
 vi.mock("@destaworks/db/repositories/user.repository", () => ({ userRepository: h.userRepo }));
-vi.mock("@destaworks/integrations/storage", () => ({
-  AVATAR_BUCKET: "avatars",
+// Only the S3 call is stubbed; `userStorageKey` is pure and comes through, so the key asserted
+// below is the real one.
+vi.mock("@destaworks/integrations/storage", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@destaworks/integrations/storage")>()),
   uploadPublic: h.uploadPublic,
 }));
 
@@ -34,14 +41,14 @@ describe("userPreferencesService.getMine", () => {
       emailSignature: "Best,\nJane",
       stickyNote: null,
     });
-    const out = await userPreferencesService.getMine(h.user as AuthUser);
+    const out = await userPreferencesService.getMine(h.user as TenantContext);
     expect(h.userRepo.findPreferences).toHaveBeenCalledWith("u1");
     expect(out).toEqual({ emailSignature: "Best,\nJane", stickyNote: null });
   });
 
   it("throws NOT_FOUND when the user row is gone", async () => {
     h.userRepo.findPreferences.mockResolvedValue(null);
-    await expect(userPreferencesService.getMine(h.user as AuthUser)).rejects.toMatchObject({
+    await expect(userPreferencesService.getMine(h.user as TenantContext)).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
   });
@@ -53,7 +60,7 @@ describe("userPreferencesService.updateMine", () => {
       emailSignature: null,
       stickyNote: "Call Jane back",
     });
-    const out = await userPreferencesService.updateMine(h.user as AuthUser, {
+    const out = await userPreferencesService.updateMine(h.user as TenantContext, {
       stickyNote: "Call Jane back",
     });
     expect(h.userRepo.updatePreferences).toHaveBeenCalledWith("u1", {
@@ -68,14 +75,15 @@ describe("userPreferencesService.uploadAvatar", () => {
     h.uploadPublic.mockResolvedValue("https://cdn.example.com/avatars/u1.jpg");
     const tinyJpegBase64 = Buffer.from("fake-jpeg-bytes").toString("base64");
 
-    const out = await userPreferencesService.uploadAvatar(h.user as AuthUser, {
+    const out = await userPreferencesService.uploadAvatar(h.user as TenantContext, {
       dataUrl: `data:image/jpeg;base64,${tinyJpegBase64}`,
     });
 
     expect(out).toEqual({ url: "https://cdn.example.com/avatars/u1.jpg" });
     const [bucket, key, bytes, contentType] = h.uploadPublic.mock.calls[0]!;
     expect(bucket).toBe("avatars");
-    expect(key).toBe("u1.jpg");
+    // 6.6: user-scoped, because `User` is a global model — one human, one avatar, every tenant.
+    expect(key).toBe("u/u1/avatar.jpg");
     expect(Buffer.isBuffer(bytes)).toBe(true);
     expect(bytes.toString()).toBe("fake-jpeg-bytes");
     expect(contentType).toBe("image/jpeg");
@@ -83,7 +91,7 @@ describe("userPreferencesService.uploadAvatar", () => {
 
   it("throws BAD_REQUEST for a non-data-URI string", async () => {
     await expect(
-      userPreferencesService.uploadAvatar(h.user as AuthUser, { dataUrl: "not-a-data-url" }),
+      userPreferencesService.uploadAvatar(h.user as TenantContext, { dataUrl: "not-a-data-url" }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
     expect(h.uploadPublic).not.toHaveBeenCalled();
   });
@@ -91,7 +99,7 @@ describe("userPreferencesService.uploadAvatar", () => {
   it("throws BAD_REQUEST for an SVG data URI (can embed a <script>)", async () => {
     const svgBase64 = Buffer.from("<svg><script>alert(1)</script></svg>").toString("base64");
     await expect(
-      userPreferencesService.uploadAvatar(h.user as AuthUser, {
+      userPreferencesService.uploadAvatar(h.user as TenantContext, {
         dataUrl: `data:image/svg+xml;base64,${svgBase64}`,
       }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });

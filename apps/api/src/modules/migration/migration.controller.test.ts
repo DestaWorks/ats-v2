@@ -19,6 +19,11 @@ const h = vi.hoisted(() => ({
 }));
 
 vi.mock("@destaworks/auth/auth", () => ({ auth: { api: { getSession: async () => h.session } } }));
+vi.mock("@destaworks/db/memberships", async () => ({
+  membershipReader: (
+    await import("@destaworks/auth/testing/membership-double")
+  ).singleTenantMembershipReader(() => h.session),
+}));
 vi.mock("@destaworks/integrations/http/rate-limit", () => ({ checkRateLimit: h.checkRateLimit }));
 
 import { installNestRequestContext } from "../../common/request-context/nest-request-context";
@@ -102,7 +107,7 @@ describe.each([
     expect(await res.json()).toEqual({ created: 1 });
     expect(call).toHaveBeenCalledWith(
       expect.objectContaining({ format: "csv" }),
-      expect.objectContaining({ id: "u1" }),
+      expect.objectContaining({ user: expect.objectContaining({ id: "u1" }) }),
     );
   });
 });
@@ -129,7 +134,10 @@ describe("GET /migration/runs/:runId", () => {
     const res = await get("/migration/runs/run-1");
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ status: "running", processedRows: 12 });
-    expect(h.state).toHaveBeenCalledWith("run-1", expect.objectContaining({ id: "u1" }));
+    expect(h.state).toHaveBeenCalledWith(
+      "run-1",
+      expect.objectContaining({ user: expect.objectContaining({ id: "u1" }) }),
+    );
   });
 });
 

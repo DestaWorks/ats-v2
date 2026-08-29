@@ -9,9 +9,14 @@ const h = vi.hoisted(() => ({
 
 vi.mock("server-only", () => ({}));
 vi.mock("@destaworks/config/request-context", () => ({
-  requestContext: () => ({ headers: async () => new Headers() }),
+  requestContext: () => ({ headers: async () => new Headers(), cookie: async () => undefined }),
 }));
 vi.mock("@destaworks/auth/auth", () => ({ auth: { api: { getSession: async () => h.session } } }));
+vi.mock("@destaworks/db/memberships", async () => ({
+  membershipReader: (
+    await import("@destaworks/auth/testing/membership-double")
+  ).singleTenantMembershipReader(() => h.session),
+}));
 vi.mock("@destaworks/db/prisma", () => ({ prisma: {} }));
 vi.mock("@destaworks/application/client-portal.service", () => ({
   clientPortalService: { generateLink: h.generateLink },
@@ -49,6 +54,10 @@ describe("POST /api/crm/clients/:id/portal/contacts/:contactId/tokens", () => {
     h.generateLink.mockResolvedValue({ contact: { id: "c1" }, token: "rawtoken" });
     const res = await POST(postReq(), ctx);
     expect(res.status).toBe(201);
-    expect(h.generateLink).toHaveBeenCalledWith("cl1", "c1", expect.objectContaining({ id: "u1" }));
+    expect(h.generateLink).toHaveBeenCalledWith(
+      "cl1",
+      "c1",
+      expect.objectContaining({ user: expect.objectContaining({ id: "u1" }) }),
+    );
   });
 });

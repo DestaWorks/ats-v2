@@ -11,7 +11,7 @@ import type {
   ScreeningScorecardDTO,
 } from "@destaworks/contracts/validation/screening";
 import { toIso } from "@destaworks/domain/utils/iso";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { TenantContext } from "@destaworks/domain/tenant";
 import { writeAudit } from "@destaworks/db/audit";
 import { withTransaction } from "@destaworks/db/with-transaction";
 import { candidateRepository } from "@destaworks/db/repositories/candidate.repository";
@@ -102,7 +102,7 @@ export const screeningService = {
   async saveAndMaybeMove(
     candidateId: string,
     input: SaveScreeningInput,
-    user: AuthUser,
+    ctx: TenantContext,
   ): Promise<ScreeningScorecardDTO> {
     const candidate = await candidateRepository.findById(candidateId);
     if (!candidate) throw new AppError("NOT_FOUND", "Candidate not found");
@@ -153,14 +153,14 @@ export const screeningService = {
           totalPct: result.totalPct,
           decision: result.decision,
           notes: input.notes ?? null,
-          scoredById: user.id,
+          scoredById: ctx.user.id,
         },
         tx,
       );
       await writeAudit(tx, {
         entity: "candidate",
         entityId: candidateId,
-        actor: user.id,
+        actor: ctx.user.id,
         action: "screening_scored",
         after: { totalPct: result.totalPct, decision: result.decision },
       });
@@ -169,10 +169,10 @@ export const screeningService = {
 
     let moved: { toStatus: CandidateStatus } | null = null;
     if (input.action === "advance") {
-      const updated = await candidateService.move(candidateId, "SUBMITTED_TO_CLIENT", user);
+      const updated = await candidateService.move(candidateId, "SUBMITTED_TO_CLIENT", ctx);
       moved = { toStatus: updated.status as CandidateStatus };
     } else if (input.action === "futurePipeline") {
-      const updated = await candidateService.move(candidateId, "FUTURE_PIPELINE", user);
+      const updated = await candidateService.move(candidateId, "FUTURE_PIPELINE", ctx);
       moved = { toStatus: updated.status as CandidateStatus };
     }
 

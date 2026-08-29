@@ -14,7 +14,7 @@ import type {
   ScreeningCandidateListEnvelope,
   ScreeningScorecardEnvelope,
 } from "@destaworks/contracts/validation/envelopes";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { AuthContext } from "@destaworks/auth/guards";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { SessionAuthGuard } from "../../common/guards/session-auth.guard";
 import { ZodValidationPipe, type ContractOutput } from "../../common/pipes/zod-validation.pipe";
@@ -59,7 +59,7 @@ export class ScreeningController {
     @Param("candidateId") candidateId: string,
     @Body(new ZodValidationPipe(saveScreeningSchema))
     body: ContractOutput<typeof saveScreeningSchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<ScreeningScorecardEnvelope> {
     return { scorecard: await this.screening.saveAndMaybeMove(candidateId, body, user) };
   }

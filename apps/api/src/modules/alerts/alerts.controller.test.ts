@@ -16,6 +16,11 @@ const h = vi.hoisted(() => ({
 vi.mock("server-only", () => ({}));
 vi.mock("@sentry/node", () => ({ captureException: vi.fn() }));
 vi.mock("@destaworks/auth/auth", () => ({ auth: { api: { getSession: async () => h.session } } }));
+vi.mock("@destaworks/db/memberships", async () => ({
+  membershipReader: (
+    await import("@destaworks/auth/testing/membership-double")
+  ).singleTenantMembershipReader(() => h.session),
+}));
 vi.mock("@destaworks/application/alert.service", () => ({
   alertService: { forViewer: h.forViewer },
 }));
@@ -92,7 +97,12 @@ describe("GET /alerts", () => {
     h.forViewer.mockRejectedValue(new AppError("NOT_FOUND", "Viewer not found"));
     expect(
       await renderFailure(() =>
-        controller().forViewer({ id: "u1", email: "a@desta.works", name: "A", role: "Associate" }),
+        controller().forViewer({
+          tenantId: "t1",
+          membershipId: "u1-m",
+          user: { id: "u1", email: "a@desta.works", name: "A" },
+          role: "Associate",
+        }),
       ),
     ).toEqual({ status: 404, body: { error: { code: "NOT_FOUND", message: "Viewer not found" } } });
   });

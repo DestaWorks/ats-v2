@@ -6,7 +6,7 @@ import type {
   PatchCrmClientResponse,
   PostCrmClientResponse,
 } from "@destaworks/contracts/http/crm";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { AuthContext } from "@destaworks/auth/guards";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { RequireCapability } from "../../common/decorators/require-capability.decorator";
 import { CapabilityGuard } from "../../common/guards/capability.guard";
@@ -40,7 +40,7 @@ export class CrmClientsController {
   async create(
     @Body(new ZodValidationPipe(createClientSchema))
     body: ContractOutput<typeof createClientSchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<PostCrmClientResponse> {
     return { client: await this.clients.create(body, user) };
   }
@@ -55,7 +55,7 @@ export class CrmClientsController {
     @Param("id") id: string,
     @Body(new ZodValidationPipe(updateClientSchema))
     body: ContractOutput<typeof updateClientSchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<PatchCrmClientResponse> {
     return { client: await this.clients.update(id, body, user) };
   }

@@ -30,6 +30,11 @@ const h = vi.hoisted(() => ({
 }));
 
 vi.mock("@destaworks/auth/auth", () => ({ auth: { api: { getSession: async () => h.session } } }));
+vi.mock("@destaworks/db/memberships", async () => ({
+  membershipReader: (
+    await import("@destaworks/auth/testing/membership-double")
+  ).singleTenantMembershipReader(() => h.session),
+}));
 
 import { installNestRequestContext } from "../../common/request-context/nest-request-context";
 import { provideFakeService, startTestApi, type TestApi } from "../../common/testing/nest-app";
@@ -205,7 +210,11 @@ describe("response shapes", () => {
 
   it("passes the route parameter and the session user to the goal toggle", async () => {
     await send("PATCH", "/daily/journal/goals/g7", { done: false });
-    expect(h.setGoalDone).toHaveBeenCalledWith("g7", false, expect.objectContaining({ id: "u1" }));
+    expect(h.setGoalDone).toHaveBeenCalledWith(
+      "g7",
+      false,
+      expect.objectContaining({ user: expect.objectContaining({ id: "u1" }) }),
+    );
   });
 });
 

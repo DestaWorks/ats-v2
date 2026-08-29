@@ -15,9 +15,14 @@ const h = vi.hoisted(() => ({
 
 vi.mock("server-only", () => ({}));
 vi.mock("@destaworks/config/request-context", () => ({
-  requestContext: () => ({ headers: async () => new Headers() }),
+  requestContext: () => ({ headers: async () => new Headers(), cookie: async () => undefined }),
 }));
 vi.mock("@destaworks/auth/auth", () => ({ auth: { api: { getSession: async () => h.session } } }));
+vi.mock("@destaworks/db/memberships", async () => ({
+  membershipReader: (
+    await import("@destaworks/auth/testing/membership-double")
+  ).singleTenantMembershipReader(() => h.session),
+}));
 vi.mock("@destaworks/db/prisma", () => ({ prisma: {} }));
 vi.mock("@destaworks/application/client.service", () => ({
   clientService: { updateContact: h.updateContact, removeContact: h.removeContact },
@@ -64,7 +69,7 @@ describe("PATCH /api/crm/clients/:id/contacts/:contactId", () => {
       "c1",
       "cc1",
       expect.objectContaining({ status: "left" }),
-      expect.objectContaining({ id: "u1" }),
+      expect.objectContaining({ user: expect.objectContaining({ id: "u1" }) }),
     );
   });
 
@@ -99,7 +104,7 @@ describe("DELETE /api/crm/clients/:id/contacts/:contactId", () => {
     expect(h.removeContact).toHaveBeenCalledWith(
       "c1",
       "cc1",
-      expect.objectContaining({ id: "u1" }),
+      expect.objectContaining({ user: expect.objectContaining({ id: "u1" }) }),
     );
   });
 });

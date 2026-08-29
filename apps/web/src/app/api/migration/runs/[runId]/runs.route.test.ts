@@ -12,9 +12,14 @@ const h = vi.hoisted(() => ({
 
 vi.mock("server-only", () => ({}));
 vi.mock("@destaworks/config/request-context", () => ({
-  requestContext: () => ({ headers: async () => new Headers() }),
+  requestContext: () => ({ headers: async () => new Headers(), cookie: async () => undefined }),
 }));
 vi.mock("@destaworks/auth/auth", () => ({ auth: { api: { getSession: async () => h.session } } }));
+vi.mock("@destaworks/db/memberships", async () => ({
+  membershipReader: (
+    await import("@destaworks/auth/testing/membership-double")
+  ).singleTenantMembershipReader(() => h.session),
+}));
 vi.mock("@destaworks/application/migration-run.service", () => ({
   migrationRunService: { state: h.state },
 }));
@@ -57,7 +62,10 @@ describe("GET /api/migration/runs/:runId", () => {
     const res = await GET(req(), ctx);
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ status: "running", processedRows: 120 });
-    expect(h.state).toHaveBeenCalledWith("run-1", expect.objectContaining({ id: "u1" }));
+    expect(h.state).toHaveBeenCalledWith(
+      "run-1",
+      expect.objectContaining({ user: expect.objectContaining({ id: "u1" }) }),
+    );
   });
 
   it("404 for a run id that does not exist", async () => {

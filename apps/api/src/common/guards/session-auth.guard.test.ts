@@ -22,6 +22,11 @@ vi.mock("@destaworks/auth/auth", () => ({
     },
   },
 }));
+vi.mock("@destaworks/db/memberships", async () => ({
+  membershipReader: (
+    await import("@destaworks/auth/testing/membership-double")
+  ).singleTenantMembershipReader(() => mockSession),
+}));
 
 import { installNestRequestContext } from "../request-context/nest-request-context";
 import { executionContextFor } from "./testing/execution-context.fixture";
@@ -58,12 +63,17 @@ describe("SessionAuthGuard", () => {
     expect(request.user).toBeUndefined();
   });
 
-  it("admits a signed-in user and attaches them to the request", async () => {
+  it("admits a signed-in user and attaches their whole context to the request", async () => {
     signInAs("Owner");
     const request: AuthenticatedRequest = { headers: {} };
 
     expect(await guard.canActivate(executionContextFor({ request }))).toBe(true);
-    expect(request.user).toMatchObject({ id: "u1", email: "u@desta.works", role: "Owner" });
+    expect(request.user).toMatchObject({
+      tenantId: "t1",
+      membershipId: "u1-m",
+      user: { id: "u1", email: "u@desta.works" },
+      role: "Owner",
+    });
   });
 
   it("passes the request's own headers to the session lookup", async () => {

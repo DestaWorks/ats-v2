@@ -15,7 +15,7 @@ import {
   type MigrationCommitAccepted,
   type MigrationRunState,
 } from "@destaworks/contracts/validation/migration";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { AuthContext } from "@destaworks/auth/guards";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { RateLimit } from "../../common/decorators/rate-limit.decorator";
 import { RequireCapability } from "../../common/decorators/require-capability.decorator";
@@ -57,7 +57,7 @@ export class MigrationController {
   @HttpCode(HttpStatus.OK)
   prepare(
     @Body(importInputPipe) body: ContractOutput<typeof importInputSchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<ImportReport> {
     return this.migration.prepare(body, user);
   }
@@ -72,7 +72,7 @@ export class MigrationController {
   @RateLimit({ name: "migration-commit", limit: 10, windowMs: 60_000 })
   commit(
     @Body(importInputPipe) body: ContractOutput<typeof importInputSchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthContext,
   ): Promise<MigrationCommitAccepted> {
     return this.runs.start(body, user);
   }
@@ -83,7 +83,7 @@ export class MigrationController {
    */
   @Get("runs/:runId")
   @HttpCode(HttpStatus.OK)
-  run(@Param("runId") runId: string, @CurrentUser() user: AuthUser): Promise<MigrationRunState> {
+  run(@Param("runId") runId: string, @CurrentUser() user: AuthContext): Promise<MigrationRunState> {
     return this.runs.state(runId, user);
   }
 }

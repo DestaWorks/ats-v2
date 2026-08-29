@@ -17,7 +17,7 @@ import type {
 import { toIso, isoOrNull } from "@destaworks/domain/utils/iso";
 import { defined } from "@destaworks/domain/utils/defined";
 import { pageMeta } from "@destaworks/domain/pagination";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { TenantContext } from "@destaworks/domain/tenant";
 import { writeAudit } from "@destaworks/db/audit";
 import { withTransaction } from "@destaworks/db/with-transaction";
 import {
@@ -131,7 +131,7 @@ async function persistFoundContacts(
   }[],
   source: "Apollo" | "Hunter",
   auditAction: string,
-  user: AuthUser,
+  ctx: TenantContext,
 ): Promise<void> {
   await withTransaction(async (tx) => {
     if (found.length > 0) {
@@ -152,7 +152,7 @@ async function persistFoundContacts(
     await writeAudit(tx, {
       entity: "prospect",
       entityId: prospectId,
-      actor: user.id,
+      actor: ctx.user.id,
       action: auditAction,
       after: { found: found.length },
     });
@@ -170,8 +170,11 @@ export const prospectService = {
    *  `buildDupSets` — that module classifies across three source types (Lead-by-NPI,
    *  Lead-by-name, Candidate-by-name) for a UI status badge, a materially different problem
    *  from flagging "is this NPI already a tracked Prospect." */
-  async search(query: SearchProspectsQuery, user: AuthUser): Promise<ProspectSearchResultDTO> {
-    await checkRateLimit(`client-discovery-search:${user.id}`, { limit: 20, windowMs: 60_000 });
+  async search(query: SearchProspectsQuery, ctx: TenantContext): Promise<ProspectSearchResultDTO> {
+    await checkRateLimit(`client-discovery-search:${ctx.user.id}`, {
+      limit: 20,
+      windowMs: 60_000,
+    });
 
     const { resultCount, results } = await searchNppes(
       defined({
@@ -209,9 +212,9 @@ export const prospectService = {
    *  against a race since the search happened moments earlier client-side). */
   async addFromSearch(
     input: AddProspectsFromSearchInput,
-    user: AuthUser,
+    ctx: TenantContext,
   ): Promise<{ added: number; skipped: number }> {
-    await checkRateLimit(`prospect-bulk-add:${user.id}`, { limit: 10, windowMs: 60_000 });
+    await checkRateLimit(`prospect-bulk-add:${ctx.user.id}`, { limit: 10, windowMs: 60_000 });
 
     const npis = input.rows.map((r) => r.npi);
     const tracked = await prospectRepository.findManyByNpis(npis);
@@ -244,14 +247,14 @@ export const prospectService = {
           source: "NPPES Search",
           icpId: input.icpId ?? null,
           status: "Fresh Lead",
-          createdById: user.id,
+          createdById: ctx.user.id,
         })),
         tx,
       );
       await writeAudit(tx, {
         entity: "prospect",
         entityId: "bulk",
-        actor: user.id,
+        actor: ctx.user.id,
         action: "add_from_search",
         after: { count: result.count, source: "NPPES Search" },
       });
@@ -262,7 +265,7 @@ export const prospectService = {
   },
 
   /** Add a prospect manually. Starts at "Fresh Lead" / source "Manual" (the service forces both). */
-  async create(input: AddProspectInput, user: AuthUser): Promise<ProspectDetailDTO> {
+  async create(input: AddProspectInput, ctx: TenantContext): Promise<ProspectDetailDTO> {
     const prospect = await withTransaction(async (tx) => {
       const created = await prospectRepository.create(
         {
@@ -276,14 +279,14 @@ export const prospectService = {
           notes: input.notes ?? null,
           status: "Fresh Lead",
           source: "Manual",
-          createdById: user.id,
+          createdById: ctx.user.id,
         },
         tx,
       );
       await writeAudit(tx, {
         entity: "prospect",
         entityId: created.id,
-        actor: user.id,
+        actor: ctx.user.id,
         action: "create",
         after: { status: created.status, source: created.source },
       });
@@ -324,7 +327,11 @@ export const prospectService = {
 
   /** Edit a prospect (status/owner/notes/website). Guard `canEditProspect` (a converted "Client"
    *  prospect is terminal → CONFLICT). */
-  async update(id: string, input: UpdateProspectInput, user: AuthUser): Promise<ProspectDetailDTO> {
+  async update(
+    id: string,
+    input: UpdateProspectInput,
+    ctx: TenantContext,
+  ): Promise<ProspectDetailDTO> {
     const existing = await requireProspect(id);
     if (!canEditProspect(existing.status as ProspectStatus)) {
       throw new AppError("CONFLICT", "Prospect already converted to a client");
@@ -343,7 +350,7 @@ export const prospectService = {
       await writeAudit(tx, {
         entity: "prospect",
         entityId: id,
-        actor: user.id,
+        actor: ctx.user.id,
         action: "update",
         before: { status: existing.status, ownerId: existing.ownerId },
         after: { status: updated.status, ownerId: updated.ownerId },
@@ -355,24 +362,27 @@ export const prospectService = {
 
   /** Enrich a prospect's contacts via Apollo (by practice name + website domain). Rate-limited —
    *  real external-API cost. Guard `canManageContacts` (a converted "Client" is terminal). */
-  async enrichContacts(id: string, user: AuthUser): Promise<ProspectDetailDTO> {
+  async enrichContacts(id: string, ctx: TenantContext): Promise<ProspectDetailDTO> {
     const existing = await requireProspect(id);
     if (!canManageContacts(existing.status as ProspectStatus)) {
       throw new AppError("CONFLICT", "Prospect already converted to a client");
     }
-    await checkRateLimit(`client-discovery-enrich:${user.id}`, { limit: 20, windowMs: 60_000 });
+    await checkRateLimit(`client-discovery-enrich:${ctx.user.id}`, {
+      limit: 20,
+      windowMs: 60_000,
+    });
 
     const domain = extractDomain(existing.website);
     const found = await findApolloContacts({
       organizationName: existing.practiceName,
       ...(domain !== null && { domain }),
     });
-    await persistFoundContacts(id, found, "Apollo", "enrich_apollo", user);
+    await persistFoundContacts(id, found, "Apollo", "enrich_apollo", ctx);
     return toProspectDetail(existing);
   },
 
   /** Hunter.io fallback when Apollo has no result — needs the prospect's website domain. */
-  async findContactsHunter(id: string, user: AuthUser): Promise<ProspectDetailDTO> {
+  async findContactsHunter(id: string, ctx: TenantContext): Promise<ProspectDetailDTO> {
     const existing = await requireProspect(id);
     if (!canManageContacts(existing.status as ProspectStatus)) {
       throw new AppError("CONFLICT", "Prospect already converted to a client");
@@ -384,10 +394,13 @@ export const prospectService = {
         "This prospect has no website on file to search Hunter.io by",
       );
     }
-    await checkRateLimit(`client-discovery-enrich:${user.id}`, { limit: 20, windowMs: 60_000 });
+    await checkRateLimit(`client-discovery-enrich:${ctx.user.id}`, {
+      limit: 20,
+      windowMs: 60_000,
+    });
 
     const found = await findHunterContacts({ domain });
-    await persistFoundContacts(id, found, "Hunter", "enrich_hunter", user);
+    await persistFoundContacts(id, found, "Hunter", "enrich_hunter", ctx);
     return toProspectDetail(existing);
   },
 
@@ -395,7 +408,7 @@ export const prospectService = {
   async addContactManual(
     id: string,
     input: AddProspectContactInput,
-    user: AuthUser,
+    ctx: TenantContext,
   ): Promise<ProspectDetailDTO> {
     const existing = await requireProspect(id);
     if (!canManageContacts(existing.status as ProspectStatus)) {
@@ -419,7 +432,7 @@ export const prospectService = {
       await writeAudit(tx, {
         entity: "prospect",
         entityId: id,
-        actor: user.id,
+        actor: ctx.user.id,
         action: "add_contact_manual",
         after: { contactId: created.id, fullName: created.fullName },
       });
@@ -428,7 +441,11 @@ export const prospectService = {
   },
 
   /** Delete one contact, scoped to its prospect. An id under a different prospect → NOT_FOUND. */
-  async deleteContact(id: string, contactId: string, user: AuthUser): Promise<ProspectDetailDTO> {
+  async deleteContact(
+    id: string,
+    contactId: string,
+    ctx: TenantContext,
+  ): Promise<ProspectDetailDTO> {
     const existing = await requireProspect(id);
     await withTransaction(async (tx) => {
       const count = await prospectContactRepository.softDelete(id, contactId, tx);
@@ -436,7 +453,7 @@ export const prospectService = {
       await writeAudit(tx, {
         entity: "prospect",
         entityId: id,
-        actor: user.id,
+        actor: ctx.user.id,
         action: "delete_contact",
         after: { contactId },
       });
@@ -445,24 +462,24 @@ export const prospectService = {
   },
 
   /** Soft-delete a prospect → reversible trash. */
-  async softDelete(id: string, user: AuthUser): Promise<{ id: string }> {
+  async softDelete(id: string, ctx: TenantContext): Promise<{ id: string }> {
     await requireProspect(id);
     await withTransaction(async (tx) => {
-      const deleted = await prospectRepository.softDelete(id, user.id, tx);
+      const deleted = await prospectRepository.softDelete(id, ctx.user.id, tx);
       await writeAudit(tx, {
         entity: "prospect",
         entityId: id,
-        actor: user.id,
+        actor: ctx.user.id,
         action: "delete",
         before: { deletedAt: null },
-        after: { deletedAt: deleted.deletedAt, deletedById: user.id },
+        after: { deletedAt: deleted.deletedAt, deletedById: ctx.user.id },
       });
     });
     return { id };
   },
 
   /** Restore a soft-deleted prospect — returns EXACTLY as it was (status untouched). */
-  async restore(id: string, user: AuthUser): Promise<ProspectDetailDTO> {
+  async restore(id: string, ctx: TenantContext): Promise<ProspectDetailDTO> {
     const existing = await prospectRepository.findById(id, { includeDeleted: true });
     if (!existing) throw new AppError("NOT_FOUND", "Prospect not found");
     if (existing.deletedAt === null) throw new AppError("CONFLICT", "Prospect is not deleted");
@@ -471,7 +488,7 @@ export const prospectService = {
       await writeAudit(tx, {
         entity: "prospect",
         entityId: id,
-        actor: user.id,
+        actor: ctx.user.id,
         action: "restore",
         before: { deletedAt: existing.deletedAt, deletedById: existing.deletedById },
         after: { deletedAt: null, status: prospect.status },
@@ -488,7 +505,7 @@ export const prospectService = {
    */
   async bulkAction(
     input: BulkProspectActionInput,
-    user: AuthUser,
+    ctx: TenantContext,
   ): Promise<{ affected: number; skipped: number }> {
     const uniqueIds = [...new Set(input.ids)];
     const rows = await prospectRepository.findManyByIds(uniqueIds, {
@@ -515,7 +532,7 @@ export const prospectService = {
         const { id } = row;
         switch (input.action) {
           case "delete":
-            await prospectRepository.softDelete(id, user.id, tx);
+            await prospectRepository.softDelete(id, ctx.user.id, tx);
             break;
           case "restore":
             await prospectRepository.restore(id, tx);
@@ -530,7 +547,7 @@ export const prospectService = {
         await writeAudit(tx, {
           entity: "prospect",
           entityId: id,
-          actor: user.id,
+          actor: ctx.user.id,
           action: `bulk_${input.action}`,
           before: { status: row.status, deletedAt: row.deletedAt },
           after: { value: "value" in input ? input.value : null },

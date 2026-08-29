@@ -21,8 +21,10 @@ vi.mock("@destaworks/db/repositories/report-export.repository", () => ({
   },
 }));
 
-vi.mock("@destaworks/integrations/storage", () => ({
-  EXPORT_BUCKET: "exports",
+// Only the S3 calls and the feature flag are stubbed; the key constructors are pure and come
+// through, so the keys asserted below are the real ones.
+vi.mock("@destaworks/integrations/storage", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@destaworks/integrations/storage")>()),
   get storageEnabled() {
     return h.storageEnabled;
   },

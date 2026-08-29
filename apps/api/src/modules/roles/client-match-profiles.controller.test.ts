@@ -21,12 +21,17 @@ vi.mock("@destaworks/config/request-context", () => ({
   installRequestContext: () => {},
 }));
 vi.mock("@destaworks/auth/auth", () => ({ auth: { api: { getSession: async () => h.session } } }));
+vi.mock("@destaworks/db/memberships", async () => ({
+  membershipReader: (
+    await import("@destaworks/auth/testing/membership-double")
+  ).singleTenantMembershipReader(() => h.session),
+}));
 vi.mock("@destaworks/db/prisma", () => ({ prisma: {} }));
 vi.mock("@destaworks/application/open-role.service", () => ({ openRoleService: h.openRole }));
 
 import { AppError } from "@destaworks/integrations/http/app-error";
 import { openRoleService } from "@destaworks/application/open-role.service";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { AuthContext } from "@destaworks/auth/guards";
 import {
   guardOutcome,
   handlerOutcome,
@@ -71,7 +76,7 @@ interface ParityCase {
   readonly spy: Mock;
   readonly result: unknown;
   readonly viaRoute: () => Response | Promise<Response>;
-  readonly viaController: (user: AuthUser) => Promise<unknown>;
+  readonly viaController: (user: AuthContext) => Promise<unknown>;
 }
 
 const SESSION_ONLY: Pick<RouteSurface, "capability" | "guards"> = {
@@ -129,8 +134,8 @@ function signIn(role: string): void {
   h.session = { user: { id: "u1", email: "u@desta.works", name: "U", role } };
 }
 
-async function authorize(handler: string): Promise<AuthUser> {
-  const request: { headers: Record<string, string>; user?: AuthUser } = { headers: {} };
+async function authorize(handler: string): Promise<AuthContext> {
+  const request: { headers: Record<string, string>; user?: AuthContext } = { headers: {} };
   expect(await guardOutcome(ClientMatchProfilesController, handler, request)).toBeNull();
   if (!request.user) throw new Error(`${handler}: guards attached no user`);
   return request.user;

@@ -5,7 +5,7 @@ import {
   type PortalAccessRequestListDTO,
 } from "@destaworks/contracts/validation/portal";
 import type { AcknowledgedIdDTO } from "@destaworks/contracts/api";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { AuthContext } from "@destaworks/auth/guards";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { RequireCapability } from "../../common/decorators/require-capability.decorator";
 import { CapabilityGuard } from "../../common/guards/capability.guard";
@@ -45,7 +45,7 @@ export class AdminPortalRequestsController {
   @HttpCode(200)
   @RequireCapability("configureClientPortal")
   async approve(
-    @CurrentUser() actor: AuthUser,
+    @CurrentUser() actor: AuthContext,
     @Param("id") id: string,
     @Body(new ZodValidationPipe(approvePortalRequestSchema))
     body: ContractOutput<typeof approvePortalRequestSchema>,

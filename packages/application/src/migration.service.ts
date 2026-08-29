@@ -13,7 +13,7 @@ import type {
   ImportRowReport,
 } from "@destaworks/contracts/validation/migration";
 import type { ResumeData } from "@destaworks/contracts/validation/resume";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { TenantContext } from "@destaworks/domain/tenant";
 import { parseResume } from "@destaworks/integrations/ai/parse-resume";
 import { writeAudit } from "@destaworks/db/audit";
 import { withTransaction } from "@destaworks/db/with-transaction";
@@ -111,8 +111,8 @@ function matchResumes(plans: ImportRowPlan[], resumes: ImportResume[] | undefine
 
 /** Exported so the run service gates staging and status reads on the SAME capability, rather than
  *  growing a second copy of the check that could drift from this one. */
-export function assertCanImport(user: AuthUser): void {
-  if (!hasCapability(user.role, "bulkImport")) {
+export function assertCanImport(ctx: TenantContext): void {
+  if (!hasCapability(ctx.role, "bulkImport")) {
     throw new AppError("FORBIDDEN", "You don't have permission to import");
   }
 }
@@ -274,11 +274,11 @@ async function attachResumeWithAi(
   plan: ImportRowPlan,
   candidateId: string,
   resumeText: string,
-  user: AuthUser,
+  ctx: TenantContext,
 ): Promise<void> {
   let data: ResumeData | null = null;
   try {
-    await checkRateLimit(`migration-resume-ai:${user.id}`, { limit: 20, windowMs: 60_000 });
+    await checkRateLimit(`migration-resume-ai:${ctx.user.id}`, { limit: 20, windowMs: 60_000 });
     const variant = variantForPlan(plan);
     data = await parseResume({ variant, text: resumeText });
     const mapped = toCandidateCreateInput(variant, data) as unknown as Record<string, unknown>;
@@ -310,14 +310,14 @@ async function attachResumeWithAi(
         ...(plan.resumeText !== undefined && { extractedText: plan.resumeText }),
         extractedData: data ?? undefined,
         storageKey: plan.resumeStorageKey ?? null,
-        uploadedById: user.id,
+        uploadedById: ctx.user.id,
       },
       tx,
     );
     await writeAudit(tx, {
       entity: "document",
       entityId: document.id,
-      actor: user.id,
+      actor: ctx.user.id,
       action: data ? "import-resume-ai" : "import-resume",
     });
   });
@@ -325,8 +325,8 @@ async function attachResumeWithAi(
 
 export const migrationService = {
   /** Parse + transform + dedupe → a diffable report. Writes NOTHING. */
-  async prepare(input: ImportInput, user: AuthUser): Promise<ImportReport> {
-    assertCanImport(user);
+  async prepare(input: ImportInput, ctx: TenantContext): Promise<ImportReport> {
+    assertCanImport(ctx);
     return buildReport(await planImport(input));
   },
 
@@ -339,8 +339,12 @@ export const migrationService = {
    * `options` is how the job runner drives it (Phase 5): progress out, abort in, and a resume
    * point. All three are optional and a request-path caller passes none.
    */
-  async commit(input: ImportInput, user: AuthUser, options?: CommitOptions): Promise<ImportReport> {
-    assertCanImport(user);
+  async commit(
+    input: ImportInput,
+    ctx: TenantContext,
+    options?: CommitOptions,
+  ): Promise<ImportReport> {
+    assertCanImport(ctx);
     const planned = await planImport(input);
 
     const warnings: string[] = [];
@@ -387,7 +391,7 @@ export const migrationService = {
                 originalFilename: plan.document.originalFilename,
                 type: plan.document.type,
                 mimeType: plan.document.mimeType,
-                uploadedById: user.id,
+                uploadedById: ctx.user.id,
               },
               tx,
             );
@@ -395,7 +399,7 @@ export const migrationService = {
           await writeAudit(tx, {
             entity: "candidate",
             entityId: candidate.id,
-            actor: user.id,
+            actor: ctx.user.id,
             action: "import",
           });
         });
@@ -418,7 +422,7 @@ export const migrationService = {
         plan.resumeText &&
         candidateId
       ) {
-        await attachResumeWithAi(plan, candidateId, plan.resumeText, user);
+        await attachResumeWithAi(plan, candidateId, plan.resumeText, ctx);
       }
 
       // Counted whatever the row's outcome — an errored row is one this attempt is finished with,
@@ -434,7 +438,7 @@ export const migrationService = {
       writeAudit(tx, {
         entity: "import_batch",
         entityId: planned.checksum,
-        actor: user.id,
+        actor: ctx.user.id,
         action: "commit",
         after: report.counts,
       }),

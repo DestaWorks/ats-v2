@@ -22,6 +22,11 @@ const h = vi.hoisted(() => ({
 
 vi.mock("server-only", () => ({}));
 vi.mock("@destaworks/auth/auth", () => ({ auth: { api: { getSession: async () => h.session } } }));
+vi.mock("@destaworks/db/memberships", async () => ({
+  membershipReader: (
+    await import("@destaworks/auth/testing/membership-double")
+  ).singleTenantMembershipReader(() => h.session),
+}));
 vi.mock("@destaworks/db/prisma", () => ({ prisma: {} }));
 vi.mock("@destaworks/application/resume.service", () => ({ resumeService: h.resume }));
 
@@ -111,7 +116,7 @@ describe("POST /resume/save", () => {
     const res = await api.request("/resume/save", jsonBody(body));
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(saved);
-    expect(h.resume.save.mock.calls[0]?.[1]).toMatchObject({ id: "u1" });
+    expect(h.resume.save.mock.calls[0]?.[1]).toMatchObject({ user: { id: "u1" } });
   });
 
   it("refuses a signed-out caller with 401 and writes nothing", async () => {

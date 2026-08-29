@@ -15,6 +15,10 @@ import type { AuthenticatedRequest } from "./authenticated-request";
  * `hasCapability` via the shared guard — 401 when signed out, 403 when the role does not grant it.
  * There is no role name in this file, and none can be introduced through the decorator either.
  *
+ * The role it decides on is the ACTIVE TENANT's membership role, because that is what
+ * `requireCapability` now resolves. Nothing here had to change for that: the guard never named a
+ * role, so moving where a role comes from was a change to one function and not to this file.
+ *
  * Attach it per route or per controller, never as a global `APP_GUARD`: a handler reached through
  * this guard without a declared capability is a misconfiguration on an authorization path, and is
  * refused rather than waved through. That makes a missing decorator fail visibly and closed.

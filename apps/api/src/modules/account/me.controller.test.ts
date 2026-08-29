@@ -21,6 +21,11 @@ const h = vi.hoisted(() => ({
 vi.mock("server-only", () => ({}));
 vi.mock("@sentry/node", () => ({ captureException: vi.fn() }));
 vi.mock("@destaworks/auth/auth", () => ({ auth: { api: { getSession: async () => h.session } } }));
+vi.mock("@destaworks/db/memberships", async () => ({
+  membershipReader: (
+    await import("@destaworks/auth/testing/membership-double")
+  ).singleTenantMembershipReader(() => h.session),
+}));
 vi.mock("@destaworks/application/user-preferences.service", () => ({
   userPreferencesService: {
     getMine: h.getPreferences,
@@ -33,7 +38,7 @@ vi.mock("@destaworks/application/learn.service", () => ({
 }));
 
 import { AppError } from "@destaworks/integrations/http/app-error";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { AuthContext } from "@destaworks/auth/guards";
 import { installNestRequestContext } from "../../common/request-context/nest-request-context";
 import type { AuthenticatedRequest } from "../../common/guards/authenticated-request";
 import { ZodValidationPipe } from "../../common/pipes/zod-validation.pipe";
@@ -74,7 +79,7 @@ function signInAs(role: string): void {
 }
 
 /** Drives the route's REAL guard chain and hands back the user it attached to the request. */
-async function admitted(handlerName: string, role = "Associate"): Promise<AuthUser> {
+async function admitted(handlerName: string, role = "Associate"): Promise<AuthContext> {
   signInAs(role);
   const request: AuthenticatedRequest = { headers: {} };
   await runDeclaredGuards(MeController, handlerName, request);

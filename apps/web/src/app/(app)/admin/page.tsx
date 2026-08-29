@@ -58,7 +58,7 @@ export default async function AdminPage() {
     <AdminDashboard
       initialUsers={users}
       initialRequests={requests}
-      currentUserId={user.id}
+      currentUserId={user.user.id}
       canConfigurePortal={canConfigurePortal}
       initialPortalRequests={portalRequests}
       clients={clients}

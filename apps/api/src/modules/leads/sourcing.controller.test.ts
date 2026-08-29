@@ -20,10 +20,15 @@ const h = vi.hoisted(() => ({
 vi.mock("@destaworks/auth/auth", () => ({
   auth: { api: { getSession: async () => h.session } },
 }));
+vi.mock("@destaworks/db/memberships", async () => ({
+  membershipReader: (
+    await import("@destaworks/auth/testing/membership-double")
+  ).singleTenantMembershipReader(() => h.session),
+}));
 vi.mock("@destaworks/application/lead.service", () => ({ leadService: {} }));
 vi.mock("@destaworks/application/similarity.service", () => ({ similarityService: {} }));
 
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { AuthContext } from "@destaworks/auth/guards";
 import { installNestRequestContext } from "../../common/request-context/nest-request-context";
 import { SessionAuthGuard } from "../../common/guards/session-auth.guard";
 import {
@@ -41,7 +46,12 @@ function controllerWith(methods: Partial<SimilarityService>): SourcingController
   return new SourcingController(serviceStub<SimilarityService>(methods));
 }
 
-const USER: AuthUser = { id: "u1", email: "op@desta.works", name: "Operator", role: "Associate" };
+const USER: AuthContext = {
+  tenantId: "t1",
+  membershipId: "u1-m",
+  user: { id: "u1", email: "op@desta.works", name: "Operator" },
+  role: "Associate",
+};
 
 beforeEach(() => {
   h.session = null;

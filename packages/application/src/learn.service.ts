@@ -1,5 +1,5 @@
 import type { LearnProgressDTO } from "@destaworks/contracts/validation/learn";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { TenantContext } from "@destaworks/domain/tenant";
 import { userRepository } from "@destaworks/db/repositories/user.repository";
 
 /**
@@ -7,11 +7,15 @@ import { userRepository } from "@destaworks/db/repositories/user.repository";
  * Not audited (personal UI state, matches legacy which never tracked it server-side at all).
  */
 export const learnService = {
-  async getMine(user: AuthUser): Promise<LearnProgressDTO> {
-    return userRepository.getLearnProgress(user.id);
+  async getMine(ctx: TenantContext): Promise<LearnProgressDTO> {
+    return userRepository.getLearnProgress(ctx.user.id);
   },
 
-  async setChapter(user: AuthUser, chapterId: string, done: boolean): Promise<LearnProgressDTO> {
-    return userRepository.setChapterProgress(user.id, chapterId, done);
+  async setChapter(
+    ctx: TenantContext,
+    chapterId: string,
+    done: boolean,
+  ): Promise<LearnProgressDTO> {
+    return userRepository.setChapterProgress(ctx.user.id, chapterId, done);
   },
 };

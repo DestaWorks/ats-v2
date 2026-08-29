@@ -22,7 +22,12 @@ vi.mock("@destaworks/db/with-transaction", () => ({
 
 import { aiOpsService } from "./ai-ops.service";
 
-const actor = { id: "u1", email: "o@desta.works", name: "Owner", role: "Owner" as const };
+const actor = {
+  tenantId: "t1",
+  membershipId: "u1-m",
+  user: { id: "u1", email: "o@desta.works", name: "Owner" },
+  role: "Owner" as const,
+};
 
 beforeEach(() => {
   Object.values(h).forEach((fn) => fn.mockReset());

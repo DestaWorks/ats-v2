@@ -1,7 +1,7 @@
 import type { NoteDTO } from "@destaworks/contracts/validation/candidate";
-import { hasCapability, type NoteType, type Role } from "@destaworks/domain/constants";
+import { hasCapability, type NoteType } from "@destaworks/domain/constants";
 import { resolveMentions, type MentionTarget } from "@destaworks/domain/mentions";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { CapabilityViewer, TenantContext } from "@destaworks/domain/tenant";
 import { writeAudit } from "@destaworks/db/audit";
 import { withTransaction } from "@destaworks/db/with-transaction";
 import { candidateRepository } from "@destaworks/db/repositories/candidate.repository";
@@ -14,11 +14,7 @@ import { sendEmail } from "@destaworks/integrations/email/provider";
 import { mentionEmail } from "@destaworks/integrations/email/templates/mention";
 
 /** Minimal viewer shape the note scope needs (kept structural for a future client-portal viewer). */
-export interface NoteViewer {
-  id: string;
-  name: string;
-  role: Role;
-}
+export type NoteViewer = CapabilityViewer;
 
 /**
  * Server-authoritative note visibility. Runs in the READ (never client-side — the legacy bug
@@ -98,18 +94,18 @@ export const noteService = {
    * body against the real user table (the legacy `ats_notify_mention` trusted a client-supplied
    * recipient list); self-mentions are dropped.
    */
-  async add(candidateId: string, input: AddNoteServiceInput, user: AuthUser): Promise<NoteDTO> {
+  async add(candidateId: string, input: AddNoteServiceInput, ctx: TenantContext): Promise<NoteDTO> {
     const candidate = await candidateRepository.findById(candidateId);
     if (!candidate) throw new AppError("NOT_FOUND", "Candidate not found");
     const users = await userRepository.list();
-    const recipients = resolveMentions(input.body, users).filter((u) => u.id !== user.id);
+    const recipients = resolveMentions(input.body, users).filter((u) => u.id !== ctx.user.id);
 
     const created = await withTransaction(async (tx) => {
       const note = await noteRepository.create(
         {
           candidateId,
-          authorId: user.id,
-          authorName: user.name,
+          authorId: ctx.user.id,
+          authorName: ctx.user.name,
           body: input.body, // stored RAW — escaped at render, never as HTML
           noteType: input.noteType,
         },
@@ -122,7 +118,7 @@ export const noteService = {
       await writeAudit(tx, {
         entity: "candidate",
         entityId: candidateId,
-        actor: user.id,
+        actor: ctx.user.id,
         action: "add_note",
         after: { noteId: note.id, noteType: note.noteType, mentioned: recipients.map((r) => r.id) },
       });
@@ -139,7 +135,7 @@ export const noteService = {
         candidateId,
         candidateName: candidate.name,
         body: input.body,
-        authorName: user.name,
+        authorName: ctx.user.name,
       });
     }
 

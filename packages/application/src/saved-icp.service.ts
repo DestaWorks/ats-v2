@@ -1,5 +1,5 @@
 import type { CreateSavedIcpInput, SavedIcpDTO } from "@destaworks/contracts/validation/saved-icp";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { TenantContext } from "@destaworks/domain/tenant";
 import { writeAudit } from "@destaworks/db/audit";
 import { withTransaction } from "@destaworks/db/with-transaction";
 import {
@@ -34,15 +34,15 @@ function toDTO(row: SavedIcpRow, userNames: Map<string, string>): SavedIcpDTO {
  */
 export const savedIcpService = {
   /** Every ICP visible to the caller: all shared (`!isPrivate`) ICPs + the caller's own private ones. */
-  async list(user: AuthUser): Promise<SavedIcpDTO[]> {
+  async list(ctx: TenantContext): Promise<SavedIcpDTO[]> {
     const rows = await savedIcpRepository.listAll();
-    const visible = rows.filter((r) => !r.isPrivate || r.userId === user.id);
+    const visible = rows.filter((r) => !r.isPrivate || r.userId === ctx.user.id);
     const userNames = await userRepository.namesByIds([...new Set(visible.map((r) => r.userId))]);
     return visible.map((r) => toDTO(r, userNames));
   },
 
-  async create(input: CreateSavedIcpInput, user: AuthUser): Promise<SavedIcpDTO> {
-    const existing = await savedIcpRepository.findByUserAndName(user.id, input.name);
+  async create(input: CreateSavedIcpInput, ctx: TenantContext): Promise<SavedIcpDTO> {
+    const existing = await savedIcpRepository.findByUserAndName(ctx.user.id, input.name);
     if (existing) {
       throw new AppError("CONFLICT", `You already have an ICP named "${input.name}"`);
     }
@@ -50,7 +50,7 @@ export const savedIcpService = {
     const row = await withTransaction(async (tx) => {
       const created = await savedIcpRepository.create(
         {
-          userId: user.id,
+          userId: ctx.user.id,
           name: input.name,
           taxonomy: input.taxonomy ?? null,
           state: input.state ?? null,
@@ -63,26 +63,26 @@ export const savedIcpService = {
       await writeAudit(tx, {
         entity: "saved_icp",
         entityId: created.id,
-        actor: user.id,
+        actor: ctx.user.id,
         action: "create",
         after: { name: created.name, isPrivate: created.isPrivate },
       });
       return created;
     });
-    const userNames = await userRepository.namesByIds([user.id]);
+    const userNames = await userRepository.namesByIds([ctx.user.id]);
     return toDTO(row, userNames);
   },
 
   /** NOT_FOUND (not FORBIDDEN) whether the id doesn't exist or belongs to another user —
    *  deliberately indistinguishable, mirrors `savedViewService.remove`. */
-  async remove(id: string, user: AuthUser): Promise<{ id: string }> {
+  async remove(id: string, ctx: TenantContext): Promise<{ id: string }> {
     await withTransaction(async (tx) => {
-      const { count } = await savedIcpRepository.deleteOwned(id, user.id, tx);
+      const { count } = await savedIcpRepository.deleteOwned(id, ctx.user.id, tx);
       if (count === 0) throw new AppError("NOT_FOUND", "Saved ICP not found");
       await writeAudit(tx, {
         entity: "saved_icp",
         entityId: id,
-        actor: user.id,
+        actor: ctx.user.id,
         action: "delete",
       });
     });

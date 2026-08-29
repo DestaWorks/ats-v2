@@ -5,7 +5,7 @@ import {
   type GeneratedPasswordDTO,
 } from "@destaworks/contracts/validation/admin";
 import type { AcknowledgedIdDTO } from "@destaworks/contracts/api";
-import type { AuthUser } from "@destaworks/auth/guards";
+import type { AuthContext } from "@destaworks/auth/guards";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { RequireCapability } from "../../common/decorators/require-capability.decorator";
 import { CapabilityGuard } from "../../common/guards/capability.guard";
@@ -41,12 +41,12 @@ export class AdminAccessRequestsController {
   @HttpCode(200)
   @RequireCapability("manageAccessRequests")
   async approve(
-    @CurrentUser() actor: AuthUser,
+    @CurrentUser() actor: AuthContext,
     @Param("id") id: string,
     @Body(new ZodValidationPipe(approveRequestSchema))
     body: ContractOutput<typeof approveRequestSchema>,
   ): Promise<GeneratedPasswordDTO> {
-    return await this.requests.approve(id, body.role, actor.id);
+    return await this.requests.approve(id, body.role, actor.user.id);
   }
 
   @Post(":id/decline")
