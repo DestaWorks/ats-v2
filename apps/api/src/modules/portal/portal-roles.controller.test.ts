@@ -18,6 +18,7 @@ vi.mock("server-only", () => ({}));
 type ContactRow = {
   id: string;
   clientId: string;
+  tenantId: string | null;
   fullName: string;
   email: string | null;
   status: string;
