@@ -1396,11 +1396,62 @@ Two items are owed to someone other than the code:
 
 **Goal:** the second application, in the structure built for it.
 
-- [ ] `apps/admin` — Next.js, consuming `@destaworks/contracts` and `@destaworks/ui`
-- [ ] Tenant list, health, suspend and restore
-- [ ] Support impersonation — time-boxed, audited, consented
-- [ ] Platform metrics separate from any tenant's reports
-- **Done-when:** tenants are supportable without database access
+- [x] `apps/admin` — Next.js, consuming `@destaworks/contracts` and `@destaworks/ui`. **HTTP-only**:
+      its allowed imports are `contracts`, `domain`, `auth`, `config`, `integrations`, `ui` — no `db`
+      and no `application`. `apps/web` holds both only as legacy debt under a ratchet 4.3 drives to
+      zero; a new app must not be born with it. It carries its OWN manifest, because two rules in
+      `check-architecture.mjs` are gated on `hasOwnManifest` and skip a unit without one — and
+      inheriting the root manifest would have handed admin `@destaworks/db` and `@prisma/client` as
+      declared dependencies on day one
+- [x] Tenant list, health, suspend and restore. Health is DERIVED, never stored — two queries
+      regardless of tenant count. Suspension reason is a closed enum, not free text: it lands in the
+      suspended tenant's own `activity_log`, which their auditors read, and free text there is an
+      open channel for a third party's PII. Restore derives its target status from `trialEndsAt`
+      rather than defaulting to `active`, so a support action cannot silently promote a suspended
+      trial into a paying-looking workspace
+- [x] Support impersonation — time-boxed, audited, consented. **The tenant consents, never the
+      platform**: a member with `manageUsers` opens a bounded window, any member can read whether
+      one is open, and consent lapses on its own rather than persisting until someone remembers.
+      The window IS the session — no second admin-controlled clock, whose only advantage would be
+      letting the admin end early, which they achieve by not making requests. Expiry re-derives from
+      server-side state on every request; no cookie `Max-Age` or client timer is load-bearing.
+      **Read-only**, enforced three ways: the platform capability vocabulary has no write member,
+      the scope type is neither a `TenantContext` nor a `PlatformContext`, and the repository
+      exposes one read. Consent lives in `ActivityLog` as an append-only ledger rather than a
+      table — a table is an UPDATE target, so whoever can revoke could silently rewrite when
+      consent was granted; ledger rows can only be superseded, which is the standard a consent
+      record must meet under HIPAA and Proclamation 1321/2024. That design would stand even without
+      the migration freeze
+- [x] Platform metrics separate from any tenant's reports. Six of eight are built from GLOBAL models
+      (`Tenant`, `Membership`, `Session`, `ScheduleRun`), which carry no RLS policy; the two that
+      read tenant-scoped tables (`AiUsageEvent`, `Document`) use a bounded per-tenant walk inside
+      `withTenantTransaction(systemContextFor(id), …)`. Both controls are load-bearing and live at
+      different times: today only the seam's injection stops each iteration reading every tenant and
+      multiplying the totals; after the migration only the announcement stops each returning
+      nothing. No `BYPASSRLS`, no weakened policy, ratchet unchanged at 29
+- [x] **Two defects integration surfaced that no single branch could see.** `/platform/*` was 401
+      for exactly the operator it exists for — `SessionAuthGuard` resolves a tenant, and a platform
+      admin belongs to none. `PlatformAuthGuard` + `@CurrentIdentity()` authenticate an identity
+      without one, on a property separate from `request.user`. And suspension did not close the
+      client portal: `tenantIsLive` covers members, but the portal and the public request-access
+      forms resolve a tenant by slug and never see a membership, so a suspended workspace locked out
+      its staff while its external contacts kept working off a 30-day cookie
+- **Done-when:** tenants are supportable without database access ✅ — list, health, suspend, restore,
+  installation metrics and a consented read of a tenant's activity trail, all behind the platform
+  axis. **Not yet provable on staging:** like Phase 6, RLS is inert until the migrations run, so the
+  per-tenant walk in the metrics reader is exercised against CI Postgres rather than a live policy
+
+**Owner decisions this phase surfaced, none of them code:**
+- **How the console obtains a session.** No auth transport is mounted in `apps/admin` on purpose — a
+  second sign-in surface on a new origin is a security decision. If admin and web share a parent
+  domain and cookie scope, the existing sign-in works as-is; separate origins need their own Better
+  Auth catch-all.
+- **AI spend in currency.** `AiUsageEvent` records tokens; there is no cost column and no price
+  table. Money needs a schema change or a rate card that would silently go stale.
+- **A platform-scoped audit sink.** 6.8 says audit every crossing into the tenant it touched. Applied
+  faithfully to a metrics dashboard that names no tenant, that is one `activity_log` insert per
+  tenant per page load, burying each customer's real trail. It is logged instead. The right home is
+  a platform-scoped sink, which is a schema change.
 
 ---
 
