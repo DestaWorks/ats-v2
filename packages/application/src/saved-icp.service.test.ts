@@ -5,7 +5,7 @@ import type { TenantContext } from "@destaworks/domain/tenant";
  * Proves saved-ICP ownership isolation (only the caller's private ICPs are ever excluded from
  * `list`; delete is always scoped to the caller's id) and the create/duplicate-name round-trip —
  * all WITHOUT a DB. Mirrors `saved-view.service.test.ts` exactly. `savedIcpRepository`,
- * `userRepository`, `writeAudit`, and `withTransaction` are mocked.
+ * `userRepository`, `writeAudit`, and `withTenantTransaction` are mocked.
  */
 
 const h = vi.hoisted(() => ({
@@ -38,7 +38,7 @@ vi.mock("@destaworks/db/repositories/saved-icp.repository", () => ({ savedIcpRep
 vi.mock("@destaworks/db/repositories/user.repository", () => ({ userRepository: h.userRepo }));
 vi.mock("@destaworks/db/audit", () => ({ writeAudit: h.writeAudit }));
 vi.mock("@destaworks/db/with-transaction", () => ({
-  withTransaction: (fn: (tx: unknown) => unknown) => fn(h.fakeTx),
+  withTenantTransaction: (_ctx: unknown, fn: (tx: unknown) => unknown) => fn(h.fakeTx),
 }));
 
 import { savedIcpService } from "./saved-icp.service";
@@ -89,7 +89,7 @@ describe("savedIcpService.remove — ownership isolation", () => {
     await expect(savedIcpService.remove("icp1", other)).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
-    expect(h.repo.deleteOwned).toHaveBeenCalledWith("icp1", "u2", h.fakeTx);
+    expect(h.repo.deleteOwned).toHaveBeenCalledWith(other, "icp1", "u2", h.fakeTx);
     expect(h.writeAudit).not.toHaveBeenCalled();
   });
 
@@ -97,7 +97,7 @@ describe("savedIcpService.remove — ownership isolation", () => {
     h.repo.deleteOwned.mockResolvedValue({ count: 1 });
     const result = await savedIcpService.remove("icp1", associate);
     expect(result).toEqual({ id: "icp1" });
-    expect(h.repo.deleteOwned).toHaveBeenCalledWith("icp1", "u1", h.fakeTx);
+    expect(h.repo.deleteOwned).toHaveBeenCalledWith(associate, "icp1", "u1", h.fakeTx);
     expect(h.writeAudit).toHaveBeenCalledWith(
       h.fakeTx,
       expect.objectContaining({ entity: "saved_icp", entityId: "icp1", action: "delete" }),
@@ -114,6 +114,7 @@ describe("savedIcpService.create", () => {
       associate,
     );
     expect(h.repo.create).toHaveBeenCalledWith(
+      associate,
       expect.objectContaining({ userId: "u1", name: "CT Behavioral Health", isPrivate: false }),
       h.fakeTx,
     );

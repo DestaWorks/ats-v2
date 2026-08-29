@@ -56,7 +56,7 @@ vi.mock("@destaworks/integrations/hunter", () => ({ findHunterContacts: h.findHu
 vi.mock("@destaworks/integrations/http/rate-limit", () => ({ checkRateLimit: h.checkRateLimit }));
 vi.mock("@destaworks/db/audit", () => ({ writeAudit: h.writeAudit }));
 vi.mock("@destaworks/db/with-transaction", () => ({
-  withTransaction: (fn: (tx: unknown) => unknown) => fn(h.fakeTx),
+  withTenantTransaction: (_ctx: unknown, fn: (tx: unknown) => unknown) => fn(h.fakeTx),
 }));
 
 import { prospectService } from "./prospect.service";
@@ -100,6 +100,7 @@ describe("prospectService.create", () => {
     h.prospectRepo.create.mockResolvedValue(prospect());
     await prospectService.create({ practiceName: "Sterling Institute" }, associate);
     expect(h.prospectRepo.create).toHaveBeenCalledWith(
+      associate,
       expect.objectContaining({ status: "Fresh Lead", source: "Manual", createdById: "u1" }),
       h.fakeTx,
     );
@@ -115,7 +116,7 @@ describe("prospectService.list", () => {
     h.prospectRepo.count.mockResolvedValue(1);
     h.prospectRepo.list.mockResolvedValue([prospect({ ownerId: "u2" })]);
     h.userRepo.namesByIds.mockResolvedValue(new Map([["u2", "Manager Mo"]]));
-    const result = await prospectService.list({});
+    const result = await prospectService.list({}, associate);
     expect(result.prospects[0]!.ownerName).toBe("Manager Mo");
     expect(h.userRepo.namesByIds).toHaveBeenCalledWith(["u2"]);
   });
@@ -135,6 +136,7 @@ describe("prospectService.update", () => {
     h.prospectRepo.update.mockResolvedValue(prospect({ status: "Contacted" }));
     await prospectService.update("p1", { status: "Contacted" }, associate);
     expect(h.prospectRepo.update).toHaveBeenCalledWith(
+      associate,
       "p1",
       expect.objectContaining({ status: "Contacted" }),
       h.fakeTx,
@@ -202,6 +204,7 @@ describe("prospectService.addFromSearch", () => {
     );
     expect(result).toEqual({ added: 1, skipped: 1 });
     expect(h.prospectRepo.createMany).toHaveBeenCalledWith(
+      associate,
       [
         expect.objectContaining({
           npi: "1111111111",
@@ -243,14 +246,19 @@ describe("prospectService.bulkAction", () => {
     );
     expect(result).toEqual({ affected: 1, skipped: 1 });
     expect(h.prospectRepo.update).toHaveBeenCalledTimes(1);
-    expect(h.prospectRepo.update).toHaveBeenCalledWith("p1", { status: "Contacted" }, h.fakeTx);
+    expect(h.prospectRepo.update).toHaveBeenCalledWith(
+      associate,
+      "p1",
+      { status: "Contacted" },
+      h.fakeTx,
+    );
   });
 
   it("delete is never blocked by status (only by already being trashed, excluded upstream)", async () => {
     h.prospectRepo.findManyByIds.mockResolvedValue([prospect({ id: "p1", status: "Client" })]);
     const result = await prospectService.bulkAction({ action: "delete", ids: ["p1"] }, associate);
     expect(result).toEqual({ affected: 1, skipped: 0 });
-    expect(h.prospectRepo.softDelete).toHaveBeenCalledWith("p1", "u1", h.fakeTx);
+    expect(h.prospectRepo.softDelete).toHaveBeenCalledWith(associate, "p1", "u1", h.fakeTx);
   });
 });
 

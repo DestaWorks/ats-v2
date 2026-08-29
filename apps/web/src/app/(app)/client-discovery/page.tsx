@@ -45,7 +45,10 @@ export default async function ClientDiscoveryPage({
   const page = Number.isInteger(rawPage) && rawPage > 0 ? rawPage : 1;
 
   const [list, userRows] = await Promise.all([
-    prospectService.list(defined({ status, ownerId, search, includeDeleted: showDeleted, page })),
+    prospectService.list(
+      defined({ status, ownerId, search, includeDeleted: showDeleted, page }),
+      user,
+    ),
     cachedUserList(),
   ]);
   const owners = userRows.map((u) => ({ id: u.id, name: u.name }));

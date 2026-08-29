@@ -4,7 +4,7 @@ import type { TenantContext } from "@destaworks/domain/tenant";
 /**
  * Proves discoverService's NPPES→DTO mapping, dedupe composition, and the add-to-sourcing write
  * WITHOUT a DB or a real network call. The pure `discover-dedupe` rules run for real; the
- * repositories, `searchNppes`, `writeAudit`, and `withTransaction` are mocked.
+ * repositories, `searchNppes`, `writeAudit`, and `withTenantTransaction` are mocked.
  */
 
 const h = vi.hoisted(() => ({
@@ -43,7 +43,7 @@ vi.mock("@destaworks/db/repositories/open-role.repository", () => ({
 vi.mock("@destaworks/integrations/nppes", () => ({ searchNppes: h.searchNppes }));
 vi.mock("@destaworks/db/audit", () => ({ writeAudit: h.writeAudit }));
 vi.mock("@destaworks/db/with-transaction", () => ({
-  withTransaction: (fn: (tx: unknown) => unknown) => fn(h.fakeTx),
+  withTenantTransaction: (_ctx: unknown, fn: (tx: unknown) => unknown) => fn(h.fakeTx),
 }));
 vi.mock("@destaworks/integrations/http/rate-limit", () => ({ checkRateLimit: vi.fn() }));
 
@@ -177,7 +177,7 @@ describe("discoverService.addToSourcing", () => {
   it("creates the lead with source forced to NPPES and audits in one tx", async () => {
     const result = await discoverService.addToSourcing({ rows: [row], clientId: "cl1" }, user);
     expect(result).toEqual({ added: 1, skipped: 0 });
-    const [rows, tx, opts] = h.leadRepo.createMany.mock.calls[0]!;
+    const [, rows, tx, opts] = h.leadRepo.createMany.mock.calls[0]!;
     expect(tx).toBe(h.fakeTx);
     expect(opts).toEqual({ skipDuplicates: true });
     expect(rows[0]).toMatchObject({
@@ -216,7 +216,7 @@ describe("discoverService.addToSourcing", () => {
   it("collapses an intra-batch duplicate NPI to a single add", async () => {
     const result = await discoverService.addToSourcing({ rows: [row, { ...row }] }, user);
     expect(result).toEqual({ added: 1, skipped: 1 });
-    const [rows] = h.leadRepo.createMany.mock.calls[0]!;
+    const [, rows] = h.leadRepo.createMany.mock.calls[0]!;
     expect(rows).toHaveLength(1);
   });
 });
@@ -234,7 +234,7 @@ describe("discoverService.coverageGaps — Wave 5.5 backlog, legacy Drop 68", ()
       { credential: "PMHNP", state: "CT", _count: { _all: 2 } },
     ]);
 
-    const rows = await discoverService.coverageGaps();
+    const rows = await discoverService.coverageGaps(user);
 
     expect(rows).toEqual([
       { credential: "PMHNP", state: "CT", roleCount: 3, poolCount: 5, pipelineCount: 2 },
@@ -250,7 +250,7 @@ describe("discoverService.coverageGaps — Wave 5.5 backlog, legacy Drop 68", ()
     h.leadRepo.groupByCredentialState.mockResolvedValue([]);
     h.candidateRepo.groupActiveByCredentialState.mockResolvedValue([]);
 
-    const rows = await discoverService.coverageGaps();
+    const rows = await discoverService.coverageGaps(user);
     expect(rows.map((r) => r.credential)).toEqual(["PMHNP", "LCSW"]);
   });
 });

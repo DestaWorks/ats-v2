@@ -17,7 +17,7 @@ vi.mock("@destaworks/db/repositories/ai-usage-event.repository", () => ({
 }));
 vi.mock("@destaworks/db/audit", () => ({ writeAudit: h.writeAudit }));
 vi.mock("@destaworks/db/with-transaction", () => ({
-  withTransaction: (fn: (tx: unknown) => unknown) => fn({}),
+  withTenantTransaction: (_ctx: unknown, fn: (tx: unknown) => unknown) => fn({}),
 }));
 
 import { aiOpsService } from "./ai-ops.service";
@@ -36,14 +36,14 @@ beforeEach(() => {
 describe("aiOpsService.getSettings", () => {
   it("passes through the repository read", async () => {
     h.get.mockResolvedValue({ disabled: true });
-    expect(await aiOpsService.getSettings()).toEqual({ disabled: true });
+    expect(await aiOpsService.getSettings(actor)).toEqual({ disabled: true });
   });
 });
 
 describe("aiOpsService.setDisabled", () => {
   it("upserts the flag + reason and writes an audit entry inside one transaction", async () => {
     await aiOpsService.setDisabled(true, actor, "incident");
-    expect(h.setDisabled).toHaveBeenCalledWith(true, "u1", "incident", {});
+    expect(h.setDisabled).toHaveBeenCalledWith(actor, true, "u1", "incident", {});
     expect(h.writeAudit).toHaveBeenCalledWith(
       {},
       expect.objectContaining({
@@ -58,17 +58,17 @@ describe("aiOpsService.setDisabled", () => {
 
   it("nulls the reason out when re-enabling, even if one was passed", async () => {
     await aiOpsService.setDisabled(false, actor, "ignored");
-    expect(h.setDisabled).toHaveBeenCalledWith(false, "u1", null, {});
+    expect(h.setDisabled).toHaveBeenCalledWith(actor, false, "u1", null, {});
   });
 
   it("normalizes a blank/whitespace-only reason to null instead of storing an empty string", async () => {
     await aiOpsService.setDisabled(true, actor, "   ");
-    expect(h.setDisabled).toHaveBeenCalledWith(true, "u1", null, {});
+    expect(h.setDisabled).toHaveBeenCalledWith(actor, true, "u1", null, {});
   });
 
   it("trims a reason with surrounding whitespace", async () => {
     await aiOpsService.setDisabled(true, actor, "  incident  ");
-    expect(h.setDisabled).toHaveBeenCalledWith(true, "u1", "incident", {});
+    expect(h.setDisabled).toHaveBeenCalledWith(actor, true, "u1", "incident", {});
   });
 
   it("logs 'enable' when re-enabling", async () => {
@@ -99,7 +99,7 @@ describe("aiOpsService.getUsageOverview", () => {
       },
     ]);
 
-    const result = await aiOpsService.getUsageOverview();
+    const result = await aiOpsService.getUsageOverview(actor);
 
     expect(result.totalCalls).toBe(4);
     expect(result.successCount).toBe(3);
@@ -127,7 +127,7 @@ describe("aiOpsService.getUsageOverview", () => {
   it("zeroes out cleanly when there's no usage yet", async () => {
     h.summarySince.mockResolvedValue([]);
     h.listRecent.mockResolvedValue([]);
-    const result = await aiOpsService.getUsageOverview();
+    const result = await aiOpsService.getUsageOverview(actor);
     expect(result).toMatchObject({
       totalCalls: 0,
       successCount: 0,

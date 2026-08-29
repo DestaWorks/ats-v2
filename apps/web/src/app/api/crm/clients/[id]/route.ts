@@ -15,9 +15,9 @@ export type PatchCrmClientResponse = Contract.PatchCrmClientResponse;
  * PATCH edits the profile fields (legacy's "Client Info" tab). Both gated `viewCrm`.
  */
 export const GET = apiHandler<{ params: Promise<{ id: string }> }>(async (_req, ctx) => {
-  await requireCapability("viewCrm");
+  const user = await requireCapability("viewCrm");
   const { id } = await ctx.params;
-  return json<GetCrmClientResponse>(await clientService.detail(id));
+  return json<GetCrmClientResponse>(await clientService.detail(id, user));
 });
 
 export const PATCH = apiHandler<{ params: Promise<{ id: string }> }>(async (req, ctx) => {

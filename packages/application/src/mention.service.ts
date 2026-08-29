@@ -38,8 +38,8 @@ export const mentionService = {
   /** The viewer's recent mentions (newest first) + the true unread badge count. */
   async listMine(ctx: TenantContext): Promise<MentionListDTO> {
     const [rows, unread] = await Promise.all([
-      mentionRepository.listForRecipient(ctx.user.id, MENTIONS_PAGE),
-      mentionRepository.countUnread(ctx.user.id),
+      mentionRepository.listForRecipient(ctx, ctx.user.id, MENTIONS_PAGE),
+      mentionRepository.countUnread(ctx, ctx.user.id),
     ]);
     return { mentions: rows.map(toMentionDTO), unread };
   },
@@ -52,16 +52,20 @@ export const mentionService = {
    */
   async markRead(input: MarkMentionReadInput, ctx: TenantContext): Promise<{ unread: number }> {
     if (input.all) {
-      await mentionRepository.markAllRead(ctx.user.id);
+      await mentionRepository.markAllRead(ctx, ctx.user.id);
     } else {
-      const count = await mentionRepository.markRead(input.mentionId, ctx.user.id);
+      const count = await mentionRepository.markRead(ctx, input.mentionId, ctx.user.id);
       if (count === 0) {
-        const exists = await mentionRepository.existsForRecipient(input.mentionId, ctx.user.id);
+        const exists = await mentionRepository.existsForRecipient(
+          ctx,
+          input.mentionId,
+          ctx.user.id,
+        );
         if (!exists) {
           throw new AppError("NOT_FOUND", "Mention not found");
         }
       }
     }
-    return { unread: await mentionRepository.countUnread(ctx.user.id) };
+    return { unread: await mentionRepository.countUnread(ctx, ctx.user.id) };
   },
 };

@@ -215,7 +215,7 @@ const CASES: ParityCase[] = [
     spy: h.client.list,
     result: { clients: [{ id: CLIENT_ID, name: "Acme Health" }] },
     viaRoute: () => listClients(get("/crm/clients"), undefined),
-    viaController: () => clients.list(),
+    viaController: (user) => clients.list(user),
     deniedRole: ASSOCIATE,
   },
   {
@@ -237,7 +237,7 @@ const CASES: ParityCase[] = [
     spy: h.client.detail,
     result: { client: { id: CLIENT_ID }, contacts: [], pipeline: [] },
     viaRoute: () => readClient(get(`/crm/clients/${CLIENT_ID}`), ctx({ id: CLIENT_ID })),
-    viaController: () => clients.detail(CLIENT_ID),
+    viaController: (user) => clients.detail(CLIENT_ID, user),
     deniedRole: ASSOCIATE,
   },
   {
@@ -260,7 +260,7 @@ const CASES: ParityCase[] = [
     spy: h.analytics.compare,
     result: [{ clientId: CLIENT_ID, name: "Acme Health" }],
     viaRoute: () => compareClients(get("/crm/compare"), undefined),
-    viaController: () => analytics.compare(),
+    viaController: (user) => analytics.compare(user),
     deniedRole: ASSOCIATE,
   },
   {
@@ -271,7 +271,7 @@ const CASES: ParityCase[] = [
     spy: h.analytics.healthScore,
     result: { score: 72, band: "healthy" },
     viaRoute: () => clientHealth(get(`/crm/clients/${CLIENT_ID}/health`), ctx({ id: CLIENT_ID })),
-    viaController: () => analytics.healthScore(CLIENT_ID),
+    viaController: (user) => analytics.healthScore(CLIENT_ID, user),
     deniedRole: ASSOCIATE,
   },
   {
@@ -282,7 +282,7 @@ const CASES: ParityCase[] = [
     spy: h.analytics.revenue,
     result: { monthlyRate: 1000, grossMargin: 40 },
     viaRoute: () => clientRevenue(get(`/crm/clients/${CLIENT_ID}/revenue`), ctx({ id: CLIENT_ID })),
-    viaController: () => analytics.revenue(CLIENT_ID),
+    viaController: (user) => analytics.revenue(CLIENT_ID, user),
     deniedRole: ASSOCIATE,
   },
   {
@@ -303,7 +303,7 @@ const CASES: ParityCase[] = [
         send(`/crm/clients/${CLIENT_ID}/ai-workspace`, "POST", WORKSPACE_INPUT),
         ctx({ id: CLIENT_ID }),
       ),
-    viaController: () => workspace.generate(CLIENT_ID, WORKSPACE_INPUT),
+    viaController: (user) => workspace.generate(CLIENT_ID, WORKSPACE_INPUT, user),
     deniedRole: ASSOCIATE,
   },
   {
@@ -523,7 +523,7 @@ const CASES: ParityCase[] = [
     spy: h.note.list,
     result: [{ id: "n1", text: "Called the COO" }],
     viaRoute: () => listNotes(get(`/crm/clients/${CLIENT_ID}/notes`), ctx({ id: CLIENT_ID })),
-    viaController: () => notes.list(CLIENT_ID),
+    viaController: (user) => notes.list(CLIENT_ID, user),
     deniedRole: ASSOCIATE,
   },
   {
@@ -556,7 +556,7 @@ const CASES: ParityCase[] = [
     result: [{ id: CONTACT_ID, portalEnabled: true }],
     viaRoute: () =>
       listPortalContacts(get(`/crm/clients/${CLIENT_ID}/portal/contacts`), ctx({ id: CLIENT_ID })),
-    viaController: () => portal.listContacts(CLIENT_ID),
+    viaController: (user) => portal.listContacts(CLIENT_ID, user),
     deniedRole: DIRECTOR,
   },
   {

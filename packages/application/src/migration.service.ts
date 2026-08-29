@@ -16,7 +16,7 @@ import type { ResumeData } from "@destaworks/contracts/validation/resume";
 import type { TenantContext } from "@destaworks/domain/tenant";
 import { parseResume } from "@destaworks/integrations/ai/parse-resume";
 import { writeAudit } from "@destaworks/db/audit";
-import { withTransaction } from "@destaworks/db/with-transaction";
+import { withTenantTransaction } from "@destaworks/db/with-transaction";
 import { candidateRepository } from "@destaworks/db/repositories/candidate.repository";
 import { clientRepository } from "@destaworks/db/repositories/client.repository";
 import { documentRepository } from "@destaworks/db/repositories/document.repository";
@@ -171,13 +171,13 @@ interface Planned {
 
 /** Parse → transform → resolve add/update against the DB → dedupe → match resumes. No writes.
  *  Shared by both ops. */
-async function planImport(input: ImportInput): Promise<Planned> {
+async function planImport(ctx: TenantContext, input: ImportInput): Promise<Planned> {
   const { rows, parseErrors } = parseSheet(input.content, input.format);
   const checksum = contentChecksum(input.content);
 
   const [clients, existing] = await Promise.all([
-    clientRepository.list(),
-    candidateRepository.listForDedupe(true),
+    clientRepository.list(ctx),
+    candidateRepository.listForDedupe(ctx, true),
   ]);
   const clientsByName = new Map<string, string>();
   for (const c of clients) {
@@ -283,12 +283,12 @@ async function attachResumeWithAi(
     data = await parseResume({ variant, text: resumeText });
     const mapped = toCandidateCreateInput(variant, data) as unknown as Record<string, unknown>;
 
-    await withTransaction(async (tx) => {
-      const existing = await candidateRepository.findById(candidateId, undefined, tx);
+    await withTenantTransaction(ctx, async (tx) => {
+      const existing = await candidateRepository.findById(ctx, candidateId, undefined, tx);
       if (existing) {
         const fills = fillEmptyFields(existing as unknown as Record<string, unknown>, mapped);
         if (Object.keys(fills).length > 0) {
-          await candidateRepository.update(candidateId, fills, tx);
+          await candidateRepository.update(ctx, candidateId, fills, tx);
         }
       }
     });
@@ -299,8 +299,9 @@ async function attachResumeWithAi(
     plan.errors.push("ai-extraction-failed");
   }
 
-  await withTransaction(async (tx) => {
+  await withTenantTransaction(ctx, async (tx) => {
     const document = await documentRepository.upsertByLegacyId(
+      ctx,
       `resume-ai:${plan.legacyId}`,
       {
         candidateId,
@@ -327,7 +328,7 @@ export const migrationService = {
   /** Parse + transform + dedupe → a diffable report. Writes NOTHING. */
   async prepare(input: ImportInput, ctx: TenantContext): Promise<ImportReport> {
     assertCanImport(ctx);
-    return buildReport(await planImport(input));
+    return buildReport(await planImport(ctx, input));
   },
 
   /**
@@ -345,7 +346,7 @@ export const migrationService = {
     options?: CommitOptions,
   ): Promise<ImportReport> {
     assertCanImport(ctx);
-    const planned = await planImport(input);
+    const planned = await planImport(ctx, input);
 
     const warnings: string[] = [];
     if (input.checksum && input.checksum !== planned.checksum) {
@@ -373,8 +374,9 @@ export const migrationService = {
       let candidateId: string | null = null;
       let committed = false;
       try {
-        await withTransaction(async (tx) => {
+        await withTenantTransaction(ctx, async (tx) => {
           const candidate = await candidateRepository.upsertByLegacyId(
+            ctx,
             plan.legacyId,
             plan.create,
             plan.update,
@@ -383,6 +385,7 @@ export const migrationService = {
           candidateId = candidate.id;
           if (plan.document) {
             await documentRepository.upsertByLegacyId(
+              ctx,
               plan.document.legacyId,
               {
                 candidateId: candidate.id,
@@ -434,7 +437,7 @@ export const migrationService = {
     const report = buildReport(planned);
     if (warnings.length > 0) report.warnings = [...(report.warnings ?? []), ...warnings];
 
-    await withTransaction((tx) =>
+    await withTenantTransaction(ctx, (tx) =>
       writeAudit(tx, {
         entity: "import_batch",
         entityId: planned.checksum,

@@ -304,13 +304,13 @@ describe("GET /daily/recap clamps `since` to the lookback window", () => {
 
   it("pulls a two-year-old `since` forward to the 14-day floor", async () => {
     await send("GET", "/daily/recap?since=2024-01-01T00:00:00.000Z");
-    expect(h.recap).toHaveBeenCalledWith(new Date("2026-08-11T12:00:00.000Z"));
+    expect(h.recap).toHaveBeenCalledWith(new Date("2026-08-11T12:00:00.000Z"), expect.anything());
     vi.useRealTimers();
   });
 
   it("leaves a `since` inside the window untouched", async () => {
     await send("GET", "/daily/recap?since=2026-08-24T09:00:00.000Z");
-    expect(h.recap).toHaveBeenCalledWith(new Date("2026-08-24T09:00:00.000Z"));
+    expect(h.recap).toHaveBeenCalledWith(new Date("2026-08-24T09:00:00.000Z"), expect.anything());
     vi.useRealTimers();
   });
 });

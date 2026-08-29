@@ -22,9 +22,9 @@ export type DeleteProspectResponse = SoftDeletedResponse;
  * (`viewClientDiscovery`).
  */
 export const GET = apiHandler<{ params: Promise<{ id: string }> }>(async (_req, ctx) => {
-  await requireCapability("viewClientDiscovery");
+  const user = await requireCapability("viewClientDiscovery");
   const { id } = await ctx.params;
-  return json<GetProspectResponse>({ prospect: await prospectService.detail(id) });
+  return json<GetProspectResponse>({ prospect: await prospectService.detail(id, user) });
 });
 
 /**

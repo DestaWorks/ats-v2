@@ -112,7 +112,7 @@ export const migrationRunService = {
   async start(input: ImportInput, ctx: TenantContext): Promise<MigrationCommitAccepted> {
     assertCanImport(ctx);
 
-    const run = await migrationRunRepository.create({
+    const run = await migrationRunRepository.create(ctx, {
       checksum: contentChecksum(input.content),
       format: input.format,
       filename: input.filename ?? null,
@@ -123,7 +123,7 @@ export const migrationRunService = {
     });
 
     const jobId = await requireMigrationCommitEnqueuer()(run.id);
-    await migrationRunRepository.setJobId(run.id, jobId);
+    await migrationRunRepository.setJobId(ctx, run.id, jobId);
 
     logger.info("migration.run.queued", { runId: run.id, jobId, actorId: ctx.user.id });
     return { runId: run.id, jobId, status: "queued" };
@@ -132,7 +132,7 @@ export const migrationRunService = {
   /** The operator's read. Same `bulkImport` gate as starting one — a run report lists candidates. */
   async state(runId: string, ctx: TenantContext): Promise<MigrationRunState> {
     assertCanImport(ctx);
-    const run = await migrationRunRepository.findById(runId);
+    const run = await migrationRunRepository.findById(ctx, runId);
     if (!run) throw new AppError("NOT_FOUND", "Import run not found");
     return toState(run);
   },

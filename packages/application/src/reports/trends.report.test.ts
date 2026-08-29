@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import type { TenantContext } from "@destaworks/domain/tenant";
 
 /**
  * `trendsReport.trends` — Wave 5.2 flex. Covers the anomaly-detection thresholds (legacy: skip
@@ -31,6 +32,13 @@ vi.mock("@destaworks/db/repositories/stage-history.repository", () => ({
 
 import { trendsReport } from "./trends.report";
 
+const ctx: TenantContext = {
+  tenantId: "t1",
+  membershipId: "u1-m",
+  user: { id: "u1", email: "u@desta.works", name: "Test User" },
+  role: "Owner",
+};
+
 beforeEach(() => {
   Object.values(h).forEach((fn) => fn.mockReset());
   h.targetsForDateRange.mockResolvedValue([]);
@@ -51,7 +59,7 @@ describe("trendsReport.trends — anomaly detection", () => {
     h.promotedCountsByRange.mockResolvedValue(new Map());
     h.enteredStatusCountsByRange.mockResolvedValue(new Map());
 
-    const dto = await trendsReport.trends();
+    const dto = await trendsReport.trends(ctx);
     expect(dto.anomalies.find((a) => a.label === "Sourced")).toBeUndefined();
   });
 
@@ -67,7 +75,7 @@ describe("trendsReport.trends — anomaly detection", () => {
     h.promotedCountsByRange.mockResolvedValue(new Map());
     h.enteredStatusCountsByRange.mockResolvedValue(new Map());
 
-    const dto = await trendsReport.trends();
+    const dto = await trendsReport.trends(ctx);
     const anomaly = dto.anomalies.find((a) => a.label === "Sourced");
     expect(anomaly).toMatchObject({
       direction: "up",
@@ -89,7 +97,7 @@ describe("trendsReport.trends — anomaly detection", () => {
     h.promotedCountsByRange.mockResolvedValue(new Map());
     h.enteredStatusCountsByRange.mockResolvedValue(new Map());
 
-    const dto = await trendsReport.trends();
+    const dto = await trendsReport.trends(ctx);
     expect(dto.anomalies.find((a) => a.label === "Sourced")).toBeUndefined();
   });
 
@@ -105,7 +113,7 @@ describe("trendsReport.trends — anomaly detection", () => {
     h.promotedCountsByRange.mockResolvedValue(new Map());
     h.enteredStatusCountsByRange.mockResolvedValue(new Map());
 
-    const dto = await trendsReport.trends();
+    const dto = await trendsReport.trends(ctx);
     const anomaly = dto.anomalies.find((a) => a.label === "Sourced");
     expect(anomaly).toMatchObject({ direction: "up", changeLabel: "new" });
   });
@@ -117,13 +125,15 @@ describe("trendsReport.trends — funnel", () => {
     h.outreachCountsByRange.mockResolvedValue(new Map([["u1", 50]]));
     h.responseCountsByRange.mockResolvedValue(new Map([["u1", 10]]));
     h.promotedCountsByRange.mockResolvedValue(new Map());
-    h.enteredStatusCountsByRange.mockImplementation(async (toStatus: string) => {
-      if (toStatus === "SUBMITTED_TO_CLIENT") return new Map([["u1", 5]]);
-      if (toStatus === "STARTED_DAY1") return new Map([["u1", 1]]);
-      return new Map();
-    });
+    h.enteredStatusCountsByRange.mockImplementation(
+      async (_ctx: TenantContext, toStatus: string) => {
+        if (toStatus === "SUBMITTED_TO_CLIENT") return new Map([["u1", 5]]);
+        if (toStatus === "STARTED_DAY1") return new Map([["u1", 1]]);
+        return new Map();
+      },
+    );
 
-    const dto = await trendsReport.trends();
+    const dto = await trendsReport.trends(ctx);
     const bySourced = dto.funnel.find((f) => f.label === "Sourced")!;
     const byOutreach = dto.funnel.find((f) => f.label === "Outreach")!;
     expect(bySourced.convCurrPct).toBeNull(); // first stage has no preceding stage

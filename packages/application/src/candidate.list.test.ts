@@ -165,7 +165,7 @@ describe("candidateService.listCandidates — DB path (newest/oldest)", () => {
       { track: "Operations", status: "NEW_CANDIDATE", clientId: "cl1", search: "jane" },
       associate,
     );
-    const [args] = h.candidateRepo.listCards.mock.calls[0]!;
+    const [, args] = h.candidateRepo.listCards.mock.calls[0]!;
     expect(args).toMatchObject({
       track: "Operations",
       status: "NEW_CANDIDATE",
@@ -182,7 +182,7 @@ describe("candidateService.listCandidates — DB path (newest/oldest)", () => {
     h.candidateRepo.listCards.mockResolvedValue([row()]);
     h.candidateRepo.count.mockResolvedValue(100);
     const list = await candidateService.listCandidates({ page: 2 }, associate);
-    const [args] = h.candidateRepo.listCards.mock.calls[0]!;
+    const [, args] = h.candidateRepo.listCards.mock.calls[0]!;
     expect(args.skip).toBe(PAGE_SIZE);
     expect(list).toMatchObject({
       total: 100,
@@ -201,7 +201,7 @@ describe("candidateService.listCandidates — DB path (newest/oldest)", () => {
     // The optimistic (unclamped, skip=100) read races `count` in the same round trip; once
     // `count` reveals page 5 doesn't exist, ONE corrective re-fetch runs at the real skip.
     expect(h.candidateRepo.listCards).toHaveBeenCalledTimes(2);
-    const correctiveArgs = h.candidateRepo.listCards.mock.calls[1]![0];
+    const correctiveArgs = h.candidateRepo.listCards.mock.calls[1]![1];
     expect(correctiveArgs.skip).toBe(0);
     expect(list.page).toBe(1);
     expect(list.hasNext).toBe(false);
@@ -213,7 +213,7 @@ describe("candidateService.listCandidates — DB path (newest/oldest)", () => {
     const list = await candidateService.listCandidates({ page: 999_999_999 }, associate);
     // The FIRST (optimistic) call must be bounded by the defensive cap, not
     // (999_999_999 - 1) * 25 — regardless of what `count` later reveals.
-    const optimisticArgs = h.candidateRepo.listCards.mock.calls[0]![0];
+    const optimisticArgs = h.candidateRepo.listCards.mock.calls[0]![1];
     expect(optimisticArgs.skip).toBeLessThanOrEqual(10_000 * PAGE_SIZE);
     expect(list.page).toBe(1); // still correctly clamps to the real last page
   });
@@ -222,7 +222,7 @@ describe("candidateService.listCandidates — DB path (newest/oldest)", () => {
     h.candidateRepo.listCards.mockResolvedValue([row()]);
     h.candidateRepo.count.mockResolvedValue(1);
     await candidateService.listCandidates({ sort: "oldest" }, associate);
-    expect(h.candidateRepo.listCards.mock.calls[0]![0].orderBy).toBe("createdAt_asc");
+    expect(h.candidateRepo.listCards.mock.calls[0]![1].orderBy).toBe("createdAt_asc");
   });
 
   it("folds the fit pct onto each item WITHOUT re-sorting — order stays the DB order", async () => {
@@ -259,7 +259,7 @@ describe("candidateService.listCandidates — DB path (newest/oldest)", () => {
 
   it("resolves `mine` to viewer.id server-side (never a client-supplied id)", async () => {
     await candidateService.listCandidates({ mine: true, sort: "oldest" }, associate);
-    const [args] = h.candidateRepo.listCards.mock.calls[0]!;
+    const [, args] = h.candidateRepo.listCards.mock.calls[0]!;
     expect(args.createdById).toBe("u1");
     expect(args.orderBy).toBe("createdAt_asc");
   });
@@ -274,7 +274,7 @@ describe("candidateService.listCandidates — DB path (newest/oldest)", () => {
       },
       associate,
     );
-    const [args] = h.candidateRepo.listCards.mock.calls[0]!;
+    const [, args] = h.candidateRepo.listCards.mock.calls[0]!;
     expect(args.source).toBe("LinkedIn");
     expect(args.createdById).toBe("other-user"); // explicit view-as owner
     expect(args.addedFrom).toEqual(new Date("2026-06-01T00:00:00.000Z")); // widened to day start
@@ -282,7 +282,7 @@ describe("candidateService.listCandidates — DB path (newest/oldest)", () => {
 
     h.candidateRepo.listCards.mockClear();
     await candidateService.listCandidates({ ownerId: "other-user", mine: true }, associate);
-    expect(h.candidateRepo.listCards.mock.calls[0]![0].createdById).toBe("u1"); // mine wins
+    expect(h.candidateRepo.listCards.mock.calls[0]![1].createdById).toBe("u1"); // mine wins
   });
 });
 
@@ -294,7 +294,7 @@ describe("candidateService.listCandidates — score path (fit / hot)", () => {
     expect(list.candidates.map((c) => c.id)).toEqual(["hi", "mid", "nul"]); // score desc, nulls last
     expect(list.candidates.map((c) => c.score)).toEqual([100, 40, null]);
     expect(list.total).toBe(3);
-    const [args] = h.candidateRepo.listCards.mock.calls[0]!;
+    const [, args] = h.candidateRepo.listCards.mock.calls[0]!;
     expect(args.skip).toBeUndefined();
     expect(args.take).toBeUndefined();
     expect(h.candidateRepo.count).not.toHaveBeenCalled();

@@ -1,6 +1,8 @@
 import { Body, Controller, HttpCode, Inject, Param, Post, UseGuards } from "@nestjs/common";
 import { generateWorkspaceSchema } from "@destaworks/contracts/validation/crm-ai-workspace";
 import type { PostCrmAiWorkspaceResponse } from "@destaworks/contracts/http/crm";
+import type { AuthContext } from "@destaworks/auth/guards";
+import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { RateLimit } from "../../common/decorators/rate-limit.decorator";
 import { RequireCapability } from "../../common/decorators/require-capability.decorator";
 import { CapabilityGuard } from "../../common/guards/capability.guard";
@@ -33,7 +35,8 @@ export class CrmAiWorkspaceController {
     @Param("id") clientId: string,
     @Body(new ZodValidationPipe(generateWorkspaceSchema))
     body: ContractOutput<typeof generateWorkspaceSchema>,
+    @CurrentUser() user: AuthContext,
   ): Promise<PostCrmAiWorkspaceResponse> {
-    return this.workspace.generate(clientId, body);
+    return this.workspace.generate(clientId, body, user);
   }
 }

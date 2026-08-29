@@ -26,8 +26,8 @@ export class AdminAiController {
 
   @Get("settings")
   @RequireCapability("manageAiSettings")
-  async getSettings(): Promise<AiSettingsDTO> {
-    return await this.aiOps.getSettings();
+  async getSettings(@CurrentUser() actor: AuthContext): Promise<AiSettingsDTO> {
+    return await this.aiOps.getSettings(actor);
   }
 
   @Patch("settings")
@@ -42,7 +42,7 @@ export class AdminAiController {
 
   @Get("usage")
   @RequireCapability("manageAiSettings")
-  async getUsage(): Promise<AiUsageOverviewDTO> {
-    return await this.aiOps.getUsageOverview();
+  async getUsage(@CurrentUser() actor: AuthContext): Promise<AiUsageOverviewDTO> {
+    return await this.aiOps.getUsageOverview(actor);
   }
 }

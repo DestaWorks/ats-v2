@@ -40,7 +40,7 @@ vi.mock("@destaworks/db/repositories/document.repository", () => ({
 }));
 vi.mock("@destaworks/db/audit", () => ({ writeAudit: h.writeAudit }));
 vi.mock("@destaworks/db/with-transaction", () => ({
-  withTransaction: (fn: (tx: unknown) => unknown) => fn(h.fakeTx),
+  withTenantTransaction: (_ctx: unknown, fn: (tx: unknown) => unknown) => fn(h.fakeTx),
 }));
 // Only the two functions that would talk to S3 are stubbed. The key constructors are pure and
 // come through untouched, so what these tests assert about a key is the real key scheme.
@@ -177,7 +177,7 @@ describe("resumeService.save", () => {
     await resumeService.save(saveInput(), h.user as TenantContext);
 
     // Attached to c1 via the shared tx; fills are empty-only (never overwrites name).
-    const [uid, fills, utx] = h.candidateRepo.update.mock.calls[0]!;
+    const [, uid, fills, utx] = h.candidateRepo.update.mock.calls[0]!;
     expect(uid).toBe("c1");
     expect(utx).toBe(h.fakeTx);
     expect(fills).toMatchObject({ phone: "(555) 555-0100", city: "Austin" });
@@ -185,7 +185,7 @@ describe("resumeService.save", () => {
     expect(h.candidateRepo.create).not.toHaveBeenCalled();
 
     // Document created with the candidate id + full extractedData, same tx.
-    const [docData, dtx] = h.documentRepo.create.mock.calls[0]!;
+    const [, docData, dtx] = h.documentRepo.create.mock.calls[0]!;
     expect(dtx).toBe(h.fakeTx);
     expect(docData).toMatchObject({ candidateId: "c1", type: "resume", uploadedById: "u1" });
     expect(docData.extractedData).toMatchObject({ name: "Jane Doe" });
@@ -210,7 +210,7 @@ describe("resumeService.save", () => {
 
     await resumeService.save(saveInput({ confirmedCandidateId: "c2" }), h.user as TenantContext);
 
-    expect(h.candidateRepo.findById).toHaveBeenCalledWith("c2", undefined, h.fakeTx);
+    expect(h.candidateRepo.findById).toHaveBeenCalledWith(h.user, "c2", undefined, h.fakeTx);
     expect(h.candidateRepo.create).not.toHaveBeenCalled();
     expect(h.writeAudit.mock.calls[0]![1]).toMatchObject({ action: "attach" });
   });
@@ -236,7 +236,7 @@ describe("resumeService.save", () => {
 
     await resumeService.save(saveInput(), h.user as TenantContext);
 
-    const [createData, ctx] = h.candidateRepo.create.mock.calls[0]!;
+    const [, createData, ctx] = h.candidateRepo.create.mock.calls[0]!;
     expect(ctx).toBe(h.fakeTx);
     // create forces NEW_CANDIDATE (stage 0) — extraction never sets a stage.
     expect(createData).toMatchObject({ status: "NEW_CANDIDATE", stageOrder: 0, createdById: "u1" });
@@ -267,7 +267,7 @@ describe("resumeService.save", () => {
 
     expect(h.fakeTx.$executeRaw).toHaveBeenCalled();
     expect(h.candidateRepo.create).not.toHaveBeenCalled();
-    const [uid, , utx] = h.candidateRepo.update.mock.calls[0]!;
+    const [, uid, , utx] = h.candidateRepo.update.mock.calls[0]!;
     expect(uid).toBe("winner");
     expect(utx).toBe(h.fakeTx);
     expect(h.writeAudit.mock.calls[0]![1]).toMatchObject({ action: "attach" });
@@ -296,7 +296,7 @@ describe("resumeService.save", () => {
 
     await resumeService.save(saveInput({ storageKey: "abc-jane.pdf" }), h.user as TenantContext);
 
-    const [docData] = h.documentRepo.create.mock.calls[0]!;
+    const [, docData] = h.documentRepo.create.mock.calls[0]!;
     expect(docData).toMatchObject({ storageKey: "abc-jane.pdf" });
   });
 
@@ -307,7 +307,7 @@ describe("resumeService.save", () => {
 
     await resumeService.save(saveInput(), h.user as TenantContext);
 
-    const [docData] = h.documentRepo.create.mock.calls[0]!;
+    const [, docData] = h.documentRepo.create.mock.calls[0]!;
     expect(docData).toMatchObject({ storageKey: null });
   });
 });
@@ -381,6 +381,7 @@ describe("resumeService.attachToCandidate", () => {
     );
 
     expect(h.documentRepo.create).toHaveBeenCalledWith(
+      h.user,
       {
         candidateId: "c1",
         type: "resume",
@@ -410,6 +411,7 @@ describe("resumeService.attachToCandidate", () => {
     );
 
     expect(h.documentRepo.create).toHaveBeenCalledWith(
+      h.user,
       expect.objectContaining({ extractedText: null, storageKey: null }),
       h.fakeTx,
     );

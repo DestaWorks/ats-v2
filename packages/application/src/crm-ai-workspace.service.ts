@@ -20,19 +20,19 @@ import { AppError } from "@destaworks/integrations/http/app-error";
 /** Recent-activity lines fed into the prompt — capped like `buildTimeline`'s 40 (`client.service.ts`). */
 const ACTIVITY_LINE_CAP = 30;
 
-async function requireClient(id: string) {
-  const client = await clientRepository.findById(id);
+async function requireClient(ctx: TenantContext, id: string) {
+  const client = await clientRepository.findById(ctx, id);
   if (!client) throw new AppError("NOT_FOUND", "Client not found");
   return client;
 }
 
-async function buildContext(clientId: string): Promise<WorkspaceContext> {
-  const client = await requireClient(clientId);
+async function buildContext(ctx: TenantContext, clientId: string): Promise<WorkspaceContext> {
+  const client = await requireClient(ctx, clientId);
   const [notes, meetings, tasks, deals] = await Promise.all([
-    clientNoteRepository.listForClient(clientId),
-    clientMeetingRepository.listForClient(clientId),
-    clientTaskRepository.listForClient(clientId),
-    dealRepository.listForClient(clientId),
+    clientNoteRepository.listForClient(ctx, clientId),
+    clientMeetingRepository.listForClient(ctx, clientId),
+    clientTaskRepository.listForClient(ctx, clientId),
+    dealRepository.listForClient(ctx, clientId),
   ]);
 
   const entries = [
@@ -63,9 +63,13 @@ async function buildContext(clientId: string): Promise<WorkspaceContext> {
  * `ClientNote` row (not legacy's truncated stringly-typed activity blob).
  */
 export const crmAiWorkspaceService = {
-  async generate(clientId: string, input: GenerateWorkspaceInput): Promise<WorkspaceResultDTO> {
-    const ctx = await buildContext(clientId);
-    return generateWorkspaceText(ctx, defined(input));
+  async generate(
+    clientId: string,
+    input: GenerateWorkspaceInput,
+    ctx: TenantContext,
+  ): Promise<WorkspaceResultDTO> {
+    const workspace = await buildContext(ctx, clientId);
+    return generateWorkspaceText(workspace, defined(input));
   },
 
   async logNote(clientId: string, text: string, ctx: TenantContext): Promise<ClientNoteDTO> {

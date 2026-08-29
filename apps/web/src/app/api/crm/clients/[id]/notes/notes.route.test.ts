@@ -56,7 +56,10 @@ describe("GET /api/crm/clients/:id/notes", () => {
     h.list.mockResolvedValue([]);
     const res = await GET(getReq(), ctx);
     expect(res.status).toBe(200);
-    expect(h.list).toHaveBeenCalledWith("c1");
+    expect(h.list).toHaveBeenCalledWith(
+      "c1",
+      expect.objectContaining({ user: expect.objectContaining({ id: "u1" }) }),
+    );
   });
 });
 

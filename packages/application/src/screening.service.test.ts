@@ -46,7 +46,7 @@ vi.mock("@destaworks/integrations/http/request-cache", () => ({
 vi.mock("./candidate.service", () => ({ candidateService: h.candidateService }));
 vi.mock("@destaworks/db/audit", () => ({ writeAudit: h.writeAudit }));
 vi.mock("@destaworks/db/with-transaction", () => ({
-  withTransaction: (fn: (tx: unknown) => unknown) => fn(h.fakeTx),
+  withTenantTransaction: (_ctx: unknown, fn: (tx: unknown) => unknown) => fn(h.fakeTx),
 }));
 
 import { screeningService } from "./screening.service";
@@ -113,7 +113,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   h.candidateRepo.findById.mockResolvedValue(candidateRow());
   h.clientRulesRepo.list.mockResolvedValue([{ clientId: "cl1", states: ["CT"], schedule: null }]);
-  h.screeningRepo.create.mockImplementation((data: Record<string, unknown>) =>
+  h.screeningRepo.create.mockImplementation((_ctx: unknown, data: Record<string, unknown>) =>
     Promise.resolve({ id: "sc1", scoredAt: new Date("2026-07-16T00:00:00Z"), ...data }),
   );
 });

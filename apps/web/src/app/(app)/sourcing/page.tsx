@@ -1,5 +1,6 @@
 import { isLeadStatus, type LeadStatus } from "@destaworks/domain/constants";
 import { defined } from "@destaworks/domain/utils/defined";
+import { getVerifiedUser } from "@destaworks/auth/guards";
 import { leadService } from "@destaworks/application/lead.service";
 import { LeadFilters } from "./lead-filters";
 import { LeadsInventory } from "./leads-inventory";
@@ -19,6 +20,7 @@ export default async function SourcingPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const user = await getVerifiedUser();
   const sp = await searchParams;
   const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
 
@@ -36,6 +38,7 @@ export default async function SourcingPage({
   const [list, clientRows, users] = await Promise.all([
     leadService.list(
       defined({ status, source, clientId, ownerId, search, includeDeleted: showDeleted, page }),
+      user,
     ),
     cachedClientList(),
     cachedUserList(), // filter + bulk "Assign owner…" options (id + display name only)

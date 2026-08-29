@@ -11,14 +11,14 @@ export async function loadRoleDetail(id: string) {
 
   let role;
   try {
-    role = await openRoleService.detail(id);
+    role = await openRoleService.detail(id, user);
   } catch (err) {
     if (err instanceof AppError && err.code === "NOT_FOUND") notFound();
     throw err;
   }
 
   const [{ matches, dormantMatches }, clientRows] = await Promise.all([
-    openRoleService.matchesAndDormant(id),
+    openRoleService.matchesAndDormant(id, user),
     cachedClientList(),
   ]);
   const clients = clientRows.map((c) => ({ id: c.id, name: c.name }));

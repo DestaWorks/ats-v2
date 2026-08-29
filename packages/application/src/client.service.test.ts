@@ -85,7 +85,7 @@ vi.mock("@destaworks/db/repositories/candidate.repository", () => ({
 vi.mock("@destaworks/db/repositories/user.repository", () => ({ userRepository: h.userRepo }));
 vi.mock("@destaworks/db/audit", () => ({ writeAudit: h.writeAudit }));
 vi.mock("@destaworks/db/with-transaction", () => ({
-  withTransaction: (fn: (tx: unknown) => unknown) => fn(h.fakeTx),
+  withTenantTransaction: (_ctx: unknown, fn: (tx: unknown) => unknown) => fn(h.fakeTx),
 }));
 
 import { clientService } from "./client.service";
@@ -231,7 +231,7 @@ describe("clientService.list", () => {
     ]);
     h.clientRepo.contactCounts.mockResolvedValue(new Map([["c1", 3]]));
 
-    const out = await clientService.list();
+    const out = await clientService.list(h.owner as TenantContext);
 
     expect(out.clients).toHaveLength(2);
     expect(out.clients.find((c) => c.id === "c1")?.contactCount).toBe(3);
@@ -242,7 +242,9 @@ describe("clientService.list", () => {
 describe("clientService.detail", () => {
   it("throws NOT_FOUND for a missing client (no further reads)", async () => {
     h.clientRepo.findById.mockResolvedValue(null);
-    await expect(clientService.detail("nope")).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(clientService.detail("nope", h.owner as TenantContext)).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
     expect(h.contactRepo.listForClient).not.toHaveBeenCalled();
   });
 
@@ -257,10 +259,13 @@ describe("clientService.detail", () => {
     ]);
     h.candidateRepo.count.mockResolvedValue(5); // verified
 
-    const out = await clientService.detail("c1");
+    const out = await clientService.detail("c1", h.owner as TenantContext);
 
     expect(out.pipelineSnapshot).toEqual({ total: 10, active: 6, started: 1, verified: 5 });
-    expect(h.candidateRepo.count).toHaveBeenCalledWith({ clientId: "c1", licenseStatus: "Active" });
+    expect(h.candidateRepo.count).toHaveBeenCalledWith(h.owner, {
+      clientId: "c1",
+      licenseStatus: "Active",
+    });
   });
 
   it("resolves addedByName for each contact via a single batched namesByIds call", async () => {
@@ -272,7 +277,7 @@ describe("clientService.detail", () => {
     h.candidateRepo.groupByStatusFiltered.mockResolvedValue([]);
     h.candidateRepo.count.mockResolvedValue(0);
 
-    const out = await clientService.detail("c1");
+    const out = await clientService.detail("c1", h.owner as TenantContext);
 
     expect(h.userRepo.namesByIds).toHaveBeenCalledWith(["u1"]);
     expect(out.contacts.find((c) => c.id === "cc1")?.addedByName).toBe("Owner");
@@ -299,7 +304,7 @@ describe("clientService.detail", () => {
     h.candidateRepo.groupByStatusFiltered.mockResolvedValue([]);
     h.candidateRepo.count.mockResolvedValue(0);
 
-    const out = await clientService.detail("c1");
+    const out = await clientService.detail("c1", h.owner as TenantContext);
 
     // Newest first: meeting (Apr) > task completed (Mar 5) > task created (Mar 1) >
     // contact added (Feb) > client created (Jan).
@@ -324,7 +329,7 @@ describe("clientService.detail", () => {
     h.candidateRepo.groupByStatusFiltered.mockResolvedValue([]);
     h.candidateRepo.count.mockResolvedValue(0);
 
-    const out = await clientService.detail("c1");
+    const out = await clientService.detail("c1", h.owner as TenantContext);
 
     expect(out.deals.find((d) => d.id === "cd1")?.blockers).toHaveLength(1);
     expect(out.deals.find((d) => d.id === "cd2")?.blockers).toHaveLength(0);
@@ -353,7 +358,7 @@ describe("clientService.detail", () => {
     h.candidateRepo.groupByStatusFiltered.mockResolvedValue([]);
     h.candidateRepo.count.mockResolvedValue(0);
 
-    const out = await clientService.detail("c1");
+    const out = await clientService.detail("c1", h.owner as TenantContext);
 
     const summaries = out.timeline.map((e) => e.summary);
     expect(summaries).toContain("Deal created: Q3 renewal");
@@ -373,7 +378,7 @@ describe("clientService.detail", () => {
     h.candidateRepo.groupByStatusFiltered.mockResolvedValue([]);
     h.candidateRepo.count.mockResolvedValue(0);
 
-    const out = await clientService.detail("c1");
+    const out = await clientService.detail("c1", h.owner as TenantContext);
 
     expect(out.timeline).toHaveLength(40);
   });
@@ -388,7 +393,7 @@ describe("clientService.create", () => {
       h.owner as TenantContext,
     );
 
-    const [data, tx] = h.clientRepo.create.mock.calls[0]!;
+    const [, data, tx] = h.clientRepo.create.mock.calls[0]!;
     expect(tx).toBe(h.fakeTx);
     expect(data).toMatchObject({ name: "Sterling Institute" });
     const [atx, params] = h.writeAudit.mock.calls[0]!;
@@ -413,7 +418,7 @@ describe("clientService.update", () => {
 
     await clientService.update("c1", { location: "Hartford, CT" }, h.owner as TenantContext);
 
-    const [id, data, tx] = h.clientRepo.update.mock.calls[0]!;
+    const [, id, data, tx] = h.clientRepo.update.mock.calls[0]!;
     expect(id).toBe("c1");
     expect(tx).toBe(h.fakeTx);
     expect(data).toMatchObject({ location: "Hartford, CT" });
@@ -444,7 +449,7 @@ describe("clientService.addContact", () => {
       h.owner as TenantContext,
     );
 
-    const [data, tx] = h.contactRepo.create.mock.calls[0]!;
+    const [, data, tx] = h.contactRepo.create.mock.calls[0]!;
     expect(tx).toBe(h.fakeTx);
     expect(data).toMatchObject({ fullName: "Jane Doe", clientId: "c1", addedById: "u1" });
     expect(h.writeAudit).toHaveBeenCalledTimes(1);
@@ -498,7 +503,7 @@ describe("clientService.removeContact", () => {
 
     await clientService.removeContact("c1", "cc1", h.owner as TenantContext);
 
-    expect(h.contactRepo.softDelete).toHaveBeenCalledWith("c1", "cc1", "u1", h.fakeTx);
+    expect(h.contactRepo.softDelete).toHaveBeenCalledWith(h.owner, "c1", "cc1", "u1", h.fakeTx);
     expect(h.writeAudit).toHaveBeenCalledTimes(1);
   });
 });
@@ -518,7 +523,7 @@ describe("clientService.addTask", () => {
 
     const out = await clientService.addTask("c1", { title: "Follow up" }, h.owner as TenantContext);
 
-    const [data, tx] = h.taskRepo.create.mock.calls[0]!;
+    const [, data, tx] = h.taskRepo.create.mock.calls[0]!;
     expect(tx).toBe(h.fakeTx);
     expect(data).toMatchObject({ title: "Follow up", clientId: "c1", createdById: "u1" });
     expect(h.writeAudit).toHaveBeenCalledTimes(1);
@@ -547,7 +552,7 @@ describe("clientService.updateTask", () => {
 
     await clientService.updateTask("c1", "ct1", { status: "done" }, h.owner as TenantContext);
 
-    const [, , data] = h.taskRepo.update.mock.calls[0]!;
+    const [, , , data] = h.taskRepo.update.mock.calls[0]!;
     expect(data.status).toBe("done");
     expect(data.completedAt).toBeInstanceOf(Date);
   });
@@ -559,7 +564,7 @@ describe("clientService.updateTask", () => {
 
     await clientService.updateTask("c1", "ct1", { status: "open" }, h.owner as TenantContext);
 
-    const [, , data] = h.taskRepo.update.mock.calls[0]!;
+    const [, , , data] = h.taskRepo.update.mock.calls[0]!;
     expect(data.status).toBe("open");
     expect(data.completedAt).toBeNull();
   });
@@ -571,7 +576,7 @@ describe("clientService.updateTask", () => {
 
     await clientService.updateTask("c1", "ct1", { title: "Renamed" }, h.owner as TenantContext);
 
-    const [, , data] = h.taskRepo.update.mock.calls[0]!;
+    const [, , , data] = h.taskRepo.update.mock.calls[0]!;
     expect(data).not.toHaveProperty("completedAt");
   });
 });
@@ -591,7 +596,7 @@ describe("clientService.removeTask", () => {
 
     await clientService.removeTask("c1", "ct1", h.owner as TenantContext);
 
-    expect(h.taskRepo.softDelete).toHaveBeenCalledWith("c1", "ct1", "u1", h.fakeTx);
+    expect(h.taskRepo.softDelete).toHaveBeenCalledWith(h.owner, "c1", "ct1", "u1", h.fakeTx);
     expect(h.writeAudit).toHaveBeenCalledTimes(1);
   });
 });
@@ -611,7 +616,7 @@ describe("clientService.addMeeting", () => {
 
     const out = await clientService.addMeeting("c1", { type: "qbr" }, h.owner as TenantContext);
 
-    const [data, tx] = h.meetingRepo.create.mock.calls[0]!;
+    const [, data, tx] = h.meetingRepo.create.mock.calls[0]!;
     expect(tx).toBe(h.fakeTx);
     expect(data).toMatchObject({ type: "qbr", clientId: "c1", loggedById: "u1" });
     expect(h.writeAudit).toHaveBeenCalledTimes(1);
@@ -634,7 +639,7 @@ describe("clientService.removeMeeting", () => {
 
     await clientService.removeMeeting("c1", "cm1", h.owner as TenantContext);
 
-    expect(h.meetingRepo.softDelete).toHaveBeenCalledWith("c1", "cm1", "u1", h.fakeTx);
+    expect(h.meetingRepo.softDelete).toHaveBeenCalledWith(h.owner, "c1", "cm1", "u1", h.fakeTx);
     expect(h.writeAudit).toHaveBeenCalledTimes(1);
   });
 });
@@ -654,7 +659,7 @@ describe("clientService.addDeal", () => {
 
     const out = await clientService.addDeal("c1", { name: "Q3 renewal" }, h.owner as TenantContext);
 
-    const [data, tx] = h.dealRepo.create.mock.calls[0]!;
+    const [, data, tx] = h.dealRepo.create.mock.calls[0]!;
     expect(tx).toBe(h.fakeTx);
     expect(data).toMatchObject({ name: "Q3 renewal", clientId: "c1", createdById: "u1" });
     expect(h.writeAudit).toHaveBeenCalledTimes(1);
@@ -685,7 +690,7 @@ describe("clientService.updateDeal", () => {
 
     await clientService.updateDeal("c1", "cd1", { stage: "Signed" }, h.owner as TenantContext);
 
-    const [, , data] = h.dealRepo.update.mock.calls[0]!;
+    const [, , , data] = h.dealRepo.update.mock.calls[0]!;
     expect(data.stage).toBe("Signed");
     expect(data.closedAt).toBeInstanceOf(Date);
   });
@@ -698,7 +703,7 @@ describe("clientService.updateDeal", () => {
 
     await clientService.updateDeal("c1", "cd1", { stage: "Lost" }, h.owner as TenantContext);
 
-    const [, , data] = h.dealRepo.update.mock.calls[0]!;
+    const [, , , data] = h.dealRepo.update.mock.calls[0]!;
     expect(data.stage).toBe("Lost");
     expect(data.closedAt).toBeInstanceOf(Date);
   });
@@ -711,7 +716,7 @@ describe("clientService.updateDeal", () => {
 
     await clientService.updateDeal("c1", "cd1", { stage: "Negotiation" }, h.owner as TenantContext);
 
-    const [, , data] = h.dealRepo.update.mock.calls[0]!;
+    const [, , , data] = h.dealRepo.update.mock.calls[0]!;
     expect(data.stage).toBe("Negotiation");
     expect(data.closedAt).toBeNull();
   });
@@ -724,7 +729,7 @@ describe("clientService.updateDeal", () => {
 
     await clientService.updateDeal("c1", "cd1", { estValue: 75000 }, h.owner as TenantContext);
 
-    const [, , data] = h.dealRepo.update.mock.calls[0]!;
+    const [, , , data] = h.dealRepo.update.mock.calls[0]!;
     expect(data).not.toHaveProperty("closedAt");
   });
 });
@@ -744,7 +749,7 @@ describe("clientService.removeDeal", () => {
 
     await clientService.removeDeal("c1", "cd1", h.owner as TenantContext);
 
-    expect(h.dealRepo.softDelete).toHaveBeenCalledWith("c1", "cd1", "u1", h.fakeTx);
+    expect(h.dealRepo.softDelete).toHaveBeenCalledWith(h.owner, "c1", "cd1", "u1", h.fakeTx);
     expect(h.writeAudit).toHaveBeenCalledTimes(1);
   });
 });
@@ -771,7 +776,7 @@ describe("clientService.addBlocker", () => {
       h.owner as TenantContext,
     );
 
-    const [data, tx] = h.blockerRepo.create.mock.calls[0]!;
+    const [, data, tx] = h.blockerRepo.create.mock.calls[0]!;
     expect(tx).toBe(h.fakeTx);
     expect(data).toMatchObject({ text: "Waiting on legal review", dealId: "cd1" });
     expect(h.writeAudit).toHaveBeenCalledTimes(1);
@@ -811,7 +816,7 @@ describe("clientService.updateBlocker", () => {
       h.owner as TenantContext,
     );
 
-    const [, , data] = h.blockerRepo.update.mock.calls[0]!;
+    const [, , , data] = h.blockerRepo.update.mock.calls[0]!;
     expect(data.resolved).toBe(true);
     expect(data.resolvedAt).toBeInstanceOf(Date);
   });
@@ -832,7 +837,7 @@ describe("clientService.updateBlocker", () => {
       h.owner as TenantContext,
     );
 
-    const [, , data] = h.blockerRepo.update.mock.calls[0]!;
+    const [, , , data] = h.blockerRepo.update.mock.calls[0]!;
     expect(data.resolved).toBe(false);
     expect(data.resolvedAt).toBeNull();
   });
@@ -855,7 +860,7 @@ describe("clientService.removeBlocker", () => {
 
     await clientService.removeBlocker("c1", "cd1", "db1", h.owner as TenantContext);
 
-    expect(h.blockerRepo.delete).toHaveBeenCalledWith("cd1", "db1", h.fakeTx);
+    expect(h.blockerRepo.delete).toHaveBeenCalledWith(h.owner, "cd1", "db1", h.fakeTx);
     expect(h.writeAudit).toHaveBeenCalledTimes(1);
   });
 });

@@ -128,7 +128,7 @@ describe("the AI ops routes keep the Next.js verbs, paths and gate", () => {
 describe("the kill switch and the spend behind it", () => {
   it("reads the current settings", async () => {
     h.getSettings.mockResolvedValue(SETTINGS);
-    expect(await controller().getSettings()).toEqual(SETTINGS);
+    expect(await controller().getSettings(await admitted("getSettings"))).toEqual(SETTINGS);
   });
 
   it("flips the switch with the session actor and the supplied reason", async () => {
@@ -153,12 +153,16 @@ describe("the kill switch and the spend behind it", () => {
 
   it("returns the usage overview", async () => {
     h.getUsageOverview.mockResolvedValue({ totals: {}, byFeature: [] });
-    expect(await controller().getUsage()).toEqual({ totals: {}, byFeature: [] });
+    expect(await controller().getUsage(await admitted("getUsage"))).toEqual({
+      totals: {},
+      byFeature: [],
+    });
   });
 
   it("carries a service failure through as the route's own envelope", async () => {
     h.getUsageOverview.mockRejectedValue(new AppError("UPSTREAM_ERROR", "Usage store unavailable"));
-    expect(await renderFailure(() => controller().getUsage())).toMatchObject({
+    const actor = await admitted("getUsage");
+    expect(await renderFailure(() => controller().getUsage(actor))).toMatchObject({
       body: { error: { code: "UPSTREAM_ERROR", message: "Usage store unavailable" } },
     });
   });

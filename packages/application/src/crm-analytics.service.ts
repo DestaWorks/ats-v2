@@ -16,6 +16,7 @@ import type {
   RevenueDTO,
 } from "@destaworks/contracts/validation/crm-analytics";
 import { isoOrNull } from "@destaworks/domain/utils/iso";
+import type { TenantContext } from "@destaworks/domain/tenant";
 import {
   candidateRepository,
   FIRST_TERMINAL_ORDER,
@@ -36,8 +37,8 @@ const BILLING_CURRENCY: CurrencyCode = "USD";
  *  Gmail sync lands (auto-pulled emails won't silently inflate this unless deliberately added). */
 const HOURS_PER_TOUCH = 0.25;
 
-async function requireClient(id: string): Promise<ClientRow> {
-  const client = await clientRepository.findById(id);
+async function requireClient(ctx: TenantContext, id: string): Promise<ClientRow> {
+  const client = await clientRepository.findById(ctx, id);
   if (!client) throw new AppError("NOT_FOUND", "Client not found");
   return client;
 }
@@ -97,13 +98,17 @@ function computeHealthInputs(
   };
 }
 
-async function gatherHealthInputs(clientId: string, now: Date): Promise<HealthInputs> {
+async function gatherHealthInputs(
+  ctx: TenantContext,
+  clientId: string,
+  now: Date,
+): Promise<HealthInputs> {
   const [statusGroups, notes, meetings, deals, tasks] = await Promise.all([
-    candidateRepository.groupByStatusFiltered({ clientId }),
-    clientNoteRepository.listForClient(clientId),
-    clientMeetingRepository.listForClient(clientId),
-    dealRepository.listForClient(clientId),
-    clientTaskRepository.listForClient(clientId),
+    candidateRepository.groupByStatusFiltered(ctx, { clientId }),
+    clientNoteRepository.listForClient(ctx, clientId),
+    clientMeetingRepository.listForClient(ctx, clientId),
+    dealRepository.listForClient(ctx, clientId),
+    clientTaskRepository.listForClient(ctx, clientId),
   ]);
   return computeHealthInputs(statusGroups, notes, meetings, deals, tasks, now);
 }
@@ -127,15 +132,16 @@ function byClient<T extends { clientId: string | null }>(rows: T[]): Map<string,
  * by `clientId` client-side.
  */
 async function gatherHealthInputsForClients(
+  ctx: TenantContext,
   clientIds: string[],
   now: Date,
 ): Promise<Map<string, HealthInputs>> {
   const [statusGroups, notes, meetings, deals, tasks] = await Promise.all([
-    candidateRepository.groupByStatusForClients(clientIds),
-    clientNoteRepository.listForClients(clientIds),
-    clientMeetingRepository.listForClients(clientIds),
-    dealRepository.listForClients(clientIds),
-    clientTaskRepository.listForClients(clientIds),
+    candidateRepository.groupByStatusForClients(ctx, clientIds),
+    clientNoteRepository.listForClients(ctx, clientIds),
+    clientMeetingRepository.listForClients(ctx, clientIds),
+    dealRepository.listForClients(ctx, clientIds),
+    clientTaskRepository.listForClients(ctx, clientIds),
   ]);
 
   const statusGroupsByClient = byClient(statusGroups);
@@ -162,17 +168,25 @@ async function gatherHealthInputsForClients(
 }
 
 export const crmAnalyticsService = {
-  async healthScore(clientId: string, clock: Clock = systemClock): Promise<HealthScoreDTO> {
-    await requireClient(clientId);
-    const inputs = await gatherHealthInputs(clientId, clock.now());
+  async healthScore(
+    clientId: string,
+    ctx: TenantContext,
+    clock: Clock = systemClock,
+  ): Promise<HealthScoreDTO> {
+    await requireClient(ctx, clientId);
+    const inputs = await gatherHealthInputs(ctx, clientId, clock.now());
     const result = computeHealthScore(inputs);
     return { ...result, daysSinceLastTouch: inputs.daysSinceLastTouch };
   },
 
-  async revenue(clientId: string, clock: Clock = systemClock): Promise<RevenueDTO> {
+  async revenue(
+    clientId: string,
+    ctx: TenantContext,
+    clock: Clock = systemClock,
+  ): Promise<RevenueDTO> {
     const now = clock.now();
-    const client = await requireClient(clientId);
-    const inputs = await gatherHealthInputs(clientId, now);
+    const client = await requireClient(ctx, clientId);
+    const inputs = await gatherHealthInputs(ctx, clientId, now);
     const hoursInvested = inputs.touchCount * HOURS_PER_TOUCH;
 
     let placementsPerYear: number | null = null;
@@ -217,10 +231,11 @@ export const crmAnalyticsService = {
     };
   },
 
-  async compare(clock: Clock = systemClock): Promise<CompareRowDTO[]> {
+  async compare(ctx: TenantContext, clock: Clock = systemClock): Promise<CompareRowDTO[]> {
     const now = clock.now();
-    const clients = await clientRepository.list();
+    const clients = await clientRepository.list(ctx);
     const inputsByClient = await gatherHealthInputsForClients(
+      ctx,
       clients.map((c) => c.id),
       now,
     );

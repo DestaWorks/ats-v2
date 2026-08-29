@@ -54,7 +54,7 @@ beforeEach(() => {
 describe("alertService.forViewer", () => {
   it("scopes the buckets to the SESSION user's id and caps at 5 rows", async () => {
     await alertService.forViewer(h.user as TenantContext);
-    expect(h.candidateRepo.alertBuckets).toHaveBeenCalledWith("u1", 5, expect.any(Date));
+    expect(h.candidateRepo.alertBuckets).toHaveBeenCalledWith(h.user, "u1", 5, expect.any(Date));
   });
 
   it("projects bucket rows with status labels + resolved client names, keeping the true count", async () => {

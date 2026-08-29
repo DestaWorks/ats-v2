@@ -11,6 +11,6 @@ export type GetReportsTrendsResponse = TrendsDTO;
  * 6557`, the Weekly Brief's "DROP 50" block). Unfiltered/team-wide, matching legacy's scope.
  */
 export const GET = apiHandler(async () => {
-  await requireCapability("viewReports");
-  return json<GetReportsTrendsResponse>(await trendsReport.trends());
+  const user = await requireCapability("viewReports");
+  return json<GetReportsTrendsResponse>(await trendsReport.trends(user));
 });

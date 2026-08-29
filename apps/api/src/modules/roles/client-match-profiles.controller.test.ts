@@ -97,7 +97,7 @@ const CASES: ParityCase[] = [
     spy: h.openRole.getMatchProfile,
     result: PROFILE,
     viaRoute: () => readProfile(new Request(url), freshCtx()),
-    viaController: () => controller.read(CLIENT_ID),
+    viaController: (user) => controller.read(CLIENT_ID, user),
   },
   {
     name: "PUT /client-match-profiles/:clientId",

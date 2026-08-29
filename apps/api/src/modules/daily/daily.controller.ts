@@ -154,8 +154,11 @@ export class DailyController {
    * rather than the audit log, so it needs no extra capability.
    */
   @Get("recap")
-  recap(@Query(recapQueryPipe) query: ContractOutput<typeof recapQuerySchema>): Promise<RecapDTO> {
-    return this.daily.recap(clampRecapSince(query.since));
+  recap(
+    @Query(recapQueryPipe) query: ContractOutput<typeof recapQuerySchema>,
+    @CurrentUser() user: AuthContext,
+  ): Promise<RecapDTO> {
+    return this.daily.recap(clampRecapSince(query.since), user);
   }
 
   /** GET /daily/team-breakdown?weekStart — per-associate weekly rollup. Leadership only. */

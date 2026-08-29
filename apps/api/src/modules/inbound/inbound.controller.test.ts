@@ -97,8 +97,8 @@ describe("InboundController — delegation and response envelope", () => {
     const triage = vi.fn().mockResolvedValue(result);
     const body = { messageText: "sure, tell me more" };
 
-    expect(await controllerWith({ triage }).triage(body)).toBe(result);
-    expect(triage).toHaveBeenCalledWith(body);
+    expect(await controllerWith({ triage }).triage(body, USER)).toBe(result);
+    expect(triage).toHaveBeenCalledWith(body, USER);
   });
 
   it("POST /inbound/attach returns the lead envelope", async () => {
@@ -128,7 +128,7 @@ describe("InboundController — authentication and rate limiting", () => {
         method: "triage",
         guards: [new SessionAuthGuard(), new RateLimitGuard()],
         request: { headers: {} },
-        invoke: () => controllerWith({ triage }).triage({ messageText: "hi" }),
+        invoke: () => controllerWith({ triage }).triage({ messageText: "hi" }, USER),
       }),
     ).rejects.toMatchObject({ code: "UNAUTHORIZED", status: 401 });
 
@@ -147,7 +147,7 @@ describe("InboundController — authentication and rate limiting", () => {
       method: "triage",
       guards: [new SessionAuthGuard(), new RateLimitGuard()],
       request: { headers: {} },
-      invoke: () => controllerWith({ triage }).triage({ messageText: "hi" }),
+      invoke: () => controllerWith({ triage }).triage({ messageText: "hi" }, USER),
     });
 
     expect(h.checkRateLimit).toHaveBeenCalledWith("inbound-triage:u1", {

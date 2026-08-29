@@ -98,8 +98,8 @@ function toActivityItem(
 
 export const auditService = {
   async listAuditForEntity(entity: string, entityId: string) {
-    await requireCapability("viewAudit");
-    return auditRepository.listForEntity(entity, entityId);
+    const ctx = await requireCapability("viewAudit");
+    return auditRepository.listForEntity(ctx, entity, entityId);
   },
 
   /**
@@ -110,13 +110,14 @@ export const auditService = {
    * `requireCapability` (mirrors `listAuditForEntity` — no viewer arg to trust).
    */
   async listActivity(filters: AuditListInput, cursor: PageCursor | null): Promise<ActivityListDTO> {
-    await requireCapability("viewAudit"); // AL-6 — server authoritative, never trusts UI hiding.
+    const ctx = await requireCapability("viewAudit"); // AL-6 — server authoritative, never trusts UI hiding.
     const repoFilters: AuditListFilters = {
       ...filters,
       ...(filters.from ? { from: utcDayStart(filters.from) } : {}),
       ...(filters.to ? { to: utcNextDayStart(filters.to) } : {}),
     };
     const rows = (await auditRepository.list(
+      ctx,
       repoFilters,
       cursor,
       ACTIVITY_PAGE + 1,
@@ -127,6 +128,7 @@ export const auditService = {
     const [actorNames, candidates] = await Promise.all([
       userRepository.namesByIds(page.map((r) => r.actor)),
       candidateRepository.namesByIds(
+        ctx,
         page.filter((r) => r.entity === "candidate").map((r) => r.entityId),
         { includeDeleted: true },
       ),
@@ -144,8 +146,8 @@ export const auditService = {
    * `viewAudit` gate (PII permitted to holders). NOT_FOUND when the row is absent.
    */
   async getActivityDetail(id: string): Promise<ActivityDetailDTO> {
-    await requireCapability("viewAudit");
-    const row = await auditRepository.findById(id);
+    const ctx = await requireCapability("viewAudit");
+    const row = await auditRepository.findById(ctx, id);
     if (!row) throw new AppError("NOT_FOUND", "Activity entry not found");
     return { id: row.id, before: row.before ?? null, after: row.after ?? null };
   },
@@ -155,8 +157,8 @@ export const auditService = {
    * names and sorted. `viewAudit`-gated (exposes only names the holder may already see).
    */
   async listActorOptions(): Promise<ActivityActorOption[]> {
-    await requireCapability("viewAudit");
-    const ids = await auditRepository.distinctActors();
+    const ctx = await requireCapability("viewAudit");
+    const ids = await auditRepository.distinctActors(ctx);
     const names = await userRepository.namesByIds(ids);
     return ids
       .map((id) => ({ id, name: names.get(id) ?? "Unknown" }))

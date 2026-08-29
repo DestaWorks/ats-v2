@@ -3,7 +3,7 @@ import { hasCapability, type NoteType } from "@destaworks/domain/constants";
 import { resolveMentions, type MentionTarget } from "@destaworks/domain/mentions";
 import type { CapabilityViewer, TenantContext } from "@destaworks/domain/tenant";
 import { writeAudit } from "@destaworks/db/audit";
-import { withTransaction } from "@destaworks/db/with-transaction";
+import { withTenantTransaction } from "@destaworks/db/with-transaction";
 import { candidateRepository } from "@destaworks/db/repositories/candidate.repository";
 import { mentionRepository } from "@destaworks/db/repositories/mention.repository";
 import { noteRepository, type NoteRow } from "@destaworks/db/repositories/note.repository";
@@ -95,13 +95,14 @@ export const noteService = {
    * recipient list); self-mentions are dropped.
    */
   async add(candidateId: string, input: AddNoteServiceInput, ctx: TenantContext): Promise<NoteDTO> {
-    const candidate = await candidateRepository.findById(candidateId);
+    const candidate = await candidateRepository.findById(ctx, candidateId);
     if (!candidate) throw new AppError("NOT_FOUND", "Candidate not found");
     const users = await userRepository.list();
     const recipients = resolveMentions(input.body, users).filter((u) => u.id !== ctx.user.id);
 
-    const created = await withTransaction(async (tx) => {
+    const created = await withTenantTransaction(ctx, async (tx) => {
       const note = await noteRepository.create(
+        ctx,
         {
           candidateId,
           authorId: ctx.user.id,
@@ -112,6 +113,7 @@ export const noteService = {
         tx,
       );
       await mentionRepository.createMany(
+        ctx,
         { noteId: note.id, candidateId, recipientIds: recipients.map((r) => r.id) },
         tx,
       );
@@ -143,8 +145,8 @@ export const noteService = {
   },
 
   /** List a candidate's notes, server-scoped by `visibleNotes`, mapped to DTOs (newest-first). */
-  async listByCandidate(candidateId: string, viewer: NoteViewer): Promise<NoteDTO[]> {
-    const notes = await noteRepository.listByCandidate(candidateId);
-    return visibleNotes(notes, viewer).map(toNoteDTO);
+  async listByCandidate(candidateId: string, ctx: TenantContext): Promise<NoteDTO[]> {
+    const notes = await noteRepository.listByCandidate(ctx, candidateId);
+    return visibleNotes(notes, ctx).map(toNoteDTO);
   },
 };

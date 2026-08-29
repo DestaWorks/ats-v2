@@ -18,9 +18,9 @@ export type DeleteRoleResponse = DeleteRoleContract;
 
 /** GET /api/roles/:id — one role's detail (role + notes). 404 if missing. */
 export const GET = apiHandler<{ params: Promise<{ id: string }> }>(async (_req, ctx) => {
-  await requireUser();
+  const user = await requireUser();
   const { id } = await ctx.params;
-  return json<GetRoleResponse>({ role: await openRoleService.detail(id) });
+  return json<GetRoleResponse>({ role: await openRoleService.detail(id, user) });
 });
 
 /**

@@ -32,8 +32,8 @@ export class CrmClientsController {
   ) {}
 
   @Get()
-  async list(): Promise<GetCrmClientsResponse> {
-    return this.clients.list();
+  async list(@CurrentUser() user: AuthContext): Promise<GetCrmClientsResponse> {
+    return this.clients.list(user);
   }
 
   @Post()
@@ -46,8 +46,11 @@ export class CrmClientsController {
   }
 
   @Get(":id")
-  async detail(@Param("id") id: string): Promise<GetCrmClientResponse> {
-    return this.clients.detail(id);
+  async detail(
+    @Param("id") id: string,
+    @CurrentUser() user: AuthContext,
+  ): Promise<GetCrmClientResponse> {
+    return this.clients.detail(id, user);
   }
 
   @Patch(":id")

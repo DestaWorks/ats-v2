@@ -33,7 +33,15 @@ vi.mock("@destaworks/integrations/http/request-cache", () => ({
   cachedClientNameMap: h.clientRepo.nameMap,
 }));
 
+import type { TenantContext } from "@destaworks/domain/tenant";
 import { credentialsIntelligenceService } from "./credentials-intelligence.service";
+
+const ctx: TenantContext = {
+  tenantId: "t1",
+  membershipId: "u1-m",
+  user: { id: "u1", email: "u@desta.works", name: "Test User" },
+  role: "Owner",
+};
 
 const STATS = {
   total: 15,
@@ -68,7 +76,7 @@ beforeEach(() => {
 
 describe("credentialsIntelligenceService.overview", () => {
   it("passes the 6 stat-card counts through unchanged", async () => {
-    const out = await credentialsIntelligenceService.overview();
+    const out = await credentialsIntelligenceService.overview(ctx);
     expect(out.stats).toEqual(STATS);
   });
 
@@ -80,7 +88,7 @@ describe("credentialsIntelligenceService.overview", () => {
       ],
       unverified: [{ credential: "PMHNP", licenseState: "CT", _count: { _all: 3 } }],
     });
-    const out = await credentialsIntelligenceService.overview();
+    const out = await credentialsIntelligenceService.overview(ctx);
     expect(out.matrix.credentials).toEqual(["LCSW", "PMHNP"]);
     expect(out.matrix.states).toEqual(["CT", "NJ"]);
     expect(out.matrix.cells).toEqual(
@@ -94,7 +102,7 @@ describe("credentialsIntelligenceService.overview", () => {
   it("flags a zero-count cell as a GAP when a client needs that credential+state combination", async () => {
     h.repo.matrixCounts.mockResolvedValue({ totals: [], unverified: [] });
     h.clientRulesRepo.list.mockResolvedValue([rulesRow({ creds: ["PMHNP"], states: ["CT"] })]);
-    const out = await credentialsIntelligenceService.overview();
+    const out = await credentialsIntelligenceService.overview(ctx);
     expect(out.matrix.cells).toEqual([
       { credential: "PMHNP", state: "CT", total: 0, unverified: 0, needed: true },
     ]);
@@ -106,7 +114,7 @@ describe("credentialsIntelligenceService.overview", () => {
       unverified: [],
     });
     h.clientRulesRepo.list.mockResolvedValue([rulesRow({ creds: ["PMHNP"], states: ["CT"] })]);
-    const out = await credentialsIntelligenceService.overview();
+    const out = await credentialsIntelligenceService.overview(ctx);
     const mdCell = out.matrix.cells.find((c) => c.credential === "MD");
     expect(mdCell?.needed).toBe(false);
   });
@@ -122,7 +130,7 @@ describe("credentialsIntelligenceService.overview", () => {
       { clientId: "cl1", credential: "PMHNP", stageOrder: 8, licenseStatus: "Active" }, // placed + submitted + verified
       // LCSW: no candidates at all → gap
     ]);
-    const out = await credentialsIntelligenceService.overview();
+    const out = await credentialsIntelligenceService.overview(ctx);
     const pmhnp = out.gapAnalysis.find((r) => r.credential === "PMHNP")!;
     expect(pmhnp).toMatchObject({
       clientName: "Sterling Institute",
@@ -141,7 +149,7 @@ describe("credentialsIntelligenceService.overview", () => {
     h.repo.nlcCompactHolders.mockResolvedValue([
       { id: "c1", name: "Jane Doe", credential: "PMHNP", licenseState: "CT" },
     ]);
-    const out = await credentialsIntelligenceService.overview();
+    const out = await credentialsIntelligenceService.overview(ctx);
     expect(out.nlcHolders).toEqual([
       {
         id: "c1",

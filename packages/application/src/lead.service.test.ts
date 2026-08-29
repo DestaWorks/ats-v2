@@ -5,7 +5,7 @@ import type { TenantContext } from "@destaworks/domain/tenant";
 /**
  * Proves the source-lead service's state-machine writes WITHOUT a DB. The pure `lead-lifecycle`
  * rules run for real; the repositories, `candidateService.create`, `writeAudit`, and
- * `withTransaction` (runs the callback with a fake `tx`) are mocked. Every mutation composes its
+ * `withTenantTransaction` (runs the callback with a fake `tx`) are mocked. Every mutation composes its
  * writes in ONE transaction; the terminal/idempotency guards (Promoted → CONFLICT, missing → 404)
  * are asserted to short-circuit before any write.
  */
@@ -61,7 +61,7 @@ vi.mock("@destaworks/db/repositories/user.repository", () => ({ userRepository: 
 vi.mock("./candidate.service", () => ({ candidateService: h.candidateService }));
 vi.mock("@destaworks/db/audit", () => ({ writeAudit: h.writeAudit }));
 vi.mock("@destaworks/db/with-transaction", () => ({
-  withTransaction: (fn: (tx: unknown) => unknown) => fn(h.fakeTx),
+  withTenantTransaction: (_ctx: unknown, fn: (tx: unknown) => unknown) => fn(h.fakeTx),
 }));
 
 import { leadService } from "./lead.service";
@@ -115,7 +115,7 @@ describe("leadService.create", () => {
       h.user as TenantContext,
     );
 
-    const [data, ctx] = h.leadRepo.create.mock.calls[0]!;
+    const [, data, ctx] = h.leadRepo.create.mock.calls[0]!;
     expect(ctx).toBe(h.fakeTx);
     expect(data).toMatchObject({
       name: "Jane Doe",
@@ -145,16 +145,19 @@ describe("leadService.list", () => {
     h.leadRepo.count.mockResolvedValue(60); // → 3 pages of 25
 
     // Requested page 9 clamps to the last page (3).
-    const out = await leadService.list({
-      status: "Sourced",
-      source: "LinkedIn",
-      clientId: "cl1",
-      ownerId: "u2",
-      search: "jane",
-      page: 9,
-    });
+    const out = await leadService.list(
+      {
+        status: "Sourced",
+        source: "LinkedIn",
+        clientId: "cl1",
+        ownerId: "u2",
+        search: "jane",
+        page: 9,
+      },
+      h.user as TenantContext,
+    );
 
-    const [countFilters] = h.leadRepo.count.mock.calls[0]!;
+    const [, countFilters] = h.leadRepo.count.mock.calls[0]!;
     expect(countFilters).toMatchObject({
       status: "Sourced",
       source: "LinkedIn",
@@ -162,7 +165,7 @@ describe("leadService.list", () => {
       createdById: "u2", // ownerId maps to the repo's createdById
       search: "jane",
     });
-    const [listFilters] = h.leadRepo.list.mock.calls[0]!;
+    const [, listFilters] = h.leadRepo.list.mock.calls[0]!;
     expect(listFilters).toMatchObject({ skip: 50, take: 25 }); // (3-1)*25
 
     expect(out).toMatchObject({
@@ -179,8 +182,8 @@ describe("leadService.list", () => {
   it("defaults to page 1 (skip 0); a single short page has no prev/next", async () => {
     h.leadRepo.list.mockResolvedValue([lead()]);
     h.leadRepo.count.mockResolvedValue(1);
-    const out = await leadService.list({});
-    const [listFilters] = h.leadRepo.list.mock.calls[0]!;
+    const out = await leadService.list({}, h.user as TenantContext);
+    const [, listFilters] = h.leadRepo.list.mock.calls[0]!;
     expect(listFilters).toMatchObject({ skip: 0, take: 25 });
     expect(out).toMatchObject({ page: 1, totalPages: 1, hasPrev: false, hasNext: false });
   });
@@ -196,7 +199,7 @@ describe("leadService.logOutreach", () => {
 
     await leadService.logOutreach("l1", { channel: "email", note: "hi" }, h.user as TenantContext);
 
-    const [params, ltx] = h.leadRepo.logOutreach.mock.calls[0]!;
+    const [, params, ltx] = h.leadRepo.logOutreach.mock.calls[0]!;
     expect(ltx).toBe(h.fakeTx);
     expect(params).toMatchObject({
       leadId: "l1",
@@ -225,7 +228,7 @@ describe("leadService.logOutreach", () => {
 
     await leadService.logOutreach("l1", { channel: "phone" }, h.user as TenantContext);
 
-    const [params] = h.leadRepo.logOutreach.mock.calls[0]!;
+    const [, params] = h.leadRepo.logOutreach.mock.calls[0]!;
     expect(params.status).toBe("Outreach 3 (Final)"); // capped — status holds
     expect(h.leadRepo.logOutreach).toHaveBeenCalledTimes(1); // attempt still written
   });
@@ -255,7 +258,7 @@ describe("leadService.respond", () => {
 
     await leadService.respond("l1", "hot", h.user as TenantContext);
 
-    const [uid, data, utx] = h.leadRepo.update.mock.calls[0]!;
+    const [, uid, data, utx] = h.leadRepo.update.mock.calls[0]!;
     expect(uid).toBe("l1");
     expect(utx).toBe(h.fakeTx);
     expect(data.status).toBe("Responded — Hot");
@@ -273,7 +276,7 @@ describe("leadService.respond", () => {
 
     await leadService.respond("l1", "cold", h.user as TenantContext);
 
-    const [, data] = h.leadRepo.update.mock.calls[0]!;
+    const [, , data] = h.leadRepo.update.mock.calls[0]!;
     expect(data.status).toBe("Responded — Cold");
     expect(data.respondedAt).toBe(respondedAt); // not overwritten
   });
@@ -293,8 +296,8 @@ describe("leadService.respond", () => {
 
     await leadService.respond("l1", "hot", h.user as TenantContext);
 
-    expect(h.leadRepo.findMostRecentUnresponded).toHaveBeenCalledWith("l1", h.fakeTx);
-    const [uid, aid, data, utx] = h.leadRepo.updateOutreachAttempt.mock.calls[0]!;
+    expect(h.leadRepo.findMostRecentUnresponded).toHaveBeenCalledWith(h.user, "l1", h.fakeTx);
+    const [, uid, aid, data, utx] = h.leadRepo.updateOutreachAttempt.mock.calls[0]!;
     expect(uid).toBe("l1");
     expect(aid).toBe("a1");
     expect(data.response).toBe("hot");
@@ -333,7 +336,7 @@ describe("leadService.promote", () => {
     expect(opts).toEqual({ user: h.user, tx: h.fakeTx });
 
     // lead flip — guarded conditional update, same tx
-    const [uid, cid, utx] = h.leadRepo.markPromoted.mock.calls[0]!;
+    const [, uid, cid, utx] = h.leadRepo.markPromoted.mock.calls[0]!;
     expect(uid).toBe("l1");
     expect(cid).toBe("c-new");
     expect(utx).toBe(h.fakeTx);
@@ -386,7 +389,7 @@ describe("leadService.softDelete", () => {
     const result = await leadService.softDelete("l1", h.user as TenantContext);
     expect(result).toEqual({ id: "l1" });
 
-    const [sid, actor, stx] = h.leadRepo.softDelete.mock.calls[0]!;
+    const [, sid, actor, stx] = h.leadRepo.softDelete.mock.calls[0]!;
     expect(sid).toBe("l1");
     expect(actor).toBe("u1");
     expect(stx).toBe(h.fakeTx);
@@ -423,8 +426,8 @@ describe("leadService.restore", () => {
     expect(detail.deletedAt).toBeNull();
 
     // findById must INCLUDE trashed rows (that's the whole point).
-    expect(h.leadRepo.findById.mock.calls[0]![1]).toMatchObject({ includeDeleted: true });
-    const [rid, rtx] = h.leadRepo.restore.mock.calls[0]!;
+    expect(h.leadRepo.findById.mock.calls[0]![2]).toMatchObject({ includeDeleted: true });
+    const [, rid, rtx] = h.leadRepo.restore.mock.calls[0]!;
     expect(rid).toBe("l1");
     expect(rtx).toBe(h.fakeTx);
 
@@ -460,7 +463,7 @@ describe("leadService.snooze", () => {
     h.leadRepo.update.mockResolvedValue(lead({ snoozedUntil: until }));
 
     const detail = await leadService.snooze("l1", until, h.user as TenantContext);
-    expect(h.leadRepo.update).toHaveBeenCalledWith("l1", { snoozedUntil: until }, h.fakeTx);
+    expect(h.leadRepo.update).toHaveBeenCalledWith(h.user, "l1", { snoozedUntil: until }, h.fakeTx);
     expect(h.writeAudit.mock.calls[0]![1]).toMatchObject({ action: "snooze" });
     expect(detail.snoozedUntil).toBe("2026-07-20T00:00:00.000Z");
 
@@ -489,12 +492,13 @@ describe("leadService outreach edit/delete", () => {
 
     await leadService.updateOutreach("l1", "a1", { note: "corrected" }, h.user as TenantContext);
     expect(h.leadRepo.updateOutreachAttempt).toHaveBeenCalledWith(
+      h.user,
       "l1",
       "a1",
       { note: "corrected" },
       h.fakeTx,
     );
-    expect(h.leadRepo.syncOutreachDenorm).toHaveBeenCalledWith("l1", h.fakeTx);
+    expect(h.leadRepo.syncOutreachDenorm).toHaveBeenCalledWith(h.user, "l1", h.fakeTx);
     expect(h.writeAudit.mock.calls[0]![1]).toMatchObject({ action: "edit_outreach" });
   });
 
@@ -514,7 +518,7 @@ describe("leadService outreach edit/delete", () => {
     );
 
     const detail = await leadService.deleteOutreach("l1", "a1", h.user as TenantContext);
-    expect(h.leadRepo.deleteOutreachAttempt).toHaveBeenCalledWith("l1", "a1", h.fakeTx);
+    expect(h.leadRepo.deleteOutreachAttempt).toHaveBeenCalledWith(h.user, "l1", "a1", h.fakeTx);
     expect(detail.status).toBe("Outreach 3"); // never regressed by a delete
     expect(h.writeAudit.mock.calls[0]![1]).toMatchObject({ action: "delete_outreach" });
   });
@@ -535,7 +539,12 @@ describe("leadService.bulkAction", () => {
 
     expect(out).toEqual({ affected: 1, skipped: 1 }); // duplicate id collapsed; Promoted skipped
     expect(h.leadRepo.update).toHaveBeenCalledTimes(1);
-    expect(h.leadRepo.update).toHaveBeenCalledWith("l1", { status: "Outreach 1" }, h.fakeTx);
+    expect(h.leadRepo.update).toHaveBeenCalledWith(
+      h.user,
+      "l1",
+      { status: "Outreach 1" },
+      h.fakeTx,
+    );
     expect(h.writeAudit.mock.calls[0]![1]).toMatchObject({
       entityId: "l1",
       action: "bulk_status",
@@ -551,7 +560,7 @@ describe("leadService.bulkAction", () => {
       { action: "assign", ids: ["l1"], value: "u2" },
       h.user as TenantContext,
     );
-    expect(h.leadRepo.update).toHaveBeenCalledWith("l1", { createdById: "u2" }, h.fakeTx);
+    expect(h.leadRepo.update).toHaveBeenCalledWith(h.user, "l1", { createdById: "u2" }, h.fakeTx);
 
     h.userRepo.namesByIds.mockResolvedValue(new Map());
     await expect(
@@ -574,9 +583,11 @@ describe("leadService.bulkAction", () => {
       h.user as TenantContext,
     );
     expect(out).toEqual({ affected: 1, skipped: 1 });
-    expect(h.leadRepo.restore).toHaveBeenCalledWith("l1", h.fakeTx);
+    expect(h.leadRepo.restore).toHaveBeenCalledWith(h.user, "l1", h.fakeTx);
     // restore must resolve rows INCLUDING deleted ones.
-    expect(h.leadRepo.findManyByIds).toHaveBeenCalledWith(["l1", "l2"], { includeDeleted: true });
+    expect(h.leadRepo.findManyByIds).toHaveBeenCalledWith(h.user, ["l1", "l2"], {
+      includeDeleted: true,
+    });
   });
 
   it("outreach: logs per eligible lead with its OWN advanced status", async () => {
@@ -591,7 +602,7 @@ describe("leadService.bulkAction", () => {
       h.user as TenantContext,
     );
 
-    const statuses = h.leadRepo.logOutreach.mock.calls.map((c) => c[0].status);
+    const statuses = h.leadRepo.logOutreach.mock.calls.map((c) => c[1].status);
     expect(statuses).toEqual(["Outreach 1", "Outreach 3"]); // advances; caps at O3
   });
 });
@@ -620,7 +631,7 @@ describe("leadService.importLeads", () => {
     );
 
     expect(out).toEqual({ added: 2, skipped: 3 });
-    const [rows, , opts] = h.leadRepo.createMany.mock.calls[0]!;
+    const [, rows, , opts] = h.leadRepo.createMany.mock.calls[0]!;
     expect(rows).toHaveLength(2);
     expect(opts).toEqual({ skipDuplicates: true });
     expect(rows[0]).toMatchObject({
@@ -658,12 +669,14 @@ describe("leadService.importLeads", () => {
     expect(out).toEqual({ added: 2, skipped: 0 });
     // Fast path unaffected — only the note-less row goes through createMany.
     expect(h.leadRepo.createMany).toHaveBeenCalledWith(
+      h.user,
       [expect.objectContaining({ name: "No History" })],
       h.fakeTx,
       { skipDuplicates: true },
     );
     // The row with notes is created individually, with the denorm fields set to match.
     expect(h.leadRepo.create).toHaveBeenCalledWith(
+      h.user,
       expect.objectContaining({
         name: "Jane Doe",
         outreachCount: 2,
@@ -673,6 +686,7 @@ describe("leadService.importLeads", () => {
       h.fakeTx,
     );
     expect(h.leadRepo.createManyOutreachAttempts).toHaveBeenCalledWith(
+      h.user,
       [
         expect.objectContaining({
           leadId: "new-lead-1",

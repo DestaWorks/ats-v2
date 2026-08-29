@@ -32,7 +32,7 @@ export const POST = apiHandler(async (req: Request) => {
  * priority/search + a 1-based `page` (clamped server-side).
  */
 export const GET = apiHandler(async (req: Request) => {
-  await requireUser();
+  const user = await requireUser();
   const params = new URL(req.url).searchParams;
   const filters = roleListQuerySchema.parse({
     clientId: params.get("clientId") ?? undefined,
@@ -41,5 +41,5 @@ export const GET = apiHandler(async (req: Request) => {
     search: params.get("search") ?? undefined,
     page: params.get("page") ?? undefined,
   });
-  return json<GetRoleListResponse>(await openRoleService.list(defined(filters)));
+  return json<GetRoleListResponse>(await openRoleService.list(defined(filters), user));
 });

@@ -20,7 +20,7 @@ const h = vi.hoisted(() => ({
 vi.mock("server-only", () => ({}));
 vi.mock("@destaworks/db/prisma", () => ({ prisma: {}, db: () => ({}) }));
 vi.mock("@destaworks/db/with-transaction", () => ({
-  withTransaction: async (fn: (tx: unknown) => unknown) => fn({}),
+  withTenantTransaction: async (_ctx: unknown, fn: (tx: unknown) => unknown) => fn({}),
 }));
 vi.mock("@destaworks/db/audit", () => ({ writeAudit: h.writeAudit }));
 vi.mock("@destaworks/db/repositories/brief.repository", () => ({
@@ -86,7 +86,11 @@ describe("briefService.saveDaily", () => {
       },
       actor,
     );
-    expect(h.upsertDaily).toHaveBeenCalledWith(expect.objectContaining({ date: "2026-07-23" }), {});
+    expect(h.upsertDaily).toHaveBeenCalledWith(
+      actor,
+      expect.objectContaining({ date: "2026-07-23" }),
+      {},
+    );
     expect(h.writeAudit).toHaveBeenCalledWith(
       {},
       expect.objectContaining({ entity: "daily_brief", action: "save_daily_brief" }),
@@ -155,6 +159,7 @@ describe("briefService.saveWeekly", () => {
       actor,
     );
     expect(h.upsertWeekly).toHaveBeenCalledWith(
+      actor,
       expect.objectContaining({ weekStart: "2026-07-20" }),
       {},
     );

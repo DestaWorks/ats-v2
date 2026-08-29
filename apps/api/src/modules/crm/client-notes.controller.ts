@@ -27,8 +27,11 @@ export class CrmClientNotesController {
   ) {}
 
   @Get()
-  async list(@Param("id") clientId: string): Promise<GetCrmClientNotesResponse> {
-    return { notes: await this.notes.list(clientId) };
+  async list(
+    @Param("id") clientId: string,
+    @CurrentUser() user: AuthContext,
+  ): Promise<GetCrmClientNotesResponse> {
+    return { notes: await this.notes.list(clientId, user) };
   }
 
   @Post()

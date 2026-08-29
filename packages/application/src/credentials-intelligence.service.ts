@@ -5,6 +5,7 @@ import type {
   NlcHolderDTO,
 } from "@destaworks/contracts/validation/credentials";
 import { COMPACT_STATES } from "@destaworks/domain/constants";
+import type { TenantContext } from "@destaworks/domain/tenant";
 import { credentialsIntelligenceRepository } from "@destaworks/db/repositories/credentials-intelligence.repository";
 import {
   cachedClientNameMap,
@@ -29,13 +30,13 @@ const PLACED_ORDER = 8; // STARTED_DAY1
  * the dashboard links out to `/license-verify` instead of duplicating that UI.
  */
 export const credentialsIntelligenceService = {
-  async overview(now: Date = new Date()): Promise<CredentialsOverviewDTO> {
+  async overview(ctx: TenantContext, now: Date = new Date()): Promise<CredentialsOverviewDTO> {
     const [stats, matrixCounts, gapCandidates, nlcHolderRows, rulesRows, clientNames] =
       await Promise.all([
-        credentialsIntelligenceRepository.statCounts(now),
-        credentialsIntelligenceRepository.matrixCounts(),
-        credentialsIntelligenceRepository.gapAnalysisCandidates(),
-        credentialsIntelligenceRepository.nlcCompactHolders(NLC_HOLDER_CAP),
+        credentialsIntelligenceRepository.statCounts(ctx, now),
+        credentialsIntelligenceRepository.matrixCounts(ctx),
+        credentialsIntelligenceRepository.gapAnalysisCandidates(ctx),
+        credentialsIntelligenceRepository.nlcCompactHolders(ctx, NLC_HOLDER_CAP),
         cachedClientRulesList(),
         cachedClientNameMap(),
       ]);

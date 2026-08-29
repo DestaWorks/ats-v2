@@ -34,7 +34,7 @@ export default async function ComparePage() {
     );
   }
 
-  const rows = await crmAnalyticsService.compare();
+  const rows = await crmAnalyticsService.compare(user);
 
   return (
     <div className="flex flex-col gap-5 px-8 py-6">

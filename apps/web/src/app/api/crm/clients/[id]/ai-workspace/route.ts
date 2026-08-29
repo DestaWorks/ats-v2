@@ -17,6 +17,6 @@ export const POST = apiHandler<{ params: Promise<{ id: string }> }>(async (req, 
   await checkRateLimit(`crm-ai-workspace:${user.user.id}`, { limit: 20, windowMs: 60_000 });
   const { id } = await ctx.params;
   const input = generateWorkspaceSchema.parse(await req.json());
-  const result = await crmAiWorkspaceService.generate(id, input);
+  const result = await crmAiWorkspaceService.generate(id, input, user);
   return json<PostCrmAiWorkspaceResponse>(result);
 });

@@ -5,6 +5,7 @@ import type {
   MassJourneyDTO,
   ReportFilters,
 } from "@destaworks/contracts/validation/reports";
+import type { TenantContext } from "@destaworks/domain/tenant";
 import {
   stageHistoryRepository,
   type StageHistoryRow,
@@ -43,10 +44,11 @@ function buildSegments(createdAt: Date, history: StageHistoryRow[], now: Date): 
 
 export const massJourneyReport = {
   /** Mass Journey Gantt (legacy `index.html:8267-8372`, the peak-complexity module). */
-  async massJourney(filters: ReportFilters): Promise<MassJourneyDTO> {
+  async massJourney(filters: ReportFilters, ctx: TenantContext): Promise<MassJourneyDTO> {
     const now = new Date();
     const cohort = await loadCohort(filters);
     const history = await stageHistoryRepository.listByCandidateIds(
+      ctx,
       cohort.candidates.map((c) => c.id),
     );
 

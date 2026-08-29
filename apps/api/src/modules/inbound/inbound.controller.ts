@@ -41,8 +41,9 @@ export class InboundController {
   @RateLimit({ name: "inbound-triage", limit: 20, windowMs: 60_000 })
   async triage(
     @Body(new ZodValidationPipe(triageSchema)) body: ContractOutput<typeof triageSchema>,
+    @CurrentUser() user: AuthContext,
   ): Promise<PostInboundTriageResponse> {
-    return await this.inbound.triage(body);
+    return await this.inbound.triage(body, user);
   }
 
   /** POST /inbound/attach — the reply belongs to an existing lead: log it and mark Responded Hot. */

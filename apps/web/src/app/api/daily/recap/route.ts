@@ -17,9 +17,9 @@ export type GetDailyRecapResponse = RecapDTO;
  * capped at 14 days back (a stale localStorage timestamp must not scan history). 401 unauth.
  */
 export const GET = apiHandler(async (req: Request) => {
-  await requireUser();
+  const user = await requireUser();
   const { since: raw } = recapQuerySchema.parse(Object.fromEntries(new URL(req.url).searchParams));
   const floor = Date.now() - RECAP_MAX_LOOKBACK_DAYS * MS_PER_DAY;
   const since = raw.getTime() < floor ? new Date(floor) : raw;
-  return json<GetDailyRecapResponse>(await dailyService.recap(since));
+  return json<GetDailyRecapResponse>(await dailyService.recap(since, user));
 });

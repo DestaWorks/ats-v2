@@ -5,7 +5,7 @@ import type {
 import { toIso } from "@destaworks/domain/utils/iso";
 import type { TenantContext } from "@destaworks/domain/tenant";
 import { writeAudit } from "@destaworks/db/audit";
-import { withTransaction } from "@destaworks/db/with-transaction";
+import { withTenantTransaction } from "@destaworks/db/with-transaction";
 import { clientRepository } from "@destaworks/db/repositories/client.repository";
 import {
   clientNoteRepository,
@@ -26,22 +26,22 @@ export function toClientNoteDTO(row: ClientNoteRow, userNames: Map<string, strin
   };
 }
 
-async function requireClient(id: string) {
-  const client = await clientRepository.findById(id);
+async function requireClient(ctx: TenantContext, id: string) {
+  const client = await clientRepository.findById(ctx, id);
   if (!client) throw new AppError("NOT_FOUND", "Client not found");
   return client;
 }
 
 /**
  * Client-note service (Wave 4.2, Health Score slice, CRM) — a manual call/note log entry
- * (legacy `crm_note`). Same `requireClient → withTransaction → repo → writeAudit` shape as every
- * other client sub-resource in `client.service.ts`; kept as its own file since it's a genuinely
- * separate concern (not another tab-CRUD slice of the same feature).
+ * (legacy `crm_note`). Same `requireClient → withTenantTransaction → repo → writeAudit` shape as
+ * every other client sub-resource in `client.service.ts`; kept as its own file since it's a
+ * genuinely separate concern (not another tab-CRUD slice of the same feature).
  */
 export const clientNoteService = {
-  async list(clientId: string): Promise<ClientNoteDTO[]> {
-    await requireClient(clientId);
-    const rows = await clientNoteRepository.listForClient(clientId);
+  async list(clientId: string, ctx: TenantContext): Promise<ClientNoteDTO[]> {
+    await requireClient(ctx, clientId);
+    const rows = await clientNoteRepository.listForClient(ctx, clientId);
     const userNames = await userRepository.namesByIds(
       rows.map((r) => r.loggedById).filter((id): id is string => id != null),
     );
@@ -53,9 +53,10 @@ export const clientNoteService = {
     input: CreateClientNoteInput,
     ctx: TenantContext,
   ): Promise<ClientNoteDTO> {
-    await requireClient(clientId);
-    const created = await withTransaction(async (tx) => {
+    await requireClient(ctx, clientId);
+    const created = await withTenantTransaction(ctx, async (tx) => {
       const row = await clientNoteRepository.create(
+        ctx,
         { ...input, clientId, loggedById: ctx.user.id },
         tx,
       );
@@ -73,9 +74,9 @@ export const clientNoteService = {
   },
 
   async remove(clientId: string, noteId: string, ctx: TenantContext): Promise<void> {
-    await requireClient(clientId);
-    await withTransaction(async (tx) => {
-      const count = await clientNoteRepository.softDelete(clientId, noteId, ctx.user.id, tx);
+    await requireClient(ctx, clientId);
+    await withTenantTransaction(ctx, async (tx) => {
+      const count = await clientNoteRepository.softDelete(ctx, clientId, noteId, ctx.user.id, tx);
       if (count === 0) throw new AppError("NOT_FOUND", "Note not found");
       await writeAudit(tx, {
         entity: "client_note",

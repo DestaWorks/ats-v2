@@ -30,7 +30,7 @@ import { defined } from "@destaworks/domain/utils/defined";
 import { pageMeta } from "@destaworks/domain/pagination";
 import type { TenantContext } from "@destaworks/domain/tenant";
 import { writeAudit } from "@destaworks/db/audit";
-import { withTransaction } from "@destaworks/db/with-transaction";
+import { withTenantTransaction } from "@destaworks/db/with-transaction";
 import { extractJd } from "@destaworks/integrations/ai/extract-jd";
 import {
   openRoleRepository,
@@ -101,8 +101,8 @@ function toRoleNoteDTO(row: {
 }
 
 /** Load a live role or throw NOT_FOUND. */
-async function requireRole(id: string): Promise<OpenRoleRow> {
-  const role = await openRoleRepository.findById(id);
+async function requireRole(ctx: TenantContext, id: string): Promise<OpenRoleRow> {
+  const role = await openRoleRepository.findById(ctx, id);
   if (!role) throw new AppError("NOT_FOUND", "Role not found");
   return role;
 }
@@ -129,8 +129,8 @@ function toMatchDTO(m: { lead: LeadMatchRow & RuleLead; score: number }): RoleMa
 }
 
 /** Every non-deleted lead, projected onto the matchers' input shape (one lean query). */
-async function loadMatchCandidates(): Promise<Array<LeadMatchRow & RuleLead>> {
-  const leads = await leadRepository.listForMatching();
+async function loadMatchCandidates(ctx: TenantContext): Promise<Array<LeadMatchRow & RuleLead>> {
+  const leads = await leadRepository.listForMatching(ctx);
   return leads.map((lead) => ({ ...lead, ...toRuleLead(lead) }));
 }
 
@@ -150,8 +150,9 @@ function toProfileDTO(
  */
 export const openRoleService = {
   async create(input: CreateOpenRoleInput, ctx: TenantContext): Promise<OpenRoleDetailDTO> {
-    const role = await withTransaction(async (tx) => {
+    const role = await withTenantTransaction(ctx, async (tx) => {
       const created = await openRoleRepository.create(
+        ctx,
         {
           clientId: input.clientId,
           title: input.title,
@@ -176,10 +177,10 @@ export const openRoleService = {
       });
       return created;
     });
-    return this.detail(role.id);
+    return this.detail(role.id, ctx);
   },
 
-  async list(filters: OpenRoleListFilters = {}): Promise<OpenRoleListDTO> {
+  async list(filters: OpenRoleListFilters, ctx: TenantContext): Promise<OpenRoleListDTO> {
     const repoFilters = defined({
       clientId: filters.clientId,
       status: filters.status,
@@ -187,11 +188,11 @@ export const openRoleService = {
       search: filters.search,
     });
     const [total, clientNames] = await Promise.all([
-      openRoleRepository.count(repoFilters),
+      openRoleRepository.count(ctx, repoFilters),
       cachedClientNameMap(),
     ]);
     const meta = pageMeta(total, filters.page ?? 1, LIST_PAGE);
-    const rows = await openRoleRepository.list({
+    const rows = await openRoleRepository.list(ctx, {
       ...repoFilters,
       skip: (meta.page - 1) * LIST_PAGE,
       take: LIST_PAGE,
@@ -203,10 +204,10 @@ export const openRoleService = {
   },
 
   /** Full detail — role + notes (matches/dormant matches are separate reads, `matches`/`dormantMatches`). */
-  async detail(id: string): Promise<OpenRoleDetailDTO> {
-    const role = await requireRole(id);
+  async detail(id: string, ctx: TenantContext): Promise<OpenRoleDetailDTO> {
+    const role = await requireRole(ctx, id);
     const [notes, clientNames] = await Promise.all([
-      openRoleRepository.listNotes(id),
+      openRoleRepository.listNotes(ctx, id),
       cachedClientNameMap(),
     ]);
     const authorIds = notes.map((n) => n.authorId);
@@ -223,20 +224,20 @@ export const openRoleService = {
   },
 
   /** The active matcher's ranked leads for this role (client-tunable weights, top 15). */
-  async matches(id: string): Promise<RoleMatchDTO[]> {
-    const role = await requireRole(id);
+  async matches(id: string, ctx: TenantContext): Promise<RoleMatchDTO[]> {
+    const role = await requireRole(ctx, id);
     const [candidates, profileRow] = await Promise.all([
-      loadMatchCandidates(),
-      clientMatchProfileRepository.findByClientId(role.clientId),
+      loadMatchCandidates(ctx),
+      clientMatchProfileRepository.findByClientId(ctx, role.clientId),
     ]);
     const weights = profileRow ?? DEFAULT_MATCH_WEIGHTS;
     return matchesForRole(role, candidates, weights).map(toMatchDTO);
   },
 
   /** The fixed-weight dormant re-engagement scorer's ranked leads for this role (top 10). */
-  async dormantMatches(id: string): Promise<RoleMatchDTO[]> {
-    const role = await requireRole(id);
-    const candidates = await loadMatchCandidates();
+  async dormantMatches(id: string, ctx: TenantContext): Promise<RoleMatchDTO[]> {
+    const role = await requireRole(ctx, id);
+    const candidates = await loadMatchCandidates(ctx);
     return dormantMatchesForRole(role, candidates).map(toMatchDTO);
   },
 
@@ -246,11 +247,12 @@ export const openRoleService = {
    */
   async matchesAndDormant(
     id: string,
+    ctx: TenantContext,
   ): Promise<{ matches: RoleMatchDTO[]; dormantMatches: RoleMatchDTO[] }> {
-    const role = await requireRole(id);
+    const role = await requireRole(ctx, id);
     const [candidates, profileRow] = await Promise.all([
-      loadMatchCandidates(),
-      clientMatchProfileRepository.findByClientId(role.clientId),
+      loadMatchCandidates(ctx),
+      clientMatchProfileRepository.findByClientId(ctx, role.clientId),
     ]);
     const weights = profileRow ?? DEFAULT_MATCH_WEIGHTS;
     return {
@@ -264,7 +266,7 @@ export const openRoleService = {
     input: UpdateOpenRoleInput,
     ctx: TenantContext,
   ): Promise<OpenRoleDetailDTO> {
-    const existing = await requireRole(id);
+    const existing = await requireRole(ctx, id);
     const closingNow =
       input.status !== undefined &&
       (input.status === "Filled" || input.status === "Closed") &&
@@ -276,8 +278,9 @@ export const openRoleService = {
       input.status !== "Closed" &&
       (existing.status === "Filled" || existing.status === "Closed");
 
-    await withTransaction(async (tx) => {
+    await withTenantTransaction(ctx, async (tx) => {
       const updated = await openRoleRepository.update(
+        ctx,
         id,
         {
           ...defined(input),
@@ -295,14 +298,14 @@ export const openRoleService = {
         after: { status: updated.status, priority: updated.priority },
       });
     });
-    return this.detail(id);
+    return this.detail(id, ctx);
   },
 
   /** Hard delete (legacy `open_role_delete` parity — no undo). */
   async remove(id: string, ctx: TenantContext): Promise<{ id: string }> {
-    const existing = await requireRole(id);
-    await withTransaction(async (tx) => {
-      await openRoleRepository.delete(id, tx);
+    const existing = await requireRole(ctx, id);
+    await withTenantTransaction(ctx, async (tx) => {
+      await openRoleRepository.delete(ctx, id, tx);
       await writeAudit(tx, {
         entity: "open_role",
         entityId: id,
@@ -319,9 +322,10 @@ export const openRoleService = {
     input: AddRoleNoteInput,
     ctx: TenantContext,
   ): Promise<OpenRoleDetailDTO> {
-    await requireRole(id);
-    await withTransaction(async (tx) => {
+    await requireRole(ctx, id);
+    await withTenantTransaction(ctx, async (tx) => {
       const note = await openRoleRepository.createNote(
+        ctx,
         {
           roleId: id,
           authorId: ctx.user.id,
@@ -339,13 +343,13 @@ export const openRoleService = {
         after: { noteId: note.id, category: input.category },
       });
     });
-    return this.detail(id);
+    return this.detail(id, ctx);
   },
 
   async deleteNote(id: string, noteId: string, ctx: TenantContext): Promise<OpenRoleDetailDTO> {
-    await requireRole(id);
-    await withTransaction(async (tx) => {
-      const { count } = await openRoleRepository.softDeleteNote(noteId, id, ctx.user.id, tx);
+    await requireRole(ctx, id);
+    await withTenantTransaction(ctx, async (tx) => {
+      const { count } = await openRoleRepository.softDeleteNote(ctx, noteId, id, ctx.user.id, tx);
       if (count === 0) throw new AppError("NOT_FOUND", "Note not found");
       await writeAudit(tx, {
         entity: "open_role",
@@ -355,7 +359,7 @@ export const openRoleService = {
         after: { noteId },
       });
     });
-    return this.detail(id);
+    return this.detail(id, ctx);
   },
 
   /**
@@ -369,17 +373,17 @@ export const openRoleService = {
     input: PromoteFromMatchInput,
     ctx: TenantContext,
   ): Promise<{ candidateId: string }> {
-    await requireRole(id);
+    await requireRole(ctx, id);
     return leadService.promote(input.leadId, ctx, { filledFromRoleId: id });
   },
 
   /** Top 3 "roles to work now" across every active (non-Filled/Closed) role. */
-  async triage(): Promise<TriageRoleDTO[]> {
+  async triage(ctx: TenantContext): Promise<TriageRoleDTO[]> {
     const [roles, clientNames, candidates, profiles] = await Promise.all([
-      openRoleRepository.listActive(),
+      openRoleRepository.listActive(ctx),
       cachedClientNameMap(),
-      loadMatchCandidates(),
-      clientMatchProfileRepository.list(),
+      loadMatchCandidates(ctx),
+      clientMatchProfileRepository.list(ctx),
     ]);
     const profileByClient = new Map(profiles.map((p) => [p.clientId, p]));
     const now = new Date();
@@ -418,8 +422,8 @@ export const openRoleService = {
   },
 
   /** This client's matcher-weight profile, or the system default (flagged `isDefault`). */
-  async getMatchProfile(clientId: string): Promise<ClientMatchProfileDTO> {
-    const row = await clientMatchProfileRepository.findByClientId(clientId);
+  async getMatchProfile(clientId: string, ctx: TenantContext): Promise<ClientMatchProfileDTO> {
+    const row = await clientMatchProfileRepository.findByClientId(ctx, clientId);
     if (!row) return toProfileDTO(clientId, DEFAULT_MATCH_WEIGHTS, true);
     return toProfileDTO(clientId, row, false);
   },
@@ -433,8 +437,9 @@ export const openRoleService = {
     if (!hasCapability(ctx.role, MATCH_PROFILE_CAP)) {
       throw new AppError("FORBIDDEN", "Only leadership can retune client matching weights");
     }
-    const row = await withTransaction(async (tx) => {
+    const row = await withTenantTransaction(ctx, async (tx) => {
       const saved = await clientMatchProfileRepository.upsert(
+        ctx,
         clientId,
         { ...input, updatedById: ctx.user.id },
         tx,
@@ -456,10 +461,10 @@ export const openRoleService = {
     if (!hasCapability(ctx.role, MATCH_PROFILE_CAP)) {
       throw new AppError("FORBIDDEN", "Only leadership can retune client matching weights");
     }
-    const existing = await clientMatchProfileRepository.findByClientId(clientId);
+    const existing = await clientMatchProfileRepository.findByClientId(ctx, clientId);
     if (existing) {
-      await withTransaction(async (tx) => {
-        await clientMatchProfileRepository.delete(clientId, tx);
+      await withTenantTransaction(ctx, async (tx) => {
+        await clientMatchProfileRepository.delete(ctx, clientId, tx);
         await writeAudit(tx, {
           entity: "client_match_profile",
           entityId: clientId,

@@ -122,11 +122,13 @@ const REPORTS = [
   { path: "source-roi", call: h.sourceRoi, filtered: true },
   { path: "time-analysis", call: h.timeAnalysis, filtered: true },
   { path: "compliance", call: h.compliance, filtered: true },
-  { path: "mass-journey", call: h.massJourney, filtered: true },
-  { path: "trends", call: h.trends, filtered: false },
+  { path: "mass-journey", call: h.massJourney, filtered: true, tenanted: true },
+  { path: "trends", call: h.trends, filtered: false, tenanted: true },
 ] as const;
 
-describe.each(REPORTS)("GET /reports/$path", ({ path, call, filtered }) => {
+describe.each(REPORTS)("GET /reports/$path", ({ path, call, filtered, ...report }) => {
+  /** The reports whose service has been threaded a `TenantContext` (SAAS-RESTRUCTURE-PLAN 6.4). */
+  const tenanted = "tenanted" in report;
   it("401 when signed out, and never reaches the service", async () => {
     const res = await api.fetch(`/reports/${path}`);
     expect(res.status).toBe(401);
@@ -157,6 +159,9 @@ describe.each(REPORTS)("GET /reports/$path", ({ path, call, filtered }) => {
     expect(call).toHaveBeenCalledWith(
       ...(filtered
         ? [{ clientId: "c1", source: "LinkedIn", addedFrom: new Date("2026-01-02") }]
+        : []),
+      ...(tenanted
+        ? [expect.objectContaining({ user: expect.objectContaining({ id: "u1" }) })]
         : []),
     );
   });

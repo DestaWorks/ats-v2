@@ -24,7 +24,7 @@ import { defined } from "@destaworks/domain/utils/defined";
 import { pageMeta } from "@destaworks/domain/pagination";
 import type { TenantContext } from "@destaworks/domain/tenant";
 import { writeAudit } from "@destaworks/db/audit";
-import { withTransaction } from "@destaworks/db/with-transaction";
+import { withTenantTransaction } from "@destaworks/db/with-transaction";
 import {
   leadRepository,
   type LeadRow,
@@ -120,10 +120,10 @@ function toLeadDetail(
  * client map, as the candidate reads do) and attempt actor names via a SINGLE batched
  * `userRepository.namesByIds` (no N+1). Used to return the fresh detail after every mutation.
  */
-async function loadDetail(lead: LeadRow): Promise<LeadDetailDTO> {
+async function loadDetail(ctx: TenantContext, lead: LeadRow): Promise<LeadDetailDTO> {
   const [attempts, clientNames] = await Promise.all([
-    leadRepository.listOutreach(lead.id),
-    clientRepository.nameMap(),
+    leadRepository.listOutreach(ctx, lead.id),
+    clientRepository.nameMap(ctx),
   ]);
   const actorNames = await userRepository.namesByIds([
     ...attempts.map((a) => a.actorId),
@@ -133,8 +133,8 @@ async function loadDetail(lead: LeadRow): Promise<LeadDetailDTO> {
 }
 
 /** Load a live lead or throw NOT_FOUND (missing OR soft-deleted — `findById` excludes trashed rows). */
-async function requireLead(id: string): Promise<LeadRow> {
-  const lead = await leadRepository.findById(id);
+async function requireLead(ctx: TenantContext, id: string): Promise<LeadRow> {
+  const lead = await leadRepository.findById(ctx, id);
   if (!lead) throw new AppError("NOT_FOUND", "Lead not found");
   return lead;
 }
@@ -153,8 +153,9 @@ export const leadService = {
    * transaction so the trail can't drift. Returns the fresh detail (empty attempt log).
    */
   async create(input: CreateLeadInput, ctx: TenantContext): Promise<LeadDetailDTO> {
-    const lead = await withTransaction(async (tx) => {
+    const lead = await withTenantTransaction(ctx, async (tx) => {
       const created = await leadRepository.create(
+        ctx,
         {
           name: input.name,
           email: input.email ?? null,
@@ -182,7 +183,7 @@ export const leadService = {
       });
       return created;
     });
-    return loadDetail(lead);
+    return loadDetail(ctx, lead);
   },
 
   /**
@@ -190,7 +191,7 @@ export const leadService = {
    * list: true filtered `total`, `page` clamped to `[1, totalPages]`, `hasPrev`/`hasNext` for the
    * numbered pager. `targetClientName`/`ownerName` resolve from one-shot batch maps (no N+1).
    */
-  async list(filters: LeadListFilters = {}): Promise<LeadListDTO> {
+  async list(filters: LeadListFilters, ctx: TenantContext): Promise<LeadListDTO> {
     const repoFilters = defined({
       status: filters.status,
       source: filters.source,
@@ -200,11 +201,11 @@ export const leadService = {
       includeDeleted: filters.includeDeleted,
     });
     const [total, clientNames] = await Promise.all([
-      leadRepository.count(repoFilters),
+      leadRepository.count(ctx, repoFilters),
       cachedClientNameMap(),
     ]);
     const meta = pageMeta(total, filters.page ?? 1, LIST_PAGE);
-    const rows = await leadRepository.list({
+    const rows = await leadRepository.list(ctx, {
       ...repoFilters,
       skip: (meta.page - 1) * LIST_PAGE,
       take: LIST_PAGE,
@@ -228,13 +229,14 @@ export const leadService = {
     input: LogOutreachInput,
     ctx: TenantContext,
   ): Promise<LeadDetailDTO> {
-    const existing = await requireLead(id);
+    const existing = await requireLead(ctx, id);
     const status = existing.status as LeadStatus;
     if (!canLogOutreach(status)) throw new AppError("CONFLICT", "Lead already promoted");
     const at = input.at ?? new Date();
     const next = advanceOnOutreach(status);
-    const lead = await withTransaction(async (tx) => {
+    const lead = await withTenantTransaction(ctx, async (tx) => {
       const { lead: updated } = await leadRepository.logOutreach(
+        ctx,
         {
           leadId: id,
           channel: input.channel,
@@ -256,7 +258,7 @@ export const leadService = {
       });
       return updated;
     });
-    return loadDetail(lead);
+    return loadDetail(ctx, lead);
   },
 
   /**
@@ -272,20 +274,22 @@ export const leadService = {
    * attempt that was already backfilled or manually set.
    */
   async respond(id: string, kind: "hot" | "cold", ctx: TenantContext): Promise<LeadDetailDTO> {
-    const existing = await requireLead(id);
+    const existing = await requireLead(ctx, id);
     const status = existing.status as LeadStatus;
     if (!canRespond(status)) throw new AppError("CONFLICT", "Lead already promoted");
     const next = setResponse(kind === "hot" ? "Hot" : "Cold");
     const respondedAt = new Date();
-    const lead = await withTransaction(async (tx) => {
+    const lead = await withTenantTransaction(ctx, async (tx) => {
       const updated = await leadRepository.update(
+        ctx,
         id,
         { status: next, respondedAt: existing.respondedAt ?? respondedAt },
         tx,
       );
-      const lastAttempt = await leadRepository.findMostRecentUnresponded(id, tx);
+      const lastAttempt = await leadRepository.findMostRecentUnresponded(ctx, id, tx);
       if (lastAttempt) {
         await leadRepository.updateOutreachAttempt(
+          ctx,
           id,
           lastAttempt.id,
           { response: kind, respondedAt },
@@ -302,7 +306,7 @@ export const leadService = {
       });
       return updated;
     });
-    return loadDetail(lead);
+    return loadDetail(ctx, lead);
   },
 
   /**
@@ -322,7 +326,7 @@ export const leadService = {
     ctx: TenantContext,
     opts?: { filledFromRoleId?: string },
   ): Promise<{ candidateId: string }> {
-    const existing = await requireLead(id);
+    const existing = await requireLead(ctx, id);
     if (!canPromote(existing.status as LeadStatus)) {
       throw new AppError("CONFLICT", "Lead already promoted");
     }
@@ -330,11 +334,11 @@ export const leadService = {
       ...leadToCandidateInput(existing),
       filledFromRoleId: opts?.filledFromRoleId ?? null,
     };
-    return withTransaction(async (tx) => {
+    return withTenantTransaction(ctx, async (tx) => {
       const candidate = await candidateService.create(input, { user: ctx, tx });
       // Guarded flip INSIDE the tx: if a concurrent promote already flipped this lead, we update 0
       // rows → throw CONFLICT, which rolls back the candidate we just created (no orphan candidate).
-      const flipped = await leadRepository.markPromoted(id, candidate.id, tx);
+      const flipped = await leadRepository.markPromoted(ctx, id, candidate.id, tx);
       if (flipped !== 1) {
         throw new AppError("CONFLICT", "Lead already promoted");
       }
@@ -356,9 +360,9 @@ export const leadService = {
    * + a `delete` audit run in one transaction. Returns `{ id }` (never echoes lead PII).
    */
   async softDelete(id: string, ctx: TenantContext): Promise<{ id: string }> {
-    const existing = await requireLead(id);
-    await withTransaction(async (tx) => {
-      const deleted = await leadRepository.softDelete(id, ctx.user.id, tx);
+    const existing = await requireLead(ctx, id);
+    await withTenantTransaction(ctx, async (tx) => {
+      const deleted = await leadRepository.softDelete(ctx, id, ctx.user.id, tx);
       await writeAudit(tx, {
         entity: "source_lead",
         entityId: id,
@@ -377,11 +381,11 @@ export const leadService = {
    * a live (not-deleted) lead → CONFLICT. Repo `restore` + a `restore` audit in one transaction.
    */
   async restore(id: string, ctx: TenantContext): Promise<LeadDetailDTO> {
-    const existing = await leadRepository.findById(id, { includeDeleted: true });
+    const existing = await leadRepository.findById(ctx, id, { includeDeleted: true });
     if (!existing) throw new AppError("NOT_FOUND", "Lead not found");
     if (existing.deletedAt === null) throw new AppError("CONFLICT", "Lead is not deleted");
-    const restored = await withTransaction(async (tx) => {
-      const lead = await leadRepository.restore(id, tx);
+    const restored = await withTenantTransaction(ctx, async (tx) => {
+      const lead = await leadRepository.restore(ctx, id, tx);
       await writeAudit(tx, {
         entity: "source_lead",
         entityId: id,
@@ -392,14 +396,14 @@ export const leadService = {
       });
       return lead;
     });
-    return loadDetail(restored);
+    return loadDetail(ctx, restored);
   },
 
   /** One lead's full detail (incl. soft-deleted — the "Show deleted" view inspects them too). */
-  async detail(id: string): Promise<LeadDetailDTO> {
-    const lead = await leadRepository.findById(id, { includeDeleted: true });
+  async detail(id: string, ctx: TenantContext): Promise<LeadDetailDTO> {
+    const lead = await leadRepository.findById(ctx, id, { includeDeleted: true });
     if (!lead) throw new AppError("NOT_FOUND", "Lead not found");
-    return loadDetail(lead);
+    return loadDetail(ctx, lead);
   },
 
   /**
@@ -409,12 +413,12 @@ export const leadService = {
    * Promoted lead can't be snoozed (its lifecycle is closed). Audited `snooze`/`wake`.
    */
   async snooze(id: string, until: Date | null, ctx: TenantContext): Promise<LeadDetailDTO> {
-    const existing = await requireLead(id);
+    const existing = await requireLead(ctx, id);
     if (until && existing.status === "Promoted") {
       throw new AppError("CONFLICT", "Lead already promoted");
     }
-    const lead = await withTransaction(async (tx) => {
-      const updated = await leadRepository.update(id, { snoozedUntil: until }, tx);
+    const lead = await withTenantTransaction(ctx, async (tx) => {
+      const updated = await leadRepository.update(ctx, id, { snoozedUntil: until }, tx);
       await writeAudit(tx, {
         entity: "source_lead",
         entityId: id,
@@ -425,7 +429,7 @@ export const leadService = {
       });
       return updated;
     });
-    return loadDetail(lead);
+    return loadDetail(ctx, lead);
   },
 
   /**
@@ -440,9 +444,10 @@ export const leadService = {
     input: UpdateOutreachInput,
     ctx: TenantContext,
   ): Promise<LeadDetailDTO> {
-    await requireLead(id);
-    const lead = await withTransaction(async (tx) => {
+    await requireLead(ctx, id);
+    const lead = await withTenantTransaction(ctx, async (tx) => {
       const count = await leadRepository.updateOutreachAttempt(
+        ctx,
         id,
         attemptId,
         {
@@ -455,7 +460,7 @@ export const leadService = {
         tx,
       );
       if (count === 0) throw new AppError("NOT_FOUND", "Outreach attempt not found");
-      const synced = await leadRepository.syncOutreachDenorm(id, tx);
+      const synced = await leadRepository.syncOutreachDenorm(ctx, id, tx);
       await writeAudit(tx, {
         entity: "source_lead",
         entityId: id,
@@ -465,7 +470,7 @@ export const leadService = {
       });
       return synced;
     });
-    return loadDetail(lead);
+    return loadDetail(ctx, lead);
   },
 
   /**
@@ -474,11 +479,11 @@ export const leadService = {
    * regressed (legacy parity — un-advancing the funnel stays a manual status change).
    */
   async deleteOutreach(id: string, attemptId: string, ctx: TenantContext): Promise<LeadDetailDTO> {
-    await requireLead(id);
-    const lead = await withTransaction(async (tx) => {
-      const count = await leadRepository.deleteOutreachAttempt(id, attemptId, tx);
+    await requireLead(ctx, id);
+    const lead = await withTenantTransaction(ctx, async (tx) => {
+      const count = await leadRepository.deleteOutreachAttempt(ctx, id, attemptId, tx);
       if (count === 0) throw new AppError("NOT_FOUND", "Outreach attempt not found");
-      const synced = await leadRepository.syncOutreachDenorm(id, tx);
+      const synced = await leadRepository.syncOutreachDenorm(ctx, id, tx);
       await writeAudit(tx, {
         entity: "source_lead",
         entityId: id,
@@ -488,7 +493,7 @@ export const leadService = {
       });
       return synced;
     });
-    return loadDetail(lead);
+    return loadDetail(ctx, lead);
   },
 
   /**
@@ -503,7 +508,7 @@ export const leadService = {
     ctx: TenantContext,
   ): Promise<{ affected: number; skipped: number }> {
     const uniqueIds = [...new Set(input.ids)];
-    const rows = await leadRepository.findManyByIds(uniqueIds, {
+    const rows = await leadRepository.findManyByIds(ctx, uniqueIds, {
       includeDeleted: input.action === "restore",
     });
     const byId = new Map(rows.map((r) => [r.id, r]));
@@ -514,7 +519,7 @@ export const leadService = {
       if (!names.has(input.value)) throw new AppError("NOT_FOUND", "User not found");
     }
     if (input.action === "client" && input.value !== null) {
-      const clients = await clientRepository.list();
+      const clients = await clientRepository.list(ctx);
       if (!clients.some((c) => c.id === input.value)) {
         throw new AppError("NOT_FOUND", "Client not found");
       }
@@ -530,28 +535,29 @@ export const leadService = {
       return row.status !== "Promoted" ? [row] : [];
     });
 
-    await withTransaction(async (tx) => {
+    await withTenantTransaction(ctx, async (tx) => {
       for (const row of eligible) {
         const { id } = row;
         switch (input.action) {
           case "delete":
-            await leadRepository.softDelete(id, ctx.user.id, tx);
+            await leadRepository.softDelete(ctx, id, ctx.user.id, tx);
             break;
           case "restore":
-            await leadRepository.restore(id, tx);
+            await leadRepository.restore(ctx, id, tx);
             break;
           case "status":
-            await leadRepository.update(id, { status: normalizeLeadStatus(input.value) }, tx);
+            await leadRepository.update(ctx, id, { status: normalizeLeadStatus(input.value) }, tx);
             break;
           case "assign":
-            await leadRepository.update(id, { createdById: input.value }, tx);
+            await leadRepository.update(ctx, id, { createdById: input.value }, tx);
             break;
           case "client":
-            await leadRepository.update(id, { clientId: input.value }, tx);
+            await leadRepository.update(ctx, id, { clientId: input.value }, tx);
             break;
           case "outreach": {
             const at = new Date();
             await leadRepository.logOutreach(
+              ctx,
               {
                 leadId: id,
                 channel: input.channel,
@@ -611,9 +617,9 @@ export const leadService = {
       .filter((r) => !r.email)
       .map((r) => r.name.trim().toLowerCase());
     const [byEmail, byName, clients] = await Promise.all([
-      leadRepository.findManyByEmails(emails),
-      leadRepository.findManyByNames(namesForEmailless),
-      clientRepository.list(),
+      leadRepository.findManyByEmails(ctx, emails),
+      leadRepository.findManyByNames(ctx, namesForEmailless),
+      clientRepository.list(ctx),
     ]);
     const existingEmails = new Set(
       byEmail.flatMap((l) => (l.email === null ? [] : [l.email.toLowerCase()])),
@@ -657,10 +663,11 @@ export const leadService = {
       (r) => !r.priorOutreachNotes || r.priorOutreachNotes.length === 0,
     );
 
-    const added = await withTransaction(async (tx) => {
+    const added = await withTenantTransaction(ctx, async (tx) => {
       let insertedCount = 0;
       if (withoutNotes.length > 0) {
         const result = await leadRepository.createMany(
+          ctx,
           withoutNotes.map((row) => ({ ...toCreateInput(row), outreachCount: 0 })),
           tx,
           { skipDuplicates: true },
@@ -672,6 +679,7 @@ export const leadService = {
         let lead: { id: string };
         try {
           lead = await leadRepository.create(
+            ctx,
             {
               ...toCreateInput(row),
               outreachCount: notes.length,
@@ -688,6 +696,7 @@ export const leadService = {
         }
         insertedCount++;
         await leadRepository.createManyOutreachAttempts(
+          ctx,
           notes.map((note) => ({
             leadId: lead.id,
             channel: "linkedin",

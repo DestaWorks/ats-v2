@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { fixedClock } from "@destaworks/domain/clock";
 import { effectiveLicenseStatus } from "@destaworks/domain/rules/license";
+import type { TenantContext } from "@destaworks/domain/tenant";
 
 /**
  * Proves `licenseVerifyService.dashboard` calls the queue/timeline reads with the right caps,
@@ -29,6 +30,12 @@ vi.mock("@destaworks/integrations/http/request-cache", () => ({
 import { licenseVerifyService } from "./license-verify.service";
 
 const NOW = fixedClock("2026-07-16T00:00:00Z");
+const ctx: TenantContext = {
+  tenantId: "t1",
+  membershipId: "u1-m",
+  user: { id: "u1", email: "u@desta.works", name: "Test User" },
+  role: "Associate",
+};
 
 function candidateRow(overrides: Record<string, unknown> = {}) {
   return {
@@ -52,10 +59,10 @@ describe("licenseVerifyService.dashboard", () => {
     h.licenseVerifyRepo.expiryTimeline.mockResolvedValue([]);
     h.clientRepo.nameMap.mockResolvedValue(new Map([["cl1", "Sterling Institute"]]));
 
-    const out = await licenseVerifyService.dashboard(NOW);
+    const out = await licenseVerifyService.dashboard(ctx, NOW);
 
-    expect(h.licenseVerifyRepo.verificationQueue).toHaveBeenCalledWith(100);
-    expect(h.licenseVerifyRepo.expiryTimeline).toHaveBeenCalledWith(12);
+    expect(h.licenseVerifyRepo.verificationQueue).toHaveBeenCalledWith(ctx, 100);
+    expect(h.licenseVerifyRepo.expiryTimeline).toHaveBeenCalledWith(ctx, 12);
     expect(out.queue).toEqual([
       {
         id: "c1",
@@ -77,7 +84,7 @@ describe("licenseVerifyService.dashboard", () => {
     h.licenseVerifyRepo.expiryTimeline.mockResolvedValue([]);
     h.clientRepo.nameMap.mockResolvedValue(new Map());
 
-    const out = await licenseVerifyService.dashboard(NOW);
+    const out = await licenseVerifyService.dashboard(ctx, NOW);
     expect(out.queueTruncated).toBe(true);
   });
 
@@ -94,7 +101,7 @@ describe("licenseVerifyService.dashboard", () => {
     ]);
     h.clientRepo.nameMap.mockResolvedValue(new Map());
 
-    const out = await licenseVerifyService.dashboard(clock);
+    const out = await licenseVerifyService.dashboard(ctx, clock);
     const byId = new Map(out.timeline.map((r) => [r.id, r.daysLeft]));
     // OLD: floor((expiry - now)/86_400_000) → -1 / 0 / -2 respectively.
     expect(byId.get("today")).toBe(0);
@@ -130,7 +137,7 @@ describe("licenseVerifyService.dashboard", () => {
     ]);
     h.clientRepo.nameMap.mockResolvedValue(new Map());
 
-    const out = await licenseVerifyService.dashboard(NOW);
+    const out = await licenseVerifyService.dashboard(ctx, NOW);
     expect(out.timeline).toEqual([
       expect.objectContaining({ id: "future", daysLeft: 30 }),
       expect.objectContaining({ id: "past", daysLeft: -15 }),

@@ -74,7 +74,7 @@ vi.mock("./lead.service", () => ({ leadService: h.leadService }));
 vi.mock("@destaworks/integrations/ai/extract-jd", () => ({ extractJd: h.extractJd }));
 vi.mock("@destaworks/db/audit", () => ({ writeAudit: h.writeAudit }));
 vi.mock("@destaworks/db/with-transaction", () => ({
-  withTransaction: (fn: (tx: unknown) => unknown) => fn(h.fakeTx),
+  withTenantTransaction: (_ctx: unknown, fn: (tx: unknown) => unknown) => fn(h.fakeTx),
 }));
 
 import { openRoleService } from "./open-role.service";
@@ -151,6 +151,7 @@ describe("openRoleService.update — closedAt stamping", () => {
     h.roleRepo.update.mockResolvedValue(role({ status: "Filled" }));
     await openRoleService.update("r1", { status: "Filled" }, associate);
     expect(h.roleRepo.update).toHaveBeenCalledWith(
+      associate,
       "r1",
       expect.objectContaining({ status: "Filled", closedAt: expect.any(Date) }),
       h.fakeTx,
@@ -162,6 +163,7 @@ describe("openRoleService.update — closedAt stamping", () => {
     h.roleRepo.update.mockResolvedValue(role({ status: "Open" }));
     await openRoleService.update("r1", { status: "Open" }, associate);
     expect(h.roleRepo.update).toHaveBeenCalledWith(
+      associate,
       "r1",
       expect.objectContaining({ status: "Open", closedAt: null }),
       h.fakeTx,
@@ -192,7 +194,7 @@ describe("openRoleService.matches", () => {
       minScore: 1,
     });
     h.leadRepo.listForMatching.mockResolvedValue([lead({ status: "Sourced" })]);
-    const matches = await openRoleService.matches("r1");
+    const matches = await openRoleService.matches("r1", associate);
     expect(matches).toHaveLength(1);
     expect(matches[0]?.score).toBe(100); // only the exaggerated same-client weight
   });
@@ -201,7 +203,7 @@ describe("openRoleService.matches", () => {
     h.roleRepo.findById.mockResolvedValue(role());
     h.profileRepo.findByClientId.mockResolvedValue(null);
     h.leadRepo.listForMatching.mockResolvedValue([lead()]); // clientId/state/credential match + Hot
-    const matches = await openRoleService.matches("r1");
+    const matches = await openRoleService.matches("r1", associate);
     expect(matches[0]?.score).toBe(30 + 25 + 25 + 20); // DEFAULT_MATCH_WEIGHTS perfect + hot
   });
 });
@@ -213,7 +215,7 @@ describe("openRoleService.dormantMatches", () => {
       lead({ status: "Responded — Hot" }),
       lead({ id: "l2", status: "No Response" }),
     ]);
-    const matches = await openRoleService.dormantMatches("r1");
+    const matches = await openRoleService.dormantMatches("r1", associate);
     expect(matches).toHaveLength(1);
     expect(matches[0]?.leadId).toBe("l2");
   });
@@ -244,7 +246,13 @@ describe("openRoleService.deleteNote", () => {
     h.roleRepo.findById.mockResolvedValue(role());
     h.roleRepo.softDeleteNote.mockResolvedValue({ count: 1 });
     await openRoleService.deleteNote("r1", "n1", associate);
-    expect(h.roleRepo.softDeleteNote).toHaveBeenCalledWith("n1", "r1", associate.user.id, h.fakeTx);
+    expect(h.roleRepo.softDeleteNote).toHaveBeenCalledWith(
+      associate,
+      "n1",
+      "r1",
+      associate.user.id,
+      h.fakeTx,
+    );
     expect(h.writeAudit).toHaveBeenCalledWith(
       h.fakeTx,
       expect.objectContaining({ action: "delete_note", after: { noteId: "n1" } }),
@@ -258,6 +266,7 @@ describe("openRoleService.deleteNote", () => {
       openRoleService.deleteNote("r1", "note-belongs-to-other-role", associate),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect(h.roleRepo.softDeleteNote).toHaveBeenCalledWith(
+      associate,
       "note-belongs-to-other-role",
       "r1",
       associate.user.id,
@@ -274,7 +283,7 @@ describe("openRoleService.triage", () => {
     h.roleRepo.listActive.mockResolvedValue(roles);
     h.profileRepo.list.mockResolvedValue([]);
     h.leadRepo.listForMatching.mockResolvedValue([lead()]);
-    const top = await openRoleService.triage();
+    const top = await openRoleService.triage(associate);
     expect(top).toHaveLength(3);
     expect(top[0]?.roleId).toBe("r1"); // P1 + hot match dominates the ranking
   });
@@ -328,6 +337,7 @@ describe("client match profile — leadership gate", () => {
     });
     const saved = await openRoleService.saveMatchProfile("c1", weights, owner);
     expect(h.profileRepo.upsert).toHaveBeenCalledWith(
+      owner,
       "c1",
       expect.objectContaining(weights),
       h.fakeTx,
@@ -337,7 +347,7 @@ describe("client match profile — leadership gate", () => {
 
   it("returns isDefault=true when a client has no saved row", async () => {
     h.profileRepo.findByClientId.mockResolvedValue(null);
-    const profile = await openRoleService.getMatchProfile("c1");
+    const profile = await openRoleService.getMatchProfile("c1", owner);
     expect(profile.isDefault).toBe(true);
     expect(profile.weightSameClient).toBe(30); // DEFAULT_MATCH_WEIGHTS
   });

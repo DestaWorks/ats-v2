@@ -12,9 +12,9 @@ export type PostCrmClientNoteResponse = Contract.PostCrmClientNoteResponse;
 
 /** GET/POST /api/crm/clients/:id/notes — manual call/note log. Gated `viewCrm`. */
 export const GET = apiHandler<{ params: Promise<{ id: string }> }>(async (_req, ctx) => {
-  await requireCapability("viewCrm");
+  const user = await requireCapability("viewCrm");
   const { id } = await ctx.params;
-  const notes = await clientNoteService.list(id);
+  const notes = await clientNoteService.list(id, user);
   return json<GetCrmClientNotesResponse>({ notes });
 });
 

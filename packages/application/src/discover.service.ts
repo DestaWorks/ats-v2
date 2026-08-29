@@ -9,7 +9,7 @@ import {
 import { TAXONOMY_OPTIONS, taxonomyForCredential } from "@destaworks/domain/constants";
 import { defined } from "@destaworks/domain/utils/defined";
 import { writeAudit } from "@destaworks/db/audit";
-import { withTransaction } from "@destaworks/db/with-transaction";
+import { withTenantTransaction } from "@destaworks/db/with-transaction";
 import { checkRateLimit } from "@destaworks/integrations/http/rate-limit";
 import { AppError } from "@destaworks/integrations/http/app-error";
 import type { TenantContext } from "@destaworks/domain/tenant";
@@ -64,11 +64,15 @@ export function mapResult(
 }
 
 /** Exported for reuse by `similarity.service.ts` (Wave 3.2) — same cross-system dedupe read. */
-export async function buildDupSets(npis: string[], names: string[]): Promise<DupCandidateSets> {
+export async function buildDupSets(
+  ctx: TenantContext,
+  npis: string[],
+  names: string[],
+): Promise<DupCandidateSets> {
   const [byNpi, byName, candByName] = await Promise.all([
-    leadRepository.findManyByNpis(npis),
-    leadRepository.findManyByNames(names),
-    candidateRepository.findManyByNames(names),
+    leadRepository.findManyByNpis(ctx, npis),
+    leadRepository.findManyByNames(ctx, names),
+    candidateRepository.findManyByNames(ctx, names),
   ]);
   const leadsByNpi: DupCandidateSets["leadsByNpi"] = new Map();
   for (const l of byNpi) {
@@ -117,6 +121,7 @@ export const discoverService = {
       ? mapped.filter((r) => r.taxonomyDesc === taxonomyOpt.matchDesc)
       : mapped;
     const sets = await buildDupSets(
+      ctx,
       rows.map((r) => r.npi),
       rows.map((r) => r.fullName.toLowerCase()),
     );
@@ -154,7 +159,7 @@ export const discoverService = {
 
     const npis = input.rows.map((r) => r.npi);
     const names = input.rows.map((r) => r.name.trim().toLowerCase());
-    const sets = await buildDupSets(npis, names);
+    const sets = await buildDupSets(ctx, npis, names);
 
     const seen = new Set<string>();
     const kept = input.rows.filter((row) => {
@@ -168,8 +173,9 @@ export const discoverService = {
     });
 
     if (kept.length > 0) {
-      await withTransaction(async (tx) => {
+      await withTenantTransaction(ctx, async (tx) => {
         await leadRepository.createMany(
+          ctx,
           kept.map((row) => ({
             name: row.name,
             npi: row.npi,
@@ -212,11 +218,11 @@ export const discoverService = {
    * (see `supplyForCombo`) — that's a live external call, kept lazy/on-demand per combo instead of
    * fired for every row on every page load.
    */
-  async coverageGaps(): Promise<CoverageGapRowDTO[]> {
+  async coverageGaps(ctx: TenantContext): Promise<CoverageGapRowDTO[]> {
     const [roleGroups, poolGroups, pipelineGroups] = await Promise.all([
-      openRoleRepository.groupOpenByCredentialState(),
-      leadRepository.groupByCredentialState(),
-      candidateRepository.groupActiveByCredentialState(),
+      openRoleRepository.groupOpenByCredentialState(ctx),
+      leadRepository.groupByCredentialState(ctx),
+      candidateRepository.groupActiveByCredentialState(ctx),
     ]);
 
     const key = (credential: string | null, state: string | null) => `${credential}::${state}`;

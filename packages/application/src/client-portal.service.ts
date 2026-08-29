@@ -20,7 +20,7 @@ import type { TenantContext } from "@destaworks/domain/tenant";
 import type { PortalContext } from "@destaworks/auth/portal-guards";
 import { hashPortalToken } from "@destaworks/auth/portal-guards";
 import { writeAudit } from "@destaworks/db/audit";
-import { withTransaction } from "@destaworks/db/with-transaction";
+import { withTenantTransaction, withTransaction } from "@destaworks/db/with-transaction";
 import { clientContactRepository } from "@destaworks/db/repositories/client-contact.repository";
 import { clientPortalTokenRepository } from "@destaworks/db/repositories/client-portal-token.repository";
 import { clientRepository } from "@destaworks/db/repositories/client.repository";
@@ -105,8 +105,8 @@ function toPortalRoleDTO(row: OpenRoleRow): PortalRoleDTO {
   };
 }
 
-async function requireContactInClient(clientId: string, contactId: string) {
-  const contact = await clientContactRepository.findById(contactId);
+async function requireContactInClient(ctx: TenantContext, clientId: string, contactId: string) {
+  const contact = await clientContactRepository.findById(ctx, contactId);
   if (!contact || contact.clientId !== clientId || contact.deletedAt) {
     throw new AppError("NOT_FOUND", "Contact not found");
   }
@@ -126,18 +126,19 @@ export const clientPortalService = {
     contactId: string,
     actor: TenantContext,
   ): Promise<GeneratedPortalLinkDTO> {
-    await requireContactInClient(clientId, contactId);
+    await requireContactInClient(actor, clientId, contactId);
     const rawToken = generateRawToken();
     const tokenHash = hashPortalToken(rawToken);
     const expiresAt = new Date(Date.now() + PORTAL_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000);
 
-    const { contact, token } = await withTransaction(async (tx) => {
-      await clientPortalTokenRepository.revokeAllForContact(contactId, tx);
+    const { contact, token } = await withTenantTransaction(actor, async (tx) => {
+      await clientPortalTokenRepository.revokeAllForContact(actor, contactId, tx);
       const tokenRow = await clientPortalTokenRepository.create(
+        actor,
         { contactId, tokenHash, expiresAt, createdById: actor.user.id },
         tx,
       );
-      await clientContactRepository.update(clientId, contactId, { portalEnabled: true }, tx);
+      await clientContactRepository.update(actor, clientId, contactId, { portalEnabled: true }, tx);
       await writeAudit(tx, {
         entity: "client_portal_token",
         entityId: tokenRow.id,
@@ -145,7 +146,7 @@ export const clientPortalService = {
         action: "generate_portal_link",
         after: { clientId, contactId },
       });
-      const updatedContact = await clientContactRepository.findById(contactId, tx);
+      const updatedContact = await clientContactRepository.findById(actor, contactId, tx);
       if (!updatedContact) throw new AppError("NOT_FOUND", "Contact not found");
       return { contact: updatedContact, token: tokenRow };
     });
@@ -154,12 +155,12 @@ export const clientPortalService = {
   },
 
   async revokeLink(clientId: string, tokenId: string, actor: TenantContext): Promise<void> {
-    const tokenRow = await clientPortalTokenRepository.findById(tokenId);
+    const tokenRow = await clientPortalTokenRepository.findById(actor, tokenId);
     if (!tokenRow || tokenRow.contact.clientId !== clientId) {
       throw new AppError("NOT_FOUND", "Portal link not found");
     }
-    await withTransaction(async (tx) => {
-      const count = await clientPortalTokenRepository.revoke(tokenId, tx);
+    await withTenantTransaction(actor, async (tx) => {
+      const count = await clientPortalTokenRepository.revoke(actor, tokenId, tx);
       if (count === 0) throw new AppError("NOT_FOUND", "Portal link not found");
       await writeAudit(tx, {
         entity: "client_portal_token",
@@ -171,10 +172,16 @@ export const clientPortalService = {
     });
   },
 
-  async listContactsForClient(clientId: string): Promise<AdminPortalContactDTO[]> {
-    const contacts = await clientContactRepository.listForClient(clientId);
+  async listContactsForClient(
+    clientId: string,
+    actor: TenantContext,
+  ): Promise<AdminPortalContactDTO[]> {
+    const contacts = await clientContactRepository.listForClient(actor, clientId);
     const portalEnabledIds = contacts.filter((c) => c.portalEnabled).map((c) => c.id);
-    const activeTokens = await clientPortalTokenRepository.findActiveForContacts(portalEnabledIds);
+    const activeTokens = await clientPortalTokenRepository.findActiveForContacts(
+      actor,
+      portalEnabledIds,
+    );
     const activeByContactId = new Map(activeTokens.map((t) => [t.contactId, t]));
     return contacts.map((c) => toAdminContactDTO(c, activeByContactId.get(c.id) ?? null));
   },

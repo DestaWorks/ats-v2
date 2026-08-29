@@ -64,7 +64,7 @@ describe("mentionService.listMine", () => {
 
     const out = await mentionService.listMine(h.user as TenantContext);
 
-    expect(h.repo.listForRecipient).toHaveBeenCalledWith("u1", expect.any(Number));
+    expect(h.repo.listForRecipient).toHaveBeenCalledWith(h.user, "u1", expect.any(Number));
     expect(out.unread).toBe(3);
     expect(out.mentions).toEqual([
       {
@@ -108,7 +108,7 @@ describe("mentionService.markRead", () => {
       h.user as TenantContext,
     );
 
-    expect(h.repo.markRead).toHaveBeenCalledWith("m1", "u1");
+    expect(h.repo.markRead).toHaveBeenCalledWith(h.user, "m1", "u1");
     expect(out).toEqual({ unread: 0 });
   });
 
@@ -128,7 +128,7 @@ describe("mentionService.markRead", () => {
     await expect(
       mentionService.markRead({ mentionId: "old-m1", all: false }, h.user as TenantContext),
     ).resolves.toEqual({ unread: 0 });
-    expect(h.repo.existsForRecipient).toHaveBeenCalledWith("old-m1", "u1");
+    expect(h.repo.existsForRecipient).toHaveBeenCalledWith(h.user, "old-m1", "u1");
     expect(h.repo.listForRecipient).not.toHaveBeenCalled();
   });
 
@@ -150,7 +150,7 @@ describe("mentionService.markRead", () => {
       h.user as TenantContext,
     );
 
-    expect(h.repo.markAllRead).toHaveBeenCalledWith("u1");
+    expect(h.repo.markAllRead).toHaveBeenCalledWith(h.user, "u1");
     expect(h.repo.markRead).not.toHaveBeenCalled();
     expect(out).toEqual({ unread: 0 });
   });

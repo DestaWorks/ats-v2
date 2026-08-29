@@ -123,15 +123,15 @@ describe("RolesController — delegation and response envelope", () => {
   it("GET /roles drops the absent filters before handing the page query to the service", async () => {
     const list = vi.fn().mockResolvedValue({ items: [], total: 0 });
 
-    await controllerWith({ list }).list({ status: "Open", page: 3 });
+    await controllerWith({ list }).list({ status: "Open", page: 3 }, USER);
 
-    expect(list).toHaveBeenCalledWith({ status: "Open", page: 3 });
+    expect(list).toHaveBeenCalledWith({ status: "Open", page: 3 }, USER);
   });
 
   it("GET /roles/triage wraps the ranked roles", async () => {
     const triage = vi.fn().mockResolvedValue([ROLE]);
 
-    expect(await controllerWith({ triage }).triage()).toEqual({ roles: [ROLE] });
+    expect(await controllerWith({ triage }).triage(USER)).toEqual({ roles: [ROLE] });
   });
 
   it("POST /roles/parse-jd returns the extraction unwrapped", async () => {
@@ -146,8 +146,8 @@ describe("RolesController — delegation and response envelope", () => {
   it("GET /roles/:id returns the role envelope", async () => {
     const detail = vi.fn().mockResolvedValue(ROLE);
 
-    expect(await controllerWith({ detail }).detail("role_1")).toEqual({ role: ROLE });
-    expect(detail).toHaveBeenCalledWith("role_1");
+    expect(await controllerWith({ detail }).detail("role_1", USER)).toEqual({ role: ROLE });
+    expect(detail).toHaveBeenCalledWith("role_1", USER);
   });
 
   it("PATCH /roles/:id passes the parsed body through", async () => {
@@ -182,8 +182,10 @@ describe("RolesController — delegation and response envelope", () => {
     const dormantMatches = vi.fn().mockResolvedValue([{ leadId: "l2" }]);
     const controller = controllerWith({ matches, dormantMatches });
 
-    expect(await controller.matches("role_1")).toEqual({ matches: [{ leadId: "l1" }] });
-    expect(await controller.dormantMatches("role_1")).toEqual({ matches: [{ leadId: "l2" }] });
+    expect(await controller.matches("role_1", USER)).toEqual({ matches: [{ leadId: "l1" }] });
+    expect(await controller.dormantMatches("role_1", USER)).toEqual({
+      matches: [{ leadId: "l2" }],
+    });
     expect(matches).toHaveBeenCalledTimes(1);
     expect(dormantMatches).toHaveBeenCalledTimes(1);
   });
@@ -216,7 +218,7 @@ describe("RolesController — authorization", () => {
         method: "detail",
         guards: [new SessionAuthGuard()],
         request: { headers: {} },
-        invoke: () => controllerWith({ detail }).detail("role_1"),
+        invoke: () => controllerWith({ detail }).detail("role_1", USER),
       }),
     ).rejects.toMatchObject({ code: "UNAUTHORIZED", status: 401 });
 
@@ -232,7 +234,7 @@ describe("RolesController — authorization", () => {
       method: "detail",
       guards: [new SessionAuthGuard()],
       request: { headers: {} },
-      invoke: () => controllerWith({ detail }).detail("role_1"),
+      invoke: () => controllerWith({ detail }).detail("role_1", USER),
     });
 
     expect(response).toEqual({ role: ROLE });

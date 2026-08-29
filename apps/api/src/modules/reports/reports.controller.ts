@@ -137,14 +137,17 @@ export class ReportsController {
 
   /** GET /reports/mass-journey — the Gantt view of candidate journeys. */
   @Get("mass-journey")
-  massJourneyReport(@Filters() filters: ReportFilters): Promise<MassJourneyDTO> {
-    return this.massJourney.massJourney(filters);
+  massJourneyReport(
+    @Filters() filters: ReportFilters,
+    @CurrentUser() user: AuthContext,
+  ): Promise<MassJourneyDTO> {
+    return this.massJourney.massJourney(filters, user);
   }
 
   /** GET /reports/trends — rolling W/M/Q anomalies. Team-wide, matching legacy's scope. */
   @Get("trends")
-  trends(): Promise<TrendsDTO> {
-    return this.trendsReport.trends();
+  trends(@CurrentUser() user: AuthContext): Promise<TrendsDTO> {
+    return this.trendsReport.trends(user);
   }
 
   /**

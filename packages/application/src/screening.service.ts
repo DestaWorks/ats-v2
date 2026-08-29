@@ -13,7 +13,7 @@ import type {
 import { toIso } from "@destaworks/domain/utils/iso";
 import type { TenantContext } from "@destaworks/domain/tenant";
 import { writeAudit } from "@destaworks/db/audit";
-import { withTransaction } from "@destaworks/db/with-transaction";
+import { withTenantTransaction } from "@destaworks/db/with-transaction";
 import { candidateRepository } from "@destaworks/db/repositories/candidate.repository";
 import {
   screeningRepository,
@@ -104,7 +104,7 @@ export const screeningService = {
     input: SaveScreeningInput,
     ctx: TenantContext,
   ): Promise<ScreeningScorecardDTO> {
-    const candidate = await candidateRepository.findById(candidateId);
+    const candidate = await candidateRepository.findById(ctx, candidateId);
     if (!candidate) throw new AppError("NOT_FOUND", "Candidate not found");
 
     const rulesRows = candidate.clientId ? await cachedClientRulesList() : [];
@@ -133,8 +133,9 @@ export const screeningService = {
       throw new AppError("BAD_REQUEST", "Score is 60%+ — not eligible for Future Pipeline");
     }
 
-    const row = await withTransaction(async (tx) => {
+    const row = await withTenantTransaction(ctx, async (tx) => {
       const created = await screeningRepository.create(
+        ctx,
         {
           candidateId,
           clientId: candidate.clientId,

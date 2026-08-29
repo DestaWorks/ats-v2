@@ -8,7 +8,7 @@ export type GetCrmClientHealthResponse = Contract.GetCrmClientHealthResponse;
 
 /** GET /api/crm/clients/:id/health — Client Health Score (legacy `index.html:7014-7025`). */
 export const GET = apiHandler<{ params: Promise<{ id: string }> }>(async (_req, ctx) => {
-  await requireCapability("viewCrm");
+  const user = await requireCapability("viewCrm");
   const { id } = await ctx.params;
-  return json<GetCrmClientHealthResponse>(await crmAnalyticsService.healthScore(id));
+  return json<GetCrmClientHealthResponse>(await crmAnalyticsService.healthScore(id, user));
 });

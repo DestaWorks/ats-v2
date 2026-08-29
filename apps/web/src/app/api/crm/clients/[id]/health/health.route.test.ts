@@ -56,6 +56,6 @@ describe("GET /api/crm/clients/:id/health", () => {
     const res = await GET(getReq(), ctx);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(result);
-    expect(h.healthScore).toHaveBeenCalledWith("c1");
+    expect(h.healthScore).toHaveBeenCalledWith("c1", expect.anything());
   });
 });

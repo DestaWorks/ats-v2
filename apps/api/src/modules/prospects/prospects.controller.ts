@@ -74,9 +74,10 @@ export class ProspectsController {
   async list(
     @Query(new ZodValidationPipe(prospectListQuerySchema))
     query: ContractOutput<typeof prospectListQuerySchema>,
+    @CurrentUser() user: AuthContext,
   ): Promise<GetProspectListResponse> {
     const { deleted, ...filters } = query;
-    return await this.prospects.list(defined({ ...filters, includeDeleted: deleted }));
+    return await this.prospects.list(defined({ ...filters, includeDeleted: deleted }), user);
   }
 
   /** POST /prospects/bulk — delete · restore · status · assign over <=200 ids. */
@@ -103,8 +104,11 @@ export class ProspectsController {
 
   /** GET /prospects/:id — detail with notes and contacts; soft-deleted rows are still inspectable. */
   @Get(":id")
-  async detail(@Param("id") id: string): Promise<GetProspectResponse> {
-    return { prospect: await this.prospects.detail(id) };
+  async detail(
+    @Param("id") id: string,
+    @CurrentUser() user: AuthContext,
+  ): Promise<GetProspectResponse> {
+    return { prospect: await this.prospects.detail(id, user) };
   }
 
   /** PATCH /prospects/:id — status/owner/notes/website. */

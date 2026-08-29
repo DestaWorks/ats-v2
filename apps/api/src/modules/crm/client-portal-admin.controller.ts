@@ -29,8 +29,11 @@ export class CrmClientPortalAdminController {
   ) {}
 
   @Get("contacts")
-  async listContacts(@Param("id") clientId: string): Promise<GetCrmPortalContactsResponse> {
-    return { contacts: await this.portal.listContactsForClient(clientId) };
+  async listContacts(
+    @Param("id") clientId: string,
+    @CurrentUser() user: AuthContext,
+  ): Promise<GetCrmPortalContactsResponse> {
+    return { contacts: await this.portal.listContactsForClient(clientId, user) };
   }
 
   @Post("contacts/:contactId/tokens")

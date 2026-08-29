@@ -33,7 +33,7 @@ export default async function CredentialsPage() {
   }
 
   const { stats, matrix, gapAnalysis, nlcHolders } =
-    await credentialsIntelligenceService.overview();
+    await credentialsIntelligenceService.overview(user);
 
   return (
     <div className="flex flex-col gap-6 px-8 py-6">

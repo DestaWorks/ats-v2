@@ -67,7 +67,10 @@ describe("GET /api/crm/clients/:id", () => {
     });
     const res = await GET(getReq(), ctx);
     expect(res.status).toBe(200);
-    expect(h.detail).toHaveBeenCalledWith("c1");
+    expect(h.detail).toHaveBeenCalledWith(
+      "c1",
+      expect.objectContaining({ user: expect.objectContaining({ id: "u1" }) }),
+    );
   });
 
   it("maps a service NOT_FOUND to 404", async () => {

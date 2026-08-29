@@ -5,6 +5,7 @@ import type {
   TrendsFunnelStageDTO,
   TrendsMetricDTO,
 } from "@destaworks/contracts/validation/reports";
+import type { TenantContext } from "@destaworks/domain/tenant";
 import { dailyRepository, type InstantWindow } from "@destaworks/db/repositories/daily.repository";
 import { stageHistoryRepository } from "@destaworks/db/repositories/stage-history.repository";
 
@@ -50,14 +51,14 @@ interface MetricTotals {
   hires: number;
 }
 
-async function metricTotals(w: InstantWindow): Promise<MetricTotals> {
+async function metricTotals(ctx: TenantContext, w: InstantWindow): Promise<MetricTotals> {
   const [sourced, outreach, responses, promoted, submitted, hires] = await Promise.all([
-    dailyRepository.sourcedCountsByRange(w),
-    dailyRepository.outreachCountsByRange(w),
-    dailyRepository.responseCountsByRange(w),
-    dailyRepository.promotedCountsByRange(w),
-    stageHistoryRepository.enteredStatusCountsByRange("SUBMITTED_TO_CLIENT", w),
-    stageHistoryRepository.enteredStatusCountsByRange("STARTED_DAY1", w),
+    dailyRepository.sourcedCountsByRange(ctx, w),
+    dailyRepository.outreachCountsByRange(ctx, w),
+    dailyRepository.responseCountsByRange(ctx, w),
+    dailyRepository.promotedCountsByRange(ctx, w),
+    stageHistoryRepository.enteredStatusCountsByRange(ctx, "SUBMITTED_TO_CLIENT", w),
+    stageHistoryRepository.enteredStatusCountsByRange(ctx, "STARTED_DAY1", w),
   ]);
   const sum = (m: Map<string, number>) => [...m.values()].reduce((a, b) => a + b, 0);
   return {
@@ -75,16 +76,17 @@ function convPct(a: number, b: number): number | null {
 }
 
 export const trendsReport = {
-  async trends(): Promise<TrendsDTO> {
+  async trends(ctx: TenantContext): Promise<TrendsDTO> {
     const [thisWeek, lastWeek, thisMonth, lastMonth, thisQuarter, lastQuarter, weekTargets] =
       await Promise.all([
-        metricTotals(window(WEEK_MS)),
-        metricTotals(window(2 * WEEK_MS, WEEK_MS)),
-        metricTotals(window(MONTH_MS)),
-        metricTotals(window(2 * MONTH_MS, MONTH_MS)),
-        metricTotals(window(QUARTER_MS)),
-        metricTotals(window(2 * QUARTER_MS, QUARTER_MS)),
+        metricTotals(ctx, window(WEEK_MS)),
+        metricTotals(ctx, window(2 * WEEK_MS, WEEK_MS)),
+        metricTotals(ctx, window(MONTH_MS)),
+        metricTotals(ctx, window(2 * MONTH_MS, MONTH_MS)),
+        metricTotals(ctx, window(QUARTER_MS)),
+        metricTotals(ctx, window(2 * QUARTER_MS, QUARTER_MS)),
         dailyRepository.targetsForDateRange(
+          ctx,
           Array.from({ length: 7 }, (_, i) => daysBefore(dateKey(), i)),
         ),
       ]);

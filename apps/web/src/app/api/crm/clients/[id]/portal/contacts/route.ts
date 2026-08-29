@@ -13,8 +13,8 @@ export type GetCrmPortalContactsResponse = Contract.GetCrmPortalContactsResponse
  * credentials).
  */
 export const GET = apiHandler<{ params: Promise<{ id: string }> }>(async (_req, ctx) => {
-  await requireCapability("configureClientPortal");
+  const user = await requireCapability("configureClientPortal");
   const { id } = await ctx.params;
-  const contacts = await clientPortalService.listContactsForClient(id);
+  const contacts = await clientPortalService.listContactsForClient(id, user);
   return json<GetCrmPortalContactsResponse>({ contacts });
 });

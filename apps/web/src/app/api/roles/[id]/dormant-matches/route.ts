@@ -11,7 +11,9 @@ export type GetRoleDormantMatchesResponse = RoleMatchesEnvelope;
  * (cold/no-response/future-collab leads only, top 10, legacy `scoreMatchDormant`).
  */
 export const GET = apiHandler<{ params: Promise<{ id: string }> }>(async (_req, ctx) => {
-  await requireUser();
+  const user = await requireUser();
   const { id } = await ctx.params;
-  return json<GetRoleDormantMatchesResponse>({ matches: await openRoleService.dormantMatches(id) });
+  return json<GetRoleDormantMatchesResponse>({
+    matches: await openRoleService.dormantMatches(id, user),
+  });
 });

@@ -26,7 +26,7 @@ export default async function CrmPage() {
     );
   }
 
-  const { clients } = await clientService.list();
+  const { clients } = await clientService.list(user);
 
   return (
     <div className="flex flex-col gap-5 px-8 py-6">

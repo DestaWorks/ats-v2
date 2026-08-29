@@ -10,8 +10,8 @@ export type GetAdminAiSettingsResponse = AiSettingsDTO;
 export type PatchAdminAiSettingsResponse = AiSettingsDTO;
 
 export const GET = apiHandler(async () => {
-  await requireCapability("manageAiSettings");
-  return json<GetAdminAiSettingsResponse>(await aiOpsService.getSettings());
+  const actor = await requireCapability("manageAiSettings");
+  return json<GetAdminAiSettingsResponse>(await aiOpsService.getSettings(actor));
 });
 
 export const PATCH = apiHandler(async (req: Request) => {

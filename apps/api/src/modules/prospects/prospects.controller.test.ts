@@ -107,9 +107,9 @@ describe("ProspectsController — delegation and response envelope", () => {
   it("GET /prospects/list renames `deleted` to `includeDeleted` and drops absent filters", async () => {
     const list = vi.fn().mockResolvedValue({ items: [], total: 0 });
 
-    await controllerWith({ list }).list({ ownerId: "u2", deleted: true });
+    await controllerWith({ list }).list({ ownerId: "u2", deleted: true }, USER);
 
-    expect(list).toHaveBeenCalledWith({ ownerId: "u2", includeDeleted: true });
+    expect(list).toHaveBeenCalledWith({ ownerId: "u2", includeDeleted: true }, USER);
   });
 
   it("POST /prospects/bulk returns the counts unwrapped", async () => {
@@ -137,8 +137,8 @@ describe("ProspectsController — delegation and response envelope", () => {
   it("GET /prospects/:id returns the prospect envelope", async () => {
     const detail = vi.fn().mockResolvedValue(PROSPECT);
 
-    expect(await controllerWith({ detail }).detail("pros_1")).toEqual({ prospect: PROSPECT });
-    expect(detail).toHaveBeenCalledWith("pros_1");
+    expect(await controllerWith({ detail }).detail("pros_1", USER)).toEqual({ prospect: PROSPECT });
+    expect(detail).toHaveBeenCalledWith("pros_1", USER);
   });
 
   it("PATCH /prospects/:id passes the parsed body through", async () => {
@@ -218,7 +218,7 @@ describe("ProspectsController — authorization", () => {
         method: "detail",
         guards: [new CapabilityGuard()],
         request: { headers: {} },
-        invoke: () => controllerWith({ detail }).detail("pros_1"),
+        invoke: () => controllerWith({ detail }).detail("pros_1", USER),
       }),
     ).rejects.toMatchObject({ code: "UNAUTHORIZED", status: 401 });
 
@@ -235,7 +235,7 @@ describe("ProspectsController — authorization", () => {
         method: "detail",
         guards: [new CapabilityGuard()],
         request: { headers: {} },
-        invoke: () => controllerWith({ detail }).detail("pros_1"),
+        invoke: () => controllerWith({ detail }).detail("pros_1", USER),
       }),
     ).rejects.toMatchObject({ code: "FORBIDDEN", status: 403 });
 
@@ -251,7 +251,7 @@ describe("ProspectsController — authorization", () => {
       method: "detail",
       guards: [new CapabilityGuard()],
       request: { headers: {} },
-      invoke: () => controllerWith({ detail }).detail("pros_1"),
+      invoke: () => controllerWith({ detail }).detail("pros_1", USER),
     });
 
     expect(response).toEqual({ prospect: PROSPECT });

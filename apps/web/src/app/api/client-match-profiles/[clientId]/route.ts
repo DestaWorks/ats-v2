@@ -15,9 +15,9 @@ export type DeleteClientMatchProfileResponse = Contract.DeleteClientMatchProfile
 
 /** GET /api/client-match-profiles/:clientId — this client's weights, or the system default (`isDefault`). */
 export const GET = apiHandler<{ params: Promise<{ clientId: string }> }>(async (_req, ctx) => {
-  await requireUser();
+  const user = await requireUser();
   const { clientId } = await ctx.params;
-  return json<GetClientMatchProfileResponse>(await openRoleService.getMatchProfile(clientId));
+  return json<GetClientMatchProfileResponse>(await openRoleService.getMatchProfile(clientId, user));
 });
 
 /**

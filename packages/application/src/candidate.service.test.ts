@@ -89,7 +89,7 @@ vi.mock("@destaworks/db/repositories/client-rules.repository", async () => {
 });
 vi.mock("@destaworks/db/audit", () => ({ writeAudit: h.writeAudit }));
 vi.mock("@destaworks/db/with-transaction", () => ({
-  withTransaction: (fn: (tx: unknown) => unknown) => fn(h.fakeTx),
+  withTenantTransaction: (_ctx: unknown, fn: (tx: unknown) => unknown) => fn(h.fakeTx),
 }));
 
 import { candidateService } from "./candidate.service";
@@ -217,7 +217,7 @@ describe("candidateService.move", () => {
 
     // candidate update — denormalized pipeline columns, using the shared tx
     expect(h.candidateRepo.update).toHaveBeenCalledTimes(1);
-    const [uid, data, utx] = h.candidateRepo.update.mock.calls[0]!;
+    const [, uid, data, utx] = h.candidateRepo.update.mock.calls[0]!;
     expect(uid).toBe("c1");
     expect(utx).toBe(h.fakeTx);
     expect(data).toMatchObject({ status: "CLIENT_INTERVIEW", stageOrder: 5 });
@@ -226,7 +226,7 @@ describe("candidateService.move", () => {
 
     // stage-history row, same tx
     expect(h.stageRepo.add).toHaveBeenCalledTimes(1);
-    const [histInput, htx] = h.stageRepo.add.mock.calls[0]!;
+    const [, histInput, htx] = h.stageRepo.add.mock.calls[0]!;
     expect(htx).toBe(h.fakeTx);
     expect(histInput).toMatchObject({
       candidateId: "c1",
@@ -257,7 +257,7 @@ describe("candidateService.move", () => {
 
     await candidateService.move("c1", "STARTED_DAY1", h.user as TenantContext);
 
-    const [, data] = h.candidateRepo.update.mock.calls[0]!;
+    const [, , data] = h.candidateRepo.update.mock.calls[0]!;
     expect(data.placedAt).toBeInstanceOf(Date);
     expect(data.stageOrder).toBe(8);
   });
@@ -272,7 +272,7 @@ describe("candidateService.move", () => {
 
     await candidateService.move("c1", "STARTED_DAY1", h.user as TenantContext);
 
-    const [, data] = h.candidateRepo.update.mock.calls[0]!;
+    const [, , data] = h.candidateRepo.update.mock.calls[0]!;
     expect(data.placedAt).toBe(originalPlacedAt); // NOT overwritten with now()
   });
 
@@ -290,7 +290,7 @@ describe("candidateService.bulkMove", () => {
   it("is partial-success: valid ids move, blocked ids are reported, NONE bypass the gate", async () => {
     // "ok" is a complete Clinical candidate; "bad" is missing credential + license state, so
     // QUALIFIED_PRESCREEN is gated for it. Both ids are attempted against the same gate.
-    h.candidateRepo.findById.mockImplementation(async (id: string) =>
+    h.candidateRepo.findById.mockImplementation(async (_ctx: unknown, id: string) =>
       id === "ok"
         ? candidate({ id: "ok" })
         : candidate({ id: "bad", credential: null, licenseState: null }),
@@ -308,15 +308,15 @@ describe("candidateService.bulkMove", () => {
       { id: "bad", reason: "Credential required; License state required" },
     ]);
     // Every id ran the gate (findById for both); only the allowed one wrote (no bypass, per-txn).
-    expect(h.candidateRepo.findById).toHaveBeenCalledWith("ok");
-    expect(h.candidateRepo.findById).toHaveBeenCalledWith("bad");
+    expect(h.candidateRepo.findById).toHaveBeenCalledWith(h.user, "ok");
+    expect(h.candidateRepo.findById).toHaveBeenCalledWith(h.user, "bad");
     expect(h.candidateRepo.update).toHaveBeenCalledTimes(1);
-    const [uid] = h.candidateRepo.update.mock.calls[0]!;
+    const [, uid] = h.candidateRepo.update.mock.calls[0]!;
     expect(uid).toBe("ok");
   });
 
   it("collects a not-found id in `blocked` instead of throwing", async () => {
-    h.candidateRepo.findById.mockImplementation(async (id: string) =>
+    h.candidateRepo.findById.mockImplementation(async (_ctx: unknown, id: string) =>
       id === "missing" ? null : candidate({ id }),
     );
     h.candidateRepo.update.mockResolvedValue({ id: "c1" });
@@ -341,7 +341,7 @@ describe("candidateService.softDelete", () => {
     await candidateService.softDelete("c1");
 
     // repo mutation runs on the shared tx
-    const [sid, actor, stx] = h.candidateRepo.softDelete.mock.calls[0]!;
+    const [, sid, actor, stx] = h.candidateRepo.softDelete.mock.calls[0]!;
     expect(sid).toBe("c1");
     expect(actor).toBe("u1");
     expect(stx).toBe(h.fakeTx);
@@ -378,8 +378,8 @@ describe("candidateService.restore", () => {
     await candidateService.restore("c1", h.owner as TenantContext);
 
     // loads WITH includeDeleted (default read excludes trashed rows)
-    expect(h.candidateRepo.findById).toHaveBeenCalledWith("c1", { includeDeleted: true });
-    const [rid, rtx] = h.candidateRepo.restore.mock.calls[0]!;
+    expect(h.candidateRepo.findById).toHaveBeenCalledWith(h.owner, "c1", { includeDeleted: true });
+    const [, rid, rtx] = h.candidateRepo.restore.mock.calls[0]!;
     expect(rid).toBe("c1");
     expect(rtx).toBe(h.fakeTx);
     const [atx, auditParams] = h.writeAudit.mock.calls[0]!;
@@ -450,7 +450,7 @@ describe("candidateService.purge", () => {
     const [atx, auditParams] = h.writeAudit.mock.calls[0]!;
     expect(atx).toBe(h.fakeTx);
     expect(auditParams).toMatchObject({ action: "purge", entityId: "c1", actor: "o1" });
-    const [pid, ptx] = h.candidateRepo.purge.mock.calls[0]!;
+    const [, pid, ptx] = h.candidateRepo.purge.mock.calls[0]!;
     expect(pid).toBe("c1");
     expect(ptx).toBe(h.fakeTx);
     // audit ordering: writeAudit invoked before repo.purge
@@ -734,7 +734,7 @@ describe("candidateService.getCandidateDetail", () => {
 
     const detail = await candidateService.getCandidateDetail("c1", h.owner as TenantContext);
 
-    expect(h.outreachRepo.listForCandidate).toHaveBeenCalledWith("c1");
+    expect(h.outreachRepo.listForCandidate).toHaveBeenCalledWith(h.owner, "c1");
     expect(h.userRepo.namesByIds).toHaveBeenCalledWith(["u1", "u2"]);
     expect(detail.outreach).toEqual([
       {
@@ -777,12 +777,13 @@ describe("candidateService.logOutreach", () => {
 
     // insert — actor from the SESSION user, on the shared tx.
     expect(h.outreachRepo.createForCandidate).toHaveBeenCalledWith(
+      h.user,
       "c1",
       { channel: "phone", note: "Left a voicemail", actorId: "u1", templateId: null },
       h.fakeTx,
     );
     // denormalized counter bumped in the same tx.
-    expect(h.candidateRepo.incrementOutreach).toHaveBeenCalledWith("c1", h.fakeTx);
+    expect(h.candidateRepo.incrementOutreach).toHaveBeenCalledWith(h.user, "c1", h.fakeTx);
     // audit row (same tx) — channel + attempt id, no note PII in the audit payload.
     expect(h.writeAudit).toHaveBeenCalledTimes(1);
     const [atx, params] = h.writeAudit.mock.calls[0]!;
@@ -830,7 +831,7 @@ describe("candidateService.update", () => {
 
     // repo update — the exact profile input, on the shared tx.
     expect(h.candidateRepo.update).toHaveBeenCalledTimes(1);
-    const [uid, data, utx] = h.candidateRepo.update.mock.calls[0]!;
+    const [, uid, data, utx] = h.candidateRepo.update.mock.calls[0]!;
     expect(uid).toBe("c1");
     expect(utx).toBe(h.fakeTx);
     expect(data).toEqual({ name: "New Name", city: "Trenton" });
@@ -871,7 +872,7 @@ describe("candidateService.verifyLicense", () => {
     );
 
     expect(h.candidateRepo.update).toHaveBeenCalledTimes(1);
-    const [uid, data, utx] = h.candidateRepo.update.mock.calls[0]!;
+    const [, uid, data, utx] = h.candidateRepo.update.mock.calls[0]!;
     expect(uid).toBe("c1");
     expect(utx).toBe(h.fakeTx);
     expect(data.licenseStatus).toBe("Active");
@@ -897,7 +898,7 @@ describe("candidateService.verifyLicense", () => {
       h.owner as TenantContext,
     );
 
-    const [, data] = h.candidateRepo.update.mock.calls[0]!;
+    const [, , data] = h.candidateRepo.update.mock.calls[0]!;
     expect(data.licenseExpiry).toBe(expiry);
     expect(data.licenseNumber).toBe("LIC-999");
   });

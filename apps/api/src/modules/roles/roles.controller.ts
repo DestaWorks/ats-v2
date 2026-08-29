@@ -76,14 +76,15 @@ export class RolesController {
   async list(
     @Query(new ZodValidationPipe(roleListQuerySchema))
     query: ContractOutput<typeof roleListQuerySchema>,
+    @CurrentUser() user: AuthContext,
   ): Promise<GetRoleListResponse> {
-    return await this.roles.list(defined(query));
+    return await this.roles.list(defined(query), user);
   }
 
   /** GET /roles/triage — the top 3 roles to work now. Declared before `:id` so it matches. */
   @Get("triage")
-  async triage(): Promise<GetRoleTriageResponse> {
-    return { roles: await this.roles.triage() };
+  async triage(@CurrentUser() user: AuthContext): Promise<GetRoleTriageResponse> {
+    return { roles: await this.roles.triage(user) };
   }
 
   /**
@@ -104,8 +105,11 @@ export class RolesController {
 
   /** GET /roles/:id — one role's detail, notes included. */
   @Get(":id")
-  async detail(@Param("id") id: string): Promise<GetRoleResponse> {
-    return { role: await this.roles.detail(id) };
+  async detail(
+    @Param("id") id: string,
+    @CurrentUser() user: AuthContext,
+  ): Promise<GetRoleResponse> {
+    return { role: await this.roles.detail(id, user) };
   }
 
   /** PATCH /roles/:id — any field, `status` included; the service stamps/clears `closedAt`. */
@@ -144,14 +148,20 @@ export class RolesController {
 
   /** GET /roles/:id/matches — the active matcher's ranked leads, client-tunable weights. */
   @Get(":id/matches")
-  async matches(@Param("id") id: string): Promise<GetRoleMatchesResponse> {
-    return { matches: await this.roles.matches(id) };
+  async matches(
+    @Param("id") id: string,
+    @CurrentUser() user: AuthContext,
+  ): Promise<GetRoleMatchesResponse> {
+    return { matches: await this.roles.matches(id, user) };
   }
 
   /** GET /roles/:id/dormant-matches — fixed-weight re-engagement candidates. */
   @Get(":id/dormant-matches")
-  async dormantMatches(@Param("id") id: string): Promise<GetRoleDormantMatchesResponse> {
-    return { matches: await this.roles.dormantMatches(id) };
+  async dormantMatches(
+    @Param("id") id: string,
+    @CurrentUser() user: AuthContext,
+  ): Promise<GetRoleDormantMatchesResponse> {
+    return { matches: await this.roles.dormantMatches(id, user) };
   }
 
   /** POST /roles/:id/notes — add a note; author comes from the session, never the body. 201. */

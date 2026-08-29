@@ -166,17 +166,17 @@ describe("LeadsController — delegation and response envelope", () => {
   it("GET /leads/list renames `deleted` to `includeDeleted` and drops the absent filters", async () => {
     const list = vi.fn().mockResolvedValue({ items: [], total: 0 });
 
-    await controllerWith({ list }).list({ status: "Sourced", deleted: true, page: 2 });
+    await controllerWith({ list }).list({ status: "Sourced", deleted: true, page: 2 }, USER);
 
-    expect(list).toHaveBeenCalledWith({ status: "Sourced", page: 2, includeDeleted: true });
+    expect(list).toHaveBeenCalledWith({ status: "Sourced", page: 2, includeDeleted: true }, USER);
   });
 
   it("GET /leads/list passes the page through untouched when no filter is set", async () => {
     const list = vi.fn().mockResolvedValue({ items: [], total: 0 });
 
-    await controllerWith({ list }).list({});
+    await controllerWith({ list }).list({}, USER);
 
-    expect(list).toHaveBeenCalledWith({});
+    expect(list).toHaveBeenCalledWith({}, USER);
   });
 
   it("POST /leads/bulk returns the service's counts unwrapped", async () => {
@@ -204,8 +204,8 @@ describe("LeadsController — delegation and response envelope", () => {
   it("GET /leads/:id returns the lead envelope", async () => {
     const detail = vi.fn().mockResolvedValue(LEAD);
 
-    expect(await controllerWith({ detail }).detail("lead_1")).toEqual({ lead: LEAD });
-    expect(detail).toHaveBeenCalledWith("lead_1");
+    expect(await controllerWith({ detail }).detail("lead_1", USER)).toEqual({ lead: LEAD });
+    expect(detail).toHaveBeenCalledWith("lead_1", USER);
   });
 
   it("DELETE /leads/:id answers with the id alone — never the deleted lead", async () => {
@@ -290,7 +290,7 @@ describe("LeadsController — authentication", () => {
         method: "detail",
         guards: [new SessionAuthGuard()],
         request: { headers: {} },
-        invoke: () => controllerWith({ detail }).detail("lead_1"),
+        invoke: () => controllerWith({ detail }).detail("lead_1", USER),
       }),
     ).rejects.toMatchObject({ code: "UNAUTHORIZED", status: 401 });
 
@@ -308,7 +308,7 @@ describe("LeadsController — authentication", () => {
       method: "detail",
       guards: [new SessionAuthGuard()],
       request: { headers: {} },
-      invoke: () => controllerWith({ detail }).detail("lead_1"),
+      invoke: () => controllerWith({ detail }).detail("lead_1", USER),
     });
 
     expect(response).toEqual({ lead: LEAD });

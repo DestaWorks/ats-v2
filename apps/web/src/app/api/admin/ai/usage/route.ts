@@ -7,6 +7,6 @@ import type { AiUsageOverviewDTO } from "@destaworks/contracts/validation/ai-ops
 export type GetAdminAiUsageResponse = AiUsageOverviewDTO;
 
 export const GET = apiHandler(async () => {
-  await requireCapability("manageAiSettings");
-  return json<GetAdminAiUsageResponse>(await aiOpsService.getUsageOverview());
+  const actor = await requireCapability("manageAiSettings");
+  return json<GetAdminAiUsageResponse>(await aiOpsService.getUsageOverview(actor));
 });

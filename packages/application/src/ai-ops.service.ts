@@ -1,7 +1,7 @@
 import { aiSettingsRepository } from "@destaworks/db/repositories/ai-settings.repository";
 import { aiUsageEventRepository } from "@destaworks/db/repositories/ai-usage-event.repository";
 import { writeAudit } from "@destaworks/db/audit";
-import { withTransaction } from "@destaworks/db/with-transaction";
+import { withTenantTransaction } from "@destaworks/db/with-transaction";
 import { toIso } from "@destaworks/domain/utils/iso";
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { AiSettingsDTO, AiUsageOverviewDTO } from "@destaworks/contracts/validation/ai-ops";
@@ -10,8 +10,8 @@ const USAGE_WINDOW_HOURS = 24;
 const RECENT_LIMIT = 20;
 
 export const aiOpsService = {
-  async getSettings(): Promise<AiSettingsDTO> {
-    return aiSettingsRepository.get();
+  async getSettings(ctx: TenantContext): Promise<AiSettingsDTO> {
+    return aiSettingsRepository.get(ctx);
   },
 
   async setDisabled(
@@ -21,8 +21,8 @@ export const aiOpsService = {
   ): Promise<AiSettingsDTO> {
     const trimmedReason = reason?.trim();
     const disabledReason = disabled && trimmedReason ? trimmedReason : null;
-    await withTransaction(async (tx) => {
-      await aiSettingsRepository.setDisabled(disabled, actor.user.id, disabledReason, tx);
+    await withTenantTransaction(actor, async (tx) => {
+      await aiSettingsRepository.setDisabled(actor, disabled, actor.user.id, disabledReason, tx);
       await writeAudit(tx, {
         entity: "ai_settings",
         entityId: "singleton",
@@ -34,11 +34,11 @@ export const aiOpsService = {
     return { disabled, disabledReason };
   },
 
-  async getUsageOverview(): Promise<AiUsageOverviewDTO> {
+  async getUsageOverview(ctx: TenantContext): Promise<AiUsageOverviewDTO> {
     const since = new Date(Date.now() - USAGE_WINDOW_HOURS * 60 * 60 * 1000);
     const [breakdown, recent] = await Promise.all([
-      aiUsageEventRepository.summarySince(since),
-      aiUsageEventRepository.listRecent(RECENT_LIMIT),
+      aiUsageEventRepository.summarySince(ctx, since),
+      aiUsageEventRepository.listRecent(ctx, RECENT_LIMIT),
     ]);
 
     const successRow = breakdown.find((b) => b.status === "success");

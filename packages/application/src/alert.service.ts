@@ -50,8 +50,8 @@ export const alertService = {
   async forViewer(ctx: TenantContext): Promise<AlertsDTO> {
     const [mentionList, buckets, clientNames] = await Promise.all([
       mentionService.listMine(ctx),
-      candidateRepository.alertBuckets(ctx.user.id, BUCKET_ROWS, new Date()),
-      clientRepository.nameMap(),
+      candidateRepository.alertBuckets(ctx, ctx.user.id, BUCKET_ROWS, new Date()),
+      clientRepository.nameMap(ctx),
     ]);
     return {
       mentions: mentionList.mentions,

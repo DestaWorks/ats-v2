@@ -19,7 +19,7 @@ import { defined } from "@destaworks/domain/utils/defined";
 import { pageMeta } from "@destaworks/domain/pagination";
 import type { TenantContext } from "@destaworks/domain/tenant";
 import { writeAudit } from "@destaworks/db/audit";
-import { withTransaction } from "@destaworks/db/with-transaction";
+import { withTenantTransaction } from "@destaworks/db/with-transaction";
 import {
   prospectRepository,
   type ProspectRow,
@@ -85,9 +85,9 @@ function toContactDTO(row: ProspectContactRow): ProspectContactDTO {
   };
 }
 
-async function toProspectDetail(row: ProspectRow): Promise<ProspectDetailDTO> {
+async function toProspectDetail(ctx: TenantContext, row: ProspectRow): Promise<ProspectDetailDTO> {
   const [contacts, ownerNames] = await Promise.all([
-    prospectContactRepository.listByProspect(row.id),
+    prospectContactRepository.listByProspect(ctx, row.id),
     userRepository.namesByIds(row.ownerId ? [row.ownerId] : []),
   ]);
   return {
@@ -100,8 +100,8 @@ async function toProspectDetail(row: ProspectRow): Promise<ProspectDetailDTO> {
 }
 
 /** Load a live prospect or throw NOT_FOUND (missing OR soft-deleted). */
-async function requireProspect(id: string): Promise<ProspectRow> {
-  const prospect = await prospectRepository.findById(id);
+async function requireProspect(ctx: TenantContext, id: string): Promise<ProspectRow> {
+  const prospect = await prospectRepository.findById(ctx, id);
   if (!prospect) throw new AppError("NOT_FOUND", "Prospect not found");
   return prospect;
 }
@@ -133,9 +133,10 @@ async function persistFoundContacts(
   auditAction: string,
   ctx: TenantContext,
 ): Promise<void> {
-  await withTransaction(async (tx) => {
+  await withTenantTransaction(ctx, async (tx) => {
     if (found.length > 0) {
       await prospectContactRepository.createMany(
+        ctx,
         found.map((c) => ({
           prospectId,
           fullName: c.fullName,
@@ -187,7 +188,7 @@ export const prospectService = {
     );
 
     const npis = results.map((r) => r.number);
-    const tracked = await prospectRepository.findManyByNpis(npis);
+    const tracked = await prospectRepository.findManyByNpis(ctx, npis);
     const trackedNpis = new Set(tracked.map((t) => t.npi));
 
     const items: ProspectSearchResultItemDTO[] = results.map((raw) => {
@@ -217,7 +218,7 @@ export const prospectService = {
     await checkRateLimit(`prospect-bulk-add:${ctx.user.id}`, { limit: 10, windowMs: 60_000 });
 
     const npis = input.rows.map((r) => r.npi);
-    const tracked = await prospectRepository.findManyByNpis(npis);
+    const tracked = await prospectRepository.findManyByNpis(ctx, npis);
     const trackedNpis = new Set(tracked.map((t) => t.npi));
 
     const seen = new Set<string>();
@@ -234,8 +235,9 @@ export const prospectService = {
     // `createMany`'s `skipDuplicates` can insert fewer rows than `kept.length` if a concurrent
     // request claims one of the same NPIs between the pre-check above and this insert — report
     // the actual inserted count, not the pre-insert candidate count.
-    const { count: added } = await withTransaction(async (tx) => {
+    const { count: added } = await withTenantTransaction(ctx, async (tx) => {
       const result = await prospectRepository.createMany(
+        ctx,
         kept.map((row) => ({
           practiceName: row.practiceName,
           npi: row.npi,
@@ -266,8 +268,9 @@ export const prospectService = {
 
   /** Add a prospect manually. Starts at "Fresh Lead" / source "Manual" (the service forces both). */
   async create(input: AddProspectInput, ctx: TenantContext): Promise<ProspectDetailDTO> {
-    const prospect = await withTransaction(async (tx) => {
+    const prospect = await withTenantTransaction(ctx, async (tx) => {
       const created = await prospectRepository.create(
+        ctx,
         {
           practiceName: input.practiceName,
           taxonomy: input.taxonomy ?? null,
@@ -292,11 +295,11 @@ export const prospectService = {
       });
       return created;
     });
-    return toProspectDetail(prospect);
+    return toProspectDetail(ctx, prospect);
   },
 
   /** The `/client-discovery` inventory — one server OFFSET page (Newest-first). */
-  async list(filters: ProspectListFilters = {}): Promise<ProspectListDTO> {
+  async list(filters: ProspectListFilters, ctx: TenantContext): Promise<ProspectListDTO> {
     const repoFilters = defined({
       status: filters.status,
       ownerId: filters.ownerId,
@@ -304,9 +307,9 @@ export const prospectService = {
       search: filters.search,
       includeDeleted: filters.includeDeleted,
     });
-    const total = await prospectRepository.count(repoFilters);
+    const total = await prospectRepository.count(ctx, repoFilters);
     const meta = pageMeta(total, filters.page ?? 1, LIST_PAGE);
-    const rows = await prospectRepository.list({
+    const rows = await prospectRepository.list(ctx, {
       ...repoFilters,
       skip: (meta.page - 1) * LIST_PAGE,
       take: LIST_PAGE,
@@ -319,10 +322,10 @@ export const prospectService = {
   },
 
   /** One prospect's full detail (incl. soft-deleted — the "Show deleted" view inspects them too). */
-  async detail(id: string): Promise<ProspectDetailDTO> {
-    const prospect = await prospectRepository.findById(id, { includeDeleted: true });
+  async detail(id: string, ctx: TenantContext): Promise<ProspectDetailDTO> {
+    const prospect = await prospectRepository.findById(ctx, id, { includeDeleted: true });
     if (!prospect) throw new AppError("NOT_FOUND", "Prospect not found");
-    return toProspectDetail(prospect);
+    return toProspectDetail(ctx, prospect);
   },
 
   /** Edit a prospect (status/owner/notes/website). Guard `canEditProspect` (a converted "Client"
@@ -332,12 +335,13 @@ export const prospectService = {
     input: UpdateProspectInput,
     ctx: TenantContext,
   ): Promise<ProspectDetailDTO> {
-    const existing = await requireProspect(id);
+    const existing = await requireProspect(ctx, id);
     if (!canEditProspect(existing.status as ProspectStatus)) {
       throw new AppError("CONFLICT", "Prospect already converted to a client");
     }
-    const prospect = await withTransaction(async (tx) => {
+    const prospect = await withTenantTransaction(ctx, async (tx) => {
       const updated = await prospectRepository.update(
+        ctx,
         id,
         {
           ...(input.status !== undefined ? { status: input.status } : {}),
@@ -357,13 +361,13 @@ export const prospectService = {
       });
       return updated;
     });
-    return toProspectDetail(prospect);
+    return toProspectDetail(ctx, prospect);
   },
 
   /** Enrich a prospect's contacts via Apollo (by practice name + website domain). Rate-limited —
    *  real external-API cost. Guard `canManageContacts` (a converted "Client" is terminal). */
   async enrichContacts(id: string, ctx: TenantContext): Promise<ProspectDetailDTO> {
-    const existing = await requireProspect(id);
+    const existing = await requireProspect(ctx, id);
     if (!canManageContacts(existing.status as ProspectStatus)) {
       throw new AppError("CONFLICT", "Prospect already converted to a client");
     }
@@ -378,12 +382,12 @@ export const prospectService = {
       ...(domain !== null && { domain }),
     });
     await persistFoundContacts(id, found, "Apollo", "enrich_apollo", ctx);
-    return toProspectDetail(existing);
+    return toProspectDetail(ctx, existing);
   },
 
   /** Hunter.io fallback when Apollo has no result — needs the prospect's website domain. */
   async findContactsHunter(id: string, ctx: TenantContext): Promise<ProspectDetailDTO> {
-    const existing = await requireProspect(id);
+    const existing = await requireProspect(ctx, id);
     if (!canManageContacts(existing.status as ProspectStatus)) {
       throw new AppError("CONFLICT", "Prospect already converted to a client");
     }
@@ -401,7 +405,7 @@ export const prospectService = {
 
     const found = await findHunterContacts({ domain });
     await persistFoundContacts(id, found, "Hunter", "enrich_hunter", ctx);
-    return toProspectDetail(existing);
+    return toProspectDetail(ctx, existing);
   },
 
   /** Add a contact manually. Guard `canManageContacts` (a converted "Client" is terminal). */
@@ -410,12 +414,13 @@ export const prospectService = {
     input: AddProspectContactInput,
     ctx: TenantContext,
   ): Promise<ProspectDetailDTO> {
-    const existing = await requireProspect(id);
+    const existing = await requireProspect(ctx, id);
     if (!canManageContacts(existing.status as ProspectStatus)) {
       throw new AppError("CONFLICT", "Prospect already converted to a client");
     }
-    await withTransaction(async (tx) => {
+    await withTenantTransaction(ctx, async (tx) => {
       const created = await prospectContactRepository.create(
+        ctx,
         {
           prospectId: id,
           fullName: input.fullName,
@@ -437,7 +442,7 @@ export const prospectService = {
         after: { contactId: created.id, fullName: created.fullName },
       });
     });
-    return toProspectDetail(existing);
+    return toProspectDetail(ctx, existing);
   },
 
   /** Delete one contact, scoped to its prospect. An id under a different prospect → NOT_FOUND. */
@@ -446,9 +451,9 @@ export const prospectService = {
     contactId: string,
     ctx: TenantContext,
   ): Promise<ProspectDetailDTO> {
-    const existing = await requireProspect(id);
-    await withTransaction(async (tx) => {
-      const count = await prospectContactRepository.softDelete(id, contactId, tx);
+    const existing = await requireProspect(ctx, id);
+    await withTenantTransaction(ctx, async (tx) => {
+      const count = await prospectContactRepository.softDelete(ctx, id, contactId, tx);
       if (count === 0) throw new AppError("NOT_FOUND", "Contact not found");
       await writeAudit(tx, {
         entity: "prospect",
@@ -458,14 +463,14 @@ export const prospectService = {
         after: { contactId },
       });
     });
-    return toProspectDetail(existing);
+    return toProspectDetail(ctx, existing);
   },
 
   /** Soft-delete a prospect → reversible trash. */
   async softDelete(id: string, ctx: TenantContext): Promise<{ id: string }> {
-    await requireProspect(id);
-    await withTransaction(async (tx) => {
-      const deleted = await prospectRepository.softDelete(id, ctx.user.id, tx);
+    await requireProspect(ctx, id);
+    await withTenantTransaction(ctx, async (tx) => {
+      const deleted = await prospectRepository.softDelete(ctx, id, ctx.user.id, tx);
       await writeAudit(tx, {
         entity: "prospect",
         entityId: id,
@@ -480,11 +485,11 @@ export const prospectService = {
 
   /** Restore a soft-deleted prospect — returns EXACTLY as it was (status untouched). */
   async restore(id: string, ctx: TenantContext): Promise<ProspectDetailDTO> {
-    const existing = await prospectRepository.findById(id, { includeDeleted: true });
+    const existing = await prospectRepository.findById(ctx, id, { includeDeleted: true });
     if (!existing) throw new AppError("NOT_FOUND", "Prospect not found");
     if (existing.deletedAt === null) throw new AppError("CONFLICT", "Prospect is not deleted");
-    const restored = await withTransaction(async (tx) => {
-      const prospect = await prospectRepository.restore(id, tx);
+    const restored = await withTenantTransaction(ctx, async (tx) => {
+      const prospect = await prospectRepository.restore(ctx, id, tx);
       await writeAudit(tx, {
         entity: "prospect",
         entityId: id,
@@ -495,7 +500,7 @@ export const prospectService = {
       });
       return prospect;
     });
-    return toProspectDetail(restored);
+    return toProspectDetail(ctx, restored);
   },
 
   /**
@@ -508,7 +513,7 @@ export const prospectService = {
     ctx: TenantContext,
   ): Promise<{ affected: number; skipped: number }> {
     const uniqueIds = [...new Set(input.ids)];
-    const rows = await prospectRepository.findManyByIds(uniqueIds, {
+    const rows = await prospectRepository.findManyByIds(ctx, uniqueIds, {
       includeDeleted: input.action === "restore",
     });
     const byId = new Map(rows.map((r) => [r.id, r]));
@@ -527,21 +532,21 @@ export const prospectService = {
       return row.status !== "Client" ? [row] : [];
     });
 
-    await withTransaction(async (tx) => {
+    await withTenantTransaction(ctx, async (tx) => {
       for (const row of eligible) {
         const { id } = row;
         switch (input.action) {
           case "delete":
-            await prospectRepository.softDelete(id, ctx.user.id, tx);
+            await prospectRepository.softDelete(ctx, id, ctx.user.id, tx);
             break;
           case "restore":
-            await prospectRepository.restore(id, tx);
+            await prospectRepository.restore(ctx, id, tx);
             break;
           case "status":
-            await prospectRepository.update(id, { status: input.value }, tx);
+            await prospectRepository.update(ctx, id, { status: input.value }, tx);
             break;
           case "assign":
-            await prospectRepository.update(id, { ownerId: input.value }, tx);
+            await prospectRepository.update(ctx, id, { ownerId: input.value }, tx);
             break;
         }
         await writeAudit(tx, {

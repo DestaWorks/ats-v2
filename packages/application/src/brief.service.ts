@@ -21,7 +21,7 @@ import { toIso } from "@destaworks/domain/utils/iso";
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { AiCallOptions } from "@destaworks/integrations/ai/deadline";
 import { writeAudit } from "@destaworks/db/audit";
-import { withTransaction } from "@destaworks/db/with-transaction";
+import { withTenantTransaction } from "@destaworks/db/with-transaction";
 import {
   generateDailyBrief,
   type DailyBriefContext,
@@ -229,8 +229,9 @@ export const briefService = {
 
   /** Persist the (possibly edited) draft + manual inputs (legacy `daily_brief_save`). */
   async saveDaily(input: SaveDailyBriefInput, ctx: TenantContext): Promise<DailyBriefDTO> {
-    const row = await withTransaction(async (tx) => {
+    const row = await withTenantTransaction(ctx, async (tx) => {
       const saved = await briefRepository.upsertDaily(
+        ctx,
         {
           date: input.date,
           headline: input.headline,
@@ -332,8 +333,9 @@ export const briefService = {
 
   async saveWeekly(input: SaveWeeklyBriefInput, ctx: TenantContext): Promise<WeeklyBriefDTO> {
     const weekStart = mondayOf(input.weekStart);
-    const row = await withTransaction(async (tx) => {
+    const row = await withTenantTransaction(ctx, async (tx) => {
       const saved = await briefRepository.upsertWeekly(
+        ctx,
         {
           weekStart,
           headline: input.headline,

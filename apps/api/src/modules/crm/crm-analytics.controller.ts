@@ -4,6 +4,8 @@ import type {
   GetCrmClientRevenueResponse,
   GetCrmCompareResponse,
 } from "@destaworks/contracts/http/crm";
+import type { AuthContext } from "@destaworks/auth/guards";
+import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { RequireCapability } from "../../common/decorators/require-capability.decorator";
 import { CapabilityGuard } from "../../common/guards/capability.guard";
 import { SessionAuthGuard } from "../../common/guards/session-auth.guard";
@@ -25,17 +27,23 @@ export class CrmAnalyticsController {
   ) {}
 
   @Get("compare")
-  async compare(): Promise<GetCrmCompareResponse> {
-    return { clients: await this.analytics.compare() };
+  async compare(@CurrentUser() user: AuthContext): Promise<GetCrmCompareResponse> {
+    return { clients: await this.analytics.compare(user) };
   }
 
   @Get("clients/:id/health")
-  async healthScore(@Param("id") clientId: string): Promise<GetCrmClientHealthResponse> {
-    return this.analytics.healthScore(clientId);
+  async healthScore(
+    @Param("id") clientId: string,
+    @CurrentUser() user: AuthContext,
+  ): Promise<GetCrmClientHealthResponse> {
+    return this.analytics.healthScore(clientId, user);
   }
 
   @Get("clients/:id/revenue")
-  async revenue(@Param("id") clientId: string): Promise<GetCrmClientRevenueResponse> {
-    return this.analytics.revenue(clientId);
+  async revenue(
+    @Param("id") clientId: string,
+    @CurrentUser() user: AuthContext,
+  ): Promise<GetCrmClientRevenueResponse> {
+    return this.analytics.revenue(clientId, user);
   }
 }

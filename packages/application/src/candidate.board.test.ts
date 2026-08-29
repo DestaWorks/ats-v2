@@ -92,7 +92,7 @@ function row(overrides: Record<string, unknown> = {}) {
 
 /** Mock the per-column reads + the filtered groupBy from a `status → rows` map. */
 function seedBoard(byStatus: Record<string, Record<string, unknown>[]>) {
-  h.candidateRepo.listCards.mockImplementation(async (f: { status?: string }) =>
+  h.candidateRepo.listCards.mockImplementation(async (_ctx: unknown, f: { status?: string }) =>
     f.status ? (byStatus[f.status] ?? []) : [],
   );
   h.candidateRepo.groupByStatusFiltered.mockResolvedValue(
@@ -198,8 +198,9 @@ describe("candidateService.listBoard", () => {
       FUTURE_PIPELINE: [row({ id: "e", status: "FUTURE_PIPELINE", stageOrder: 12 })],
     });
     // meta.overdue / meta.stuck now come from targeted COUNT queries, not an in-memory scan.
-    h.candidateRepo.count.mockImplementation(async (f: { overdue?: boolean; stuck?: boolean }) =>
-      f.overdue ? 1 : f.stuck ? 1 : 0,
+    h.candidateRepo.count.mockImplementation(
+      async (_ctx: unknown, f: { overdue?: boolean; stuck?: boolean }) =>
+        f.overdue ? 1 : f.stuck ? 1 : 0,
     );
   });
 
@@ -253,7 +254,7 @@ describe("candidateService.listBoard", () => {
     );
     // Focus → exactly one per-column read (the other 8 short-circuit to []).
     expect(h.candidateRepo.listCards).toHaveBeenCalledTimes(1);
-    const [args] = h.candidateRepo.listCards.mock.calls[0]!;
+    const [, args] = h.candidateRepo.listCards.mock.calls[0]!;
     expect(args).toMatchObject({
       track: "Operations",
       clientId: "cl1",
@@ -268,7 +269,7 @@ describe("candidateService.listBoard", () => {
     const many = Array.from({ length: 26 }, (_, i) =>
       row({ id: `n${i}`, status: "NEW_CANDIDATE", stageOrder: 0 }),
     );
-    h.candidateRepo.listCards.mockImplementation(async (f: { status?: string }) =>
+    h.candidateRepo.listCards.mockImplementation(async (_ctx: unknown, f: { status?: string }) =>
       f.status === "NEW_CANDIDATE" ? many : [],
     );
     h.candidateRepo.groupByStatusFiltered.mockResolvedValue([
@@ -299,7 +300,7 @@ describe("candidateService.listColumn (per-column load-more)", () => {
     expect(page.items).toHaveLength(25);
     expect(page.hasMore).toBe(true);
     expect(decodeCursor(page.nextCursor!, "createdAt_desc")!.id).toBe("s24");
-    const [args] = h.candidateRepo.listCards.mock.calls[0]!;
+    const [, args] = h.candidateRepo.listCards.mock.calls[0]!;
     expect(args).toMatchObject({
       status: "INITIAL_SCREENING",
       orderBy: "createdAt_desc",

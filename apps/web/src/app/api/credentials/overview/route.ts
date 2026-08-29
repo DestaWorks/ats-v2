@@ -13,6 +13,6 @@ export type GetCredentialsOverviewResponse = CredentialsOverviewDTO;
  * point-in-time snapshot, not a paginated/filtered read.
  */
 export const GET = apiHandler(async () => {
-  await requireCapability("viewCredentials");
-  return json<GetCredentialsOverviewResponse>(await credentialsIntelligenceService.overview());
+  const user = await requireCapability("viewCredentials");
+  return json<GetCredentialsOverviewResponse>(await credentialsIntelligenceService.overview(user));
 });

@@ -11,6 +11,6 @@ export type GetRoleTriageResponse = RoleTriageContract;
  * role, ranked by priority + staleness + match quality (legacy triage-strip formula).
  */
 export const GET = apiHandler(async () => {
-  await requireUser();
-  return json<GetRoleTriageResponse>({ roles: await openRoleService.triage() });
+  const user = await requireUser();
+  return json<GetRoleTriageResponse>({ roles: await openRoleService.triage(user) });
 });

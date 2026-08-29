@@ -11,7 +11,7 @@ export type GetRoleMatchesResponse = RoleMatchesEnvelope;
  * weights, top 15, legacy `matchesFor`). 404 if the role is missing.
  */
 export const GET = apiHandler<{ params: Promise<{ id: string }> }>(async (_req, ctx) => {
-  await requireUser();
+  const user = await requireUser();
   const { id } = await ctx.params;
-  return json<GetRoleMatchesResponse>({ matches: await openRoleService.matches(id) });
+  return json<GetRoleMatchesResponse>({ matches: await openRoleService.matches(id, user) });
 });

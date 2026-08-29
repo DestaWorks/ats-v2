@@ -86,8 +86,9 @@ describe("portalAccessRequestService.approve", () => {
 
     const result = await portalAccessRequestService.approve("r1", { clientId: "cl1" }, actor);
 
-    expect(h.claimPending).toHaveBeenCalledWith("r1", "approved");
+    expect(h.claimPending).toHaveBeenCalledWith(actor, "r1", "approved");
     expect(h.createContact).toHaveBeenCalledWith(
+      actor,
       expect.objectContaining({ clientId: "cl1", fullName: "Jane Doe", email: "jane@acme.health" }),
     );
     expect(h.generateLink).toHaveBeenCalledWith("cl1", "newcontact", actor);
@@ -163,7 +164,7 @@ describe("portalAccessRequestService.approve", () => {
       portalAccessRequestService.approve("r1", { clientId: "cl1" }, actor),
     ).rejects.toThrow("contact not in client");
 
-    expect(h.revertToPending).toHaveBeenCalledWith("r1");
+    expect(h.revertToPending).toHaveBeenCalledWith(actor, "r1");
   });
 });
 

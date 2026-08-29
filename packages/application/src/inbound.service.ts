@@ -39,12 +39,13 @@ function truncateMessage(message: string): string {
  * Returns null when nothing matches — the reviewer proceeds as a fresh Hot lead.
  */
 async function findExisting(
+  ctx: TenantContext,
   extracted: Pick<InboundExtractedDTO, "email" | "name">,
 ): Promise<InboundExistingDTO | null> {
   if (extracted.email) {
     const [candidates, leads] = await Promise.all([
-      candidateRepository.findManyByEmails([extracted.email]),
-      leadRepository.findManyByEmails([extracted.email]),
+      candidateRepository.findManyByEmails(ctx, [extracted.email]),
+      leadRepository.findManyByEmails(ctx, [extracted.email]),
     ]);
     if (candidates[0]) {
       return {
@@ -59,7 +60,7 @@ async function findExisting(
     }
   }
   if (extracted.name) {
-    const leads = await leadRepository.findManyByNames([extracted.name.trim().toLowerCase()]);
+    const leads = await leadRepository.findManyByNames(ctx, [extracted.name.trim().toLowerCase()]);
     if (leads[0]) {
       return { kind: "lead", id: leads[0].id, name: leads[0].name, matchedOn: "name" };
     }
@@ -139,10 +140,14 @@ async function matchClients(
  */
 export const inboundService = {
   /** Extract + dedupe + client-match a pasted message. Read-only (no lead is created here). */
-  async triage(input: TriageInput, clock: Clock = systemClock): Promise<TriageResultDTO> {
+  async triage(
+    input: TriageInput,
+    ctx: TenantContext,
+    clock: Clock = systemClock,
+  ): Promise<TriageResultDTO> {
     const extracted = await extractInbound(input.messageText, input.context ?? null);
     const [existing, clientMatches] = await Promise.all([
-      findExisting(extracted),
+      findExisting(ctx, extracted),
       matchClients(extracted, clock.now()),
     ]);
     return { extracted, clientMatches, existing };
@@ -187,7 +192,7 @@ export const inboundService = {
    * alone (same posture as the resume-match flow's server-side re-classification).
    */
   async attach(input: AttachInboundInput, ctx: TenantContext): Promise<LeadDetailDTO> {
-    const reMatch = await findExisting({ name: input.name, email: input.email ?? null });
+    const reMatch = await findExisting(ctx, { name: input.name, email: input.email ?? null });
     if (reMatch?.kind !== "lead" || reMatch.id !== input.leadId) {
       throw new AppError(
         "CONFLICT",

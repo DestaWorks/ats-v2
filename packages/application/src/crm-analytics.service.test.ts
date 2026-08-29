@@ -50,7 +50,15 @@ vi.mock("@destaworks/db/repositories/deal.repository", () => ({
   dealRepository: { listForClient: h.listDeals, listForClients: h.listDealsForClients },
 }));
 
+import type { TenantContext } from "@destaworks/domain/tenant";
 import { crmAnalyticsService } from "./crm-analytics.service";
+
+const ctx: TenantContext = {
+  tenantId: "t1",
+  membershipId: "u1-m",
+  user: { id: "u1", email: "u@desta.works", name: "Test User" },
+  role: "Owner",
+};
 
 function clientRow(overrides: Record<string, unknown> = {}) {
   return {
@@ -81,7 +89,7 @@ beforeEach(() => {
 describe("crmAnalyticsService.revenue", () => {
   it("returns nulls for every projected figure when there's no contractStart yet — never invents numbers", async () => {
     h.findByIdClient.mockResolvedValue(clientRow({ monthlyRate: 5000, avgPlacementFee: 20000 }));
-    const dto = await crmAnalyticsService.revenue("c1");
+    const dto = await crmAnalyticsService.revenue("c1", ctx);
     expect(dto.placementsPerYear).toBeNull();
     expect(dto.annualizedRevenue).toBeNull();
     expect(dto.grossProfit).toBeNull();
@@ -101,7 +109,7 @@ describe("crmAnalyticsService.revenue", () => {
     );
     h.groupByStatusFiltered.mockResolvedValue([{ status: "STARTED_DAY1", _count: { _all: 2 } }]);
 
-    const dto = await crmAnalyticsService.revenue("c1");
+    const dto = await crmAnalyticsService.revenue("c1", ctx);
     // retainerARR = 1000*12 = 12000; placementsPerYear ≈ 2; placementARR ≈ 2*10000 = 20000
     expect(dto.annualizedRevenue).toBeCloseTo(32000, -2);
     expect(dto.grossProfit).toBeCloseTo(16000, -2); // 50% margin
@@ -115,6 +123,7 @@ describe("crmAnalyticsService.revenue — lifetimeCumulative regressions", () =>
     );
     const dto = await crmAnalyticsService.revenue(
       "c1",
+      ctx,
       fixedClock("2027-01-01T00:00:00Z"), // exactly one year later
     );
     // OLD: 365 days / 30 = 12.1667 "months" → 12166.67 for a 12-month contract.
@@ -131,7 +140,7 @@ describe("crmAnalyticsService.revenue — lifetimeCumulative regressions", () =>
     );
     h.groupByStatusFiltered.mockResolvedValue([{ status: "STARTED_DAY1", _count: { _all: 1 } }]);
 
-    const dto = await crmAnalyticsService.revenue("c1", fixedClock("2026-08-01T00:00:00Z"));
+    const dto = await crmAnalyticsService.revenue("c1", ctx, fixedClock("2026-08-01T00:00:00Z"));
     // OLD: contractAgeDays was -31, so the retainer term was 1000 * (-31/30) = -1033.33,
     // dragging the one real 10 000 placement down to ~8966 of "lifetime revenue".
     expect(dto.lifetimeCumulative).toBe(10_000);
@@ -142,7 +151,7 @@ describe("crmAnalyticsService.revenue — lifetimeCumulative regressions", () =>
     h.findByIdClient.mockResolvedValue(
       clientRow({ monthlyRate: 3333, contractStart: new Date("2026-01-01T00:00:00Z") }),
     );
-    const dto = await crmAnalyticsService.revenue("c1", fixedClock("2026-04-01T00:00:00Z"));
+    const dto = await crmAnalyticsService.revenue("c1", ctx, fixedClock("2026-04-01T00:00:00Z"));
     expect(dto.lifetimeCumulative).toBe(9999);
     expect(Number.isInteger(dto.lifetimeCumulative! * 100)).toBe(true);
   });
@@ -174,8 +183,8 @@ describe("crmAnalyticsService — health score consistency (the actual bug fix)"
     ]);
 
     const [health, rows] = await Promise.all([
-      crmAnalyticsService.healthScore("c1"),
-      crmAnalyticsService.compare(),
+      crmAnalyticsService.healthScore("c1", ctx),
+      crmAnalyticsService.compare(ctx),
     ]);
     const compareRow = rows.find((r) => r.clientId === "c1")!;
 
@@ -188,9 +197,9 @@ describe("crmAnalyticsService — health score consistency (the actual bug fix)"
       clientRow({ id: "c1" }),
       clientRow({ id: "c2", name: "Beta" }),
     ]);
-    await crmAnalyticsService.compare();
+    await crmAnalyticsService.compare(ctx);
     expect(h.groupByStatusForClients).toHaveBeenCalledTimes(1);
-    expect(h.groupByStatusForClients).toHaveBeenCalledWith(["c1", "c2"]);
+    expect(h.groupByStatusForClients).toHaveBeenCalledWith(ctx, ["c1", "c2"]);
     expect(h.listNotesForClients).toHaveBeenCalledTimes(1);
     expect(h.listMeetingsForClients).toHaveBeenCalledTimes(1);
     expect(h.listDealsForClients).toHaveBeenCalledTimes(1);

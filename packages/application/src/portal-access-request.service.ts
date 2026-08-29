@@ -64,10 +64,10 @@ export const portalAccessRequestService = {
     input: ApprovePortalRequestInput,
     actor: TenantContext,
   ): Promise<GeneratedPortalLinkDTO> {
-    const request = await portalAccessRequestRepository.findById(id);
+    const request = await portalAccessRequestRepository.findById(actor, id);
     if (!request) throw new AppError("NOT_FOUND", "Access request not found");
 
-    const claimed = await portalAccessRequestRepository.claimPending(id, "approved");
+    const claimed = await portalAccessRequestRepository.claimPending(actor, id, "approved");
     if (claimed !== 1) {
       throw new AppError("CONFLICT", "This request has already been resolved");
     }
@@ -76,7 +76,7 @@ export const portalAccessRequestService = {
       const contactId = input.contactId
         ? input.contactId
         : (
-            await clientContactRepository.create({
+            await clientContactRepository.create(actor, {
               clientId: input.clientId,
               fullName: request.name,
               email: request.email,
@@ -87,7 +87,7 @@ export const portalAccessRequestService = {
 
       return await clientPortalService.generateLink(input.clientId, contactId, actor);
     } catch (err) {
-      await portalAccessRequestRepository.revertToPending(id);
+      await portalAccessRequestRepository.revertToPending(actor, id);
       throw err;
     }
   },

@@ -14,7 +14,7 @@ export type GetLeadListResponse = LeadListDTO;
  * server-side). Returns the `LeadListDTO` page.
  */
 export const GET = apiHandler(async (req: Request) => {
-  await requireUser();
+  const user = await requireUser();
   const params = new URL(req.url).searchParams;
   const { deleted, ...filters } = leadListQuerySchema.parse({
     status: params.get("status") ?? undefined,
@@ -26,6 +26,6 @@ export const GET = apiHandler(async (req: Request) => {
     page: params.get("page") ?? undefined,
   });
   return json<GetLeadListResponse>(
-    await leadService.list(defined({ ...filters, includeDeleted: deleted })),
+    await leadService.list(defined({ ...filters, includeDeleted: deleted }), user),
   );
 });

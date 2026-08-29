@@ -51,6 +51,6 @@ describe("GET /api/crm/clients/:id/portal/contacts", () => {
     h.listContactsForClient.mockResolvedValue([]);
     const res = await GET(getReq(), ctx);
     expect(res.status).toBe(200);
-    expect(h.listContactsForClient).toHaveBeenCalledWith("cl1");
+    expect(h.listContactsForClient).toHaveBeenCalledWith("cl1", expect.anything());
   });
 });

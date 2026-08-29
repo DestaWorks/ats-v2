@@ -4,7 +4,7 @@ import {
   type MembershipRow,
 } from "@destaworks/db/tenancy/membership.repository";
 import { userRepository } from "@destaworks/db/repositories/user.repository";
-import { withTransaction } from "@destaworks/db/with-transaction";
+import { withTenantTransaction, withTransaction } from "@destaworks/db/with-transaction";
 import { hasCapability, isRole, ROLES, type Role } from "@destaworks/domain/constants";
 import type { TenantContext } from "@destaworks/domain/tenant";
 import { toIso } from "@destaworks/domain/utils/iso";
@@ -159,7 +159,7 @@ export const membershipService = {
       throw new AppError("CONFLICT", "That account is already a member of this workspace");
     }
 
-    const row = await withTransaction(async (tx) => {
+    const row = await withTenantTransaction(ctx, async (tx) => {
       const created = await membershipRepository.upsertInvitation(
         {
           tenantId: ctx.tenantId,
@@ -258,7 +258,7 @@ export const membershipService = {
       }
     }
 
-    const removed = await withTransaction(async (tx) => {
+    const removed = await withTenantTransaction(ctx, async (tx) => {
       const updated = await membershipRepository.updateStatus(row.id, "removed", tx);
       await writeAudit(tx, {
         entity: "membership",

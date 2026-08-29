@@ -75,7 +75,7 @@ const h = vi.hoisted(() => ({
 
 vi.mock("server-only", () => ({}));
 vi.mock("@destaworks/db/with-transaction", () => ({
-  withTransaction: (fn: (tx: unknown) => unknown) => fn(h.fakeTx),
+  withTenantTransaction: (_ctx: unknown, fn: (tx: unknown) => unknown) => fn(h.fakeTx),
 }));
 vi.mock("@destaworks/db/audit", () => ({ writeAudit: vi.fn().mockResolvedValue(undefined) }));
 vi.mock("@destaworks/db/repositories/client.repository", () => ({
@@ -87,7 +87,7 @@ vi.mock("@destaworks/db/repositories/document.repository", () => ({
 vi.mock("@destaworks/db/repositories/candidate.repository", () => ({
   candidateRepository: {
     listForDedupe: () => Promise.resolve([...store.candidates.values()]),
-    upsertByLegacyId: (legacyId: string) => {
+    upsertByLegacyId: (_ctx: unknown, legacyId: string) => {
       store.upserts.push(legacyId);
       const existing = store.candidates.get(legacyId);
       if (existing) return Promise.resolve(existing);
@@ -125,10 +125,18 @@ vi.mock("@destaworks/db/memberships", () => ({
   },
 }));
 
-/** The run table, with the one behaviour that matters: the claim is conditional on status. */
+/**
+ * The run table, with the one behaviour that matters: the claim is conditional on status.
+ *
+ * The leading `_ctx` on `create` / `findById` / `setJobId` is not decoration: those three are
+ * reached through `start` and `state`, which hold a `TenantContext` and now pass it (6.4). The
+ * four below them are reached from the JOB, which runs outside any request and has no context to
+ * pass — so they still take the id first. The split in this double is the split still open in the
+ * service.
+ */
 vi.mock("@destaworks/db/repositories/migration-run.repository", () => ({
   migrationRunRepository: {
-    create: (data: Record<string, unknown>) => {
+    create: (_ctx: unknown, data: Record<string, unknown>) => {
       store.seq += 1;
       const now = new Date();
       const run: StoredRun = {
@@ -157,8 +165,8 @@ vi.mock("@destaworks/db/repositories/migration-run.repository", () => ({
       store.runs.set(run.id, run);
       return Promise.resolve(run);
     },
-    findById: (id: string) => Promise.resolve(store.runs.get(id) ?? null),
-    setJobId: (id: string, jobId: string) => {
+    findById: (_ctx: unknown, id: string) => Promise.resolve(store.runs.get(id) ?? null),
+    setJobId: (_ctx: unknown, id: string, jobId: string) => {
       const run = store.runs.get(id);
       if (run) run.jobId = jobId;
       return Promise.resolve(run);

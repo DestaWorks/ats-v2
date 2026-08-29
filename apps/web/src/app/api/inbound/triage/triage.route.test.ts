@@ -56,6 +56,9 @@ describe("POST /api/inbound/triage", () => {
     const res = await POST(req(body), undefined);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(result);
-    expect(h.triage).toHaveBeenCalledWith(body);
+    expect(h.triage).toHaveBeenCalledWith(
+      body,
+      expect.objectContaining({ user: expect.objectContaining({ id: expect.any(String) }) }),
+    );
   });
 });

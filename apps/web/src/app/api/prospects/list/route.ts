@@ -17,7 +17,7 @@ export type GetProspectListResponse = ProspectListDTO;
  * `page` (clamped server-side).
  */
 export const GET = apiHandler(async (req: Request) => {
-  await requireCapability("viewClientDiscovery");
+  const user = await requireCapability("viewClientDiscovery");
   const params = new URL(req.url).searchParams;
   const { deleted, ...filters } = prospectListQuerySchema.parse({
     status: params.get("status") ?? undefined,
@@ -28,6 +28,6 @@ export const GET = apiHandler(async (req: Request) => {
     page: params.get("page") ?? undefined,
   });
   return json<GetProspectListResponse>(
-    await prospectService.list(defined({ ...filters, includeDeleted: deleted })),
+    await prospectService.list(defined({ ...filters, includeDeleted: deleted }), user),
   );
 });

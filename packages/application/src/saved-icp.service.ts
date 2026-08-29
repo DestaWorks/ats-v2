@@ -1,7 +1,7 @@
 import type { CreateSavedIcpInput, SavedIcpDTO } from "@destaworks/contracts/validation/saved-icp";
 import type { TenantContext } from "@destaworks/domain/tenant";
 import { writeAudit } from "@destaworks/db/audit";
-import { withTransaction } from "@destaworks/db/with-transaction";
+import { withTenantTransaction } from "@destaworks/db/with-transaction";
 import {
   savedIcpRepository,
   type SavedIcpRow,
@@ -35,20 +35,21 @@ function toDTO(row: SavedIcpRow, userNames: Map<string, string>): SavedIcpDTO {
 export const savedIcpService = {
   /** Every ICP visible to the caller: all shared (`!isPrivate`) ICPs + the caller's own private ones. */
   async list(ctx: TenantContext): Promise<SavedIcpDTO[]> {
-    const rows = await savedIcpRepository.listAll();
+    const rows = await savedIcpRepository.listAll(ctx);
     const visible = rows.filter((r) => !r.isPrivate || r.userId === ctx.user.id);
     const userNames = await userRepository.namesByIds([...new Set(visible.map((r) => r.userId))]);
     return visible.map((r) => toDTO(r, userNames));
   },
 
   async create(input: CreateSavedIcpInput, ctx: TenantContext): Promise<SavedIcpDTO> {
-    const existing = await savedIcpRepository.findByUserAndName(ctx.user.id, input.name);
+    const existing = await savedIcpRepository.findByUserAndName(ctx, ctx.user.id, input.name);
     if (existing) {
       throw new AppError("CONFLICT", `You already have an ICP named "${input.name}"`);
     }
 
-    const row = await withTransaction(async (tx) => {
+    const row = await withTenantTransaction(ctx, async (tx) => {
       const created = await savedIcpRepository.create(
+        ctx,
         {
           userId: ctx.user.id,
           name: input.name,
@@ -76,8 +77,8 @@ export const savedIcpService = {
   /** NOT_FOUND (not FORBIDDEN) whether the id doesn't exist or belongs to another user —
    *  deliberately indistinguishable, mirrors `savedViewService.remove`. */
   async remove(id: string, ctx: TenantContext): Promise<{ id: string }> {
-    await withTransaction(async (tx) => {
-      const { count } = await savedIcpRepository.deleteOwned(id, ctx.user.id, tx);
+    await withTenantTransaction(ctx, async (tx) => {
+      const { count } = await savedIcpRepository.deleteOwned(ctx, id, ctx.user.id, tx);
       if (count === 0) throw new AppError("NOT_FOUND", "Saved ICP not found");
       await writeAudit(tx, {
         entity: "saved_icp",

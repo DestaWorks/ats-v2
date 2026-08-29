@@ -43,7 +43,7 @@ vi.mock("@destaworks/db/repositories/mention.repository", () => ({
 vi.mock("@destaworks/db/repositories/user.repository", () => ({ userRepository: h.userRepo }));
 vi.mock("@destaworks/db/audit", () => ({ writeAudit: h.writeAudit }));
 vi.mock("@destaworks/db/with-transaction", () => ({
-  withTransaction: (fn: (tx: unknown) => unknown) => fn(h.fakeTx),
+  withTenantTransaction: (_ctx: unknown, fn: (tx: unknown) => unknown) => fn(h.fakeTx),
 }));
 vi.mock("@destaworks/integrations/email/provider", () => ({ sendEmail: h.sendEmail }));
 
@@ -96,7 +96,7 @@ describe("noteService.add", () => {
 
     // Body passed to the repo is BYTE-FOR-BYTE what was submitted — no sanitization at rest.
     expect(h.noteRepo.create).toHaveBeenCalledTimes(1);
-    const [data, tx] = h.noteRepo.create.mock.calls[0]!;
+    const [, data, tx] = h.noteRepo.create.mock.calls[0]!;
     expect(data.body).toBe(xss);
     expect(tx).toBe(h.fakeTx);
     // author comes from the session, NOT the client body.
@@ -141,6 +141,7 @@ describe("noteService.add", () => {
     );
 
     expect(h.mentionRepo.createMany).toHaveBeenCalledWith(
+      h.user,
       { noteId: "n1", candidateId: "c1", recipientIds: ["u2"] },
       h.fakeTx,
     );
@@ -232,7 +233,7 @@ describe("noteService.listByCandidate", () => {
       noteRow({ id: "n2", noteType: "call" }),
       noteRow({ id: "n1", noteType: "internal" }),
     ]);
-    const dtos = await noteService.listByCandidate("c1", h.owner);
+    const dtos = await noteService.listByCandidate("c1", h.owner as TenantContext);
     expect(dtos.map((n) => n.id)).toEqual(["n2", "n1"]);
     expect(dtos[0]).toMatchObject({ id: "n2", noteType: "call" });
     // ISO string dates on the wire.
@@ -244,7 +245,7 @@ describe("noteService.listByCandidate", () => {
       noteRow({ id: "n2", noteType: "call" }),
       noteRow({ id: "n1", noteType: "internal" }),
     ]);
-    const dtos = await noteService.listByCandidate("c1", h.user);
+    const dtos = await noteService.listByCandidate("c1", h.user as TenantContext);
     expect(dtos.map((n) => n.id)).toEqual(["n1"]);
   });
 });

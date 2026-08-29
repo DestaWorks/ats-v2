@@ -6,6 +6,7 @@ import type {
 import { systemClock, type Clock } from "@destaworks/domain/clock";
 import { utcDaysBetween } from "@destaworks/domain/daily";
 import { toIso } from "@destaworks/domain/utils/iso";
+import type { TenantContext } from "@destaworks/domain/tenant";
 import { licenseVerifyRepository } from "@destaworks/db/repositories/license-verify.repository";
 import { cachedClientNameMap } from "@destaworks/integrations/http/request-cache";
 
@@ -49,11 +50,14 @@ function toTimelineRowDTO(c: TimelineRow, expiry: Date, now: Date): LicenseVerif
  * This service only derives the two read lists; verification itself happens on `/candidates/:id`.
  */
 export const licenseVerifyService = {
-  async dashboard(clock: Clock = systemClock): Promise<LicenseVerifyDashboardDTO> {
+  async dashboard(
+    ctx: TenantContext,
+    clock: Clock = systemClock,
+  ): Promise<LicenseVerifyDashboardDTO> {
     const now = clock.now();
     const [queue, timelineRows, clientNames] = await Promise.all([
-      licenseVerifyRepository.verificationQueue(QUEUE_CAP),
-      licenseVerifyRepository.expiryTimeline(TIMELINE_CAP),
+      licenseVerifyRepository.verificationQueue(ctx, QUEUE_CAP),
+      licenseVerifyRepository.expiryTimeline(ctx, TIMELINE_CAP),
       cachedClientNameMap(),
     ]);
     return {

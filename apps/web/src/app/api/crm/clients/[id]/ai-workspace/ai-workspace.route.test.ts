@@ -61,6 +61,6 @@ describe("POST /api/crm/clients/:id/ai-workspace", () => {
     const res = await POST(postReq({ preset: "brief" }), ctx);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ text: "Brief text" });
-    expect(h.generate).toHaveBeenCalledWith("c1", { preset: "brief" });
+    expect(h.generate).toHaveBeenCalledWith("c1", { preset: "brief" }, expect.anything());
   });
 });

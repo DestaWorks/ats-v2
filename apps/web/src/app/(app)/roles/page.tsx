@@ -4,6 +4,7 @@ import {
   isRolePriority,
   isRoleStatus,
 } from "@destaworks/domain/constants";
+import { getVerifiedUser } from "@destaworks/auth/guards";
 import { openRoleService } from "@destaworks/application/open-role.service";
 import { AddRoleButton } from "./add-role-modal";
 import { RoleFilters } from "./role-filters";
@@ -35,15 +36,19 @@ export default async function RolesPage({
   const rawPage = Number(one(sp.page));
   const page = Number.isInteger(rawPage) && rawPage > 0 ? rawPage : 1;
 
+  const user = await getVerifiedUser();
   const [list, triage, clientRows] = await Promise.all([
-    openRoleService.list({
-      ...(clientId !== undefined && { clientId }),
-      ...(status !== undefined && { status }),
-      ...(priority !== undefined && { priority }),
-      ...(search !== undefined && { search }),
-      page,
-    }),
-    openRoleService.triage(),
+    openRoleService.list(
+      {
+        ...(clientId !== undefined && { clientId }),
+        ...(status !== undefined && { status }),
+        ...(priority !== undefined && { priority }),
+        ...(search !== undefined && { search }),
+        page,
+      },
+      user,
+    ),
+    openRoleService.triage(user),
     cachedClientList(),
   ]);
   const clients = clientRows.map((c) => ({ id: c.id, name: c.name }));

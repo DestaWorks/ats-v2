@@ -25,6 +25,7 @@ const h = vi.hoisted(() => ({
 vi.mock("server-only", () => ({}));
 vi.mock("@destaworks/db/prisma", () => ({ prisma: {}, db: () => ({}) }));
 vi.mock("@destaworks/db/with-transaction", () => ({
+  withTenantTransaction: async (_ctx: unknown, fn: (tx: unknown) => unknown) => fn({}),
   withTransaction: async (fn: (tx: unknown) => unknown) => fn({}),
 }));
 vi.mock("@destaworks/db/audit", () => ({ writeAudit: vi.fn() }));
@@ -92,8 +93,9 @@ describe("clientPortalService.generateLink", () => {
     const revokeOrder = h.revokeAllForContact.mock.invocationCallOrder[0] ?? -1;
     const createOrder = h.createTokenRow.mock.invocationCallOrder[0] ?? -1;
     expect(revokeOrder).toBeLessThan(createOrder);
-    expect(h.revokeAllForContact).toHaveBeenCalledWith("c1", expect.anything());
+    expect(h.revokeAllForContact).toHaveBeenCalledWith(actor, "c1", expect.anything());
     expect(h.updateContact).toHaveBeenCalledWith(
+      actor,
       "cl1",
       "c1",
       { portalEnabled: true },
@@ -129,7 +131,7 @@ describe("clientPortalService.revokeLink", () => {
     h.findByIdToken.mockResolvedValue({ id: "t1", contactId: "c1", contact: { clientId: "cl1" } });
     h.revoke.mockResolvedValue(1);
     await clientPortalService.revokeLink("cl1", "t1", actor);
-    expect(h.revoke).toHaveBeenCalledWith("t1", expect.anything());
+    expect(h.revoke).toHaveBeenCalledWith(actor, "t1", expect.anything());
   });
 });
 

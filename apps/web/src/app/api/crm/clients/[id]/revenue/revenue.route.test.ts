@@ -63,6 +63,6 @@ describe("GET /api/crm/clients/:id/revenue", () => {
     const res = await GET(getReq(), ctx);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(result);
-    expect(h.revenue).toHaveBeenCalledWith("c1");
+    expect(h.revenue).toHaveBeenCalledWith("c1", expect.anything());
   });
 });

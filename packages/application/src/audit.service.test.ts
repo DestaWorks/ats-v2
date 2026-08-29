@@ -82,6 +82,19 @@ function row(overrides: Record<string, unknown> = {}) {
   };
 }
 
+/**
+ * The `TenantContext` the REAL guard resolves from the mocked session + membership double, and
+ * which every tenant-scoped repository call now carries as its first argument (6.3/6.4). Asserting
+ * it here is the point: a read of the trail that reached the repository without it would be a read
+ * of every tenant's activity log.
+ */
+const OWNER_CTX = expect.objectContaining({
+  tenantId: "t1",
+  membershipId: "u1-m",
+  role: "Owner",
+  user: expect.objectContaining({ id: "u1" }),
+});
+
 beforeEach(() => {
   mockSession = null;
   listForEntity.mockReset();
@@ -107,7 +120,7 @@ describe("auditService.listAuditForEntity — capability gate", () => {
     listForEntity.mockResolvedValue(rows);
 
     await expect(auditService.listAuditForEntity("candidate", "c1")).resolves.toBe(rows);
-    expect(listForEntity).toHaveBeenCalledWith("candidate", "c1");
+    expect(listForEntity).toHaveBeenCalledWith(OWNER_CTX, "candidate", "c1");
   });
 });
 
@@ -139,7 +152,7 @@ describe("auditService.listActivity — filters → repo where (UTC day-bounds)"
 
   it("forwards action/entity/actor equality filters unchanged", async () => {
     await auditService.listActivity({ action: "purge", entity: "candidate", actor: "u9" }, null);
-    const [filters] = list.mock.calls[0]!;
+    const [, filters] = list.mock.calls[0]!;
     expect(filters).toMatchObject({ action: "purge", entity: "candidate", actor: "u9" });
   });
 
@@ -148,7 +161,7 @@ describe("auditService.listActivity — filters → repo where (UTC day-bounds)"
       { from: new Date("2026-06-01T09:30:00.000Z"), to: new Date("2026-06-30T09:30:00.000Z") },
       null,
     );
-    const [filters] = list.mock.calls[0]!;
+    const [, filters] = list.mock.calls[0]!;
     expect((filters.from as Date).toISOString()).toBe("2026-06-01T00:00:00.000Z");
     // Was a 23:59:59.999 "inclusive day end" — one of THREE private `utcDayStart` copies with
     // two different end-of-day rules. Now the one shared half-open `[start, nextDayStart)`.
@@ -161,7 +174,7 @@ describe("auditService.listActivity — filters → repo where (UTC day-bounds)"
       "at_desc",
     );
     await auditService.listActivity({}, cursor);
-    const [, passedCursor, take] = list.mock.calls[0]!;
+    const [, , passedCursor, take] = list.mock.calls[0]!;
     expect(take).toBe(51);
     expect(passedCursor).toBe(cursor);
   });
@@ -214,7 +227,7 @@ describe("auditService.listActivity — pagination + resolution + no PII leak", 
     );
     const res = await auditService.listActivity({}, null);
     // Resolved with includeDeleted so a since-deleted candidate still labels.
-    expect(candidateNamesByIds).toHaveBeenCalledWith(["live", "trashed", "purged"], {
+    expect(candidateNamesByIds).toHaveBeenCalledWith(OWNER_CTX, ["live", "trashed", "purged"], {
       includeDeleted: true,
     });
     expect(res.items[0]).toMatchObject({
@@ -228,7 +241,7 @@ describe("auditService.listActivity — pagination + resolution + no PII leak", 
   it("does NOT resolve labels for non-candidate entities", async () => {
     list.mockResolvedValue([row({ id: "a1", entity: "document", entityId: "d1" })]);
     const res = await auditService.listActivity({}, null);
-    expect(candidateNamesByIds).toHaveBeenCalledWith([], { includeDeleted: true });
+    expect(candidateNamesByIds).toHaveBeenCalledWith(OWNER_CTX, [], { includeDeleted: true });
     expect(res.items[0]).toMatchObject({ entityLabel: null, entityLink: null });
   });
 

@@ -32,7 +32,7 @@ vi.mock("@destaworks/db/repositories/document.repository", () => ({
 }));
 vi.mock("@destaworks/db/audit", () => ({ writeAudit: h.writeAudit }));
 vi.mock("@destaworks/db/with-transaction", () => ({
-  withTransaction: (fn: (tx: unknown) => unknown) => fn(h.fakeTx),
+  withTenantTransaction: (_ctx: unknown, fn: (tx: unknown) => unknown) => fn(h.fakeTx),
 }));
 vi.mock("@destaworks/integrations/ai/parse-resume", () => ({ parseResume: h.parseResume }));
 vi.mock("@destaworks/integrations/http/rate-limit", () => ({ checkRateLimit: h.checkRateLimit }));
@@ -69,7 +69,9 @@ beforeEach(() => {
   h.candidateRepo.list.mockReset().mockResolvedValue([]);
   h.candidateRepo.upsertByLegacyId
     .mockReset()
-    .mockImplementation((legacyId: string) => Promise.resolve({ id: `db-${legacyId}`, legacyId }));
+    .mockImplementation((_ctx: TenantContext, legacyId: string) =>
+      Promise.resolve({ id: `db-${legacyId}`, legacyId }),
+    );
   h.documentRepo.upsertByLegacyId.mockReset().mockResolvedValue({ id: "doc-1" });
   h.documentRepo.create.mockReset().mockResolvedValue({ id: "doc-ai-1" });
   h.candidateRepo.findById.mockReset().mockResolvedValue({ id: "db-L-1", name: "Jane" });
@@ -161,7 +163,7 @@ describe("migrationService.commit", () => {
       keptLegacyId: "L-2",
     });
     // the Needs Review control tag was written into the create payload
-    const [, create] = h.candidateRepo.upsertByLegacyId.mock.calls[0]!;
+    const [, , create] = h.candidateRepo.upsertByLegacyId.mock.calls[0]!;
     expect(create.tags).toContain("Needs Review");
   });
 
@@ -172,7 +174,7 @@ describe("migrationService.commit", () => {
     await migrationService.commit({ format: "csv", content }, owner);
 
     expect(h.documentRepo.upsertByLegacyId).toHaveBeenCalledTimes(1);
-    const [legacyId, data, tx] = h.documentRepo.upsertByLegacyId.mock.calls[0]!;
+    const [, legacyId, data, tx] = h.documentRepo.upsertByLegacyId.mock.calls[0]!;
     expect(legacyId).toBe("drive-1");
     expect(tx).toBe(h.fakeTx);
     expect(data).toMatchObject({
@@ -191,6 +193,7 @@ describe("migrationService.commit", () => {
     const report = await migrationService.commit({ format: "csv", content }, owner);
     expect(h.candidateRepo.upsertByLegacyId).toHaveBeenCalledTimes(1);
     expect(h.candidateRepo.upsertByLegacyId).toHaveBeenCalledWith(
+      owner,
       "L-1",
       expect.anything(),
       expect.anything(),
@@ -204,7 +207,7 @@ describe("migrationService.commit", () => {
       "ID,Name,Status,DeletedAt,DeletedBy\nL-9,Gone,0 - New Candidate,2024-01-15,u-del\n";
     const report = await migrationService.commit({ format: "csv", content }, owner);
     expect(report.counts.softDeleted).toBe(1);
-    const [, create] = h.candidateRepo.upsertByLegacyId.mock.calls[0]!;
+    const [, , create] = h.candidateRepo.upsertByLegacyId.mock.calls[0]!;
     expect(create.deletedAt).toBeInstanceOf(Date);
     expect(create.deletedById).toBe("u-del");
   });
@@ -220,7 +223,7 @@ describe("migrationService.commit", () => {
   });
 
   it("continues on a per-row failure and reports it errored", async () => {
-    h.candidateRepo.upsertByLegacyId.mockImplementation((legacyId: string) =>
+    h.candidateRepo.upsertByLegacyId.mockImplementation((_ctx: TenantContext, legacyId: string) =>
       legacyId === "L-1"
         ? Promise.reject(new Error("boom"))
         : Promise.resolve({ id: "db", legacyId }),
@@ -416,7 +419,7 @@ describe("migrationService.commit — AI resume extraction (Wave 1.3 backlog, In
       text: "resume text for jane",
     });
     expect(h.documentRepo.upsertByLegacyId).toHaveBeenCalledTimes(1);
-    const [legacyId, docData] = h.documentRepo.upsertByLegacyId.mock.calls[0]!;
+    const [, legacyId, docData] = h.documentRepo.upsertByLegacyId.mock.calls[0]!;
     expect(legacyId).toBe("resume-ai:L-1");
     expect(docData).toMatchObject({
       candidateId: "db-L-1",
@@ -424,6 +427,7 @@ describe("migrationService.commit — AI resume extraction (Wave 1.3 backlog, In
       extractedText: "resume text for jane",
     });
     expect(h.candidateRepo.update).toHaveBeenCalledWith(
+      owner,
       "db-L-1",
       expect.objectContaining({ email: "jane.new@x.com" }),
       h.fakeTx,
@@ -451,8 +455,8 @@ describe("migrationService.commit — AI resume extraction (Wave 1.3 backlog, In
     await migrationService.commit(input, owner);
 
     expect(h.documentRepo.upsertByLegacyId).toHaveBeenCalledTimes(2);
-    const [firstKey] = h.documentRepo.upsertByLegacyId.mock.calls[0]!;
-    const [secondKey] = h.documentRepo.upsertByLegacyId.mock.calls[1]!;
+    const [, firstKey] = h.documentRepo.upsertByLegacyId.mock.calls[0]!;
+    const [, secondKey] = h.documentRepo.upsertByLegacyId.mock.calls[1]!;
     expect(firstKey).toBe(secondKey);
     expect(firstKey).toBe("resume-ai:L-1");
   });
@@ -479,7 +483,7 @@ describe("migrationService.commit — AI resume extraction (Wave 1.3 backlog, In
       owner,
     );
 
-    const fills = h.candidateRepo.update.mock.calls[0]?.[1] as Record<string, unknown> | undefined;
+    const fills = h.candidateRepo.update.mock.calls[0]?.[2] as Record<string, unknown> | undefined;
     expect(fills?.email).toBeUndefined(); // NOT overwritten
     expect(fills?.phone).toBe("555-1234"); // empty field WAS filled
   });
@@ -502,7 +506,7 @@ describe("migrationService.commit — AI resume extraction (Wave 1.3 backlog, In
     expect(report.rows[0]!.reasons).toContain("ai-extraction-failed");
     // The resume still attaches text-only — an AI failure shouldn't also lose the free part.
     expect(h.documentRepo.upsertByLegacyId).toHaveBeenCalledTimes(1);
-    const [, docData] = h.documentRepo.upsertByLegacyId.mock.calls[0]!;
+    const [, , docData] = h.documentRepo.upsertByLegacyId.mock.calls[0]!;
     expect(docData).toMatchObject({
       candidateId: "db-L-1",
       type: "resume",
@@ -585,6 +589,7 @@ describe("migrationService.commit — driven by a job runner", () => {
     });
     expect(h.candidateRepo.upsertByLegacyId).toHaveBeenCalledTimes(1);
     expect(h.candidateRepo.upsertByLegacyId).toHaveBeenCalledWith(
+      owner,
       "L-3",
       expect.anything(),
       expect.anything(),

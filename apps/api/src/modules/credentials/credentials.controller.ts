@@ -1,5 +1,7 @@
 import { Controller, Get, Inject, UseGuards } from "@nestjs/common";
 import type { CredentialsOverviewDTO } from "@destaworks/contracts/validation/credentials";
+import type { AuthContext } from "@destaworks/auth/guards";
+import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { RequireCapability } from "../../common/decorators/require-capability.decorator";
 import { CapabilityGuard } from "../../common/guards/capability.guard";
 import { SessionAuthGuard } from "../../common/guards/session-auth.guard";
@@ -23,7 +25,7 @@ export class CredentialsController {
   /** GET /credentials/overview — one point-in-time snapshot; no filters, no pagination. */
   @Get("overview")
   @RequireCapability("viewCredentials")
-  async overview(): Promise<CredentialsOverviewDTO> {
-    return this.credentials.overview();
+  async overview(@CurrentUser() user: AuthContext): Promise<CredentialsOverviewDTO> {
+    return this.credentials.overview(user);
   }
 }

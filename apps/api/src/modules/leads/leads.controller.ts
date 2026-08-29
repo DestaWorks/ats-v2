@@ -80,9 +80,10 @@ export class LeadsController {
   async list(
     @Query(new ZodValidationPipe(leadListQuerySchema))
     query: ContractOutput<typeof leadListQuerySchema>,
+    @CurrentUser() user: AuthContext,
   ): Promise<GetLeadListResponse> {
     const { deleted, ...filters } = query;
-    return await this.leads.list(defined({ ...filters, includeDeleted: deleted }));
+    return await this.leads.list(defined({ ...filters, includeDeleted: deleted }), user);
   }
 
   /** POST /leads/bulk — delete · restore · status · assign · client · outreach over <=200 ids. */
@@ -108,8 +109,11 @@ export class LeadsController {
 
   /** GET /leads/:id — full detail, soft-deleted leads included so the trash view can inspect them. */
   @Get(":id")
-  async detail(@Param("id") id: string): Promise<GetLeadResponse> {
-    return { lead: await this.leads.detail(id) };
+  async detail(
+    @Param("id") id: string,
+    @CurrentUser() user: AuthContext,
+  ): Promise<GetLeadResponse> {
+    return { lead: await this.leads.detail(id, user) };
   }
 
   /** DELETE /leads/:id — soft-delete. Answers with the id alone, never the lead. */

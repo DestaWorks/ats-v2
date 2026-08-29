@@ -68,7 +68,7 @@ vi.mock("@destaworks/db/repositories/user.repository", () => ({
 }));
 vi.mock("@destaworks/db/audit", () => ({ writeAudit: h.writeAudit }));
 vi.mock("@destaworks/db/with-transaction", () => ({
-  withTransaction: (fn: (tx: unknown) => unknown) => fn(h.fakeTx),
+  withTenantTransaction: (_ctx: unknown, fn: (tx: unknown) => unknown) => fn(h.fakeTx),
 }));
 
 import { dailyService } from "./daily.service";
@@ -110,10 +110,10 @@ describe("dailyService.liveActuals", () => {
     h.repo.countOutreach.mockResolvedValue(12);
     h.repo.countCleanup.mockResolvedValue(3);
 
-    const out = await dailyService.liveActuals("u1", "2026-07-13", -180); // UTC+3
+    const out = await dailyService.liveActuals("u1", "2026-07-13", -180, h.user as TenantContext); // UTC+3
 
     expect(out).toEqual({ sourcing: 7, outreach: 12, atsCleanup: 3 });
-    const [, w] = h.repo.countLeadsSourced.mock.calls[0]!;
+    const [, , w] = h.repo.countLeadsSourced.mock.calls[0]!;
     expect(w.start.toISOString()).toBe("2026-07-12T21:00:00.000Z"); // local midnight in UTC
     expect(w.end.toISOString()).toBe("2026-07-13T21:00:00.000Z");
   });
@@ -143,7 +143,7 @@ describe("dailyService.setTarget", () => {
 
     await dailyService.setTarget(input, h.owner as TenantContext);
 
-    const [data, tx] = h.repo.upsertTarget.mock.calls[0]!;
+    const [, data, tx] = h.repo.upsertTarget.mock.calls[0]!;
     expect(tx).toBe(h.fakeTx);
     expect(data).toMatchObject({ userId: "u1", date: "2026-07-13", sourcing: 25, setById: "o1" });
     expect(h.writeAudit.mock.calls[0]![1]).toMatchObject({
@@ -175,16 +175,16 @@ describe("dailyService.submitLog", () => {
 
   it("snapshots the auto counts server-side and audits in one tx", async () => {
     h.repo.countCandidatesAdded.mockResolvedValue(4);
-    h.repo.countAuditAction.mockImplementation((_u: string, action: string) =>
+    h.repo.countAuditAction.mockImplementation((_ctx: unknown, _u: string, action: string) =>
       Promise.resolve(action === "move" ? 6 : 2),
     );
-    h.repo.createLog.mockImplementation((data: Record<string, unknown>) =>
+    h.repo.createLog.mockImplementation((_ctx: unknown, data: Record<string, unknown>) =>
       Promise.resolve({ ...data, id: "dl1", blocker: null, notes: null, shiftHandoff: null }),
     );
 
     const dto = await dailyService.submitLog(input, h.user as TenantContext);
 
-    const [data, tx] = h.repo.createLog.mock.calls[0]!;
+    const [, data, tx] = h.repo.createLog.mock.calls[0]!;
     expect(tx).toBe(h.fakeTx);
     expect(data).toMatchObject({
       userId: "u1",
@@ -234,7 +234,7 @@ describe("dailyService.logView", () => {
 
     expect(view.ramp).toMatchObject({ weekNum: 2, sourced: 15 });
     expect(view.streak).toBe(2); // 12th + 11th hit, 10th missed
-    expect(h.repo.goalsForWeek).toHaveBeenCalledWith("u1", "2026-07-13"); // Monday of that week
+    expect(h.repo.goalsForWeek).toHaveBeenCalledWith(h.user, "u1", "2026-07-13"); // Monday of that week
   });
 });
 
@@ -242,7 +242,7 @@ describe("dailyService.setGoalDone", () => {
   it("owner-scoped real update; someone else's goal → NOT_FOUND", async () => {
     h.repo.setGoalDone.mockResolvedValue(1);
     await dailyService.setGoalDone("g1", true, h.user as TenantContext);
-    expect(h.repo.setGoalDone).toHaveBeenCalledWith("g1", "u1", true);
+    expect(h.repo.setGoalDone).toHaveBeenCalledWith(h.user, "g1", "u1", true);
 
     h.repo.setGoalDone.mockResolvedValue(0);
     await expect(
@@ -266,7 +266,10 @@ describe("dailyService.recap", () => {
     h.repo.countOutreachSince.mockResolvedValue(2);
     h.userRepo.namesByIds.mockResolvedValue(new Map([["u1", "Test User"]]));
 
-    const recap = await dailyService.recap(new Date("2026-07-12T00:00:00Z"));
+    const recap = await dailyService.recap(
+      new Date("2026-07-12T00:00:00Z"),
+      h.user as TenantContext,
+    );
 
     expect(recap.added).toEqual({ count: 4, names: ["A", "B", "C"] });
     expect(recap.moves).toEqual({ count: 1, names: ["Jane"] });
@@ -286,7 +289,10 @@ describe("dailyService.recap", () => {
     h.repo.countOutreachSince.mockResolvedValue(140);
     h.userRepo.namesByIds.mockResolvedValue(new Map([["u1", "Test User"]]));
 
-    const recap = await dailyService.recap(new Date("2026-07-12T00:00:00Z"));
+    const recap = await dailyService.recap(
+      new Date("2026-07-12T00:00:00Z"),
+      h.user as TenantContext,
+    );
 
     expect(recap.added.count).toBe(63);
     expect(recap.moves.count).toBe(58);
@@ -310,7 +316,7 @@ describe("dailyService.addFeedback — Wave 3.1 backlog", () => {
 
     await dailyService.addFeedback(input, h.owner as TenantContext);
 
-    const [data, tx] = h.repo.createFeedback.mock.calls[0]!;
+    const [, data, tx] = h.repo.createFeedback.mock.calls[0]!;
     expect(tx).toBe(h.fakeTx);
     expect(data).toMatchObject({
       authorId: "o1",
@@ -410,7 +416,7 @@ describe("dailyService.teamBreakdown — Wave 3.1 backlog", () => {
       { id: "u1", name: "Test User" },
       { id: "u2", name: "Associate Two" },
     ]);
-    const [start, end] = h.repo.logsForDateRange.mock.calls[0]!;
+    const [, start, end] = h.repo.logsForDateRange.mock.calls[0]!;
     expect(start).toBe("2026-07-13");
     expect(end).toBe("2026-07-19"); // Monday + 6 = Sunday
   });
@@ -494,7 +500,7 @@ describe("dailyService.overview — target roster (design pass 2026-08-04)", () 
         daysLoggedThisWeek: 1,
       },
     ]);
-    const [start, end] = h.repo.logsForDateRange.mock.calls[0]!;
+    const [, start, end] = h.repo.logsForDateRange.mock.calls[0]!;
     expect(start).toBe("2026-07-13"); // Monday of that week
     expect(end).toBe("2026-07-15"); // through TODAY, not the full week
     expect(h.userRepo.listByRole).toHaveBeenCalledWith("Associate");

@@ -8,6 +8,6 @@ export type GetCrmCompareResponse = Contract.GetCrmCompareResponse;
 
 /** GET /api/crm/compare — cross-client Compare dashboard (legacy `index.html:7330-7354`). */
 export const GET = apiHandler(async () => {
-  await requireCapability("viewCrm");
-  return json<GetCrmCompareResponse>({ clients: await crmAnalyticsService.compare() });
+  const user = await requireCapability("viewCrm");
+  return json<GetCrmCompareResponse>({ clients: await crmAnalyticsService.compare(user) });
 });

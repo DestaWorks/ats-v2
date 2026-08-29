@@ -92,7 +92,7 @@ beforeEach(() => {
 describe("inboundService.triage", () => {
   it("returns no existing match and no client matches when nothing lines up", async () => {
     h.extractInbound.mockResolvedValue(extracted());
-    const result = await inboundService.triage({ messageText: "hi there, im a PMHNP in NJ" });
+    const result = await inboundService.triage({ messageText: "hi there, im a PMHNP in NJ" }, user);
     expect(result.extracted.name).toBe("Jane Doe");
     expect(result.existing).toBeNull();
     expect(result.clientMatches).toEqual([]);
@@ -106,7 +106,7 @@ describe("inboundService.triage", () => {
     h.leadRepo.findManyByEmails.mockResolvedValue([
       { id: "l1", name: "Jane Doe", email: "jane@example.com" },
     ]);
-    const result = await inboundService.triage({ messageText: "hi there, im a PMHNP in NJ" });
+    const result = await inboundService.triage({ messageText: "hi there, im a PMHNP in NJ" }, user);
     expect(result.existing).toEqual({
       kind: "candidate",
       id: "c1",
@@ -120,7 +120,7 @@ describe("inboundService.triage", () => {
     h.leadRepo.findManyByEmails.mockResolvedValue([
       { id: "l1", name: "Jane Doe", email: "jane@example.com" },
     ]);
-    const result = await inboundService.triage({ messageText: "hi there, im a PMHNP in NJ" });
+    const result = await inboundService.triage({ messageText: "hi there, im a PMHNP in NJ" }, user);
     expect(result.existing).toEqual({
       kind: "lead",
       id: "l1",
@@ -132,7 +132,7 @@ describe("inboundService.triage", () => {
   it("falls back to a NAME match on leads when there is no email", async () => {
     h.extractInbound.mockResolvedValue(extracted({ email: null }));
     h.leadRepo.findManyByNames.mockResolvedValue([{ id: "l2", name: "Jane Doe", email: null }]);
-    const result = await inboundService.triage({ messageText: "hi im jane, a PMHNP" });
+    const result = await inboundService.triage({ messageText: "hi im jane, a PMHNP" }, user);
     expect(result.existing).toEqual({
       kind: "lead",
       id: "l2",
@@ -152,7 +152,7 @@ describe("inboundService.triage", () => {
       { clientId: "cl-fit", states: ["NJ"], creds: ["PMHNP"], pops: [], settings: [] },
       { clientId: "cl-nofit", states: ["CA"], creds: ["LCSW"], pops: [], settings: [] },
     ]);
-    const result = await inboundService.triage({ messageText: "hi there, im a PMHNP in NJ" });
+    const result = await inboundService.triage({ messageText: "hi there, im a PMHNP in NJ" }, user);
     expect(result.clientMatches).toHaveLength(1);
     expect(result.clientMatches[0]?.clientId).toBe("cl-fit");
     expect(result.clientMatches[0]?.reasons).toEqual(

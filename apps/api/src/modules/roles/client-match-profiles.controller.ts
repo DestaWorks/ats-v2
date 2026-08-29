@@ -29,8 +29,11 @@ export class ClientMatchProfilesController {
   ) {}
 
   @Get(":clientId")
-  async read(@Param("clientId") clientId: string): Promise<GetClientMatchProfileResponse> {
-    return this.openRoles.getMatchProfile(clientId);
+  async read(
+    @Param("clientId") clientId: string,
+    @CurrentUser() user: AuthContext,
+  ): Promise<GetClientMatchProfileResponse> {
+    return this.openRoles.getMatchProfile(clientId, user);
   }
 
   @Put(":clientId")

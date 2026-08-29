@@ -43,7 +43,7 @@ import type { JourneyDTO, JourneyEventDTO } from "@destaworks/contracts/validati
 import { requireUser } from "@destaworks/auth/guards";
 import type { TenantContext } from "@destaworks/domain/tenant";
 import { writeAudit } from "@destaworks/db/audit";
-import { withTransaction } from "@destaworks/db/with-transaction";
+import { withTenantTransaction } from "@destaworks/db/with-transaction";
 import type { ScopedTx } from "@destaworks/db/tenant-scope";
 import {
   candidateRepository,
@@ -442,7 +442,7 @@ export const candidateService = {
       createdById: user.user.id,
     };
     const run = async (tx: ScopedTx) => {
-      const created = await candidateRepository.create(data, tx);
+      const created = await candidateRepository.create(user, data, tx);
       await writeAudit(tx, {
         entity: "candidate",
         entityId: created.id,
@@ -453,7 +453,7 @@ export const candidateService = {
       return created;
     };
     // Compose inside the caller's tx (promote), else open our own so create + audit stay atomic.
-    return opts?.tx ? run(opts.tx) : withTransaction(run);
+    return opts?.tx ? run(opts.tx) : withTenantTransaction(user, run);
   },
 
   /**
@@ -466,11 +466,11 @@ export const candidateService = {
    * enforced at the route before this is reached (design D-5).
    */
   async update(id: string, input: UpdateCandidateInput, ctx: TenantContext) {
-    const existing = await candidateRepository.findById(id);
+    const existing = await candidateRepository.findById(ctx, id);
     if (!existing) throw new AppError("NOT_FOUND", "Candidate not found");
     const data = defined(input);
-    return withTransaction(async (tx) => {
-      const updated = await candidateRepository.update(id, data, tx);
+    return withTenantTransaction(ctx, async (tx) => {
+      const updated = await candidateRepository.update(ctx, id, data, tx);
       await writeAudit(tx, {
         entity: "candidate",
         entityId: id,
@@ -492,10 +492,10 @@ export const candidateService = {
    */
   async softDelete(id: string) {
     const user = await requireUser();
-    const existing = await candidateRepository.findById(id);
+    const existing = await candidateRepository.findById(user, id);
     if (!existing) throw new AppError("NOT_FOUND", "Candidate not found");
-    return withTransaction(async (tx) => {
-      const deleted = await candidateRepository.softDelete(id, user.user.id, tx);
+    return withTenantTransaction(user, async (tx) => {
+      const deleted = await candidateRepository.softDelete(user, id, user.user.id, tx);
       await writeAudit(tx, {
         entity: "candidate",
         entityId: id,
@@ -517,11 +517,11 @@ export const candidateService = {
    * Audited (action `restore`) in the same transaction as the repo `restore`.
    */
   async restore(id: string, ctx: TenantContext) {
-    const existing = await candidateRepository.findById(id, { includeDeleted: true });
+    const existing = await candidateRepository.findById(ctx, id, { includeDeleted: true });
     if (!existing) throw new AppError("NOT_FOUND", "Candidate not found");
     if (existing.deletedAt === null) throw new AppError("CONFLICT", "Candidate is not in Trash");
-    return withTransaction(async (tx) => {
-      const restored = await candidateRepository.restore(id, tx);
+    return withTenantTransaction(ctx, async (tx) => {
+      const restored = await candidateRepository.restore(ctx, id, tx);
       await writeAudit(tx, {
         entity: "candidate",
         entityId: id,
@@ -548,12 +548,12 @@ export const candidateService = {
     if (!hasCapability(ctx.role, "purgeCandidate")) {
       throw new AppError("FORBIDDEN", "You don't have permission to purge candidates");
     }
-    const existing = await candidateRepository.findById(id, { includeDeleted: true });
+    const existing = await candidateRepository.findById(ctx, id, { includeDeleted: true });
     if (!existing) throw new AppError("NOT_FOUND", "Candidate not found");
     if (existing.deletedAt === null) {
       throw new AppError("CONFLICT", "Only trashed candidates can be purged");
     }
-    return withTransaction(async (tx) => {
+    return withTenantTransaction(ctx, async (tx) => {
       await writeAudit(tx, {
         entity: "candidate",
         entityId: id,
@@ -561,7 +561,7 @@ export const candidateService = {
         action: "purge",
         before: { name: existing.name, status: existing.status, deletedAt: existing.deletedAt },
       });
-      await candidateRepository.purge(id, tx); // cascades documents / notes / stage history
+      await candidateRepository.purge(ctx, id, tx); // cascades documents / notes / stage history
       return { id };
     });
   },
@@ -574,7 +574,7 @@ export const candidateService = {
    * (`userRepository.namesByIds`) rather than N per-row queries.
    */
   async listTrash(viewer: TenantContext): Promise<CandidateTrashDTO> {
-    const rows = await candidateRepository.listDeleted(TRASH_PAGE);
+    const rows = await candidateRepository.listDeleted(viewer, TRASH_PAGE);
     const clientNames = await cachedClientNameMap();
     const actorIds = rows.map((r) => r.deletedById).filter((id): id is string => id !== null);
     const actorNames = await userRepository.namesByIds(actorIds);
@@ -592,7 +592,7 @@ export const candidateService = {
    * documents/notes/history/outreach, all unused here.
    */
   async getProfile(id: string, viewer: TenantContext): Promise<CandidateProfileDTO> {
-    const candidate = await candidateRepository.findById(id);
+    const candidate = await candidateRepository.findById(viewer, id);
     if (!candidate) throw new AppError("NOT_FOUND", "Candidate not found");
     return toCandidateProfileDTO(toCandidateDTO(candidate, viewer));
   },
@@ -614,13 +614,13 @@ export const candidateService = {
     // already-known `id` — so all 7 fire in one round trip instead of findById-then-the-rest.
     const [candidate, documents, notes, history, clientNames, rulesRows, outreachRows] =
       await Promise.all([
-        candidateRepository.findById(id),
-        documentRepository.listByCandidate(id),
-        noteRepository.listByCandidate(id),
-        stageHistoryRepository.listByCandidate(id),
+        candidateRepository.findById(viewer, id),
+        documentRepository.listByCandidate(viewer, id),
+        noteRepository.listByCandidate(viewer, id),
+        stageHistoryRepository.listByCandidate(viewer, id),
         cachedClientNameMap(),
         cachedClientRulesList(),
-        outreachRepository.listForCandidate(id),
+        outreachRepository.listForCandidate(viewer, id),
       ]);
     if (!candidate) throw new AppError("NOT_FOUND", "Candidate not found");
     // Attempt actors → display names in ONE batched read (mirrors the lead detail; no N+1).
@@ -670,14 +670,14 @@ export const candidateService = {
    * in one batched read. `spanDays` = first→last event, for the "N events · spans N days" line.
    */
   async getJourney(id: string, viewer: TenantContext): Promise<JourneyDTO> {
-    const candidate = await candidateRepository.findById(id);
+    const candidate = await candidateRepository.findById(viewer, id);
     if (!candidate) throw new AppError("NOT_FOUND", "Candidate not found");
 
     const [history, notes, outreachRows, lead, clientNames] = await Promise.all([
-      stageHistoryRepository.listByCandidate(id),
-      noteRepository.listByCandidate(id),
-      outreachRepository.listForCandidate(id),
-      leadRepository.findByPromotedCandidateId(id),
+      stageHistoryRepository.listByCandidate(viewer, id),
+      noteRepository.listByCandidate(viewer, id),
+      outreachRepository.listForCandidate(viewer, id),
+      leadRepository.findByPromotedCandidateId(viewer, id),
       cachedClientNameMap(),
     ]);
     const actorIds = [
@@ -770,10 +770,11 @@ export const candidateService = {
     input: LogOutreachInput,
     ctx: TenantContext,
   ): Promise<OutreachAttemptDTO> {
-    const existing = await candidateRepository.findById(id);
+    const existing = await candidateRepository.findById(ctx, id);
     if (!existing) throw new AppError("NOT_FOUND", "Candidate not found");
-    const attempt = await withTransaction(async (tx) => {
+    const attempt = await withTenantTransaction(ctx, async (tx) => {
       const created = await outreachRepository.createForCandidate(
+        ctx,
         id,
         {
           channel: input.channel,
@@ -783,7 +784,7 @@ export const candidateService = {
         },
         tx,
       );
-      await candidateRepository.incrementOutreach(id, tx);
+      await candidateRepository.incrementOutreach(ctx, id, tx);
       await writeAudit(tx, {
         entity: "candidate",
         entityId: id,
@@ -807,11 +808,12 @@ export const candidateService = {
    * + audit run in one transaction.
    */
   async verifyLicense(id: string, input: VerifyLicenseInput, ctx: TenantContext) {
-    const existing = await candidateRepository.findById(id);
+    const existing = await candidateRepository.findById(ctx, id);
     if (!existing) throw new AppError("NOT_FOUND", "Candidate not found");
     const now = new Date();
-    return withTransaction(async (tx) => {
+    return withTenantTransaction(ctx, async (tx) => {
       const updated = await candidateRepository.update(
+        ctx,
         id,
         {
           licenseStatus: input.licenseStatus,
@@ -884,8 +886,8 @@ export const candidateService = {
       const optimisticSkip = (Math.min(requestedPage, MAX_OPTIMISTIC_PAGE) - 1) * LIST_PAGE;
       const [[clientNames, rulesRows], total, optimisticRows] = await Promise.all([
         namesAndRules,
-        candidateRepository.count({ ...repoFilters, now }),
-        candidateRepository.listCards({
+        candidateRepository.count(viewer, { ...repoFilters, now }),
+        candidateRepository.listCards(viewer, {
           ...repoFilters,
           orderBy: baseOrder,
           skip: optimisticSkip,
@@ -898,7 +900,7 @@ export const candidateService = {
       const rows =
         meta.page === requestedPage
           ? optimisticRows
-          : await candidateRepository.listCards({
+          : await candidateRepository.listCards(viewer, {
               ...repoFilters,
               orderBy: baseOrder,
               skip: (meta.page - 1) * LIST_PAGE,
@@ -921,7 +923,7 @@ export const candidateService = {
     // name/rules lookup doesn't depend on the rows either, so it runs alongside them too.
     const [[clientNames, rulesRows], allRows] = await Promise.all([
       namesAndRules,
-      candidateRepository.listCards({ ...repoFilters, orderBy: baseOrder, now }),
+      candidateRepository.listCards(viewer, { ...repoFilters, orderBy: baseOrder, now }),
     ]);
     const rulesByClient = buildRulesMap(clientNames, rulesRows);
     let scored = allRows.map((row) => ({ row, score: scoreFor(row, rulesByClient, now) }));
@@ -1007,15 +1009,15 @@ export const candidateService = {
     // only its column query actually runs (the rest resolve to empty), per the design.
     const [grouped, overdueCount, stuckCount, clientNames, rulesRows, columnRows, terminalRows] =
       await Promise.all([
-        candidateRepository.groupByStatusFiltered(shared),
-        candidateRepository.count({ ...shared, overdue: true }),
-        candidateRepository.count({ ...shared, stuck: true }),
+        candidateRepository.groupByStatusFiltered(viewer, shared),
+        candidateRepository.count(viewer, { ...shared, overdue: true }),
+        candidateRepository.count(viewer, { ...shared, stuck: true }),
         cachedClientNameMap(),
         cachedClientRulesList(),
         Promise.all(
           ACTIVE_STATUS_CODES.map((status) =>
             !focus || focus === status
-              ? candidateRepository.listCards({
+              ? candidateRepository.listCards(viewer, {
                   ...shared,
                   status,
                   orderBy: "createdAt_desc",
@@ -1027,7 +1029,7 @@ export const candidateService = {
         Promise.all(
           TERMINAL_STATUS_CODES.map((status) =>
             opts.includeTerminal
-              ? candidateRepository.listCards({
+              ? candidateRepository.listCards(viewer, {
                   ...shared,
                   status,
                   orderBy: "createdAt_desc",
@@ -1105,7 +1107,7 @@ export const candidateService = {
     const now = new Date();
     const shared = { ...toRepoFilters(filters, viewer), now };
     const [rows, clientNames, rulesRows] = await Promise.all([
-      candidateRepository.listCards({
+      candidateRepository.listCards(viewer, {
         ...shared,
         status,
         orderBy: "createdAt_desc",
@@ -1182,7 +1184,7 @@ export const candidateService = {
     if (!isCandidateStatus(toStatus)) {
       throw new AppError("BAD_REQUEST", `Unknown pipeline status: ${toStatus}`);
     }
-    const existing = await candidateRepository.findById(id);
+    const existing = await candidateRepository.findById(ctx, id);
     if (!existing) throw new AppError("NOT_FOUND", "Candidate not found");
 
     const now = clock.now();
@@ -1195,13 +1197,15 @@ export const candidateService = {
     // placedAt is set once, the first time the candidate reaches "Started (Day 1)".
     const placedAt = toStatus === "STARTED_DAY1" ? (existing.placedAt ?? now) : existing.placedAt;
 
-    return withTransaction(async (tx) => {
+    return withTenantTransaction(ctx, async (tx) => {
       const updated = await candidateRepository.update(
+        ctx,
         id,
         { status: toStatus, stageOrder: toStageOrder, stageEnteredAt: now, placedAt },
         tx,
       );
       await stageHistoryRepository.add(
+        ctx,
         {
           candidateId: id,
           fromStatus: existing.status,

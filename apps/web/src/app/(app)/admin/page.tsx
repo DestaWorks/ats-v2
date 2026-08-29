@@ -37,10 +37,10 @@ export default async function AdminPage() {
     canConfigurePortal ? portalAccessRequestService.list() : Promise.resolve([]),
     canConfigurePortal ? cachedClientList() : Promise.resolve([]),
     canManageAi
-      ? aiOpsService.getSettings()
+      ? aiOpsService.getSettings(user)
       : Promise.resolve({ disabled: false, disabledReason: null }),
     canManageAi
-      ? aiOpsService.getUsageOverview()
+      ? aiOpsService.getUsageOverview(user)
       : Promise.resolve({
           windowHours: 24,
           totalCalls: 0,

@@ -30,7 +30,7 @@ import type {
 import { toIso } from "@destaworks/domain/utils/iso";
 import type { TenantContext } from "@destaworks/domain/tenant";
 import { writeAudit } from "@destaworks/db/audit";
-import { withTransaction } from "@destaworks/db/with-transaction";
+import { withTenantTransaction } from "@destaworks/db/with-transaction";
 import {
   dailyRepository,
   type DailyLogRow,
@@ -113,12 +113,17 @@ function toFeedbackDTO(row: ManagerFeedbackRow): ManagerFeedbackDTO {
  */
 export const dailyService = {
   /** Event-derived counts for one user-local day (legacy `liveActuals`; inbound/screens have none). */
-  async liveActuals(userId: string, date: string, tz: number): Promise<LiveActualsDTO> {
+  async liveActuals(
+    userId: string,
+    date: string,
+    tz: number,
+    ctx: TenantContext,
+  ): Promise<LiveActualsDTO> {
     const w = dayWindow(date, tz);
     const [sourcing, outreach, atsCleanup] = await Promise.all([
-      dailyRepository.countLeadsSourced(userId, w),
-      dailyRepository.countOutreach(userId, w),
-      dailyRepository.countCleanup(userId, w),
+      dailyRepository.countLeadsSourced(ctx, userId, w),
+      dailyRepository.countOutreach(ctx, userId, w),
+      dailyRepository.countCleanup(ctx, userId, w),
     ]);
     return { sourcing, outreach, atsCleanup };
   },
@@ -134,13 +139,15 @@ export const dailyService = {
     const canSetTargets = hasCapability(ctx.role, SET_TARGETS_CAP);
     const monday = mondayOf(date);
     const [target, live, actual, clients, users, targetsToday, weekLogs] = await Promise.all([
-      dailyRepository.targetFor(ctx.user.id, date),
-      this.liveActuals(ctx.user.id, date, tz),
-      dailyRepository.actualFor(ctx.user.id, date),
-      clientRepository.list(),
+      dailyRepository.targetFor(ctx, ctx.user.id, date),
+      this.liveActuals(ctx.user.id, date, tz, ctx),
+      dailyRepository.actualFor(ctx, ctx.user.id, date),
+      clientRepository.list(ctx),
       canSetTargets ? userRepository.listByRole("Associate") : Promise.resolve(undefined),
-      canSetTargets ? dailyRepository.targetsForDate(date) : Promise.resolve(undefined),
-      canSetTargets ? dailyRepository.logsForDateRange(monday, date) : Promise.resolve(undefined),
+      canSetTargets ? dailyRepository.targetsForDate(ctx, date) : Promise.resolve(undefined),
+      canSetTargets
+        ? dailyRepository.logsForDateRange(ctx, monday, date)
+        : Promise.resolve(undefined),
     ]);
     const clientNames = new Map(clients.map((c) => [c.id, c.name]));
     const userNames = target
@@ -188,8 +195,9 @@ export const dailyService = {
     }
     const names = await userRepository.namesByIds([input.userId]);
     if (!names.has(input.userId)) throw new AppError("NOT_FOUND", "User not found");
-    await withTransaction(async (tx) => {
+    await withTenantTransaction(ctx, async (tx) => {
       const row = await dailyRepository.upsertTarget(
+        ctx,
         {
           userId: input.userId,
           date: input.date,
@@ -219,8 +227,9 @@ export const dailyService = {
 
   /** End of Shift — upsert the SESSION user's confirmed actuals for the day (audited). */
   async saveActuals(input: SaveActualsInput, ctx: TenantContext): Promise<void> {
-    await withTransaction(async (tx) => {
+    await withTenantTransaction(ctx, async (tx) => {
       const row = await dailyRepository.upsertActual(
+        ctx,
         {
           userId: ctx.user.id,
           date: input.date,
@@ -246,14 +255,14 @@ export const dailyService = {
   },
 
   /** "Since you closed" recap — counts + a few names, from DOMAIN tables (never gated audit). */
-  async recap(since: Date): Promise<RecapDTO> {
+  async recap(since: Date, ctx: TenantContext): Promise<RecapDTO> {
     const [added, moves, outreach, addedCount, movesCount, outreachCount] = await Promise.all([
-      dailyRepository.candidatesAddedSince(since),
-      dailyRepository.stageMovesSince(since),
-      dailyRepository.outreachSince(since),
-      dailyRepository.countCandidatesAddedSince(since),
-      dailyRepository.countStageMovesSince(since),
-      dailyRepository.countOutreachSince(since),
+      dailyRepository.candidatesAddedSince(ctx, since),
+      dailyRepository.stageMovesSince(ctx, since),
+      dailyRepository.outreachSince(ctx, since),
+      dailyRepository.countCandidatesAddedSince(ctx, since),
+      dailyRepository.countStageMovesSince(ctx, since),
+      dailyRepository.countOutreachSince(ctx, since),
     ]);
     const actorNames = await userRepository.namesByIds(outreach.map((o) => o.actorId));
     const distinctActors = [...new Set(outreach.map((o) => actorNames.get(o.actorId) ?? "—"))];
@@ -285,17 +294,17 @@ export const dailyService = {
       feedback,
       goals,
     ] = await Promise.all([
-      dailyRepository.logFor(ctx.user.id, date),
-      dailyRepository.countCandidatesAdded(ctx.user.id, w),
-      dailyRepository.countAuditAction(ctx.user.id, "move", w),
-      dailyRepository.countAuditAction(ctx.user.id, "add_note", w),
-      dailyRepository.countAuditAction(ctx.user.id, "verify_license", w),
-      dailyRepository.logsForUser(ctx.user.id, 15),
-      dailyRepository.entriesForUser(ctx.user.id, 20),
+      dailyRepository.logFor(ctx, ctx.user.id, date),
+      dailyRepository.countCandidatesAdded(ctx, ctx.user.id, w),
+      dailyRepository.countAuditAction(ctx, ctx.user.id, "move", w),
+      dailyRepository.countAuditAction(ctx, ctx.user.id, "add_note", w),
+      dailyRepository.countAuditAction(ctx, ctx.user.id, "verify_license", w),
+      dailyRepository.logsForUser(ctx, ctx.user.id, 15),
+      dailyRepository.entriesForUser(ctx, ctx.user.id, 20),
       userRepository.findTenureBasis(ctx.user.id),
-      clientRepository.list(),
-      dailyRepository.feedbackForUser(ctx.user.id, 2),
-      dailyRepository.goalsForWeek(ctx.user.id, mondayOf(date)),
+      clientRepository.list(ctx),
+      dailyRepository.feedbackForUser(ctx, ctx.user.id, 2),
+      dailyRepository.goalsForWeek(ctx, ctx.user.id, mondayOf(date)),
     ]);
     const weekNum = tenureWeek(userRow?.createdAt ?? clock.now(), date);
     const ramp = rampFor(weekNum);
@@ -336,18 +345,19 @@ export const dailyService = {
 
   /** Submit the day's self-report (ONE per user/day — a resubmit is a 409; autos snapshot here). */
   async submitLog(input: SubmitLogInput, ctx: TenantContext): Promise<DailyLogDTO> {
-    const existing = await dailyRepository.logFor(ctx.user.id, input.date);
+    const existing = await dailyRepository.logFor(ctx, ctx.user.id, input.date);
     if (existing) throw new AppError("CONFLICT", "Today's log is already submitted");
     const w = dayWindow(input.date, input.tz);
     const [added, moved, notes] = await Promise.all([
-      dailyRepository.countCandidatesAdded(ctx.user.id, w),
-      dailyRepository.countAuditAction(ctx.user.id, "move", w),
-      dailyRepository.countAuditAction(ctx.user.id, "add_note", w),
+      dailyRepository.countCandidatesAdded(ctx, ctx.user.id, w),
+      dailyRepository.countAuditAction(ctx, ctx.user.id, "move", w),
+      dailyRepository.countAuditAction(ctx, ctx.user.id, "add_note", w),
     ]);
     let row;
     try {
-      row = await withTransaction(async (tx) => {
+      row = await withTenantTransaction(ctx, async (tx) => {
         const created = await dailyRepository.createLog(
+          ctx,
           {
             userId: ctx.user.id,
             date: input.date,
@@ -391,8 +401,12 @@ export const dailyService = {
 
   /** Add a journal note (personal; audited lightly). */
   async addEntry(date: string, text: string, ctx: TenantContext): Promise<JournalEntryDTO> {
-    const row = await withTransaction(async (tx) => {
-      const created = await dailyRepository.createEntry({ userId: ctx.user.id, date, text }, tx);
+    const row = await withTenantTransaction(ctx, async (tx) => {
+      const created = await dailyRepository.createEntry(
+        ctx,
+        { userId: ctx.user.id, date, text },
+        tx,
+      );
       await writeAudit(tx, {
         entity: "journal",
         entityId: created.id,
@@ -408,8 +422,9 @@ export const dailyService = {
   /** Add a weekly goal (weekStart is normalized to the Monday of its week). */
   async addGoal(weekStart: string, text: string, ctx: TenantContext): Promise<JournalGoalDTO> {
     const monday = mondayOf(weekStart);
-    const row = await withTransaction(async (tx) => {
+    const row = await withTenantTransaction(ctx, async (tx) => {
       const created = await dailyRepository.createGoal(
+        ctx,
         { userId: ctx.user.id, weekStart: monday, text },
         tx,
       );
@@ -427,7 +442,7 @@ export const dailyService = {
 
   /** Toggle a goal done/undone — a REAL update (the legacy append-duplicate bug stops here). */
   async setGoalDone(id: string, done: boolean, ctx: TenantContext): Promise<void> {
-    const count = await dailyRepository.setGoalDone(id, ctx.user.id, done);
+    const count = await dailyRepository.setGoalDone(ctx, id, ctx.user.id, done);
     if (count === 0) throw new AppError("NOT_FOUND", "Goal not found");
   },
 
@@ -441,8 +456,9 @@ export const dailyService = {
     }
     const names = await userRepository.namesByIds([input.userId]);
     if (!names.has(input.userId)) throw new AppError("NOT_FOUND", "User not found");
-    await withTransaction(async (tx) => {
+    await withTenantTransaction(ctx, async (tx) => {
       const row = await dailyRepository.createFeedback(
+        ctx,
         {
           authorId: ctx.user.id,
           authorName: ctx.user.name,
@@ -477,7 +493,7 @@ export const dailyService = {
     // `associates` (Associate-only) is the "send feedback to" picker's option list; those two
     // populations are deliberately different, so this fetches both rather than filtering one.
     const [logs, users, associates] = await Promise.all([
-      dailyRepository.logsForDateRange(monday, weekEnd),
+      dailyRepository.logsForDateRange(ctx, monday, weekEnd),
       cachedUserList(),
       userRepository.listByRole("Associate"),
     ]);

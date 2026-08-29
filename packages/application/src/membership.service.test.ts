@@ -49,6 +49,7 @@ vi.mock("@destaworks/db/repositories/user.repository", () => ({
 vi.mock("@destaworks/db/audit", () => ({ writeAudit: h.writeAudit }));
 vi.mock("@destaworks/db/with-transaction", () => ({
   withTransaction: (fn: (tx: unknown) => unknown) => fn({ tx: true }),
+  withTenantTransaction: (_ctx: unknown, fn: (tx: unknown) => unknown) => fn({ tx: true }),
 }));
 vi.mock("@destaworks/auth/tenant-context", () => ({
   resolveTenantContext: h.resolveTenantContext,

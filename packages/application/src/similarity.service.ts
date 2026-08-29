@@ -57,6 +57,7 @@ export const similarityService = {
       .filter((r) => r.taxonomyDesc === taxonomyOpt.matchDesc);
 
     const sets = await buildDupSets(
+      ctx,
       mapped.map((m) => m.npi),
       mapped.map((m) => m.fullName),
     );

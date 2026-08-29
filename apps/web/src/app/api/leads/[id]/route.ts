@@ -16,9 +16,9 @@ export type DeleteLeadResponse = SoftDeletedResponse;
  * can still inspect them). 401 unauth; 404 missing.
  */
 export const GET = apiHandler<{ params: Promise<{ id: string }> }>(async (_req, ctx) => {
-  await requireUser();
+  const user = await requireUser();
   const { id } = await ctx.params;
-  return json<GetLeadResponse>({ lead: await leadService.detail(id) });
+  return json<GetLeadResponse>({ lead: await leadService.detail(id, user) });
 });
 
 /**

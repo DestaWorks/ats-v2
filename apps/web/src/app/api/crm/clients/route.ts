@@ -17,8 +17,8 @@ export type PostCrmClientResponse = Contract.PostCrmClientResponse;
  * (`index.html:1415`) and contact mutations to leadership/BD server-side (`Code.gs:151`).
  */
 export const GET = apiHandler(async () => {
-  await requireCapability("viewCrm");
-  return json<GetCrmClientsResponse>(await clientService.list());
+  const user = await requireCapability("viewCrm");
+  return json<GetCrmClientsResponse>(await clientService.list(user));
 });
 
 export const POST = apiHandler(async (req: Request) => {

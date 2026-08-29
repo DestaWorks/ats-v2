@@ -12,7 +12,7 @@ import {
 import { parseResume } from "@destaworks/integrations/ai/parse-resume";
 import type { TenantContext } from "@destaworks/domain/tenant";
 import { writeAudit } from "@destaworks/db/audit";
-import { withTransaction } from "@destaworks/db/with-transaction";
+import { withTenantTransaction } from "@destaworks/db/with-transaction";
 import { candidateRepository } from "@destaworks/db/repositories/candidate.repository";
 import { documentRepository } from "@destaworks/db/repositories/document.repository";
 import { AppError } from "@destaworks/integrations/http/app-error";
@@ -95,7 +95,7 @@ export const resumeService = {
     const data = resumeSchemaFor(input.variant).parse(input.data);
 
     // Recompute the match server-side; resolve the attach target.
-    const candidates = await candidateRepository.listForMatch();
+    const candidates = await candidateRepository.listForMatch(ctx);
     const match = matchResumeToCandidate(data, candidates);
 
     let candidateId: string | null = null;
@@ -111,14 +111,14 @@ export const resumeService = {
 
     const mapped = toCandidateCreateInput(input.variant, data);
 
-    return withTransaction(async (tx) => {
+    return withTenantTransaction(ctx, async (tx) => {
       let candidate;
       let action: "attach" | "create";
 
       if (!candidateId && match.status === "none") {
         const lockKey = `resume-create:${normalizeName(data.name)}:${data.email ? normalizeEmail(data.email) : ""}`;
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
-        const freshCandidates = await candidateRepository.listForMatch(false, tx);
+        const freshCandidates = await candidateRepository.listForMatch(ctx, false, tx);
         const freshMatch = matchResumeToCandidate(data, freshCandidates);
         if (freshMatch.status !== "none") {
           candidateId = freshMatch.candidateId;
@@ -126,7 +126,7 @@ export const resumeService = {
       }
 
       if (candidateId) {
-        const existing = await candidateRepository.findById(candidateId, undefined, tx);
+        const existing = await candidateRepository.findById(ctx, candidateId, undefined, tx);
         if (!existing) throw new AppError("NOT_FOUND", "Candidate not found");
         // OQ-2: attach the document + fill only empty candidate fields (no destructive overwrite).
         const fills = fillEmptyFields(
@@ -135,12 +135,13 @@ export const resumeService = {
         );
         candidate =
           Object.keys(fills).length > 0
-            ? await candidateRepository.update(existing.id, fills, tx)
+            ? await candidateRepository.update(ctx, existing.id, fills, tx)
             : existing;
         action = "attach";
       } else {
         // New candidates always start at stage 0 (create never sets a status — same as the service).
         candidate = await candidateRepository.create(
+          ctx,
           {
             ...mapped,
             status: "NEW_CANDIDATE",
@@ -153,6 +154,7 @@ export const resumeService = {
       }
 
       const document = await documentRepository.create(
+        ctx,
         {
           candidateId: candidate.id,
           type: "resume",
@@ -191,11 +193,12 @@ export const resumeService = {
     input: UploadCandidateResumeInput,
     ctx: TenantContext,
   ) {
-    const candidate = await candidateRepository.findById(candidateId);
+    const candidate = await candidateRepository.findById(ctx, candidateId);
     if (!candidate) throw new AppError("NOT_FOUND", "Candidate not found");
 
-    return withTransaction(async (tx) => {
+    return withTenantTransaction(ctx, async (tx) => {
       const document = await documentRepository.create(
+        ctx,
         {
           candidateId,
           type: "resume",

@@ -5,7 +5,7 @@ import type { TenantContext } from "@destaworks/domain/tenant";
  * Proves saved-view ownership isolation (a user can only ever list/delete their own rows — the
  * repository is always called with `user.id`, never a client-suppliable value) and the
  * create/duplicate-name round-trip — all WITHOUT a DB. `savedViewRepository`, `writeAudit`, and
- * `withTransaction` are mocked.
+ * `withTenantTransaction` are mocked.
  */
 
 const h = vi.hoisted(() => ({
@@ -37,7 +37,7 @@ vi.mock("@destaworks/db/repositories/saved-view.repository", () => ({
 }));
 vi.mock("@destaworks/db/audit", () => ({ writeAudit: h.writeAudit }));
 vi.mock("@destaworks/db/with-transaction", () => ({
-  withTransaction: (fn: (tx: unknown) => unknown) => fn(h.fakeTx),
+  withTenantTransaction: (_ctx: unknown, fn: (tx: unknown) => unknown) => fn(h.fakeTx),
 }));
 
 import { savedViewService } from "./saved-view.service";
@@ -66,11 +66,11 @@ describe("savedViewService.list — ownership isolation", () => {
   it("always queries by the CALLER's id, never a client-suppliable value", async () => {
     h.repo.listByUser.mockResolvedValue([view()]);
     await savedViewService.list("pipeline", associate);
-    expect(h.repo.listByUser).toHaveBeenCalledWith("u1", "pipeline");
+    expect(h.repo.listByUser).toHaveBeenCalledWith(associate, "u1", "pipeline");
 
     h.repo.listByUser.mockClear();
     await savedViewService.list("pipeline", other);
-    expect(h.repo.listByUser).toHaveBeenCalledWith("u2", "pipeline");
+    expect(h.repo.listByUser).toHaveBeenCalledWith(other, "u2", "pipeline");
   });
 });
 
@@ -80,7 +80,7 @@ describe("savedViewService.remove — ownership isolation", () => {
     await expect(savedViewService.remove("v1", other)).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
-    expect(h.repo.deleteOwned).toHaveBeenCalledWith("v1", "u2", h.fakeTx);
+    expect(h.repo.deleteOwned).toHaveBeenCalledWith(other, "v1", "u2", h.fakeTx);
     expect(h.writeAudit).not.toHaveBeenCalled();
   });
 
@@ -88,7 +88,7 @@ describe("savedViewService.remove — ownership isolation", () => {
     h.repo.deleteOwned.mockResolvedValue({ count: 1 });
     const result = await savedViewService.remove("v1", associate);
     expect(result).toEqual({ id: "v1" });
-    expect(h.repo.deleteOwned).toHaveBeenCalledWith("v1", "u1", h.fakeTx);
+    expect(h.repo.deleteOwned).toHaveBeenCalledWith(associate, "v1", "u1", h.fakeTx);
     expect(h.writeAudit).toHaveBeenCalledWith(
       h.fakeTx,
       expect.objectContaining({ entity: "saved_view", entityId: "v1", action: "delete" }),
@@ -105,6 +105,7 @@ describe("savedViewService.create", () => {
       associate,
     );
     expect(h.repo.create).toHaveBeenCalledWith(
+      associate,
       { userId: "u1", scope: "pipeline", name: "My hot leads", query: "mine=1" },
       h.fakeTx,
     );

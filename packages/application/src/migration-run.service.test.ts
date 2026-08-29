@@ -112,9 +112,9 @@ describe("start", () => {
 
     expect(accepted).toEqual({ runId: "run-1", jobId: "job-1", status: "queued" });
     expect(enqueue).toHaveBeenCalledWith("run-1");
-    expect(h.runRepo.setJobId).toHaveBeenCalledWith("run-1", "job-1");
+    expect(h.runRepo.setJobId).toHaveBeenCalledWith(owner, "run-1", "job-1");
     // The staged row carries the content and the same checksum the ETL will recompute.
-    const [staged] = h.runRepo.create.mock.calls[0]!;
+    const [, staged] = h.runRepo.create.mock.calls[0]!;
     expect(staged).toMatchObject({ content: CONTENT, format: "csv", startedById: "u1" });
     expect(String((staged as { checksum: string }).checksum)).toHaveLength(64);
   });
