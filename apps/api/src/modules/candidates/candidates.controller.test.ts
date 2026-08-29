@@ -27,6 +27,8 @@ const h = vi.hoisted(() => ({
     bulkMove: vi.fn(),
     create: vi.fn(),
     getProfile: vi.fn(),
+    listTrash: vi.fn(),
+    dashboardStats: vi.fn(),
     update: vi.fn(),
     softDelete: vi.fn(),
     getJourney: vi.fn(),
@@ -295,6 +297,73 @@ describe("candidate reads", () => {
     const res = await api.request("/candidates/c1/notes");
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ notes: [{ id: "n1", body: "hi" }] });
+  });
+});
+
+describe("GET /candidates/trash", () => {
+  const TRASH = {
+    items: [
+      {
+        id: "c1",
+        name: "Jane Doe",
+        credential: "PMHNP",
+        clientName: null,
+        status: "NEW_CANDIDATE",
+        statusLabel: "0 - New Candidate",
+        deletedAt: "2026-01-02T00:00:00.000Z",
+        deletedByName: "Test User",
+      },
+    ],
+  };
+
+  it("answers the soft-deleted list to any signed-in operator", async () => {
+    signInAs("Associate");
+    h.candidate.listTrash.mockResolvedValue(TRASH);
+    const res = await api.request("/candidates/trash");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(TRASH);
+    expect(h.candidate.listTrash.mock.calls[0]?.[0]).toMatchObject({ user: { id: "u1" } });
+  });
+
+  it("is matched before the `:id` route", async () => {
+    h.candidate.listTrash.mockResolvedValue({ items: [] });
+    await api.request("/candidates/trash");
+    expect(h.candidate.getProfile).not.toHaveBeenCalled();
+  });
+
+  it("refuses a signed-out caller with 401 and reads nothing", async () => {
+    h.session = null;
+    const res = await api.request("/candidates/trash");
+    expect(res.status).toBe(401);
+    expect(((await res.json()) as ErrorEnvelope).error.code).toBe("UNAUTHORIZED");
+    expect(h.candidate.listTrash).not.toHaveBeenCalled();
+  });
+});
+
+describe("GET /candidates/dashboard-stats", () => {
+  const STATS = { total: 3, active: 2, terminal: 1, columns: [], attention: [] };
+
+  it("answers the summary to any signed-in operator", async () => {
+    signInAs("Associate");
+    h.candidate.dashboardStats.mockResolvedValue(STATS);
+    const res = await api.request("/candidates/dashboard-stats");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(STATS);
+    expect(h.candidate.dashboardStats.mock.calls[0]?.[0]).toMatchObject({ user: { id: "u1" } });
+  });
+
+  it("is matched before the `:id` route", async () => {
+    h.candidate.dashboardStats.mockResolvedValue(STATS);
+    await api.request("/candidates/dashboard-stats");
+    expect(h.candidate.getProfile).not.toHaveBeenCalled();
+  });
+
+  it("refuses a signed-out caller with 401 and reads nothing", async () => {
+    h.session = null;
+    const res = await api.request("/candidates/dashboard-stats");
+    expect(res.status).toBe(401);
+    expect(((await res.json()) as ErrorEnvelope).error.code).toBe("UNAUTHORIZED");
+    expect(h.candidate.dashboardStats).not.toHaveBeenCalled();
   });
 });
 

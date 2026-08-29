@@ -1,6 +1,7 @@
 import { Controller, Get, Inject, Param, Query, UseGuards } from "@nestjs/common";
 import {
   activityQuerySchema,
+  type ActivityActorOptionsDTO,
   type ActivityDetailDTO,
   type ActivityListDTO,
 } from "@destaworks/contracts/validation/activity";
@@ -42,6 +43,19 @@ export class ActivityController {
   ): Promise<ActivityListDTO> {
     const { cursor, ...filters } = query;
     return await this.audit.listActivity(defined(filters), this.decodePage(cursor));
+  }
+
+  /**
+   * GET /activity/actor-options — the distinct actors the log holds, for the filter picker.
+   * Declared before `:id` so the literal segment wins the match; Nest resolves in declaration order.
+   *
+   * A name is PII, so this carries the same `viewAudit` gate as the log itself rather than a
+   * looser one for a dropdown; the service self-gates on it too.
+   */
+  @Get("actor-options")
+  @RequireCapability("viewAudit")
+  async actorOptions(): Promise<ActivityActorOptionsDTO> {
+    return { actors: await this.audit.listActorOptions() };
   }
 
   @Get(":id")

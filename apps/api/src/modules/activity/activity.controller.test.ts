@@ -14,6 +14,7 @@ const h = vi.hoisted(() => ({
   session: null as { user: { id: string; email: string; name: string; role?: string } } | null,
   listActivity: vi.fn(),
   getActivityDetail: vi.fn(),
+  listActorOptions: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
@@ -25,7 +26,11 @@ vi.mock("@destaworks/db/memberships", async () => ({
   ).singleTenantMembershipReader(() => h.session),
 }));
 vi.mock("@destaworks/application/audit.service", () => ({
-  auditService: { listActivity: h.listActivity, getActivityDetail: h.getActivityDetail },
+  auditService: {
+    listActivity: h.listActivity,
+    getActivityDetail: h.getActivityDetail,
+    listActorOptions: h.listActorOptions,
+  },
 }));
 
 import { encodeCursor } from "@destaworks/contracts/validation/cursor";
@@ -52,7 +57,7 @@ const controller = (): ActivityController =>
     listActivity: h.listActivity,
     getActivityDetail: h.getActivityDetail,
     listAuditForEntity: vi.fn(),
-    listActorOptions: vi.fn(),
+    listActorOptions: h.listActorOptions,
   });
 
 function guardWith(role: string | null, handlerName: string): Promise<unknown> {
@@ -76,6 +81,7 @@ beforeEach(() => {
   h.session = null;
   h.listActivity.mockReset();
   h.getActivityDetail.mockReset();
+  h.listActorOptions.mockReset();
 });
 
 describe("the activity routes keep the Next.js verbs, paths and gate", () => {
@@ -96,24 +102,45 @@ describe("the activity routes keep the Next.js verbs, paths and gate", () => {
     });
   });
 
+  it("mounts the actor options under the same viewAudit gate", () => {
+    expect(routeOf(ActivityController, "actorOptions")).toEqual({
+      method: "GET",
+      path: "/activity/actor-options",
+      status: 200,
+      capability: "viewAudit",
+      guards: ["SessionAuthGuard", "CapabilityGuard"],
+    });
+  });
+
   it("injects the audit service by token — never the imported singleton", () => {
     expect(injectedTokens(ActivityController)).toEqual([AUDIT_SERVICE]);
+  });
+
+  // Nest matches in declaration order, so `/activity/actor-options` reaching `detail("actor-options")`
+  // is a source-ordering bug no request-level assertion here would catch.
+  it("declares the literal actor-options route before the `:id` route", () => {
+    const handlers = Object.getOwnPropertyNames(ActivityController.prototype);
+    expect(handlers.indexOf("actorOptions")).toBeLessThan(handlers.indexOf("detail"));
   });
 });
 
 describe("GET /activity — denial", () => {
-  it("401s signed out on both routes", async () => {
+  it("401s signed out on every route", async () => {
     expect(await guardWith(null, "list")).toEqual(UNAUTHORIZED);
     expect(await guardWith(null, "detail")).toEqual(UNAUTHORIZED);
+    expect(await guardWith(null, "actorOptions")).toEqual(UNAUTHORIZED);
     expect(h.listActivity).not.toHaveBeenCalled();
     expect(h.getActivityDetail).not.toHaveBeenCalled();
+    expect(h.listActorOptions).not.toHaveBeenCalled();
   });
 
-  it("403s a role that does not hold viewAudit, on both routes", async () => {
+  it("403s a role that does not hold viewAudit, on every route", async () => {
     expect(await guardWith("Associate", "list")).toEqual(FORBIDDEN);
     expect(await guardWith("Associate", "detail")).toEqual(FORBIDDEN);
+    expect(await guardWith("Associate", "actorOptions")).toEqual(FORBIDDEN);
     expect(h.listActivity).not.toHaveBeenCalled();
     expect(h.getActivityDetail).not.toHaveBeenCalled();
+    expect(h.listActorOptions).not.toHaveBeenCalled();
   });
 
   it("admits a role that does hold viewAudit", async () => {
@@ -153,6 +180,23 @@ describe("GET /activity — the page", () => {
       status: 422,
       body: { error: { code: "BAD_REQUEST", message: "Validation failed" } },
     });
+  });
+});
+
+describe("GET /activity/actor-options", () => {
+  it("wraps the service's name-sorted options in the contract envelope", async () => {
+    const actors = [
+      { id: "u1", name: "Ada Lovelace" },
+      { id: "u2", name: "Grace Hopper" },
+    ];
+    h.listActorOptions.mockResolvedValue(actors);
+    expect(await controller().actorOptions()).toEqual({ actors });
+    expect(h.listActorOptions).toHaveBeenCalledWith();
+  });
+
+  it("answers an empty option list rather than nothing when the log has no actors", async () => {
+    h.listActorOptions.mockResolvedValue([]);
+    expect(await controller().actorOptions()).toEqual({ actors: [] });
   });
 });
 

@@ -65,3 +65,8 @@ export interface ActivityActorOption {
   id: string;
   name: string;
 }
+
+/** The actor filter's options, name-sorted — `GET /activity/actor-options`. */
+export interface ActivityActorOptionsDTO {
+  actors: ActivityActorOption[];
+}
