@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { clientPortalService } from "@destaworks/application/client-portal.service";
 import { portalAccessRequestService } from "@destaworks/application/portal-access-request.service";
 import { provideService } from "../service-token";
+import { PortalDataController } from "./portal-data.controller";
 import { PortalRolesController } from "./portal-roles.controller";
 import { CLIENT_PORTAL_SERVICE, PORTAL_ACCESS_REQUEST_SERVICE } from "./portal.tokens";
 
@@ -14,7 +15,7 @@ export { CLIENT_PORTAL_SERVICE, PORTAL_ACCESS_REQUEST_SERVICE };
  * the same service.
  */
 @Module({
-  controllers: [PortalRolesController],
+  controllers: [PortalDataController, PortalRolesController],
   providers: [
     provideService(CLIENT_PORTAL_SERVICE, clientPortalService),
     provideService(PORTAL_ACCESS_REQUEST_SERVICE, portalAccessRequestService),

@@ -95,6 +95,7 @@ describe("RolesController — declared routes", () => {
       { ...open, route: "POST /roles/:id/promote" },
       { ...open, route: "GET /roles/:id/matches" },
       { ...open, route: "GET /roles/:id/dormant-matches" },
+      { ...open, route: "GET /roles/:id/matches-and-dormant" },
       { ...open, route: "POST /roles/:id/notes", status: 201 },
       { ...open, route: "DELETE /roles/:id/notes/:noteId" },
     ]);
@@ -188,6 +189,34 @@ describe("RolesController — delegation and response envelope", () => {
     });
     expect(matches).toHaveBeenCalledTimes(1);
     expect(dormantMatches).toHaveBeenCalledTimes(1);
+  });
+
+  it("GET /roles/:id/matches-and-dormant answers both lists from ONE service call", async () => {
+    const matchesAndDormant = vi.fn().mockResolvedValue({
+      matches: [{ leadId: "l1" }],
+      dormantMatches: [{ leadId: "l2" }],
+    });
+    const matches = vi.fn();
+    const dormantMatches = vi.fn();
+
+    const response = await controllerWith({
+      matchesAndDormant,
+      matches,
+      dormantMatches,
+    }).matchesAndDormant("role_1", USER);
+
+    expect(response).toEqual({ matches: [{ leadId: "l1" }], dormantMatches: [{ leadId: "l2" }] });
+    expect(matchesAndDormant).toHaveBeenCalledTimes(1);
+    expect(matchesAndDormant).toHaveBeenCalledWith("role_1", USER);
+    // The whole point of the composite: it must not fan back out into the two single-list reads.
+    expect(matches).not.toHaveBeenCalled();
+    expect(dormantMatches).not.toHaveBeenCalled();
+  });
+
+  it("keeps the two single-list endpoints, so a caller wanting one list still gets one", () => {
+    const paths = describeRoutes(RolesController).map((r) => r.route);
+    expect(paths).toContain("GET /roles/:id/matches");
+    expect(paths).toContain("GET /roles/:id/dormant-matches");
   });
 
   it("POST /roles/:id/notes takes the author from the session, never the body", async () => {
