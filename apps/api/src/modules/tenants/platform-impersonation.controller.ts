@@ -19,7 +19,8 @@ import {
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { AuthUser } from "@destaworks/auth/guards";
 import { CurrentTenant } from "../../common/decorators/current-tenant.decorator";
-import { CurrentUser } from "../../common/decorators/current-user.decorator";
+import { CurrentIdentity } from "../../common/decorators/current-identity.decorator";
+import { PlatformAuthGuard } from "../../common/guards/platform-auth.guard";
 import { SessionAuthGuard } from "../../common/guards/session-auth.guard";
 import { TenantGuard } from "../../common/guards/tenant.guard";
 import { ZodValidationPipe, type ContractOutput } from "../../common/pipes/zod-validation.pipe";
@@ -37,7 +38,7 @@ import { PLATFORM_IMPERSONATION_SERVICE } from "./tenants.tokens";
  *
  * The `consent` routes carry `TenantGuard`: a workspace granting or withdrawing its own consent is
  * acting INSIDE itself, and the role that decides whether it may is the membership's, which only
- * `TenantContext` carries. The read route carries `SessionAuthGuard` alone, because a platform
+ * `TenantContext` carries. The read route carries `PlatformAuthGuard`, because a platform
  * admin belongs to no tenant and `TenantGuard` would refuse exactly the person the route is for.
  *
  * ── Why no `@RequireCapability` on any of them ─────────────────────────────────────────────────
@@ -88,10 +89,10 @@ export class PlatformImpersonationController {
    * capability are all read server-side, on this request, from state the caller cannot author.
    */
   @Get(":slug/activity")
-  @UseGuards(SessionAuthGuard)
+  @UseGuards(PlatformAuthGuard)
   async activity(
     @Param("slug") slug: string,
-    @CurrentUser() user: AuthUser,
+    @CurrentIdentity() user: AuthUser,
     @Query("cursor") cursor?: string,
   ): Promise<GetImpersonatedActivityResponse> {
     return this.impersonation.readActivityAsTenant(user, slug, cursor ?? null);

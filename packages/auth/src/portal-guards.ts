@@ -6,6 +6,7 @@ import { requestContext } from "@destaworks/config/request-context";
 import { tenantRepository } from "@destaworks/db/tenancy/membership.repository";
 import { systemContextFor } from "@destaworks/domain/system-context";
 import { readTenantClaim } from "./tenant-claim";
+import { tenantIsUsable } from "./tenant-context";
 
 /**
  * Client Portal auth (Wave 4.3) — completely separate from `server/auth/guards.ts`. Never imports
@@ -47,7 +48,8 @@ async function claimedTenantScope() {
   });
   if (!claim) return null;
   const tenant = await tenantRepository.findBySlug(claim.slug);
-  return tenant ? systemContextFor(tenant.id) : null;
+  if (!tenant || !tenantIsUsable(tenant)) return null;
+  return systemContextFor(tenant.id);
 }
 
 async function resolveByRawToken(

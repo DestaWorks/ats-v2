@@ -52,10 +52,35 @@ export interface AuthContext extends TenantContext {
  * across different users' requests. It now covers the membership lookup too, so resolving a
  * tenant costs one extra query per request rather than one per guard call.
  */
-export const getCurrentUser = cache(async (): Promise<AuthContext | null> => {
+/**
+ * The signed-in identity, with NO tenant resolved.
+ *
+ * Separate from `getCurrentUser` because the platform plane needs exactly this and nothing more:
+ * a platform admin may belong to no tenant at all, so resolving one would refuse the operator the
+ * plane exists for. It grants nothing — an identity reaches no repository and no capability check.
+ */
+export const getSignedInIdentity = cache(async (): Promise<AuthUser | null> => {
   const session = await auth.api.getSession({ headers: await requestContext().headers() });
   if (!session) return null;
   setLogContext({ userId: session.user.id });
+  return {
+    id: session.user.id,
+    email: session.user.email,
+    name: session.user.name,
+    image: session.user.image ?? null,
+  };
+});
+
+/** A signed-in identity, tenant or not (401 otherwise). The platform plane's authentication. */
+export async function requireSignedInIdentity(): Promise<AuthUser> {
+  const identity = await getSignedInIdentity();
+  if (!identity) throw new AppError("UNAUTHORIZED", "Sign in required");
+  return identity;
+}
+
+export const getCurrentUser = cache(async (): Promise<AuthContext | null> => {
+  const identity = await getSignedInIdentity();
+  if (!identity) return null;
   // The claim is read from the request the same way for both stacks (6.5 owns precedence:
   // path > subdomain > cookie). It is only ever a claim — `resolveTenantContext` is what checks it
   // against an active membership, and a claim naming a tenant the user does not belong to resolves
@@ -66,13 +91,6 @@ export const getCurrentUser = cache(async (): Promise<AuthContext | null> => {
     path: headers.get("x-invoke-path") ?? headers.get("x-pathname") ?? undefined,
     cookie: (await requestContext().cookie(TENANT_COOKIE)) ?? undefined,
   });
-
-  const identity: AuthUser = {
-    id: session.user.id,
-    email: session.user.email,
-    name: session.user.name,
-    image: session.user.image ?? null,
-  };
 
   const resolution = await resolveTenantContext(identity, claim);
   if (resolution.outcome !== "resolved") return null;

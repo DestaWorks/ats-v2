@@ -28,10 +28,13 @@ type TokenRow = {
 };
 
 let mockToken: TokenRow | null = null;
+let mockTenant: { id: string; status: string; deletedAt: Date | null } | null = null;
 const touchLastUsed = vi.fn();
 
 vi.mock("@destaworks/db/tenancy/membership.repository", () => ({
-  tenantRepository: { findBySlug: async (slug: string) => (slug === "acme" ? { id: "t1" } : null) },
+  tenantRepository: {
+    findBySlug: async (slug: string) => (slug === "acme" ? mockTenant : null),
+  },
 }));
 
 vi.mock("@destaworks/db/repositories/client-portal-token.repository", () => ({
@@ -72,6 +75,7 @@ function tokenFor(contact: Partial<ContactRow> = {}, token: Partial<TokenRow> = 
 }
 
 beforeEach(() => {
+  mockTenant = { id: "t1", status: "active", deletedAt: null };
   mockToken = null;
   mockCookie = undefined;
   touchLastUsed.mockClear();
@@ -111,6 +115,20 @@ describe("exchangePortalToken", () => {
     expect(await exchangePortalToken("raw-token")).toBeNull();
 
     mockToken = null;
+    expect(await exchangePortalToken("raw-token")).toBeNull();
+  });
+});
+
+describe("a suspended workspace closes the portal too", () => {
+  it("refuses a live token when the tenant is suspended", async () => {
+    mockToken = tokenFor();
+    mockTenant = { id: "t1", status: "suspended", deletedAt: null };
+    expect(await exchangePortalToken("raw-token")).toBeNull();
+  });
+
+  it("refuses a live token when the tenant is soft-deleted", async () => {
+    mockToken = tokenFor();
+    mockTenant = { id: "t1", status: "active", deletedAt: new Date() };
     expect(await exchangePortalToken("raw-token")).toBeNull();
   });
 });

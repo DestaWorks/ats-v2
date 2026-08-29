@@ -31,7 +31,10 @@ type TokenRow = { id: string; revokedAt: Date | null; expiresAt: Date; contact: 
 const h = vi.hoisted(() => ({ token: null as unknown }));
 
 vi.mock("@destaworks/db/tenancy/membership.repository", () => ({
-  tenantRepository: { findBySlug: async (slug: string) => (slug === "acme" ? { id: "t1" } : null) },
+  tenantRepository: {
+    findBySlug: async (slug: string) =>
+      slug === "acme" ? { id: "t1", status: "active", deletedAt: null } : null,
+  },
 }));
 
 vi.mock("@destaworks/db/repositories/client-portal-token.repository", () => ({

@@ -61,7 +61,13 @@ vi.mock("@destaworks/db/memberships", () => ({
 }));
 
 import { installRequestContext } from "@destaworks/config/request-context";
-import { getCurrentUser, requireUser, requireCapability } from "./guards";
+import {
+  getCurrentUser,
+  getSignedInIdentity,
+  requireSignedInIdentity,
+  requireUser,
+  requireCapability,
+} from "./guards";
 import { TENANT_COOKIE as ACTIVE_TENANT_COOKIE } from "@destaworks/domain/constants/tenancy";
 
 installRequestContext({
@@ -110,6 +116,28 @@ describe("auth guards — server-side authorization", () => {
   it("refuses a signed-in user who belongs to no tenant", async () => {
     signInAs("Owner");
     await expect(requireUser()).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+  });
+
+  // The platform plane is off the tenant axis, so belonging to no tenant is its NORMAL case.
+  // Reading identity through the tenant-resolving guard 401'd exactly the operator /platform/*
+  // exists for; these two prove the identity read does not depend on a tenant resolving.
+  it("still reads the identity of a signed-in user who belongs to no tenant", async () => {
+    signInAs("Owner");
+    expect(await getCurrentUser()).toBeNull();
+    expect(await getSignedInIdentity()).toMatchObject({ id: "u1" });
+    await expect(requireSignedInIdentity()).resolves.toMatchObject({ id: "u1" });
+  });
+
+  it("still reads the identity when two memberships make the tenant ambiguous", async () => {
+    signInAs("Owner");
+    memberOf({ tenantId: "tenant-a", role: "Owner" }, { tenantId: "tenant-b", role: "Associate" });
+    expect(await getCurrentUser()).toBeNull();
+    await expect(requireSignedInIdentity()).resolves.toMatchObject({ id: "u1" });
+  });
+
+  it("refuses an identity read with no session at all", async () => {
+    expect(await getSignedInIdentity()).toBeNull();
+    await expect(requireSignedInIdentity()).rejects.toMatchObject({ code: "UNAUTHORIZED" });
   });
 
   it("coerces an unknown/forged membership role to Associate (role is never trusted verbatim)", async () => {

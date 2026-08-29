@@ -206,3 +206,6 @@ jobs:
 
       - name: Build
         run: pnpm exec turbo run //#app:build ${{ env.TURBO_AFFECTED }}
+
+      - name: Build the platform-admin console
+        run: pnpm exec turbo run //#admin:build ${{ env.TURBO_AFFECTED }}

@@ -7,8 +7,8 @@ import {
   type PostPlatformTenantSuspendResponse,
 } from "@destaworks/contracts/validation/tenant";
 import type { AuthUser } from "@destaworks/auth/guards";
-import { CurrentUser } from "../../common/decorators/current-user.decorator";
-import { SessionAuthGuard } from "../../common/guards/session-auth.guard";
+import { CurrentIdentity } from "../../common/decorators/current-identity.decorator";
+import { PlatformAuthGuard } from "../../common/guards/platform-auth.guard";
 import { ZodValidationPipe, type ContractOutput } from "../../common/pipes/zod-validation.pipe";
 import type { ServiceOf } from "../service-token";
 import { PLATFORM_ADMIN_SERVICE } from "./tenants.tokens";
@@ -29,7 +29,7 @@ import { PLATFORM_ADMIN_SERVICE } from "./tenants.tokens";
  * audit row — so an authorized crossing and its record cannot come apart.
  */
 @Controller("platform/tenants")
-@UseGuards(SessionAuthGuard)
+@UseGuards(PlatformAuthGuard)
 export class PlatformTenantsController {
   constructor(
     @Inject(PLATFORM_ADMIN_SERVICE)
@@ -38,7 +38,7 @@ export class PlatformTenantsController {
 
   /** GET /platform/tenants — the tenant registry. Metadata only; no tenant's contents. */
   @Get()
-  async list(@CurrentUser() user: AuthUser): Promise<GetPlatformTenantsResponse> {
+  async list(@CurrentIdentity() user: AuthUser): Promise<GetPlatformTenantsResponse> {
     return this.platform.listTenants(user);
   }
 
@@ -46,7 +46,7 @@ export class PlatformTenantsController {
   @Get(":slug")
   async read(
     @Param("slug") slug: string,
-    @CurrentUser() user: AuthUser,
+    @CurrentIdentity() user: AuthUser,
   ): Promise<GetPlatformTenantResponse> {
     return this.platform.readTenant(user, slug);
   }
@@ -64,7 +64,7 @@ export class PlatformTenantsController {
     @Param("slug") slug: string,
     @Body(new ZodValidationPipe(suspendTenantSchema))
     body: ContractOutput<typeof suspendTenantSchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentIdentity() user: AuthUser,
   ): Promise<PostPlatformTenantSuspendResponse> {
     return this.platform.suspendTenant(user, slug, body);
   }
@@ -74,7 +74,7 @@ export class PlatformTenantsController {
   @Post(":slug/restore")
   async restore(
     @Param("slug") slug: string,
-    @CurrentUser() user: AuthUser,
+    @CurrentIdentity() user: AuthUser,
   ): Promise<PostPlatformTenantRestoreResponse> {
     return this.platform.restoreTenant(user, slug);
   }

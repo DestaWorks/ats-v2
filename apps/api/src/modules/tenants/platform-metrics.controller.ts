@@ -4,8 +4,8 @@ import {
   type GetPlatformMetricsResponse,
 } from "@destaworks/contracts/validation/platform-metrics";
 import type { AuthUser } from "@destaworks/auth/guards";
-import { CurrentUser } from "../../common/decorators/current-user.decorator";
-import { SessionAuthGuard } from "../../common/guards/session-auth.guard";
+import { CurrentIdentity } from "../../common/decorators/current-identity.decorator";
+import { PlatformAuthGuard } from "../../common/guards/platform-auth.guard";
 import { ZodValidationPipe, type ContractOutput } from "../../common/pipes/zod-validation.pipe";
 import type { ServiceOf } from "../service-token";
 import { PLATFORM_METRICS_SERVICE } from "./tenants.tokens";
@@ -32,7 +32,7 @@ import { PLATFORM_METRICS_SERVICE } from "./tenants.tokens";
  * through, and returns what the service composed. It holds no repository and no query.
  */
 @Controller("platform/metrics")
-@UseGuards(SessionAuthGuard)
+@UseGuards(PlatformAuthGuard)
 export class PlatformMetricsController {
   constructor(
     @Inject(PLATFORM_METRICS_SERVICE)
@@ -44,7 +44,7 @@ export class PlatformMetricsController {
   async read(
     @Query(new ZodValidationPipe(platformMetricsQuerySchema))
     query: ContractOutput<typeof platformMetricsQuerySchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentIdentity() user: AuthUser,
   ): Promise<GetPlatformMetricsResponse> {
     return await this.metrics.readMetrics(user, query);
   }
