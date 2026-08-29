@@ -35,6 +35,19 @@ export const accessRequestSchema = z.object({
 });
 export type AccessRequestInput = z.infer<typeof accessRequestSchema>;
 
+/**
+ * Body of `POST /access-requests`. `.strict()` rather than the form schema's default strip: the
+ * workspace is resolved from the request host, so a key naming one must be a 422 and never a value
+ * the endpoint could be tempted to read.
+ */
+export const submitAccessRequestSchema = accessRequestSchema.strict();
+export type SubmitAccessRequestInput = z.infer<typeof submitAccessRequestSchema>;
+
+/** Response body of `POST /access-requests` — acceptance only, never the applicant's details. */
+export interface PostAccessRequestResponse {
+  ok: true;
+}
+
 // Forgot-password (2026-08-02). Better Auth's own `resetPassword` server route enforces the real
 // min/max length (defaults 8/128); this schema is client-side UX only — matches the same 8-char
 // minimum the My Profile "Change Password" form already uses (`profile-view.tsx`).

@@ -1,48 +1,62 @@
 "use server";
 
 import { accessRequestSchema } from "@destaworks/contracts/validation/auth";
-import { AppError } from "@destaworks/integrations/http/app-error";
-import { checkRateLimit } from "@destaworks/integrations/http/rate-limit";
-import { accessRequestService } from "@destaworks/application/access-request.service";
-import { publicTenantService } from "@destaworks/application/public-tenant.service";
+import { AppError, isAppErrorCode } from "@destaworks/integrations/http/app-error";
 import { headers } from "next/headers";
+import { readFailure } from "@/lib/api/client";
+import { apiUrl } from "@/lib/api/server";
 
 /**
- * Server Action: submit an access request. Thin — validates with the shared Zod schema,
- * then delegates to the service (no business logic here).
+ * Server Action: submit an access request. Thin — validates with the shared Zod schema, then hands
+ * the submission to `POST /access-requests` (Phase 4.0 Option A: `apps/web` never reaches the
+ * services in-process).
  *
- * This is PUBLIC (no auth), so it is throttled with a coarse best-effort key before doing any work.
- * The key is a single global bucket (we have no trusted per-caller identity here) — it blunts a
- * flood but is per-instance/in-memory; production should front this with an IP-based limit in a
- * shared store / the platform WAF (see `server/http/rate-limit`).
+ * It posts directly rather than through `apiPost` because this caller is UNAUTHENTICATED: there is
+ * no session to forward, and what does have to travel is the host the visitor opened the form on —
+ * the API resolves and verifies the workspace from it, and refuses an unknown or suspended one.
+ * Rate limiting moved with the endpoint (`RateLimitGuard`, same bucket, limit and window).
  */
 export async function submitAccessRequest(
   raw: unknown,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  try {
-    await checkRateLimit("access-request", { limit: 20, windowMs: 60_000 });
-  } catch (err) {
-    if (err instanceof AppError && err.code === "RATE_LIMITED") {
-      return { ok: false, error: "Too many requests. Please wait a moment and try again." };
-    }
-    throw err;
-  }
   const parsed = accessRequestSchema.safeParse(raw);
   if (!parsed.success) {
     return { ok: false, error: "Please check the form and try again." };
   }
-  try {
-    const scope = await publicTenantService.contextForHost(
-      (await headers()).get("host") ?? undefined,
-    );
-    if (!scope) throw new AppError("NOT_FOUND", "No such workspace");
 
-    await accessRequestService.submit(scope, parsed.data);
-  } catch (err) {
-    if (err instanceof AppError && err.code === "CONFLICT") {
-      return { ok: false, error: err.message };
-    }
-    throw err;
+  const url = apiUrl("/access-requests", process.env.API_URL);
+  if (url === null) {
+    throw new AppError("INTERNAL", "The API address is not configured (API_URL).");
   }
-  return { ok: true };
+
+  const host = (await headers()).get("host");
+
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      cache: "no-store",
+      headers: {
+        accept: "application/json",
+        "content-type": "application/json",
+        ...(host !== null && { "x-forwarded-host": host }),
+      },
+      body: JSON.stringify(parsed.data),
+    });
+  } catch {
+    throw new AppError("UPSTREAM_ERROR", "Couldn't reach the API.", 502);
+  }
+
+  if (res.ok) return { ok: true };
+
+  const failure = await readFailure(res);
+  if (failure.code === "RATE_LIMITED") {
+    return { ok: false, error: "Too many requests. Please wait a moment and try again." };
+  }
+  if (failure.code === "CONFLICT") return { ok: false, error: failure.message };
+  throw new AppError(
+    isAppErrorCode(failure.code) ? failure.code : "INTERNAL",
+    failure.message,
+    res.status,
+  );
 }

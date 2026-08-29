@@ -2,6 +2,7 @@ import { membershipService } from "@destaworks/application/membership.service";
 import { platformAdminService } from "@destaworks/application/platform-admin.service";
 import { platformImpersonationService } from "@destaworks/application/platform-impersonation.service";
 import { platformMetricsService } from "@destaworks/application/platform-metrics.service";
+import { publicTenantService } from "@destaworks/application/public-tenant.service";
 import { serviceToken } from "../service-token";
 
 /**
@@ -22,3 +23,11 @@ export const PLATFORM_IMPERSONATION_SERVICE = serviceToken<typeof platformImpers
 export const PLATFORM_METRICS_SERVICE = serviceToken<typeof platformMetricsService>(
   "PLATFORM_METRICS_SERVICE",
 );
+
+/**
+ * Resolving a workspace for an UNAUTHENTICATED caller, from the host their browser used. Its own
+ * token because it grants nothing: it verifies a workspace exists and is usable and hands back a
+ * scoping-only context, which is all a public endpoint may ever be given.
+ */
+export const PUBLIC_TENANT_SERVICE =
+  serviceToken<typeof publicTenantService>("PUBLIC_TENANT_SERVICE");
