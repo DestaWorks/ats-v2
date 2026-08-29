@@ -1309,11 +1309,42 @@ a brief for the same day. They belong in 6.2's re-keying as `@@unique([tenantId,
 **Phase 6 done-when:** two tenants coexist on staging with isolation proven by the suite and by RLS
 independently. **NOT met, and two distinct things stand in the way.**
 
-**Written, not yet enforced.** Every sub-phase's code is in and green — 2,451 tests, the seam, the
-guards, RLS, the isolation suite — but **222 escape-hatch uses across 80 files** remain. Services
-carry a `TenantContext` and still reach repositories through the compile-time bridge, which runs
-unscoped. Until that count is zero and the bridge is deleted, a query *can* skip the tenant filter;
-`pnpm tenant:check` ratchets it and fails if it rises. This is the phase's real remaining work.
+**Written, not yet enforced — 222 → 111 escape hatches.** 282 repository call sites now pass a
+context and 79 transactions announce their tenant. The remaining 111 are NOT more of the same
+sweep, and the bridge cannot simply be deleted: four structural blockers stand behind them, each
+needing a decision rather than an edit.
+
+1. **181 call sites have no context in scope.** 6.4's claim that every service holds one is not
+   true. `admin-user.service.ts` is the clearest case — it touches no repository at all, only
+   Better Auth plus six `writeAudit` calls, and every public method takes `actorId: string`.
+   Threading it changes a public signature used by another service, six web routes and a
+   controller.
+2. **A portal contact is not a member.** `PortalContext` carries no tenant, and the client portal's
+   public surface (`data`, `postRole`, `logView`) has no `TenantContext` to pass.
+   `domain/tenant.ts` already anticipates widening the viewer type; the widening is not built.
+3. **`reports/*` is blocked on the background export job.** Every report reaches data through
+   `loadCohort`, which reaches `exportService.candidatesCsv`, which runs in the export job whose
+   payload is `{exportId, filters}` — no tenant, and it cannot read one off its own row because
+   that read needs a context. Threading reports without solving this half-threads four files.
+4. **`packages/integrations/src/http/request-cache.ts`** — flagged independently by all three
+   workstreams. `cachedClientList` / `cachedClientRulesList` / `cachedUserList` read tenant-scoped
+   tables unscoped on nearly every render path. They are React `cache()` memos, so adding a context
+   keys the memo on object identity: this one needs design, not a codemod.
+
+**Two paths break the day RLS is applied, and both were found by reading rather than by a test.**
+`activity_log` is tenant-scoped with `FORCE` and a `WITH CHECK` policy, and two flows write to it
+through a transaction that announces no tenant: `membership.acceptInvitation` (an invitation grants
+no tenant until it is accepted) and `platformAdminService.readTenant` (cross-tenant by design).
+`current_setting` returns NULL, the INSERT is refused, and because the audit must succeed for the
+operation to succeed, **accepting an invitation and the whole 6.8 admin plane stop working**. Both
+fail closed, which is the right direction and still an outage.
+
+**One regression was introduced and fixed here.** Converting `withTransaction` to
+`withTenantTransaction` silently disarmed an advisory lock: the callback receives the extended
+CLIENT, the seam intercepts `$allModels` only, so `$executeRaw` ran on a pooled connection outside
+the transaction and `pg_advisory_xact_lock` released immediately — the resume importer's
+duplicate-candidate guard became a no-op that still read like a lock. Raw methods are now bound to
+the real transaction client, with a test verified to fail without the fix.
 
 **Written, not yet applied.** Per the deferral decision, no migration has run: `tenantId` is still
 nullable, the uniqueness rules are still global, and RLS is inert. The isolation suite therefore
