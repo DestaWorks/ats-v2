@@ -164,7 +164,6 @@ model ActivityLog {
   tenantId String?
   tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  @@index([tenantId])
 }
 
 model AiUsageEvent {
@@ -457,7 +456,7 @@ model ClientTask {
   tenantId String?
   tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  @@index([tenantId])
+  @@index([tenantId, deletedAt]) // ditto
 }
 
 /// Wave 4.2 slice 2 (CRM) — a logged meeting for a client (legacy "Meetings" tab). Genuinely
@@ -512,7 +511,7 @@ model ClientNote {
   tenantId String?
   tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  @@index([tenantId])
+  @@index([tenantId, deletedAt]) // ditto
 }
 
 /// Wave 4.2 slice 3 (CRM) — a sales opportunity for a client (legacy "Deals" tab, DROP 76).
@@ -678,6 +677,7 @@ model Candidate {
   @@index([tenantId, deletedAt, createdAt, id]) // list, createdAt sorts (Newest/Oldest)
   @@index([tenantId, status, deletedAt, createdAt, id]) // board per-column keyset (status + createdAt desc, id)
   @@index([tenantId, status, deletedAt, stageEnteredAt]) // stuck/overdue thresholds + listStaleActive
+  @@index([tenantId, clientId]) // per-client rosters and client reports
   // Perf audit 2026-08-03: candidate.repository.ts's search does `name`/`email` `contains`
   // (case-insensitive) — a plain btree (the `email` index above) can only accelerate PREFIX
   // matches, never substring search, so every keystroke was a sequential scan of the whole table.
@@ -695,7 +695,6 @@ model Candidate {
   tenantId String?
   tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  @@index([tenantId])
 }
 
 // Uploaded documents (resumes today; licenses/other later). Wave 1.2 (design S-1/S-2):
@@ -743,7 +742,7 @@ model Document {
   tenantId String?
   tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  @@index([tenantId])
+  @@index([tenantId, deletedAt]) // every document list excludes soft-deleted rows
 }
 
 // Candidate notes (Wave 2.2). Body is user text — stored RAW and rendered as escaped plain text
@@ -942,6 +941,7 @@ model SourceLead {
   @@index([email]) // dedupe/search
   @@index([clientId])
   @@index([tenantId, deletedAt, createdAt, id]) // keyset list (createdAt_desc, id tiebreak)
+  @@index([tenantId, status]) // sourcing pipeline filters on lifecycle status
   @@map("source_leads")
 
   /// Tenant scope. Nullable in 6.1 so the expand migration is safe against live rows. 6.2 backfills
@@ -950,7 +950,6 @@ model SourceLead {
   tenantId String?
   tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  @@index([tenantId])
 }
 
 // ONE table for BOTH lead and candidate outreach (L-3). This slice writes leadId only; candidateId
@@ -1276,6 +1275,7 @@ model OpenRole {
   tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
+  @@index([tenantId, status]) // triage and open-role listings filter on status
 }
 
 /// Role-scoped note (legacy `ATS_RoleNotes`) — same soft-delete append-only shape as candidate/lead
@@ -1472,7 +1472,6 @@ model Prospect {
   tenantId String?
   tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  @@index([tenantId])
 }
 
 model ProspectContact {
