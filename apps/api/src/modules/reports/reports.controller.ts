@@ -15,6 +15,7 @@ import {
   type TimeAnalysisDTO,
   type TrendsDTO,
 } from "@destaworks/contracts/validation/reports";
+import type { GetReportsFilterOptionsResponse } from "@destaworks/contracts/reports/filter-options";
 import type { AuthContext } from "@destaworks/auth/guards";
 import { logger } from "@destaworks/config/logger";
 import { reportExportJob } from "@destaworks/jobs/definitions/report-export.job";
@@ -30,6 +31,7 @@ import {
   MASS_JOURNEY_REPORT,
   PIPELINE_REPORTS_SERVICE,
   REPORT_EXPORT_SERVICE,
+  REPORT_FILTER_OPTIONS_SERVICE,
   TEAM_REPORTS_SERVICE,
   TIME_REPORTS_SERVICE,
   TRENDS_REPORT,
@@ -48,16 +50,16 @@ const Filters = (): ParameterDecorator => Query(reportFiltersPipe);
 
 /**
  * Reporting: the eleven read-only report endpoints plus the CSV export, all over the one filtered
- * cohort the `/reports` page drives.
+ * cohort the `/reports` page drives, and the vocabularies that page's filter bar is built from.
  *
  * `viewReports` is declared ONCE at the class level rather than per method. Every route here is
  * leadership-only, so a per-method decorator would be eleven chances to forget one — and
  * `CapabilityGuard` refuses a handler that declares nothing, so a new method added to this
  * controller inherits the gate instead of shipping open.
  *
- * Two of the twelve take no filters (`client-capacity` and `trends` are unfiltered/all-time by
- * design, matching the legacy widgets they replace), and `export` answers `text/csv` rather than
- * JSON. Both differences are deliberate and preserved from the routes this replaces.
+ * `client-capacity` and `trends` take no filters (unfiltered/all-time by design, matching the
+ * legacy widgets they replace), `filter-options` takes none because it is what the bar is built
+ * from, and `export` answers `text/csv` rather than JSON. Each difference is deliberate.
  */
 @Controller("reports")
 @UseGuards(CapabilityGuard)
@@ -72,6 +74,8 @@ export class ReportsController {
     private readonly teamReports: ServiceOf<typeof TEAM_REPORTS_SERVICE>,
     @Inject(TIME_REPORTS_SERVICE)
     private readonly timeReports: ServiceOf<typeof TIME_REPORTS_SERVICE>,
+    @Inject(REPORT_FILTER_OPTIONS_SERVICE)
+    private readonly filterOptionsService: ServiceOf<typeof REPORT_FILTER_OPTIONS_SERVICE>,
     @Inject(MASS_JOURNEY_REPORT)
     private readonly massJourney: ServiceOf<typeof MASS_JOURNEY_REPORT>,
     @Inject(TRENDS_REPORT) private readonly trendsReport: ServiceOf<typeof TRENDS_REPORT>,
@@ -80,6 +84,17 @@ export class ReportsController {
     private readonly exportJobs: ServiceOf<typeof REPORT_EXPORT_SERVICE>,
     @Inject(JOB_QUEUE) private readonly queue: ServiceOf<typeof JOB_QUEUE>,
   ) {}
+
+  /**
+   * GET /reports/filter-options — the vocabularies the filter bar offers.
+   *
+   * Takes no filters: it IS the filter bar's source. A literal two-segment path, so it cannot be
+   * captured by `export/jobs/:id`, the only parameterised route here.
+   */
+  @Get("filter-options")
+  filterOptions(@CurrentUser() user: AuthContext): Promise<GetReportsFilterOptionsResponse> {
+    return this.filterOptionsService.load(user);
+  }
 
   /** GET /reports/executive — Executive Summary. */
   @Get("executive")
