@@ -29,11 +29,27 @@ export const AUDIT_ACTIONS = [
   "log_outreach",
   "respond",
   "promote",
+  // Tenancy (SAAS-RESTRUCTURE-PLAN 6.5) — the membership lifecycle. Who was let into a tenant and
+  // who was put out of it is the trail an access review reads, so it is a first-class action here
+  // rather than a generic create/delete on an unnamed row.
+  "invite",
+  "accept_invite",
+  "remove_member",
+  // Platform plane (6.8) — a cross-tenant action by a platform admin. Every one is audited into
+  // the tenant it touched, which is the only reason the plane is allowed to exist.
+  "platform_access",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
 /** Every audit `entity` the services write today. */
-export const AUDIT_ENTITIES = ["candidate", "document", "import_batch", "source_lead"] as const;
+export const AUDIT_ENTITIES = [
+  "candidate",
+  "document",
+  "import_batch",
+  "source_lead",
+  "membership",
+  "tenant",
+] as const;
 export type AuditEntity = (typeof AUDIT_ENTITIES)[number];
 
 export function isAuditAction(value: string): value is AuditAction {
@@ -60,6 +76,10 @@ export const AUDIT_ACTION_LABEL: Record<AuditAction, string> = {
   log_outreach: "Log outreach",
   respond: "Mark responded",
   promote: "Promote lead",
+  invite: "Invite member",
+  accept_invite: "Accept invitation",
+  remove_member: "Remove member",
+  platform_access: "Platform access",
 };
 
 /** Human labels for the known entities (the filter select + the row Entity column). */
@@ -68,6 +88,8 @@ export const AUDIT_ENTITY_LABEL: Record<AuditEntity, string> = {
   document: "Document",
   import_batch: "Import batch",
   source_lead: "Source lead",
+  membership: "Membership",
+  tenant: "Tenant",
 };
 
 /**
@@ -89,6 +111,12 @@ export const AUDIT_ACTION_TONE: Record<AuditAction, BadgeTone> = {
   log_outreach: "neutral",
   respond: "navy",
   promote: "success",
+  invite: "amber",
+  accept_invite: "success",
+  remove_member: "danger",
+  // `danger`, not `navy`: a platform admin reading inside a tenant is the highest-signal row in
+  // this log and must read as an exception, never as routine traffic.
+  platform_access: "danger",
 };
 
 /** Humanize a raw action string ("verify_license" → "Verify license"); tolerant of legacy/ETL codes. */
