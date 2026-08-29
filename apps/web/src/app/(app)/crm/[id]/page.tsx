@@ -1,9 +1,10 @@
 import { notFound } from "next/navigation";
 import { hasCapability } from "@destaworks/domain/constants";
 import { getVerifiedUser } from "@destaworks/auth/guards";
-import { clientService } from "@destaworks/application/client.service";
+import type { GetCrmClientResponse } from "@destaworks/contracts/http/crm";
 import { AppError } from "@destaworks/integrations/http/app-error";
 import { ErrorState } from "@destaworks/ui/error-state";
+import { apiGet } from "@/lib/api/server";
 import { ClientDetail } from "./client-detail";
 
 export default async function ClientDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -23,7 +24,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
   const { id } = await params;
   let detail;
   try {
-    detail = await clientService.detail(id, user);
+    detail = await apiGet<GetCrmClientResponse>(`/crm/clients/${encodeURIComponent(id)}`);
   } catch (err) {
     if (err instanceof AppError && err.code === "NOT_FOUND") notFound();
     throw err;

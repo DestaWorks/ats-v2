@@ -2,8 +2,9 @@ import { hasCapability } from "@destaworks/domain/constants";
 import { dateKeyForOffset, mondayOf } from "@destaworks/domain/daily";
 import { getVerifiedUser } from "@destaworks/auth/guards";
 import { viewerTzOffset } from "@destaworks/integrations/http/viewer-tz";
-import { briefService } from "@destaworks/application/brief.service";
+import type { WeeklyBriefDTO } from "@destaworks/contracts/validation/briefs";
 import { ErrorState } from "@destaworks/ui/error-state";
+import { apiGet, query } from "@/lib/api/server";
 import { WeeklyBriefView } from "./weekly-brief-view";
 
 /**
@@ -13,7 +14,7 @@ import { WeeklyBriefView } from "./weekly-brief-view";
  * which an RSC render can't know on a cold visit — so the composite still loads client-side on
  * first-ever load. From the second visit on (perf audit 2026-08-05), this reads the `app-tz`
  * cookie (shared with `/daily-log` — same "browser's local day" signal) and, when present,
- * server-fetches the saved brief for that week directly, seeding `WeeklyBriefView` so it skips
+ * server-fetches the saved brief for that week from the API, seeding `WeeklyBriefView` so it skips
  * its redundant first client fetch.
  */
 export default async function WeeklyBriefPage() {
@@ -37,7 +38,9 @@ export default async function WeeklyBriefPage() {
   const seed =
     initialTz !== undefined && initialWeekStart !== undefined
       ? {
-          initial: await briefService.getWeekly(initialWeekStart, user),
+          initial: await apiGet<WeeklyBriefDTO | null>(
+            `/briefs/weekly${query({ weekStart: initialWeekStart })}`,
+          ),
           initialWeekStart,
           initialTz,
         }

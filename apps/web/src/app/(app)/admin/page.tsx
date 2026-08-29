@@ -1,16 +1,19 @@
 import { hasCapability } from "@destaworks/domain/constants";
 import { getVerifiedUser } from "@destaworks/auth/guards";
-import { adminUserService } from "@destaworks/application/admin-user.service";
-import { accessRequestService } from "@destaworks/application/access-request.service";
-import { portalAccessRequestService } from "@destaworks/application/portal-access-request.service";
-import { aiOpsService } from "@destaworks/application/ai-ops.service";
+import type {
+  AccessRequestListDTO,
+  AdminUserListDTO,
+} from "@destaworks/contracts/validation/admin";
+import type { AiSettingsDTO, AiUsageOverviewDTO } from "@destaworks/contracts/validation/ai-ops";
+import type { PortalAccessRequestListDTO } from "@destaworks/contracts/validation/portal";
+import type { LookupOptionsDTO } from "@destaworks/contracts/validation/lookups";
 import { ErrorState } from "@destaworks/ui/error-state";
+import { apiGet } from "@/lib/api/server";
 import { AdminDashboard } from "./admin-dashboard";
-import { cachedClientList } from "@destaworks/integrations/http/request-cache";
 
 /**
  * Admin (Wave 5.3) — Users / Access Requests / Roles / Blocked. Gated `manageUsers` (the
- * broadest of the three admin capabilities used here); the `/api/admin/*` routes enforce the
+ * broadest of the three admin capabilities used here); the `/admin/*` endpoints enforce the
  * precise capability per action, so this is a friendly no-access screen + the real gate,
  * matching `/crm`'s pattern. Team/Profiles and Audit tabs are intentionally out of scope here —
  * see `docs/IMPLEMENTATION-PLAN.md` Wave 5.3 notes.
@@ -31,28 +34,33 @@ export default async function AdminPage() {
 
   const canConfigurePortal = hasCapability(user.role, "configureClientPortal");
   const canManageAi = hasCapability(user.role, "manageAiSettings");
-  const [{ users }, requests, portalRequests, clientRows, aiSettings, aiUsage] = await Promise.all([
-    adminUserService.list(),
-    accessRequestService.list(user),
-    canConfigurePortal ? portalAccessRequestService.list(user) : Promise.resolve([]),
-    canConfigurePortal ? cachedClientList(user) : Promise.resolve([]),
-    canManageAi
-      ? aiOpsService.getSettings(user)
-      : Promise.resolve({ disabled: false, disabledReason: null }),
-    canManageAi
-      ? aiOpsService.getUsageOverview(user)
-      : Promise.resolve({
-          windowHours: 24,
-          totalCalls: 0,
-          successCount: 0,
-          errorCount: 0,
-          totalInputTokens: 0,
-          totalOutputTokens: 0,
-          avgLatencyMs: 0,
-          recent: [],
-        }),
-  ]);
-  const clients = clientRows.map((c) => ({ id: c.id, name: c.name }));
+  const [{ users }, { requests }, portalRequests, clients, aiSettings, aiUsage] = await Promise.all(
+    [
+      apiGet<AdminUserListDTO>("/admin/users"),
+      apiGet<AccessRequestListDTO>("/admin/access-requests"),
+      canConfigurePortal
+        ? apiGet<PortalAccessRequestListDTO>("/admin/portal/requests").then((r) => r.requests)
+        : Promise.resolve([]),
+      canConfigurePortal
+        ? apiGet<LookupOptionsDTO>("/lookups").then((r) => r.clients)
+        : Promise.resolve([]),
+      canManageAi
+        ? apiGet<AiSettingsDTO>("/admin/ai/settings")
+        : Promise.resolve({ disabled: false, disabledReason: null }),
+      canManageAi
+        ? apiGet<AiUsageOverviewDTO>("/admin/ai/usage")
+        : Promise.resolve({
+            windowHours: 24,
+            totalCalls: 0,
+            successCount: 0,
+            errorCount: 0,
+            totalInputTokens: 0,
+            totalOutputTokens: 0,
+            avgLatencyMs: 0,
+            recent: [],
+          }),
+    ],
+  );
 
   return (
     <AdminDashboard
