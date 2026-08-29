@@ -186,4 +186,33 @@ describe("the audit trail is written by the services and only by the services", 
     expect(calls).toBeGreaterThanOrEqual(84);
     expect(outsideTransaction).toBe(0);
   });
+  describe("a portal contact is a principal, not an exemption", () => {
+    it("admits a portal mutation attributed to the cookie-resolved contact", () => {
+      const interceptor = new AuditActorInterceptor();
+      const run = () =>
+        interceptor.intercept(
+          contextFor({ method: "POST", portal: { contactId: "contact_1", clientId: "client_1" } }),
+          { handle: () => "ok" },
+        );
+      expect(run()).toBe("ok");
+    });
+
+    it("still refuses a portal mutation when the guard resolved nothing", () => {
+      const interceptor = new AuditActorInterceptor();
+      const run = () =>
+        interceptor.intercept(contextFor({ method: "POST", portal: undefined }), {
+          handle: () => "ok",
+        });
+      expect(run).toThrowError(expect.objectContaining({ code: "UNAUTHORIZED" }));
+    });
+
+    it("refuses a portal object carrying no contact id", () => {
+      const interceptor = new AuditActorInterceptor();
+      const run = () =>
+        interceptor.intercept(contextFor({ method: "POST", portal: { clientId: "client_1" } }), {
+          handle: () => "ok",
+        });
+      expect(run).toThrowError(expect.objectContaining({ code: "UNAUTHORIZED" }));
+    });
+  });
 });

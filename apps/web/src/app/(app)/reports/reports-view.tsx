@@ -5,13 +5,14 @@ import { DetailTabs, type TabDef } from "@destaworks/ui/tabs";
 import type { ExecutiveSummaryDTO } from "@destaworks/contracts/validation/reports";
 import type { ReportFilterOptionsDTO } from "@destaworks/contracts/reports/filter-options";
 import { PrintButton } from "../credentials/print-button";
+import { ExportCsvButton } from "./export-csv-button";
 import { ClientCapacityTab } from "./client-capacity-tab";
 import { ClientFunnelTab } from "./client-funnel-tab";
 import { ClientPortfolioTab } from "./client-portfolio-tab";
 import { ComplianceTab } from "./compliance-tab";
 import { ExecutiveTab } from "./executive-tab";
 import { ReportFilterBar } from "./filter-bar";
-import { EMPTY_FILTERS, buildReportQuery } from "./lib/use-report-fetch";
+import { EMPTY_FILTERS } from "./lib/use-report-fetch";
 import { MassJourneyTab } from "./mass-journey-tab";
 import { PipelineFunnelTab } from "./pipeline-funnel-tab";
 import { SourceRoiTab } from "./source-roi-tab";
@@ -82,12 +83,7 @@ export function ReportsView({
       <div className="flex items-start justify-between gap-4 print:hidden">
         <ReportFilterBar filters={filters} onChange={setFilters} options={options} />
         <div className="flex shrink-0 gap-2">
-          <a
-            href={`/api/reports/export?${buildReportQuery(filters)}`}
-            className="inline-flex h-9 items-center rounded-md border border-black/15 px-3 text-sm font-semibold text-navy hover:bg-black/[0.03]"
-          >
-            Export CSV
-          </a>
+          <ExportCsvButton filters={filters} />
           <PrintButton />
         </div>
       </div>

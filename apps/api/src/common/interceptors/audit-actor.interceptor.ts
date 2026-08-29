@@ -49,6 +49,8 @@ export interface AuditActorRequest {
   method?: string;
   /** `unknown` on purpose: `getRequest<T>()` is an unchecked assertion, so this is narrowed. */
   user?: unknown;
+  /** What `PortalAuthGuard` attaches. A separate property because the two never merge. */
+  portal?: unknown;
 }
 
 /**
@@ -97,6 +99,22 @@ function resolvedActorId(user: unknown): string | null {
 }
 
 /**
+ * The portal contact's id, or `null`.
+ *
+ * A portal mutation is ATTRIBUTED, not unattributed: `PortalAuthGuard` resolves an external client
+ * contact from the `portal_token` cookie server-side and attaches it as `request.portal`. It is a
+ * different principal from an operator, not the absence of one — so it resolves here rather than
+ * taking `@UnattributedMutation`, which would admit the route even when the guard populated
+ * nothing and is precisely the case this interceptor exists to fail.
+ */
+function resolvedPortalActorId(portal: unknown): string | null {
+  if (typeof portal !== "object" || portal === null) return null;
+  if (!("contactId" in portal)) return null;
+  const id: unknown = portal.contactId;
+  return typeof id === "string" && id.length > 0 ? id : null;
+}
+
+/**
  * Fails a mutating request closed when no server-resolved actor reached the handler, so that no
  * mutation can be recorded in `activity_log` without an attributable `actor`.
  *
@@ -129,7 +147,8 @@ export class AuditActorInterceptor {
       declaredAllowance(context.getClass?.());
 
     if (MUTATING_METHODS.has(method) && allowance === undefined) {
-      if (resolvedActorId(request.user) === null) {
+      const actor = resolvedActorId(request.user) ?? resolvedPortalActorId(request.portal);
+      if (actor === null) {
         throw new AppError("UNAUTHORIZED", "Sign in required");
       }
     }
