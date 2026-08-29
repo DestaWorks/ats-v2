@@ -3,7 +3,7 @@
  * /api/sourcing/similar`, reusing the shared `postJson` envelope helper from `@/lib/api/client`.
  */
 import { postJson, type ApiResult } from "@/lib/api/client";
-import type { PostSourcingSimilarResponse } from "@/app/api/sourcing/similar/route";
+import type { FindSimilarResultDTO as PostSourcingSimilarResponse } from "@destaworks/contracts/validation/similarity";
 
 export function postFindSimilar(
   credential: string | null,

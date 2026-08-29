@@ -7,7 +7,7 @@ import {
   AI_WORKSPACE_PRESET_LABELS,
   type AiWorkspacePreset,
 } from "@destaworks/contracts/validation/crm-ai-workspace";
-import type { PostCrmAiWorkspaceResponse } from "@/app/api/crm/clients/[id]/ai-workspace/route";
+import type { PostCrmAiWorkspaceResponse } from "@destaworks/contracts/http/crm";
 import { messageForFailure, postJson } from "@/lib/api/client";
 import { Button } from "@destaworks/ui/button";
 import { Input } from "@destaworks/ui/input";

@@ -3,7 +3,7 @@
  * so the envelope is read in one place. These add only what the board needs on top: splitting a
  * `STAGE_BLOCKED` message back into the list of reasons the UI renders. No PII ever crosses these (the board DTO omits it).
  */
-import type { GetCandidatesResponse } from "@/app/api/candidates/route";
+import type { GetCandidatesResponse } from "@destaworks/contracts/http/pipeline";
 import type { CandidateStatus } from "@destaworks/domain/constants";
 import { getJson, messageForFailure, postJson } from "@/lib/api/client";
 

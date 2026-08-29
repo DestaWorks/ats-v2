@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import type { ClientTimelineEntryDTO } from "@destaworks/contracts/validation/client";
-import type { PostCrmClientNoteResponse } from "@/app/api/crm/clients/[id]/notes/route";
+import type { PostCrmClientNoteResponse } from "@destaworks/contracts/http/crm";
 import { messageForFailure, postJson } from "@/lib/api/client";
 import { Button } from "@destaworks/ui/button";
 import { EmptyState } from "@destaworks/ui/empty-state";

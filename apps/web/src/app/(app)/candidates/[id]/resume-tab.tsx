@@ -2,7 +2,7 @@
 
 import { useRef, useState, type DragEvent } from "react";
 import { toast } from "sonner";
-import type { GetDocumentDownloadUrlResponse } from "@/app/api/documents/[id]/download-url/route";
+import type { DownloadUrlEnvelope as GetDocumentDownloadUrlResponse } from "@destaworks/contracts/validation/envelopes";
 import type { DocumentSummaryDTO } from "@destaworks/contracts/validation/candidate";
 import { getJson, messageForFailure } from "@/lib/api/client";
 import { uploadToStorage } from "@/lib/api/upload";

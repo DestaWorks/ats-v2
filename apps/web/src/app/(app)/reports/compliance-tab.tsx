@@ -5,7 +5,7 @@ import { EmptyState } from "@destaworks/ui/empty-state";
 import { Table, Td } from "@destaworks/ui/table";
 import { ReportTabShell } from "./lib/report-tab-shell";
 import { buildReportQuery, useReportFetch, type ReportFilterState } from "./lib/use-report-fetch";
-import type { GetReportsComplianceResponse } from "@/app/api/reports/compliance/route";
+import type { ComplianceDTO as GetReportsComplianceResponse } from "@destaworks/contracts/validation/reports";
 
 export function ComplianceTab({ filters }: { filters: ReportFilterState }) {
   const data = useReportFetch<GetReportsComplianceResponse>(

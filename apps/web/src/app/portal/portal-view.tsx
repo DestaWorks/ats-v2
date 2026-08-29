@@ -13,11 +13,11 @@ import {
   postPortalRoleSchema,
   type PortalDataDTO,
   type PortalRoleDTO,
+  type PostPortalRoleResponse,
 } from "@destaworks/contracts/validation/portal";
 import { useApiForm } from "@/lib/forms/use-api-form";
 import { emptyToNull } from "@/lib/forms/empty-to-null";
 import { postJson } from "@/lib/api/client";
-import type { PostPortalRoleResponse } from "@/app/api/portal/roles/route";
 import { Badge } from "@destaworks/ui/badge";
 import { Button } from "@destaworks/ui/button";
 import { DetailTabs, type TabDef } from "@destaworks/ui/tabs";

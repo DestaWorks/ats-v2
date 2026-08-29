@@ -4,12 +4,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { dateKey, paceStatus } from "@destaworks/domain/daily";
 import { useTzCookieSync } from "@/lib/use-tz-cookie-sync";
-import type { DailyOverviewDTO } from "@destaworks/contracts/validation/daily";
+import type { DailyOverviewDTO, AcknowledgedDTO } from "@destaworks/contracts/validation/daily";
 import { getJson, postJson, messageForFailure } from "@/lib/api/client";
-import type { PostDailyActualsResponse } from "@/app/api/daily/actuals/route";
-import type { GetDailyOverviewResponse } from "@/app/api/daily/overview/route";
-import type { PostDailyTargetsResponse } from "@/app/api/daily/targets/route";
-import type { PostTargetsSuggestResponse } from "@/app/api/targets/suggest/route";
+import type { TargetsSuggestAiOutput as PostTargetsSuggestResponse } from "@destaworks/contracts/validation/briefs";
 import { cn } from "@destaworks/domain/utils/cn";
 import { Button } from "@destaworks/ui/button";
 import { Field } from "@destaworks/ui/field";
@@ -49,9 +46,7 @@ export function DailyStrip({
   const skipNextRefresh = useRef(initial !== undefined && initialTz === tz);
 
   const refresh = useCallback(async () => {
-    const res = await getJson<GetDailyOverviewResponse>(
-      `/api/daily/overview?date=${today}&tz=${tz}`,
-    );
+    const res = await getJson<DailyOverviewDTO>(`/api/daily/overview?date=${today}&tz=${tz}`);
     if (res.ok) setData(res.data);
   }, [today, tz]);
 
@@ -246,7 +241,7 @@ function EndOfShiftModal({
 
   async function submit() {
     setPending(true);
-    const res = await postJson<PostDailyActualsResponse>("/api/daily/actuals", {
+    const res = await postJson<AcknowledgedDTO>("/api/daily/actuals", {
       date: today,
       sourcing: Number(form.sourcing) || 0,
       outreach: Number(form.outreach) || 0,
@@ -481,7 +476,7 @@ function SetTargetsModal({
   async function submit() {
     if (!form.userId) return;
     setPending(true);
-    const res = await postJson<PostDailyTargetsResponse>("/api/daily/targets", {
+    const res = await postJson<AcknowledgedDTO>("/api/daily/targets", {
       userId: form.userId,
       date: today,
       sourcing: Number(form.sourcing) || 0,

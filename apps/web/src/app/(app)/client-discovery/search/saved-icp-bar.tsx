@@ -4,8 +4,10 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { SavedIcpDTO } from "@destaworks/contracts/validation/saved-icp";
-import type { PostSavedIcpResponse } from "@/app/api/saved-icps/route";
-import type { DeleteSavedIcpResponse } from "@/app/api/saved-icps/[id]/route";
+import type {
+  PostSavedIcpResponse,
+  DeleteSavedIcpResponse,
+} from "@destaworks/contracts/http/saved-icp";
 import type { SearchProspectsQuery } from "@destaworks/contracts/validation/prospect";
 import { messageForFailure } from "@/lib/api/client";
 import { postJson, deleteJson, type ApiResult } from "@/lib/api/client";

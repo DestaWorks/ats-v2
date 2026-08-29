@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getJson } from "@/lib/api/client";
-import type { GetDailyRecapResponse } from "@/app/api/daily/recap/route";
+import type { RecapDTO as GetDailyRecapResponse } from "@destaworks/contracts/validation/daily";
 
 /**
  * "Since you closed" (legacy Overview recap). Last-seen lives in localStorage per user (legacy

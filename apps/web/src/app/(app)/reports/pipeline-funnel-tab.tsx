@@ -3,7 +3,7 @@
 import { Card } from "@destaworks/ui/card";
 import { Bar, ReportTabShell } from "./lib/report-tab-shell";
 import { buildReportQuery, useReportFetch, type ReportFilterState } from "./lib/use-report-fetch";
-import type { GetReportsPipelineFunnelResponse } from "@/app/api/reports/pipeline-funnel/route";
+import type { PipelineFunnelDTO as GetReportsPipelineFunnelResponse } from "@destaworks/contracts/validation/reports";
 
 export function PipelineFunnelTab({ filters }: { filters: ReportFilterState }) {
   const data = useReportFetch<GetReportsPipelineFunnelResponse>(

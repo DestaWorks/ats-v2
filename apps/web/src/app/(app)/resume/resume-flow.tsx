@@ -3,12 +3,12 @@
 import { useState } from "react";
 import type { ResumeVariant } from "@destaworks/domain/constants/documents";
 import { RESUME_VARIANT_LABELS } from "@destaworks/domain/constants/documents";
-import type { PostResumeExtractResponse } from "@/app/api/resume/extract/route";
 import type { PostResumeSaveResponse } from "@/app/api/resume/save/route";
 import type {
   ResumeData,
   ResumeMatch,
   SaveResumeInput,
+  ExtractResumeResponse as PostResumeExtractResponse,
 } from "@destaworks/contracts/validation/resume";
 import { Spinner } from "@destaworks/ui/spinner";
 import { ErrorState } from "@destaworks/ui/error-state";

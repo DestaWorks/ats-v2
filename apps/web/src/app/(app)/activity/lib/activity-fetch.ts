@@ -6,8 +6,10 @@
  * the list hop — the list DTO omits the raw snapshots (AL-3); the detail hop is fetched only on
  * expand, by a `viewAudit` holder.
  */
-import type { GetActivityResponse } from "@/app/api/activity/route";
-import type { GetActivityDetailResponse } from "@/app/api/activity/[id]/route";
+import type {
+  ActivityListDTO as GetActivityResponse,
+  ActivityDetailDTO as GetActivityDetailResponse,
+} from "@destaworks/contracts/validation/activity";
 import { getJson, messageForFailure } from "@/lib/api/client";
 import { buildActivityQuery } from "./activity-query";
 

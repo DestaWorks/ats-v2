@@ -4,7 +4,7 @@ import { Card } from "@destaworks/ui/card";
 import { EmptyState } from "@destaworks/ui/empty-state";
 import { ReportTabShell } from "./lib/report-tab-shell";
 import { buildReportQuery, useReportFetch, type ReportFilterState } from "./lib/use-report-fetch";
-import type { GetReportsClientPortfolioResponse } from "@/app/api/reports/client-portfolio/route";
+import type { ClientPortfolioDTO as GetReportsClientPortfolioResponse } from "@destaworks/contracts/validation/reports";
 
 export function ClientPortfolioTab({ filters }: { filters: ReportFilterState }) {
   const data = useReportFetch<GetReportsClientPortfolioResponse>(

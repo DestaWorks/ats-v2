@@ -8,14 +8,12 @@ import {
   BLOCKERS,
   type DailyLogViewDTO,
   type TeamBreakdownDTO,
+  type AcknowledgedDTO,
+  type CreatedJournalEntryDTO as PostDailyJournalEntriesResponse,
+  type CreatedJournalGoalDTO as PostDailyJournalGoalsResponse,
+  type SubmittedLogDTO as PostDailyLogResponse,
 } from "@destaworks/contracts/validation/daily";
 import { getJson, postJson, patchJson, messageForFailure } from "@/lib/api/client";
-import type { PatchDailyJournalGoalResponse } from "@/app/api/daily/journal/goals/[id]/route";
-import type { PostDailyJournalEntriesResponse } from "@/app/api/daily/journal/entries/route";
-import type { PostDailyJournalGoalsResponse } from "@/app/api/daily/journal/goals/route";
-import type { GetDailyLogResponse, PostDailyLogResponse } from "@/app/api/daily/log/route";
-import type { PostDailyManagerFeedbackResponse } from "@/app/api/daily/manager-feedback/route";
-import type { GetDailyTeamBreakdownResponse } from "@/app/api/daily/team-breakdown/route";
 import { Button } from "@destaworks/ui/button";
 import { Card } from "@destaworks/ui/card";
 import { Field } from "@destaworks/ui/field";
@@ -162,7 +160,7 @@ function TeamBreakdownSection({ weekStart }: { weekStart: string }) {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const res = await getJson<GetDailyTeamBreakdownResponse>(
+      const res = await getJson<TeamBreakdownDTO>(
         `/api/daily/team-breakdown?weekStart=${weekStart}`,
       );
       if (cancelled) return;
@@ -176,7 +174,7 @@ function TeamBreakdownSection({ weekStart }: { weekStart: string }) {
   async function postFeedback() {
     if (!targetUserId || !feedbackBody.trim()) return;
     setPending(true);
-    const res = await postJson<PostDailyManagerFeedbackResponse>("/api/daily/manager-feedback", {
+    const res = await postJson<AcknowledgedDTO>("/api/daily/manager-feedback", {
       userId: targetUserId,
       body: feedbackBody.trim(),
     });
@@ -350,7 +348,7 @@ export function DailyLogView({
   const skipNextRefresh = useRef(initial !== undefined && initialTz === tz);
 
   const refresh = useCallback(async () => {
-    const res = await getJson<GetDailyLogResponse>(`/api/daily/log?date=${today}&tz=${tz}`);
+    const res = await getJson<DailyLogViewDTO>(`/api/daily/log?date=${today}&tz=${tz}`);
     if (res.ok) setView(res.data);
   }, [today, tz]);
 
@@ -427,7 +425,7 @@ export function DailyLogView({
   }
 
   async function toggleGoal(id: string, done: boolean) {
-    const res = await patchJson<PatchDailyJournalGoalResponse>(`/api/daily/journal/goals/${id}`, {
+    const res = await patchJson<AcknowledgedDTO>(`/api/daily/journal/goals/${id}`, {
       done,
     });
     if (res.ok) void refresh();

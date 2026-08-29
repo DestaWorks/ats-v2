@@ -7,9 +7,10 @@ import type {
   AlertBucketDTO,
   AlertCandidateDTO,
 } from "@destaworks/contracts/validation/alerts";
-import type { GetAlertsResponse } from "@/app/api/alerts/route";
-import type { PostMentionsReadResponse } from "@/app/api/mentions/read/route";
-import type { MentionDTO } from "@destaworks/contracts/validation/mention";
+import type {
+  MentionDTO,
+  MentionUnreadDTO as PostMentionsReadResponse,
+} from "@destaworks/contracts/validation/mention";
 import { getJson, postJson } from "@/lib/api/client";
 import { cn } from "@destaworks/domain/utils/cn";
 import { Popover } from "@destaworks/ui/popover";
@@ -33,7 +34,7 @@ export function AlertsBell({ viewerFirstName }: { viewerFirstName: string }) {
   const [alerts, setAlerts] = useState<AlertsDTO | null>(null);
 
   const refresh = useCallback(async () => {
-    const res = await getJson<GetAlertsResponse>("/api/alerts");
+    const res = await getJson<AlertsDTO>("/api/alerts");
     if (res.ok) setAlerts(res.data);
   }, []);
 

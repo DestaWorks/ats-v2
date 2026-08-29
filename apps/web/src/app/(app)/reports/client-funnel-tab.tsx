@@ -5,7 +5,7 @@ import { EmptyState } from "@destaworks/ui/empty-state";
 import { cn } from "@destaworks/domain/utils/cn";
 import { ReportTabShell } from "./lib/report-tab-shell";
 import { buildReportQuery, useReportFetch, type ReportFilterState } from "./lib/use-report-fetch";
-import type { GetReportsClientFunnelResponse } from "@/app/api/reports/client-funnel/route";
+import type { ClientFunnelDTO as GetReportsClientFunnelResponse } from "@destaworks/contracts/validation/reports";
 
 export function ClientFunnelTab({ filters }: { filters: ReportFilterState }) {
   const data = useReportFetch<GetReportsClientFunnelResponse>(

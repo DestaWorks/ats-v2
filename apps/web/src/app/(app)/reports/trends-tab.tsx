@@ -6,7 +6,7 @@ import { Card } from "@destaworks/ui/card";
 import { cn } from "@destaworks/domain/utils/cn";
 import { ReportTabShell } from "./lib/report-tab-shell";
 import { useReportFetch } from "./lib/use-report-fetch";
-import type { GetReportsTrendsResponse } from "@/app/api/reports/trends/route";
+import type { TrendsDTO as GetReportsTrendsResponse } from "@destaworks/contracts/validation/reports";
 
 // recharts is heavy — load it only once this tab actually renders (perf audit 2026-08-05).
 const TrendsChart = dynamic(() => import("./trends-chart").then((m) => m.TrendsChart));

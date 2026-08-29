@@ -4,7 +4,6 @@ import { useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import type { LearnChapter, LearnProgressDTO } from "@destaworks/contracts/validation/learn";
-import type { PatchMeLearnProgressResponse } from "@/app/api/me/learn-progress/route";
 import { messageForFailure, patchJson } from "@/lib/api/client";
 import { Button } from "@destaworks/ui/button";
 import { Modal } from "@destaworks/ui/modal";
@@ -25,7 +24,7 @@ export function LearnView({
 
   async function setChapterDone(chapterId: string, done: boolean) {
     setPending(true);
-    const res = await patchJson<PatchMeLearnProgressResponse>("/api/me/learn-progress", {
+    const res = await patchJson<LearnProgressDTO>("/api/me/learn-progress", {
       chapterId,
       done,
     });

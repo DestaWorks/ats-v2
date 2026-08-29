@@ -4,9 +4,10 @@ import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 import { updateUser, changePassword } from "@/lib/auth-client";
-import type { UserPreferencesDTO } from "@destaworks/contracts/validation/user-preferences";
-import type { PatchMePreferencesResponse } from "@/app/api/me/preferences/route";
-import type { PostMeAvatarResponse } from "@/app/api/me/avatar/route";
+import type {
+  UserPreferencesDTO,
+  AvatarUploadedDTO as PostMeAvatarResponse,
+} from "@destaworks/contracts/validation/user-preferences";
 import { useApiForm } from "@/lib/forms/use-api-form";
 import { emptyToNull } from "@/lib/forms/empty-to-null";
 import { messageForFailure, patchJson, postJson } from "@/lib/api/client";
@@ -110,7 +111,7 @@ export function ProfileView({
       phone: preferences.phone,
       location: preferences.location,
     },
-    submit: (values) => patchJson<PatchMePreferencesResponse>("/api/me/preferences", values),
+    submit: (values) => patchJson<UserPreferencesDTO>("/api/me/preferences", values),
     onSuccess: () => toast.success("Profile updated"),
     onFailure: setServerError,
   });

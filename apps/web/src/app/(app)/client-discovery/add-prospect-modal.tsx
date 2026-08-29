@@ -2,13 +2,15 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { addProspectSchema } from "@destaworks/contracts/validation/prospect";
+import {
+  addProspectSchema,
+  type ProspectEnvelope as PostProspectResponse,
+} from "@destaworks/contracts/validation/prospect";
 import type { ProspectDetailDTO } from "@destaworks/contracts/validation/prospect";
 import { CLIENT_DISCOVERY_SPECIALTY_GROUPS } from "@destaworks/domain/constants";
 import { useApiForm } from "@/lib/forms/use-api-form";
 import { emptyToNull } from "@/lib/forms/empty-to-null";
 import { postJson } from "@/lib/api/client";
-import type { PostProspectResponse } from "@/app/api/prospects/route";
 import { Button, type ButtonProps } from "@destaworks/ui/button";
 import { Field } from "@destaworks/ui/field";
 import { Input } from "@destaworks/ui/input";

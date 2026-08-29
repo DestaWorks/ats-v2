@@ -4,7 +4,7 @@
  */
 import { postJson, type ApiResult } from "@/lib/api/client";
 import type { DiscoverAddRow } from "@destaworks/contracts/validation/discover";
-import type { PostDiscoverAddResponse } from "@/app/api/discover/add/route";
+import type { PostDiscoverAddResponse } from "@destaworks/contracts/http/discover";
 
 export function postDiscoverAdd(
   rows: DiscoverAddRow[],
