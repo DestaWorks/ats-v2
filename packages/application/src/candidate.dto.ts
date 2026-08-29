@@ -71,7 +71,11 @@ export const CANDIDATE_GATED_FIELDS = [
 ] as const satisfies readonly (keyof CandidateRow)[];
 
 /** Columns no viewer ever receives, at any capability. */
-export const CANDIDATE_WITHHELD_FIELDS = [] as const satisfies readonly (keyof CandidateRow)[];
+export const CANDIDATE_WITHHELD_FIELDS = [
+  // The tenant scope key. Withheld rather than published because it is not the viewer's business
+  // and publishing it hands a client half of a cross-tenant probe: an id to guess against.
+  "tenantId",
+] as const satisfies readonly (keyof CandidateRow)[];
 
 type CandidatePublishedField = (typeof CANDIDATE_PUBLISHED_FIELDS)[number];
 type CandidateGatedField = (typeof CANDIDATE_GATED_FIELDS)[number];

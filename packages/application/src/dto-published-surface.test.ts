@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 /**
  * Guards the DTO published surface: the schema is NOT the API. Every scalar column of a Prisma
@@ -29,7 +29,15 @@ import {
 import type { CandidateRow } from "@destaworks/db/repositories/candidate.repository";
 import type { DocumentRow } from "@destaworks/db/repositories/document.repository";
 
-const SCHEMA = readFileSync(join(process.cwd(), "prisma", "schema.prisma"), "utf8");
+// Resolved from THIS file, not from `process.cwd()`, and pointed at the schema Prisma actually
+// generates from (`prisma.config.ts`). It previously read `<cwd>/prisma/schema.prisma` — a stale
+// duplicate last touched 2026-08-18 and missing three models. The two copies still agreed on
+// Candidate and Document, so nothing escaped classification, but this guard is the thing standing
+// between a new column and a PII leak: it has to read the file the app uses.
+const SCHEMA = readFileSync(
+  fileURLToPath(new URL("../../db/prisma/schema.prisma", import.meta.url)),
+  "utf8",
+);
 
 /** Every declared model/enum/type/view name — how a relation field is told from a scalar column. */
 const DECLARED_TYPES = new Set(

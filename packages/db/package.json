@@ -10,6 +10,7 @@
     "./lifecycle": "./src/lifecycle.ts",
     "./prisma": "./src/prisma.ts",
     "./repositories/*": "./src/repositories/*.ts",
+    "./tenant-scope": "./src/tenant-scope.ts",
     "./with-transaction": "./src/with-transaction.ts"
   },
   "dependencies": {

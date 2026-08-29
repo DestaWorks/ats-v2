@@ -43,6 +43,7 @@ function noteRow(overrides: Record<string, unknown> = {}) {
   return {
     id: "n1",
     legacyId: null,
+    tenantId: null,
     candidateId: "c1",
     authorId: "u1",
     authorName: "Test User",

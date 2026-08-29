@@ -40,7 +40,10 @@ export const DOCUMENT_GATED_FIELDS = [
 ] as const satisfies readonly (keyof DocumentRow)[];
 
 /** Columns no viewer ever receives, at any capability. */
-export const DOCUMENT_WITHHELD_FIELDS = [] as const satisfies readonly (keyof DocumentRow)[];
+export const DOCUMENT_WITHHELD_FIELDS = [
+  // See candidate.dto.ts — the tenant scope key is never viewer-facing.
+  "tenantId",
+] as const satisfies readonly (keyof DocumentRow)[];
 
 type DocumentPublishedField = (typeof DOCUMENT_PUBLISHED_FIELDS)[number];
 type DocumentGatedField = (typeof DOCUMENT_GATED_FIELDS)[number];
