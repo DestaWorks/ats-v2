@@ -2,8 +2,9 @@ import "reflect-metadata";
 import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from "vitest";
 
 /**
- * Contract parity for `POST /api/migration/{prepare,commit}`: the `bulkImport` denials, the 422
- * envelope from the shared `importInputSchema`, and the per-user rate limit the commit carries.
+ * Contract parity for the migration endpoints: the `bulkImport` denials, the 422 envelope from the
+ * shared `importInputSchema`, and the per-user rate limit the commit carries. Phase 5 changed what
+ * the commit answers with — a queued run, 202 — so the parity assertion moved with it.
  */
 
 vi.mock("server-only", () => ({}));
@@ -12,6 +13,8 @@ const h = vi.hoisted(() => ({
   session: null as { user: { id: string; email: string; name: string; role?: string } } | null,
   prepare: vi.fn(),
   commit: vi.fn(),
+  start: vi.fn(),
+  state: vi.fn(),
   checkRateLimit: vi.fn(),
 }));
 
@@ -21,7 +24,7 @@ vi.mock("@destaworks/integrations/http/rate-limit", () => ({ checkRateLimit: h.c
 import { installNestRequestContext } from "../../common/request-context/nest-request-context";
 import { provideFakeService, startTestApi, type TestApi } from "../../common/testing/nest-app";
 import { MigrationController } from "./migration.controller";
-import { MIGRATION_SERVICE } from "./migration.tokens";
+import { MIGRATION_RUN_SERVICE, MIGRATION_SERVICE } from "./migration.tokens";
 
 interface Envelope {
   error: { code: string; message: string; issues?: { path: string; message: string }[] };
@@ -44,7 +47,10 @@ beforeAll(async () => {
   installNestRequestContext();
   api = await startTestApi({
     controllers: [MigrationController],
-    providers: [provideFakeService(MIGRATION_SERVICE, { prepare: h.prepare, commit: h.commit })],
+    providers: [
+      provideFakeService(MIGRATION_SERVICE, { prepare: h.prepare, commit: h.commit }),
+      provideFakeService(MIGRATION_RUN_SERVICE, { start: h.start, state: h.state }),
+    ],
   });
 });
 
@@ -54,13 +60,15 @@ beforeEach(() => {
   h.session = null;
   h.prepare.mockReset();
   h.commit.mockReset();
+  h.start.mockReset();
+  h.state.mockReset();
   h.checkRateLimit.mockReset();
 });
 
 describe.each([
-  { path: "/migration/prepare", call: h.prepare },
-  { path: "/migration/commit", call: h.commit },
-])("POST $path", ({ path, call }) => {
+  { path: "/migration/prepare", call: h.prepare, ok: 200 },
+  { path: "/migration/commit", call: h.start, ok: 202 },
+])("POST $path", ({ path, call, ok }) => {
   it("401 when signed out", async () => {
     const res = await post(path, BODY);
     expect(res.status).toBe(401);
@@ -86,11 +94,11 @@ describe.each([
     expect(call).not.toHaveBeenCalled();
   });
 
-  it("200 for Owner, handing the service the parsed body and the session user", async () => {
+  it("succeeds for Owner, handing the service the parsed body and the session user", async () => {
     h.session = OWNER;
     call.mockResolvedValue({ created: 1 });
     const res = await post(path, BODY);
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(ok);
     expect(await res.json()).toEqual({ created: 1 });
     expect(call).toHaveBeenCalledWith(
       expect.objectContaining({ format: "csv" }),
@@ -99,10 +107,36 @@ describe.each([
   });
 });
 
+describe("GET /migration/runs/:runId", () => {
+  const get = (path: string) => api.fetch(path, { method: "GET" });
+
+  it("401 when signed out", async () => {
+    const res = await get("/migration/runs/run-1");
+    expect(res.status).toBe(401);
+    expect(h.state).not.toHaveBeenCalled();
+  });
+
+  it("403 for a role without bulkImport — reading a run is not a lesser privilege", async () => {
+    h.session = ASSOCIATE;
+    const res = await get("/migration/runs/run-1");
+    expect(res.status).toBe(403);
+    expect(h.state).not.toHaveBeenCalled();
+  });
+
+  it("200 with the run state for Owner", async () => {
+    h.session = OWNER;
+    h.state.mockResolvedValue({ runId: "run-1", status: "running", processedRows: 12 });
+    const res = await get("/migration/runs/run-1");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ status: "running", processedRows: 12 });
+    expect(h.state).toHaveBeenCalledWith("run-1", expect.objectContaining({ id: "u1" }));
+  });
+});
+
 describe("rate limiting", () => {
   it("meters the commit per user, matching the route's 10/min bucket", async () => {
     h.session = OWNER;
-    h.commit.mockResolvedValue({});
+    h.start.mockResolvedValue({});
     await post("/migration/commit", BODY);
     expect(h.checkRateLimit).toHaveBeenCalledWith("migration-commit:u1", {
       limit: 10,

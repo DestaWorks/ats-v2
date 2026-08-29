@@ -35,6 +35,11 @@ export const importResumeSchema = z.object({
 });
 export type ImportResume = z.infer<typeof importResumeSchema>;
 
+/** The same resumes read back out of storage rather than off the wire. A staged commit parks them
+ *  on its run row, and a later attempt — possibly a later deployment — validates them again on the
+ *  way back in, because JSON out of a database is no more trusted than JSON off a socket. */
+export const stagedImportResumesSchema = importResumeSchema.array();
+
 /** Combined resume-text payload cap — conservative, safely under Vercel's default serverless body
  *  limit (this is ON TOP OF the CSV/JSON `content`, so the two caps are independent). */
 export const MAX_IMPORT_RESUMES = 300;
@@ -124,4 +129,72 @@ export interface ImportReport {
    *  Present only when a resume ZIP was actually part of the request; absent when the import is
    *  CSV/JSON-only, so the UI never shows a misleading "0 matched" for imports with no resumes at all. */
   resumeCounts?: { matched: number; ambiguous: number; none: number };
+}
+
+/* ---------------------------------------------------------------- the asynchronous commit ---- */
+
+/**
+ * Lifecycle of one commit run (Phase 5). The commit no longer answers with a report, because it
+ * cannot finish inside a request: it stages the upload, hands a `migration.commit` job the run id,
+ * and answers `202`. Everything an operator needs afterwards — "did it finish, and if not, where
+ * did it stop" — is read back from the run.
+ *
+ * `interrupted` is deliberately distinct from `failed`: the attempt stopped at a row boundary
+ * (timeout, shutdown) with the rows before `processedRows` already committed, and the queue will
+ * retry from there. `failed` means the attempts are spent and a human has to look.
+ */
+export const MIGRATION_RUN_STATUSES = [
+  "queued",
+  "running",
+  "interrupted",
+  "succeeded",
+  "failed",
+] as const;
+export type MigrationRunStatus = (typeof MIGRATION_RUN_STATUSES)[number];
+
+export function isMigrationRunStatus(value: string): value is MigrationRunStatus {
+  return (MIGRATION_RUN_STATUSES as readonly string[]).includes(value);
+}
+
+/** Terminal states — a poller stops here. */
+export function isMigrationRunFinished(status: MigrationRunStatus): boolean {
+  return status === "succeeded" || status === "failed";
+}
+
+/** `202` body of `POST /api/migration/commit` — a receipt for work that has not started yet. */
+export interface MigrationCommitAccepted {
+  runId: string;
+  /** The queue's id for the enqueued job, so a run can be correlated with the worker's records. */
+  jobId: string;
+  status: MigrationRunStatus;
+}
+
+/**
+ * `200` body of `GET /api/migration/runs/:runId` — the operator's view of one run.
+ *
+ * `processedRows`/`totalRows` are what the handler reports as it goes, so a stalled run is
+ * distinguishable from a slow one: a run whose `updatedAt` stops advancing is stuck. `report` is
+ * present only once the run succeeded, and is the same `ImportReport` the synchronous commit used
+ * to return, so the wizard renders it unchanged.
+ */
+export interface MigrationRunState {
+  runId: string;
+  jobId: string | null;
+  status: MigrationRunStatus;
+  /** Which queue attempt is running (1-based). Greater than 1 means an earlier one was interrupted. */
+  attempt: number;
+  processedRows: number;
+  /** 0 until an attempt has parsed the upload and knows how many rows it will write. */
+  totalRows: number;
+  checksum: string;
+  filename: string | null;
+  queuedAt: string;
+  startedAt: string | null;
+  /** Advances on every progress report — this is the "is it stuck" signal. */
+  updatedAt: string;
+  finishedAt: string | null;
+  /** An `AppErrorCode`-shaped reason on a `failed` run, never the underlying message (which can
+   *  quote row data). Pair it with the run id in the logs to find the cause. */
+  failureCode: string | null;
+  report: ImportReport | null;
 }

@@ -1,8 +1,9 @@
 import { Module } from "@nestjs/common";
 import { migrationService } from "@destaworks/application/migration.service";
+import { migrationRunService } from "@destaworks/application/migration-run.service";
 import { provideService } from "../service-token";
 import { MigrationController } from "./migration.controller";
-import { MIGRATION_SERVICE } from "./migration.tokens";
+import { MIGRATION_RUN_SERVICE, MIGRATION_SERVICE } from "./migration.tokens";
 
 /**
  * The one-shot legacy Sheet to Postgres ETL (DECISIONS D1): staging an upload, previewing the
@@ -14,7 +15,10 @@ import { MIGRATION_SERVICE } from "./migration.tokens";
  */
 @Module({
   controllers: [MigrationController],
-  providers: [provideService(MIGRATION_SERVICE, migrationService)],
-  exports: [MIGRATION_SERVICE],
+  providers: [
+    provideService(MIGRATION_SERVICE, migrationService),
+    provideService(MIGRATION_RUN_SERVICE, migrationRunService),
+  ],
+  exports: [MIGRATION_SERVICE, MIGRATION_RUN_SERVICE],
 })
 export class MigrationModule {}

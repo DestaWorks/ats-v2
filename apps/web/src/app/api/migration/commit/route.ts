@@ -1,30 +1,32 @@
-import { importInputSchema, type ImportReport } from "@destaworks/contracts/validation/migration";
+import {
+  importInputSchema,
+  type MigrationCommitAccepted,
+} from "@destaworks/contracts/validation/migration";
 import { requireCapability } from "@destaworks/auth/guards";
 import { apiHandler, json } from "@destaworks/integrations/http/api-handler";
 import { checkRateLimit } from "@destaworks/integrations/http/rate-limit";
-import { migrationService } from "@destaworks/application/migration.service";
+import { migrationRunService } from "@destaworks/application/migration-run.service";
+
+/** Response body of `POST /api/migration/commit` — the queued run, not its result. */
+export type PostMigrationCommitResponse = MigrationCommitAccepted;
 
 /**
- * Allow the ETL commit up to the platform maximum — a large one-shot import can run for minutes.
- */
-export const maxDuration = 300;
-
-/** Response body of `POST /api/migration/commit` — the post-upsert report. */
-export type PostMigrationCommitResponse = ImportReport;
-
-/**
- * POST /api/migration/commit — idempotent upsert of the legacy candidates keyed on `legacy_id`
- * (per-row continue-on-error; batching the upserts is a future optimization), plus per-candidate +
- * summary audit. Re-running never duplicates. Guarded by `requireCapability("bulkImport")`. Same
- * body as /prepare; a `checksum` mismatch is a non-blocking warning in the report (E-7).
+ * POST /api/migration/commit — stage the export and queue the ETL. Answers `202` with a run id;
+ * the import itself runs as a `migration.commit` job and the client polls
+ * `GET /api/migration/runs/:runId` for progress and the final report (Phase 5).
  *
- * The commit is expensive (a full re-upsert), so it is rate-limited per user (best-effort,
- * in-memory — see `server/http/rate-limit`).
+ * `maxDuration` is gone with the work: what is left is a hash, one insert and an enqueue. The
+ * commit was the one operation in this app that could not fit in the platform's 300s ceiling, and
+ * capping it there only meant a large import was cut off partway with no record of where.
+ *
+ * Still `bulkImport`-guarded and still rate-limited per user — the bucket now meters how often
+ * someone can queue an import rather than how often they can run one, which matters more, since a
+ * queued run costs worker time whether or not the caller waits for it.
  */
 export const POST = apiHandler(async (req: Request) => {
   const user = await requireCapability("bulkImport");
   await checkRateLimit(`migration-commit:${user.id}`, { limit: 10, windowMs: 60_000 });
   const input = importInputSchema.parse(await req.json());
-  const report = await migrationService.commit(input, user);
-  return json<PostMigrationCommitResponse>(report);
+  const accepted = await migrationRunService.start(input, user);
+  return json<PostMigrationCommitResponse>(accepted, 202);
 });

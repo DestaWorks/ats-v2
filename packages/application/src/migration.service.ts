@@ -109,9 +109,52 @@ function matchResumes(plans: ImportRowPlan[], resumes: ImportResume[] | undefine
  * report exposes only the name already shown in-app.
  */
 
-function assertCanImport(user: AuthUser): void {
+/** Exported so the run service gates staging and status reads on the SAME capability, rather than
+ *  growing a second copy of the check that could drift from this one. */
+export function assertCanImport(user: AuthUser): void {
   if (!hasCapability(user.role, "bulkImport")) {
     throw new AppError("FORBIDDEN", "You don't have permission to import");
+  }
+}
+
+/** The prepare→commit hand-off key (E-7). One definition, so the checksum a run is staged with is
+ *  the one `planImport` recomputes. */
+export function contentChecksum(content: string): string {
+  return createHash("sha256").update(content).digest("hex");
+}
+
+/**
+ * What a caller outside a request can ask of a commit. Only the job handler supplies these; a
+ * synchronous caller passes nothing and behaves exactly as before.
+ */
+export interface CommitOptions {
+  /**
+   * Aborted when the attempt's wall-clock budget runs out or the worker is shutting down. Checked
+   * BETWEEN rows, never inside one: each row is its own transaction, so the only safe place to
+   * stop is after one has committed and before the next has begun. A half-written row is not a
+   * state this ETL can be left in.
+   */
+  signal?: AbortSignal;
+  /** Called after each row is committed, so a minutes-long run is observable while it runs. */
+  onProgress?: (done: number, total: number) => Promise<void>;
+  /**
+   * Skip the writes for the first N writable rows: a previous attempt already committed them.
+   *
+   * This is an optimization on top of idempotency, not a substitute for it — every row is upserted
+   * on `legacy_id`, so redoing one is a no-op and a wrong resume point costs nothing but time. It
+   * earns its place because `extractWithAi` makes a redone row a repeated paid LLM call. Safe
+   * without a checksum guard here: the handler reads the content from the run row it is resuming,
+   * so the parse order cannot have changed between attempts.
+   */
+  resumeFromRow?: number;
+}
+
+/** Raised when a commit stops because its signal aborted. Distinct from a failure: the rows
+ *  already committed are sound, and the queue should retry from `processedRows`. */
+export class CommitAbortedError extends Error {
+  constructor(readonly processedRows: number) {
+    super("The import was interrupted and will resume on the next attempt.");
+    this.name = "CommitAbortedError";
   }
 }
 
@@ -130,7 +173,7 @@ interface Planned {
  *  Shared by both ops. */
 async function planImport(input: ImportInput): Promise<Planned> {
   const { rows, parseErrors } = parseSheet(input.content, input.format);
-  const checksum = createHash("sha256").update(input.content).digest("hex");
+  const checksum = contentChecksum(input.content);
 
   const [clients, existing] = await Promise.all([
     clientRepository.list(),
@@ -292,8 +335,11 @@ export const migrationService = {
    * (+ optional resume document upsert) + a per-candidate `import` audit — continue-on-error so a
    * single bad row can't abort the batch. Then one `import_batch` summary audit. Returns the
    * same-shape report with realized actions.
+   *
+   * `options` is how the job runner drives it (Phase 5): progress out, abort in, and a resume
+   * point. All three are optional and a request-path caller passes none.
    */
-  async commit(input: ImportInput, user: AuthUser): Promise<ImportReport> {
+  async commit(input: ImportInput, user: AuthUser, options?: CommitOptions): Promise<ImportReport> {
     assertCanImport(user);
     const planned = await planImport(input);
 
@@ -303,9 +349,25 @@ export const migrationService = {
       warnings.push("checksum-mismatch");
     }
 
-    for (const plan of planned.plans) {
-      if (plan.action === "error" || plan.action === "skip") continue;
+    // Only writable rows are counted, so the resume point and the progress denominator are the
+    // same scale — "row 400 of 900" means 400 rows are in the database, not 400 lines were read.
+    const writable = planned.plans.filter((p) => p.action !== "error" && p.action !== "skip");
+    const resumeFrom = options?.resumeFromRow ?? 0;
+    if (resumeFrom > 0) warnings.push(`resumed-from-row:${Math.min(resumeFrom, writable.length)}`);
+    let done = 0;
+
+    for (const plan of writable) {
+      // The abort check sits here, between two complete row transactions — the only boundary at
+      // which stopping leaves the database in a state the next attempt can pick up from.
+      if (options?.signal?.aborted) throw new CommitAbortedError(done);
+
+      if (done < resumeFrom) {
+        done++;
+        continue;
+      }
+
       let candidateId: string | null = null;
+      let committed = false;
       try {
         await withTransaction(async (tx) => {
           const candidate = await candidateRepository.upsertByLegacyId(
@@ -337,11 +399,11 @@ export const migrationService = {
             action: "import",
           });
         });
+        committed = true;
       } catch {
-        // Never log the row (PII). Mark it errored and continue.
+        // Never log the row (PII). Mark it errored and carry on: a bad row is reported, not fatal.
         plan.action = "error";
         plan.errors.push("commit-failed");
-        continue;
       }
 
       // Wave 1.3 backlog (Indrasur bulk-resume flow) — deliberately OUTSIDE the upsert transaction
@@ -349,9 +411,20 @@ export const migrationService = {
       // unambiguously matched resume, and only when the caller opted in — this is also what
       // attaches the Storage file (Wave 6), not just the AI-parsed fields, since both are cheap/
       // free relative to the LLM call this same opt-in already gates.
-      if (input.extractWithAi && plan.resumeMatch === "matched" && plan.resumeText && candidateId) {
+      if (
+        committed &&
+        input.extractWithAi &&
+        plan.resumeMatch === "matched" &&
+        plan.resumeText &&
+        candidateId
+      ) {
         await attachResumeWithAi(plan, candidateId, plan.resumeText, user);
       }
+
+      // Counted whatever the row's outcome — an errored row is one this attempt is finished with,
+      // so a resumed attempt must not start before it and try it again.
+      done++;
+      await options?.onProgress?.(done, writable.length);
     }
 
     const report = buildReport(planned);

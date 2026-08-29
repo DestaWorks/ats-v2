@@ -11,8 +11,9 @@ import type {
 } from "@destaworks/contracts/validation/migration";
 import type { PostResumeUploadUrlResponse } from "@/app/api/resume/upload-url/route";
 import { MAX_IMPORT_RESUMES } from "@destaworks/contracts/validation/migration";
-import { messageForFailure, postJson } from "@/lib/api/client";
+import { getJson, messageForFailure, postJson } from "@/lib/api/client";
 import type { PostMigrationCommitResponse } from "@/app/api/migration/commit/route";
+import type { GetMigrationRunResponse } from "@/app/api/migration/runs/[runId]/route";
 import type { PostMigrationPrepareResponse } from "@/app/api/migration/prepare/route";
 import { logger } from "@destaworks/config/logger";
 import { Button } from "@destaworks/ui/button";
@@ -27,6 +28,10 @@ import { ReportView } from "./report-view";
 /** Combined resume-text payload cap (chars, ≈bytes for this purpose) — conservative, safely
  *  under Vercel's default serverless body-size limit (Wave 1.3 backlog, the "Indrasur" flow). */
 const MAX_RESUME_PAYLOAD_CHARS = 8_000_000;
+
+/** How often the wizard asks a queued run how far it has got. Slow enough to be free, fast enough
+ *  that the row counter visibly moves on an import of any size. */
+const RUN_POLL_INTERVAL_MS = 2_000;
 
 type Step = "upload" | "preview" | "commit";
 
@@ -195,6 +200,8 @@ export function MigrationWizard({ storageEnabled }: { storageEnabled: boolean })
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<ImportReport | null>(null);
   const [committed, setCommitted] = useState<ImportReport | null>(null);
+  /** Rows written so far by the queued run — `null` until the first poll answers. */
+  const [runProgress, setRunProgress] = useState<{ done: number; total: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   // Wave 1.3 backlog (Indrasur bulk-resume flow) — optional, independent of the CSV/JSON above.
   const [resumeZipName, setResumeZipName] = useState<string | null>(null);
@@ -216,6 +223,7 @@ export function MigrationWizard({ storageEnabled }: { storageEnabled: boolean })
     setError(null);
     setPreview(null);
     setCommitted(null);
+    setRunProgress(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
     setResumeZipName(null);
     setResumeZipBytes(0);
@@ -320,7 +328,7 @@ export function MigrationWizard({ storageEnabled }: { storageEnabled: boolean })
     };
   }
 
-  async function post<T extends ImportReport>(url: string, body: ImportInput): Promise<T | null> {
+  async function post<T>(url: string, body: ImportInput): Promise<T | null> {
     setLoading(true);
     setError(null);
     try {
@@ -408,17 +416,53 @@ export function MigrationWizard({ storageEnabled }: { storageEnabled: boolean })
     }
   }
 
+  /**
+   * Follow a queued run to its end (Phase 5). The commit no longer returns a report — it returns a
+   * run id — so this polls the run and keeps `runProgress` fed while it goes. Polling rather than
+   * streaming because the answer is a handful of integers every couple of seconds, and a poll
+   * survives the page being reopened while a stream does not.
+   */
+  async function followRun(runId: string): Promise<void> {
+    for (;;) {
+      const result = await getJson<GetMigrationRunResponse>(`/api/migration/runs/${runId}`);
+      if (!result.ok) {
+        setError(messageForFailure(result.failure));
+        return;
+      }
+      const run = result.data;
+      setRunProgress({ done: run.processedRows, total: run.totalRows });
+
+      if (run.status === "succeeded" && run.report) {
+        setCommitted(run.report);
+        setStep("commit");
+        return;
+      }
+      if (run.status === "failed") {
+        setError(
+          "The import stopped before it finished. Nothing was duplicated — re-running it resumes " +
+            `where it left off. (run ${run.runId})`,
+        );
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, RUN_POLL_INTERVAL_MS));
+    }
+  }
+
   async function handleCommit() {
     if (!file) return;
     setLoading(true);
-    const enrichedResumes = await uploadMatchedResumesToStorage();
-    const report = await post<PostMigrationCommitResponse>(
-      "/api/migration/commit",
-      bodyFor(file, enrichedResumes),
-    );
-    if (report) {
-      setCommitted(report);
-      setStep("commit");
+    setRunProgress(null);
+    try {
+      const enrichedResumes = await uploadMatchedResumesToStorage();
+      const accepted = await post<PostMigrationCommitResponse>(
+        "/api/migration/commit",
+        bodyFor(file, enrichedResumes),
+      );
+      if (!accepted) return;
+      setLoading(true);
+      await followRun(accepted.runId);
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -566,6 +610,13 @@ export function MigrationWizard({ storageEnabled }: { storageEnabled: boolean })
             >
               Commit {willImport} candidate{willImport === 1 ? "" : "s"}
             </Button>
+            {loading && runProgress ? (
+              <span role="status" className="text-xs text-gray">
+                {runProgress.total > 0
+                  ? `Importing — ${runProgress.done.toLocaleString()} of ${runProgress.total.toLocaleString()} rows written…`
+                  : "Queued — waiting for a worker…"}
+              </span>
+            ) : null}
             {willImport === 0 ? (
               <span className="text-xs text-gray">
                 Nothing importable — every row errored or was skipped.
