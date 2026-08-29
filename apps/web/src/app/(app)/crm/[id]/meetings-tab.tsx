@@ -4,7 +4,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { MEETING_TYPES } from "@destaworks/domain/constants";
 import { addMeetingSchema, type ClientMeetingDTO } from "@destaworks/contracts/validation/client";
-import type { PostCrmClientMeetingResponse } from "@/app/api/crm/clients/[id]/meetings/route";
+import type { PostCrmClientMeetingResponse } from "@destaworks/contracts/http/crm";
 import { useApiForm } from "@/lib/forms/use-api-form";
 import { emptyToNull } from "@/lib/forms/empty-to-null";
 import { deleteJson, postJson } from "@/lib/api/client";

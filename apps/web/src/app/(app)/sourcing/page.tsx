@@ -1,10 +1,10 @@
 import { isLeadStatus, type LeadStatus } from "@destaworks/domain/constants";
-import { defined } from "@destaworks/domain/utils/defined";
 import { getVerifiedUser } from "@destaworks/auth/guards";
-import { leadService } from "@destaworks/application/lead.service";
+import type { LookupOptionsDTO } from "@destaworks/contracts/validation/lookups";
+import type { LeadListDTO } from "@destaworks/contracts/validation/lead";
+import { apiGet, query } from "@/lib/api/server";
 import { LeadFilters } from "./lead-filters";
 import { LeadsInventory } from "./leads-inventory";
-import { cachedClientList, cachedUserList } from "@destaworks/integrations/http/request-cache";
 
 /**
  * Sourcing inventory (RSC, Wave 2.6) — the pre-pipeline source-lead board (Sourced → Outreach →
@@ -20,7 +20,7 @@ export default async function SourcingPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const user = await getVerifiedUser();
+  await getVerifiedUser();
   const sp = await searchParams;
   const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
 
@@ -35,15 +35,13 @@ export default async function SourcingPage({
   const rawPage = Number(one(sp.page));
   const page = Number.isInteger(rawPage) && rawPage > 0 ? rawPage : 1;
 
-  const [list, clientRows, users] = await Promise.all([
-    leadService.list(
-      defined({ status, source, clientId, ownerId, search, includeDeleted: showDeleted, page }),
-      user,
+  const [list, { clients, users }] = await Promise.all([
+    apiGet<LeadListDTO>(
+      `/leads/list${query({ status, source, clientId, ownerId, search, includeDeleted: showDeleted, page })}`,
     ),
-    cachedClientList(user),
-    cachedUserList(), // filter + bulk "Assign owner…" options (id + display name only)
+    // filter + bulk "Assign owner…" options (id + display name only)
+    apiGet<LookupOptionsDTO>("/lookups"),
   ]);
-  const clients = clientRows.map((c) => ({ id: c.id, name: c.name }));
 
   // Remount the client list whenever the SERVER query changes so it re-seeds cleanly.
   const listKey = [status, source, clientId, ownerId, search, showDeleted, page].join("|");

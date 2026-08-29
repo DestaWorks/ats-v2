@@ -1,24 +1,25 @@
 import { Suspense } from "react";
 import { TRACKS, type Track } from "@destaworks/domain/constants";
 import { getVerifiedUser } from "@destaworks/auth/guards";
-import { candidateService } from "@destaworks/application/candidate.service";
-import { savedViewService } from "@destaworks/application/saved-view.service";
+import type { BoardResponse } from "@destaworks/contracts/validation/pipeline";
+import type { GetSavedViewsResponse } from "@destaworks/contracts/http/saved-view";
+import type { LookupOptionsDTO } from "@destaworks/contracts/validation/lookups";
 import { Spinner } from "@destaworks/ui/spinner";
+import { apiGet, query } from "@/lib/api/server";
 import { PipelineBoard } from "./pipeline-board";
-import { cachedClientList, cachedUserList } from "@destaworks/integrations/http/request-cache";
 
 /**
  * Pipeline board (RSC). Guards with `getCurrentUser()` (mirrors the dashboard — the `(app)` segment
- * has no shared layout), reads the board server-side (direct `candidateService.listBoard` call — no
- * self-fetch), and hands the funnel-grouped `BoardResponse` to the client board. URL `searchParams`
- * seed the initial filtered read so a shared link lands pre-filtered.
+ * has no shared layout), reads the board server-side through the API, and hands the funnel-grouped
+ * `BoardResponse` to the client board. URL `searchParams` seed the initial filtered read so a
+ * shared link lands pre-filtered.
  */
 export default async function PipelinePage({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const user = await getVerifiedUser();
+  await getVerifiedUser();
 
   const sp = await searchParams;
   const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
@@ -29,22 +30,11 @@ export default async function PipelinePage({
   const search = one(sp.search);
   const ownerId = one(sp.ownerId);
 
-  const [board, clientRows, userRows, savedViews] = await Promise.all([
-    candidateService.listBoard(
-      {
-        ...(track !== undefined && { track }),
-        ...(clientId !== undefined && { clientId }),
-        ...(search !== undefined && { search }),
-        ...(ownerId !== undefined && { ownerId }),
-      },
-      user,
-    ),
-    cachedClientList(user),
-    cachedUserList(),
-    savedViewService.list("pipeline", user),
+  const [board, { clients, users }, { savedViews }] = await Promise.all([
+    apiGet<BoardResponse>(`/candidates${query({ track, clientId, search, ownerId })}`),
+    apiGet<LookupOptionsDTO>("/lookups"),
+    apiGet<GetSavedViewsResponse>(`/saved-views${query({ scope: "pipeline" })}`),
   ]);
-  const clients = clientRows.map((c) => ({ id: c.id, name: c.name }));
-  const owners = userRows.map((u) => ({ id: u.id, name: u.name }));
 
   return (
     <div className="flex flex-col gap-5 px-8 py-6">
@@ -62,7 +52,7 @@ export default async function PipelinePage({
           </div>
         }
       >
-        <PipelineBoard initial={board} clients={clients} owners={owners} savedViews={savedViews} />
+        <PipelineBoard initial={board} clients={clients} owners={users} savedViews={savedViews} />
       </Suspense>
     </div>
   );

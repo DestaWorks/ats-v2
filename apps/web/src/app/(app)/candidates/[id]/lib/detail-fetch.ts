@@ -7,10 +7,12 @@
  * authenticated detail page only.
  */
 import type { PatchCandidateResponse } from "@/app/api/candidates/[id]/route";
-import type { PostCandidateMoveResponse } from "@/app/api/candidates/[id]/move/route";
-import type { PostCandidateNoteResponse } from "@/app/api/candidates/[id]/notes/route";
-import type { PostCandidateOutreachResponse } from "@/app/api/candidates/[id]/outreach/route";
-import type { PostCandidateResumeResponse } from "@/app/api/candidates/[id]/resume/route";
+import type {
+  MovedCandidateEnvelope as PostCandidateMoveResponse,
+  NoteEnvelope as PostCandidateNoteResponse,
+  OutreachAttemptEnvelope as PostCandidateOutreachResponse,
+  DocumentSummaryEnvelope as PostCandidateResumeResponse,
+} from "@destaworks/contracts/validation/envelopes";
 import type { PostCandidateVerifyLicenseResponse } from "@/app/api/candidates/[id]/verify-license/route";
 import type { CandidateStatus } from "@destaworks/domain/constants";
 import type {

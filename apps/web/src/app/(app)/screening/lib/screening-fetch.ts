@@ -2,8 +2,10 @@
  * Client fetch helpers for Screening (Wave 3.3) — thin wrappers over the gated
  * `/api/screening/*` routes reusing the shared `getJson`/`postJson` envelope helpers.
  */
-import type { PostScreeningResponse } from "@/app/api/screening/[candidateId]/route";
-import type { GetScreeningCandidatesResponse } from "@/app/api/screening/candidates/route";
+import type {
+  ScreeningScorecardEnvelope as PostScreeningResponse,
+  ScreeningCandidateListEnvelope as GetScreeningCandidatesResponse,
+} from "@destaworks/contracts/validation/envelopes";
 import { getJson, postJson, type ApiResult } from "@/lib/api/client";
 import type { SaveScreeningInput } from "@destaworks/contracts/validation/screening";
 

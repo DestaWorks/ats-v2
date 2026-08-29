@@ -1,19 +1,20 @@
 import { hasCapability } from "@destaworks/domain/constants";
 import { getVerifiedUser } from "@destaworks/auth/guards";
-import { candidateService } from "@destaworks/application/candidate.service";
+import type { CandidateTrashDTO } from "@destaworks/contracts/validation/candidate";
+import { apiGet } from "@/lib/api/server";
 import { TrashList } from "./trash-list";
 
 /**
  * Trash view (RSC) — soft-deleted candidates, newest-deleted first. Guards with `getCurrentUser()`
- * (the `(app)` layout also guards — defence in depth), loads the PII-gated payload directly via
- * `candidateService.listTrash(user)` (no self-fetch, mirroring the board / detail pages), and passes
+ * (the `(app)` layout also guards — defence in depth), loads the PII-gated payload from
+ * `GET /candidates/trash`, and passes
  * `canPurge` down so the client rows can UI-gate the Purge action. The server routes stay
  * authoritative: soft-delete/restore are open to any operator, Purge requires `purgeCandidate`.
  */
 export default async function TrashPage() {
   const user = await getVerifiedUser();
 
-  const { items } = await candidateService.listTrash(user);
+  const { items } = await apiGet<CandidateTrashDTO>("/candidates/trash");
   const canPurge = hasCapability(user.role, "purgeCandidate");
 
   return (

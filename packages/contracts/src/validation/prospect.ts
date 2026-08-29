@@ -217,6 +217,12 @@ export type DeleteProspectResponse = SoftDeletedResponse;
 /** Response body of `GET /api/prospects/list`. */
 export type GetProspectListResponse = ProspectListDTO;
 
+/**
+ * Response body of `GET /prospects/search` — one NPPES page for the criteria in the query, each
+ * row flagged with whether its NPI is already tracked as a prospect.
+ */
+export type GetProspectSearchResponse = ProspectSearchResultDTO;
+
 /** Response body of `POST /api/prospects/bulk` — counts only, never prospect PII. */
 export type PostProspectBulkResponse = BulkActionCounts;
 

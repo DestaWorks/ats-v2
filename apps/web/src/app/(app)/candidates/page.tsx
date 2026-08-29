@@ -7,23 +7,24 @@ import {
   type LicenseStatus,
   type Track,
 } from "@destaworks/domain/constants";
+import type { CandidateListDTO } from "@destaworks/contracts/validation/candidate";
 import type { ListSort } from "@destaworks/contracts/validation/pipeline";
+import type { GetSavedViewsResponse } from "@destaworks/contracts/http/saved-view";
+import type { LookupOptionsDTO } from "@destaworks/contracts/validation/lookups";
 import { getVerifiedUser } from "@destaworks/auth/guards";
-import { candidateService } from "@destaworks/application/candidate.service";
-import { savedViewService } from "@destaworks/application/saved-view.service";
+import { apiGet, query } from "@/lib/api/server";
 import { SavedViewsBar } from "../lib/saved-views-bar";
 import { AddCandidateButton } from "../add-candidate-modal";
 import { CandidatesList } from "./candidates-list";
 import { ListFilters } from "./list-filters";
-import { cachedClientList, cachedUserList } from "@destaworks/integrations/http/request-cache";
 
 /**
  * Candidates browse (RSC) — a searchable, filterable, SERVER OFFSET-paginated flat list, distinct
  * from the funnel board. Guards with `getCurrentUser()` (the `(app)` layout also guards — defence in
- * depth), server-renders the requested page (`candidateService.listCandidates` — no self-fetch;
- * `viewer` drives the license-number gate + resolves `mine`), and seeds the filters from URL
- * `searchParams` so a shared link lands pre-filtered. Every filter/sort/page interaction is a URL
- * change this RSC re-reads — nothing is filtered or paginated client-side.
+ * depth), server-renders the requested page through the API (the session forwarded with the read
+ * drives the license-number gate + resolves `mine`), and seeds the filters from URL `searchParams`
+ * so a shared link lands pre-filtered. Every filter/sort/page interaction is a URL change this RSC
+ * re-reads — nothing is filtered or paginated client-side.
  */
 export default async function CandidatesPage({
   searchParams,
@@ -71,34 +72,30 @@ export default async function CandidatesPage({
   const addedFrom = date(sp.addedFrom);
   const addedTo = date(sp.addedTo);
 
-  const [list, clientRows, userRows, savedViews] = await Promise.all([
-    candidateService.listCandidates(
-      {
-        ...(track !== undefined && { track }),
-        ...(status !== undefined && { status }),
-        ...(clientId !== undefined && { clientId }),
-        ...(search !== undefined && { search }),
-        ...(tags !== undefined && { tags }),
-        ...(licenseStatus !== undefined && { licenseStatus }),
-        ...(source !== undefined && { source }),
-        ...(ownerId !== undefined && { ownerId }),
-        ...(addedFrom !== undefined && { addedFrom }),
-        ...(addedTo !== undefined && { addedTo }),
+  const [list, { clients, users }, { savedViews }] = await Promise.all([
+    apiGet<CandidateListDTO>(
+      `/candidates/list${query({
+        track,
+        status,
+        clientId,
+        search,
+        tags: tags?.join(","),
+        licenseStatus,
+        source,
+        ownerId,
+        addedFrom: addedFrom?.toISOString(),
+        addedTo: addedTo?.toISOString(),
         mine: flag(sp.mine),
         overdue: flag(sp.overdue),
         stuck: flag(sp.stuck),
         hot,
         sort,
         page,
-      },
-      user,
+      })}`,
     ),
-    cachedClientList(user),
-    cachedUserList(),
-    savedViewService.list("candidates", user),
+    apiGet<LookupOptionsDTO>("/lookups"),
+    apiGet<GetSavedViewsResponse>(`/saved-views${query({ scope: "candidates" })}`),
   ]);
-  const clients = clientRows.map((c) => ({ id: c.id, name: c.name }));
-  const owners = userRows.map((u) => ({ id: u.id, name: u.name }));
   const canEditCredential = hasCapability(user.role, "viewCredentials");
 
   return (
@@ -119,7 +116,7 @@ export default async function CandidatesPage({
         />
       </header>
 
-      <ListFilters clients={clients} owners={owners} />
+      <ListFilters clients={clients} owners={users} />
       <SavedViewsBar scope="candidates" initial={savedViews} />
 
       <CandidatesList list={list} searchParams={sp} />

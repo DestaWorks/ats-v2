@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import type { CoverageGapRowDTO } from "@destaworks/contracts/validation/discover";
-import type { GetDiscoverCoverageGapSupplyResponse } from "@/app/api/discover/coverage-gaps/supply/route";
+import type { GetDiscoverCoverageGapSupplyResponse } from "@destaworks/contracts/http/discover";
 import { taxonomyForCredential } from "@destaworks/domain/constants";
 import { getJson } from "@/lib/api/client";
 import { Button } from "@destaworks/ui/button";

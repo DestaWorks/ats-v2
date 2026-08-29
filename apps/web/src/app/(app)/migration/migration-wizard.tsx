@@ -8,13 +8,12 @@ import type {
   ImportInput,
   ImportReport,
   ImportResume,
+  MigrationCommitAccepted as PostMigrationCommitResponse,
+  MigrationRunState as GetMigrationRunResponse,
 } from "@destaworks/contracts/validation/migration";
-import type { PostResumeUploadUrlResponse } from "@/app/api/resume/upload-url/route";
 import { MAX_IMPORT_RESUMES } from "@destaworks/contracts/validation/migration";
 import { getJson, messageForFailure, postJson } from "@/lib/api/client";
-import type { PostMigrationCommitResponse } from "@/app/api/migration/commit/route";
-import type { GetMigrationRunResponse } from "@/app/api/migration/runs/[runId]/route";
-import type { PostMigrationPrepareResponse } from "@/app/api/migration/prepare/route";
+import { uploadToStorage } from "@/lib/api/upload";
 import { logger } from "@destaworks/config/logger";
 import { Button } from "@destaworks/ui/button";
 import { Card } from "@destaworks/ui/card";
@@ -366,26 +365,16 @@ export function MigrationWizard({ storageEnabled }: { storageEnabled: boolean })
         const blob = rawResumeBlobsRef.current.get(r.originalFilename);
         if (!blob) return r;
         try {
-          const res = await fetch("/api/resume/upload-url", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ filename: r.originalFilename, mimeType: "application/pdf" }),
-          });
-          if (!res.ok) {
-            failures.push(`${r.originalFilename}: upload-url ${res.status}`);
-            return r;
-          }
-          const { signedUrl, storageKey } = (await res.json()) as PostResumeUploadUrlResponse;
-          const upload = await fetch(signedUrl, {
-            method: "PUT",
-            headers: { "Content-Type": "application/pdf" },
+          const result = await uploadToStorage({
+            filename: r.originalFilename,
+            mimeType: "application/pdf",
             body: blob,
           });
-          if (!upload.ok) {
-            failures.push(`${r.originalFilename}: PUT ${upload.status} ${upload.statusText}`);
+          if (!result.ok) {
+            failures.push(`${r.originalFilename}: ${result.reason}`);
             return r;
           }
-          return { ...r, storageKey };
+          return { ...r, storageKey: result.storageKey };
         } catch (err) {
           failures.push(
             `${r.originalFilename}: ${err instanceof Error ? err.message : "network error"}`,
@@ -406,10 +395,7 @@ export function MigrationWizard({ storageEnabled }: { storageEnabled: boolean })
 
   async function handlePreview() {
     if (!file) return;
-    const report = await post<PostMigrationPrepareResponse>(
-      "/api/migration/prepare",
-      bodyFor(file),
-    );
+    const report = await post<ImportReport>("/api/migration/prepare", bodyFor(file));
     if (report) {
       setPreview(report);
       setStep("preview");

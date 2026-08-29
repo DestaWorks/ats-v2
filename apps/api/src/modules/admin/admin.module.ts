@@ -4,6 +4,8 @@ import { accessRequestService } from "@destaworks/application/access-request.ser
 import { aiOpsService } from "@destaworks/application/ai-ops.service";
 import { provideService } from "../service-token";
 import { PortalModule } from "../portal/portal.module";
+import { TenantsModule } from "../tenants/tenants.module";
+import { AccessRequestsController } from "./access-requests.controller";
 import { AdminAccessRequestsController } from "./admin-access-requests.controller";
 import { AdminAiController } from "./admin-ai.controller";
 import { AdminPortalRequestsController } from "./admin-portal-requests.controller";
@@ -19,10 +21,14 @@ export { ACCESS_REQUEST_SERVICE, ADMIN_USER_SERVICE, AI_OPS_SERVICE };
  * The admin view of CLIENT PORTAL access requests is served here too — its callers are operators —
  * but the service behind it stays in `PortalModule`, which owns that audience. `PortalModule` is
  * imported for the token rather than the service being registered twice.
+ *
+ * `AccessRequestsController` is the applicant's half of the same service: public, unauthenticated,
+ * and kept here so the queue and the form that fills it stay in one place.
  */
 @Module({
-  imports: [PortalModule],
+  imports: [PortalModule, TenantsModule],
   controllers: [
+    AccessRequestsController,
     AdminUsersController,
     AdminAccessRequestsController,
     AdminAiController,

@@ -213,6 +213,16 @@ export interface RoleMatchesEnvelope {
   matches: RoleMatchDTO[];
 }
 
+/**
+ * Both matchers' ranked lists from ONE request — the composite `/roles/[id]` needs on every page
+ * load. Named field-for-field after `openRoleService.matchesAndDormant`, so the composite endpoint
+ * stays a pass-through and cannot quietly reshape what the two separate endpoints already answer.
+ */
+export interface RoleMatchesAndDormantEnvelope {
+  matches: RoleMatchDTO[];
+  dormantMatches: RoleMatchDTO[];
+}
+
 /** Response body of `POST /api/roles`. */
 export type PostRoleResponse = OpenRoleEnvelope;
 
@@ -251,6 +261,13 @@ export type GetRoleMatchesResponse = RoleMatchesEnvelope;
 
 /** Response body of `GET /api/roles/:id/dormant-matches`. */
 export type GetRoleDormantMatchesResponse = RoleMatchesEnvelope;
+
+/**
+ * Response body of `GET /roles/:id/matches-and-dormant` — both lists in one round trip, which is
+ * what `/roles/[id]` reads (SAAS-RESTRUCTURE-PLAN 4.0: a composite read becomes a composite
+ * endpoint, not N calls).
+ */
+export type GetRoleMatchesAndDormantResponse = RoleMatchesAndDormantEnvelope;
 
 /** Response body of `POST /api/roles/:id/notes` — the whole role detail, notes included. */
 export type PostRoleNoteResponse = OpenRoleEnvelope;

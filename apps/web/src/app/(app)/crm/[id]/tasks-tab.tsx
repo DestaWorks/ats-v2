@@ -3,8 +3,10 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { addTaskSchema, type ClientTaskDTO } from "@destaworks/contracts/validation/client";
-import type { PostCrmClientTaskResponse } from "@/app/api/crm/clients/[id]/tasks/route";
-import type { PatchCrmClientTaskResponse } from "@/app/api/crm/clients/[id]/tasks/[taskId]/route";
+import type {
+  PostCrmClientTaskResponse,
+  PatchCrmClientTaskResponse,
+} from "@destaworks/contracts/http/crm";
 import { useApiForm } from "@/lib/forms/use-api-form";
 import { emptyToNull } from "@/lib/forms/empty-to-null";
 import { deleteJson, messageForFailure, patchJson, postJson } from "@/lib/api/client";

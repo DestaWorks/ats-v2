@@ -30,6 +30,18 @@ const DEFAULT_STATUS: Record<AppErrorCode, number> = {
 };
 
 /**
+ * Whether a string is one of this app's error codes.
+ *
+ * Derived from `DEFAULT_STATUS` rather than a second list, so a new code cannot be recognised in
+ * one place and unknown in the other. `apps/web` uses it to decide whether an envelope arriving
+ * over HTTP from `apps/api` may keep its code or must collapse to `INTERNAL` — a proxy's error
+ * page must not be able to invent a code that changes how a page renders.
+ */
+export function isAppErrorCode(value: string | undefined): value is AppErrorCode {
+  return value !== undefined && Object.prototype.hasOwnProperty.call(DEFAULT_STATUS, value);
+}
+
+/**
  * Typed application error. Services throw these; the API handler maps them to a JSON
  * response with the right HTTP status (`server/http` — full handler lands in Wave 0.4).
  */

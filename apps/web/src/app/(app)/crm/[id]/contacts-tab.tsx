@@ -10,8 +10,10 @@ import {
   type ClientContactDTO,
   type UpdateContactInput,
 } from "@destaworks/contracts/validation/client";
-import type { PostCrmClientContactResponse } from "@/app/api/crm/clients/[id]/contacts/route";
-import type { PatchCrmClientContactResponse } from "@/app/api/crm/clients/[id]/contacts/[contactId]/route";
+import type {
+  PostCrmClientContactResponse,
+  PatchCrmClientContactResponse,
+} from "@destaworks/contracts/http/crm";
 import { useApiForm } from "@/lib/forms/use-api-form";
 import { emptyToNull } from "@/lib/forms/empty-to-null";
 import { deleteJson, messageForFailure, patchJson, postJson } from "@/lib/api/client";

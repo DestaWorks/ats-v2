@@ -2,7 +2,8 @@ import { hasCapability } from "@destaworks/domain/constants";
 import { dateKeyForOffset } from "@destaworks/domain/daily";
 import { getVerifiedUser } from "@destaworks/auth/guards";
 import { viewerTzOffset } from "@destaworks/integrations/http/viewer-tz";
-import { dailyService } from "@destaworks/application/daily.service";
+import type { DailyLogViewDTO } from "@destaworks/contracts/validation/daily";
+import { apiGet, query } from "@/lib/api/server";
 import { DailyLogView } from "./daily-log-view";
 
 /**
@@ -11,9 +12,9 @@ import { DailyLogView } from "./daily-log-view";
  * loads client-side via `GET /api/daily/log?date&tz` on first-ever load. From the SECOND visit
  * on (perf audit 2026-08-05), `daily-log-view.tsx` mirrors its resolved tz offset into an
  * `app-tz` cookie (shared with `/weekly-brief`, same underlying "browser's local day" signal);
- * when present, this page server-fetches the same composite directly (bypassing the internal
- * HTTP round-trip) and seeds it, so the client only re-fetches if the browser's live tz offset
- * doesn't match what was seeded (DST shift, travel) — see `daily-log-view.tsx`'s skip-first-fetch
+ * when present, this page server-fetches the same composite from the API and seeds it, so the
+ * client only re-fetches if the browser's live tz offset doesn't match what was seeded (DST
+ * shift, travel) — see `daily-log-view.tsx`'s skip-first-fetch
  * guard. Full-width layout (no `max-w` cap) — matches legacy (its dailylog view
  * has no width cap either, its 5-column KPI/form grids fill the whole container) and every other
  * page in this app (Sourcing/Roles/Candidates/Dashboard all use `px-8 py-6`, no cap).
@@ -31,7 +32,9 @@ export default async function DailyLogPage() {
 
   const initial =
     initialTz !== undefined
-      ? await dailyService.logView(user, dateKeyForOffset(initialTz), initialTz)
+      ? await apiGet<DailyLogViewDTO>(
+          `/daily/log${query({ date: dateKeyForOffset(initialTz), tz: initialTz })}`,
+        )
       : undefined;
 
   return (

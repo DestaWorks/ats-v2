@@ -5,8 +5,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { CandidateListDTO } from "@destaworks/contracts/validation/candidate";
-import type { PostCandidatesBulkMoveResponse } from "@/app/api/candidates/bulk-move/route";
-import type { ListSort } from "@destaworks/contracts/validation/pipeline";
+import type {
+  ListSort,
+  BulkMoveResponse as PostCandidatesBulkMoveResponse,
+} from "@destaworks/contracts/validation/pipeline";
 import {
   ALL_STATUS_CODES,
   statusLabel,

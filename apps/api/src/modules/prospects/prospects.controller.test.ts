@@ -70,6 +70,7 @@ describe("ProspectsController — declared routes", () => {
     expect(describeRoutes(ProspectsController)).toEqual([
       { route: "POST /prospects", ...gate, status: 201 },
       { route: "GET /prospects/list", ...gate, status: 200 },
+      { route: "GET /prospects/search", ...gate, status: 200 },
       { route: "POST /prospects/bulk", ...gate, status: 200 },
       { route: "POST /prospects/bulk-add", ...gate, status: 200 },
       { route: "GET /prospects/:id", ...gate, status: 200 },
@@ -83,15 +84,17 @@ describe("ProspectsController — declared routes", () => {
     ]);
   });
 
-  it("leaves no route in the area ungated — the class-level capability covers all twelve", () => {
+  it("leaves no route in the area ungated — the class-level capability covers all thirteen", () => {
     const routes = describeRoutes(ProspectsController);
-    expect(routes).toHaveLength(12);
+    expect(routes).toHaveLength(13);
     expect(routes.every((r) => r.capability === "viewClientDiscovery")).toBe(true);
   });
 
-  it("declares GET /prospects/list before GET /prospects/:id so `list` is not read as an id", () => {
+  it("declares the literal GET routes before GET /prospects/:id so neither is read as an id", () => {
     const paths = describeRoutes(ProspectsController).map((r) => r.route);
-    expect(paths.indexOf("GET /prospects/list")).toBeLessThan(paths.indexOf("GET /prospects/:id"));
+    const id = paths.indexOf("GET /prospects/:id");
+    expect(paths.indexOf("GET /prospects/list")).toBeLessThan(id);
+    expect(paths.indexOf("GET /prospects/search")).toBeLessThan(id);
   });
 });
 
@@ -110,6 +113,15 @@ describe("ProspectsController — delegation and response envelope", () => {
     await controllerWith({ list }).list({ ownerId: "u2", deleted: true }, USER);
 
     expect(list).toHaveBeenCalledWith({ ownerId: "u2", includeDeleted: true }, USER);
+  });
+
+  it("GET /prospects/search returns the NPPES page unwrapped", async () => {
+    const result = { results: [{ npi: "1", alreadyTracked: false }], resultCount: 1 };
+    const search = vi.fn().mockResolvedValue(result);
+    const query = { taxonomy: "Behavioral Health", state: "CT" as const };
+
+    expect(await controllerWith({ search }).search(query, USER)).toEqual(result);
+    expect(search).toHaveBeenCalledWith(query, USER);
   });
 
   it("POST /prospects/bulk returns the counts unwrapped", async () => {

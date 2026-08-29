@@ -5,7 +5,7 @@ import { EmptyState } from "@destaworks/ui/empty-state";
 import { cn } from "@destaworks/domain/utils/cn";
 import { Bar, ReportTabShell } from "./lib/report-tab-shell";
 import { useReportFetch } from "./lib/use-report-fetch";
-import type { GetReportsClientCapacityResponse } from "@/app/api/reports/client-capacity/route";
+import type { ClientCapacityDTO as GetReportsClientCapacityResponse } from "@destaworks/contracts/validation/reports";
 
 const TONE_BAR: Record<"red" | "orange" | "green", string> = {
   red: "bg-red",

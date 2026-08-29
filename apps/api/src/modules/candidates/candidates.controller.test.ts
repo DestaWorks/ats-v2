@@ -27,6 +27,9 @@ const h = vi.hoisted(() => ({
     bulkMove: vi.fn(),
     create: vi.fn(),
     getProfile: vi.fn(),
+    getCandidateDetail: vi.fn(),
+    listTrash: vi.fn(),
+    dashboardStats: vi.fn(),
     update: vi.fn(),
     softDelete: vi.fn(),
     getJourney: vi.fn(),
@@ -38,6 +41,7 @@ const h = vi.hoisted(() => ({
   },
   note: { add: vi.fn(), listByCandidate: vi.fn() },
   resume: { attachToCandidate: vi.fn() },
+  lookup: { filterOptions: vi.fn() },
 }));
 
 vi.mock("server-only", () => ({}));
@@ -52,8 +56,10 @@ vi.mock("@destaworks/application/candidate.service", () => ({ candidateService: 
 vi.mock("@destaworks/application/note.service", () => ({ noteService: h.note }));
 vi.mock("@destaworks/application/resume.service", () => ({ resumeService: h.resume }));
 vi.mock("@destaworks/application/similarity.service", () => ({ similarityService: {} }));
+vi.mock("@destaworks/application/lookup.service", () => ({ lookupService: h.lookup }));
 
 import { encodeCursor } from "@destaworks/contracts/validation/cursor";
+import { storageEnabled } from "@destaworks/integrations/storage";
 import {
   jsonBody,
   startContractHost,
@@ -107,6 +113,10 @@ const ROW = {
 
 const BOARD = { columns: [], terminal: [], meta: { total: 0, active: 0, overdue: 0, stuck: 0 } };
 const COLUMN_PAGE = { status: "NEW_CANDIDATE", items: [], nextCursor: null, hasMore: false };
+const LOOKUPS = {
+  clients: [{ id: "cl1", name: "Northside Health" }],
+  users: [{ id: "u1", name: "Test User" }],
+};
 
 let api: ContractHost;
 
@@ -132,6 +142,7 @@ beforeEach(() => {
   h.candidate.update.mockResolvedValue(ROW);
   h.candidate.restore.mockResolvedValue(ROW);
   h.candidate.verifyLicense.mockResolvedValue(ROW);
+  h.lookup.filterOptions.mockResolvedValue(LOOKUPS);
 });
 
 describe("GET /candidates — one path, two endpoints", () => {
@@ -295,6 +306,121 @@ describe("candidate reads", () => {
     const res = await api.request("/candidates/c1/notes");
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ notes: [{ id: "n1", body: "hi" }] });
+  });
+});
+
+/**
+ * The composite the detail page loads. What matters here is that ONE request answers everything
+ * `/candidates/[id]` renders — the plan's 4.0 paydown rule — and that folding the option lists in
+ * neither widens the gate nor turns a missing candidate into a 500.
+ */
+describe("GET /candidates/:id/detail — the page composite", () => {
+  const DETAIL = { candidate: { id: "c1", name: "Jane Doe" }, notes: [], documents: [] };
+
+  it("answers the detail, both option lists and the storage flag in one response", async () => {
+    h.candidate.getCandidateDetail.mockResolvedValue(DETAIL);
+    const res = await api.request("/candidates/c1/detail");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      detail: DETAIL,
+      clients: LOOKUPS.clients,
+      taggable: LOOKUPS.users,
+      storageEnabled,
+    });
+    expect(h.candidate.getCandidateDetail.mock.calls[0]?.[0]).toBe("c1");
+    expect(h.lookup.filterOptions).toHaveBeenCalledTimes(1);
+  });
+
+  it("is not matched by the lighter `:id` projection", async () => {
+    h.candidate.getCandidateDetail.mockResolvedValue(DETAIL);
+    await api.request("/candidates/c1/detail");
+    expect(h.candidate.getProfile).not.toHaveBeenCalled();
+  });
+
+  it("answers 404 for a missing candidate even when the option read fails alongside it", async () => {
+    const { AppError } = await import("@destaworks/integrations/http/app-error");
+    h.candidate.getCandidateDetail.mockRejectedValue(
+      new AppError("NOT_FOUND", "Candidate not found"),
+    );
+    h.lookup.filterOptions.mockRejectedValue(new Error("lookup exploded"));
+    const res = await api.request("/candidates/missing/detail");
+    expect(res.status).toBe(404);
+    expect(((await res.json()) as ErrorEnvelope).error.code).toBe("NOT_FOUND");
+  });
+
+  it("refuses a signed-out caller with 401 and reads nothing", async () => {
+    h.session = null;
+    const res = await api.request("/candidates/c1/detail");
+    expect(res.status).toBe(401);
+    expect(h.candidate.getCandidateDetail).not.toHaveBeenCalled();
+    expect(h.lookup.filterOptions).not.toHaveBeenCalled();
+  });
+});
+
+describe("GET /candidates/trash", () => {
+  const TRASH = {
+    items: [
+      {
+        id: "c1",
+        name: "Jane Doe",
+        credential: "PMHNP",
+        clientName: null,
+        status: "NEW_CANDIDATE",
+        statusLabel: "0 - New Candidate",
+        deletedAt: "2026-01-02T00:00:00.000Z",
+        deletedByName: "Test User",
+      },
+    ],
+  };
+
+  it("answers the soft-deleted list to any signed-in operator", async () => {
+    signInAs("Associate");
+    h.candidate.listTrash.mockResolvedValue(TRASH);
+    const res = await api.request("/candidates/trash");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(TRASH);
+    expect(h.candidate.listTrash.mock.calls[0]?.[0]).toMatchObject({ user: { id: "u1" } });
+  });
+
+  it("is matched before the `:id` route", async () => {
+    h.candidate.listTrash.mockResolvedValue({ items: [] });
+    await api.request("/candidates/trash");
+    expect(h.candidate.getProfile).not.toHaveBeenCalled();
+  });
+
+  it("refuses a signed-out caller with 401 and reads nothing", async () => {
+    h.session = null;
+    const res = await api.request("/candidates/trash");
+    expect(res.status).toBe(401);
+    expect(((await res.json()) as ErrorEnvelope).error.code).toBe("UNAUTHORIZED");
+    expect(h.candidate.listTrash).not.toHaveBeenCalled();
+  });
+});
+
+describe("GET /candidates/dashboard-stats", () => {
+  const STATS = { total: 3, active: 2, terminal: 1, columns: [], attention: [] };
+
+  it("answers the summary to any signed-in operator", async () => {
+    signInAs("Associate");
+    h.candidate.dashboardStats.mockResolvedValue(STATS);
+    const res = await api.request("/candidates/dashboard-stats");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(STATS);
+    expect(h.candidate.dashboardStats.mock.calls[0]?.[0]).toMatchObject({ user: { id: "u1" } });
+  });
+
+  it("is matched before the `:id` route", async () => {
+    h.candidate.dashboardStats.mockResolvedValue(STATS);
+    await api.request("/candidates/dashboard-stats");
+    expect(h.candidate.getProfile).not.toHaveBeenCalled();
+  });
+
+  it("refuses a signed-out caller with 401 and reads nothing", async () => {
+    h.session = null;
+    const res = await api.request("/candidates/dashboard-stats");
+    expect(res.status).toBe(401);
+    expect(((await res.json()) as ErrorEnvelope).error.code).toBe("UNAUTHORIZED");
+    expect(h.candidate.dashboardStats).not.toHaveBeenCalled();
   });
 });
 

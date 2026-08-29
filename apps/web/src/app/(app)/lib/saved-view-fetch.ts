@@ -6,8 +6,10 @@
  */
 import { deleteJson, postJson, type ApiResult } from "@/lib/api/client";
 import type { CreateSavedViewInput } from "@destaworks/contracts/validation/saved-view";
-import type { PostSavedViewResponse } from "@/app/api/saved-views/route";
-import type { DeleteSavedViewResponse } from "@/app/api/saved-views/[id]/route";
+import type {
+  PostSavedViewResponse,
+  DeleteSavedViewResponse,
+} from "@destaworks/contracts/http/saved-view";
 
 export function createSavedView(
   input: CreateSavedViewInput,

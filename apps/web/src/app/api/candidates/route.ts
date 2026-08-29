@@ -9,10 +9,10 @@ import { AppError } from "@destaworks/integrations/http/app-error";
 import { candidateService } from "@destaworks/application/candidate.service";
 import { toCandidateDTO } from "@destaworks/application/candidate.dto";
 import type { CandidateEnvelope } from "@destaworks/application/candidate.wire";
-import type { BoardResponse, ColumnPageDTO } from "@destaworks/contracts/validation/pipeline";
+import type * as Contract from "@destaworks/contracts/http/pipeline";
 
 /** Wire shape of `GET /api/candidates` — the full board, or one column page when `column` is set. */
-export type GetCandidatesResponse = BoardResponse | ColumnPageDTO;
+export type GetCandidatesResponse = Contract.GetCandidatesResponse;
 
 /** Wire shape of `POST /api/candidates` — the PII-re-gated newly created candidate. */
 export type PostCandidateResponse = CandidateEnvelope;

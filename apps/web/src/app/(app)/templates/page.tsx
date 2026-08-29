@@ -1,8 +1,9 @@
 import { getVerifiedUser } from "@destaworks/auth/guards";
 import { hasCapability } from "@destaworks/domain/constants";
-import { userPreferencesService } from "@destaworks/application/user-preferences.service";
+import type { LookupOptionsDTO } from "@destaworks/contracts/validation/lookups";
+import type { UserPreferencesDTO } from "@destaworks/contracts/validation/user-preferences";
+import { apiGet } from "@/lib/api/server";
 import { TemplatesWorkspace } from "./templates-workspace";
-import { cachedClientList } from "@destaworks/integrations/http/request-cache";
 
 /**
  * Templates (RSC, Wave 4.1) — outreach/workflow template library, ported from legacy
@@ -15,11 +16,10 @@ import { cachedClientList } from "@destaworks/integrations/http/request-cache";
 export default async function TemplatesPage() {
   const user = await getVerifiedUser();
 
-  const [clientRows, preferences] = await Promise.all([
-    cachedClientList(user),
-    userPreferencesService.getMine(user),
+  const [{ clients }, preferences] = await Promise.all([
+    apiGet<LookupOptionsDTO>("/lookups"),
+    apiGet<UserPreferencesDTO>("/me/preferences"),
   ]);
-  const clients = clientRows.map((c) => ({ id: c.id, name: c.name }));
 
   return (
     <div className="flex flex-col gap-6 px-8 py-6">

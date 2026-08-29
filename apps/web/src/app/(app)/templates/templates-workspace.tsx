@@ -16,16 +16,20 @@ import {
   adaptLeadToRecipient,
 } from "@destaworks/domain/rules/adapt-recipient";
 import { getJson, postJson, messageForFailure } from "@/lib/api/client";
-import type { GetLeadListResponse } from "@/app/api/leads/list/route";
-import type { PostLeadOutreachResponse } from "@/app/api/leads/[id]/outreach/route";
-import type { GetCandidateResponse } from "@/app/api/candidates/[id]/route";
-import type { PostCandidateOutreachResponse } from "@/app/api/candidates/[id]/outreach/route";
-import type { GetCandidateListResponse } from "@/app/api/candidates/list/route";
+import type {
+  CandidateProfileEnvelope as GetCandidateResponse,
+  OutreachAttemptEnvelope as PostCandidateOutreachResponse,
+} from "@destaworks/contracts/validation/envelopes";
 import type {
   CandidateListItemDTO,
   CandidateProfileDTO,
+  CandidateListDTO as GetCandidateListResponse,
 } from "@destaworks/contracts/validation/candidate";
-import type { LeadListItemDTO } from "@destaworks/contracts/validation/lead";
+import type {
+  LeadListItemDTO,
+  LeadListDTO as GetLeadListResponse,
+  LeadEnvelope as PostLeadOutreachResponse,
+} from "@destaworks/contracts/validation/lead";
 import { Button } from "@destaworks/ui/button";
 import { Input } from "@destaworks/ui/input";
 import { Select } from "@destaworks/ui/select";

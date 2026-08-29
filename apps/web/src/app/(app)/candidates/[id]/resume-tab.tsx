@@ -2,10 +2,10 @@
 
 import { useRef, useState, type DragEvent } from "react";
 import { toast } from "sonner";
-import type { GetDocumentDownloadUrlResponse } from "@/app/api/documents/[id]/download-url/route";
-import type { PostResumeUploadUrlResponse } from "@/app/api/resume/upload-url/route";
+import type { DownloadUrlEnvelope as GetDocumentDownloadUrlResponse } from "@destaworks/contracts/validation/envelopes";
 import type { DocumentSummaryDTO } from "@destaworks/contracts/validation/candidate";
 import { getJson, messageForFailure } from "@/lib/api/client";
+import { uploadToStorage } from "@/lib/api/upload";
 import { Modal } from "@destaworks/ui/modal";
 import { Spinner } from "@destaworks/ui/spinner";
 import { Table, Td } from "@destaworks/ui/table";
@@ -123,25 +123,14 @@ function UploadResumeButton({
   const inputRef = useRef<HTMLInputElement>(null);
   const busy = stage !== "idle";
 
-  async function uploadToStorage(file: File): Promise<string | undefined> {
+  async function storageKeyFor(file: File): Promise<string | undefined> {
     if (!storageEnabled) return undefined;
-    try {
-      const res = await fetch("/api/resume/upload-url", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ filename: file.name, mimeType: file.type || "application/pdf" }),
-      });
-      if (!res.ok) return undefined;
-      const { signedUrl, storageKey } = (await res.json()) as PostResumeUploadUrlResponse;
-      const upload = await fetch(signedUrl, {
-        method: "PUT",
-        headers: { "Content-Type": file.type || "application/pdf" },
-        body: file,
-      });
-      return upload.ok ? storageKey : undefined;
-    } catch {
-      return undefined;
-    }
+    const result = await uploadToStorage({
+      filename: file.name,
+      mimeType: file.type || "application/pdf",
+      body: file,
+    });
+    return result.ok ? result.storageKey : undefined;
   }
 
   async function handleFile(file: File | undefined) {
@@ -160,7 +149,7 @@ function UploadResumeButton({
         // Best-effort — an unreadable/scanned PDF still attaches, just without extracted text.
       }
       setStage("uploading");
-      const storageKey = await uploadToStorage(file);
+      const storageKey = await storageKeyFor(file);
       setStage("saving");
       const res = await postResumeUpload(candidateId, {
         originalFilename: file.name,

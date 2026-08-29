@@ -30,14 +30,20 @@ import { hasCapability } from "@destaworks/domain/constants";
 import { defined } from "@destaworks/domain/utils/defined";
 import { toIso } from "@destaworks/domain/utils/iso";
 import { AppError } from "@destaworks/integrations/http/app-error";
+import { storageEnabled } from "@destaworks/integrations/storage";
 import { toCandidateDTO, toDocumentSummaryDTO } from "@destaworks/application/candidate.dto";
 import type { AuthContext } from "@destaworks/auth/guards";
-import type { CandidateListDTO } from "@destaworks/contracts/validation/candidate";
+import type {
+  CandidateListDTO,
+  CandidateTrashDTO,
+  GetCandidateDetailPageResponse,
+} from "@destaworks/contracts/validation/candidate";
 import type { JourneyDTO } from "@destaworks/contracts/validation/journey";
 import type {
   BoardResponse,
   BulkMoveResponse,
   ColumnPageDTO,
+  DashboardStatsDTO,
 } from "@destaworks/contracts/validation/pipeline";
 import type {
   CandidateAckEnvelope,
@@ -58,6 +64,7 @@ import { SessionAuthGuard } from "../../common/guards/session-auth.guard";
 import { ZodValidationPipe, type ContractOutput } from "../../common/pipes/zod-validation.pipe";
 import { flatQuery } from "../../common/query-params";
 import type { ServiceOf } from "../service-token";
+import { LOOKUP_SERVICE } from "../lookups/lookups.tokens";
 import { RESUME_SERVICE } from "../resume/resume.tokens";
 import { CANDIDATE_SERVICE, NOTE_SERVICE } from "./candidates.tokens";
 
@@ -90,6 +97,8 @@ export class CandidatesController {
     private readonly notes: ServiceOf<typeof NOTE_SERVICE>,
     @Inject(RESUME_SERVICE)
     private readonly resumes: ServiceOf<typeof RESUME_SERVICE>,
+    @Inject(LOOKUP_SERVICE)
+    private readonly lookups: ServiceOf<typeof LOOKUP_SERVICE>,
   ) {}
 
   /**
@@ -161,6 +170,28 @@ export class CandidatesController {
   }
 
   /**
+   * GET /candidates/trash — the `/trash` payload, soft-deleted candidates newest-deleted first.
+   * Declared before `:id` so the literal segment wins the match; Nest resolves in declaration order.
+   *
+   * Open to any signed-in operator, matching the page it serves: soft-delete and restore are
+   * reversible, and the rows are PII-gated by `toCandidateDTO` inside the service — a trash row
+   * never carries `licenseNumber`. Purging is the gated action, and it lives on its own endpoint.
+   */
+  @Get("trash")
+  async trash(@CurrentUser() user: AuthContext): Promise<CandidateTrashDTO> {
+    return this.candidates.listTrash(user);
+  }
+
+  /**
+   * GET /candidates/dashboard-stats — headline counts, the active-stage funnel and the small
+   * "needs attention" list. Declared before `:id` for the same reason as `trash`.
+   */
+  @Get("dashboard-stats")
+  async dashboardStats(@CurrentUser() user: AuthContext): Promise<DashboardStatsDTO> {
+    return this.candidates.dashboardStats(user);
+  }
+
+  /**
    * GET /candidates/:id — the lighter profile projection the recipient picker fetches after a pick.
    * Not the detail composite the RSC page loads: no documents, notes, history or outreach.
    */
@@ -170,6 +201,34 @@ export class CandidatesController {
     @CurrentUser() user: AuthContext,
   ): Promise<CandidateProfileEnvelope> {
     return { candidate: await this.candidates.getProfile(id, user) };
+  }
+
+  /**
+   * GET /candidates/:id/detail — the whole detail page in one request: the candidate composite,
+   * the client and @mention option lists, and whether object storage is configured.
+   *
+   * 4.0's paydown list names `load-detail.ts` as the composite loader to port, so the option lists
+   * are folded in HERE rather than left to a second call on `GET /lookups`: the page renders none
+   * of itself until all of them have arrived, so serving them separately buys nothing and costs a
+   * round trip. Same gate as both reads it replaces — session, no capability — and `storageEnabled`
+   * is read from THIS process, which is the one that would perform the upload.
+   *
+   * The PII gate is the service's: `getCandidateDetail` projects through `toCandidateDTO(row,
+   * viewer)`, so `licenseNumber` stays absent without `viewCredentials`. Nothing is re-projected
+   * here.
+   */
+  @Get(":id/detail")
+  async detail(
+    @Param("id") id: string,
+    @CurrentUser() user: AuthContext,
+  ): Promise<GetCandidateDetailPageResponse> {
+    // Both reads start together, but the detail is AWAITED first so a missing candidate answers
+    // 404 even when the option read fails in the same tick.
+    const optionsPromise = this.lookups.filterOptions(user);
+    optionsPromise.catch(() => {});
+    const detail = await this.candidates.getCandidateDetail(id, user);
+    const { clients, users } = await optionsPromise;
+    return { detail, clients, taggable: users, storageEnabled };
   }
 
   /**

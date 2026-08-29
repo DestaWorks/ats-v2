@@ -4,13 +4,15 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { dateKey, mondayOf } from "@destaworks/domain/daily";
 import { useTzCookieSync } from "@/lib/use-tz-cookie-sync";
-import type { WeeklyBriefAiOutput, WeeklyBriefDTO } from "@destaworks/contracts/validation/briefs";
+import type {
+  WeeklyBriefAiOutput,
+  WeeklyBriefDTO,
+  WeeklyPatternsAiOutput as PostBriefsWeeklyPatternsResponse,
+} from "@destaworks/contracts/validation/briefs";
 import { getJson, messageForFailure, postJson } from "@/lib/api/client";
 import { awaitBriefDraft } from "@/lib/api/await-brief-draft";
-import type { GetBriefsWeeklyResponse } from "@/app/api/briefs/weekly/route";
-import type { PostBriefsWeeklyGenerateResponse } from "@/app/api/briefs/weekly/generate/route";
-import type { PostBriefsWeeklyPatternsResponse } from "@/app/api/briefs/weekly/patterns/route";
-import type { PostBriefsWeeklySaveResponse } from "@/app/api/briefs/weekly/save/route";
+import type { GetBriefsWeeklyResponse } from "@destaworks/contracts/http/briefs";
+import type { EnqueuedJobResponse as PostBriefsWeeklyGenerateResponse } from "@destaworks/contracts/validation/jobs";
 import { Button } from "@destaworks/ui/button";
 import { Card } from "@destaworks/ui/card";
 import { Field } from "@destaworks/ui/field";
@@ -137,7 +139,7 @@ export function WeeklyBriefView({
   async function save() {
     if (!draft) return;
     setSavingBrief(true);
-    const res = await postJson<PostBriefsWeeklySaveResponse>("/api/briefs/weekly/save", {
+    const res = await postJson<WeeklyBriefDTO>("/api/briefs/weekly/save", {
       ...draft,
       weekStart,
     });

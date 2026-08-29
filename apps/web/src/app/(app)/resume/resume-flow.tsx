@@ -3,13 +3,12 @@
 import { useState } from "react";
 import type { ResumeVariant } from "@destaworks/domain/constants/documents";
 import { RESUME_VARIANT_LABELS } from "@destaworks/domain/constants/documents";
-import type { PostResumeExtractResponse } from "@/app/api/resume/extract/route";
 import type { PostResumeSaveResponse } from "@/app/api/resume/save/route";
-import type { PostResumeUploadUrlResponse } from "@/app/api/resume/upload-url/route";
 import type {
   ResumeData,
   ResumeMatch,
   SaveResumeInput,
+  ExtractResumeResponse as PostResumeExtractResponse,
 } from "@destaworks/contracts/validation/resume";
 import { Spinner } from "@destaworks/ui/spinner";
 import { ErrorState } from "@destaworks/ui/error-state";
@@ -19,14 +18,18 @@ import { UploadZone } from "./upload-zone";
 import { ReviewForm } from "./review/review-form";
 import { BrandedResume } from "./branded-resume";
 import { capResumeText, extractPdfText } from "./lib/pdf-extract";
-import type { ApiErrorBody } from "@/lib/api/client";
+import { messageForFailure, postJson, type ApiFailure } from "@/lib/api/client";
+import { uploadToStorage } from "@/lib/api/upload";
 
 type Step = "pick" | "upload" | "extracting" | "review" | "saved";
 
-/** Turn an API error envelope into a user-safe message (no PII, no raw provider text). */
-function messageForError(body: ApiErrorBody, fallback: string): string {
-  const code = body.error?.code;
-  switch (code) {
+/**
+ * The resume flow's own wording for the codes AI extraction can fail with. Everything else defers
+ * to the shared `messageForFailure`, so this stays a list of what is special here rather than a
+ * second copy of the general mapping.
+ */
+function messageForError(failure: ApiFailure, fallback: string): string {
+  switch (failure.code) {
     case "FEATURE_DISABLED":
       return "Resume extraction isn't configured on this environment. Ask an administrator to add an AI provider key.";
     case "RATE_LIMITED":
@@ -34,7 +37,9 @@ function messageForError(body: ApiErrorBody, fallback: string): string {
     case "EXTRACTION_FAILED":
       return "The resume couldn't be extracted. Try again, or paste the text manually.";
     case "BAD_REQUEST":
-      return body.error?.message ?? fallback;
+      return failure.message || fallback;
+    case "NETWORK":
+      return messageForFailure(failure);
     default:
       return fallback;
   }
@@ -116,26 +121,18 @@ export function ResumeFlow({
     }
     setStep("extracting");
     setError(null);
-    try {
-      const res = await fetch("/api/resume/extract", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ variant, text }),
-      });
-      if (!res.ok) {
-        const body = (await res.json().catch(() => ({}))) as ApiErrorBody;
-        setError(messageForError(body, "Extraction failed. Please try again."));
-        setStep("upload");
-        return;
-      }
-      const data = (await res.json()) as PostResumeExtractResponse;
-      setExtractedText(text);
-      setResult(data);
-      setStep("review");
-    } catch {
-      setError("Network error calling the extraction service. Please try again.");
+    const result = await postJson<PostResumeExtractResponse>("/api/resume/extract", {
+      variant,
+      text,
+    });
+    if (!result.ok) {
+      setError(messageForError(result.failure, "Extraction failed. Please try again."));
       setStep("upload");
+      return;
     }
+    setExtractedText(text);
+    setResult(result.data);
+    setStep("review");
   }
 
   /** Best-effort: uploads the raw file straight to Storage and returns its key, or `undefined` on
@@ -143,23 +140,8 @@ export function ResumeFlow({
    *  extracted text is always the source of truth. */
   async function tryUploadToStorage(originalFilename: string, mimeType: string) {
     if (!resumeStorageEnabled || !file) return undefined;
-    try {
-      const res = await fetch("/api/resume/upload-url", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ filename: originalFilename, mimeType }),
-      });
-      if (!res.ok) return undefined;
-      const { signedUrl, storageKey } = (await res.json()) as PostResumeUploadUrlResponse;
-      const upload = await fetch(signedUrl, {
-        method: "PUT",
-        headers: { "Content-Type": mimeType },
-        body: file,
-      });
-      return upload.ok ? storageKey : undefined;
-    } catch {
-      return undefined;
-    }
+    const result = await uploadToStorage({ filename: originalFilename, mimeType, body: file });
+    return result.ok ? result.storageKey : undefined;
   }
 
   async function handleSave(data: ResumeData, confirmedCandidateId: string | undefined) {
@@ -179,22 +161,16 @@ export function ResumeFlow({
       storageKey,
     };
     try {
-      const res = await fetch("/api/resume/save", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) {
-        const body = (await res.json().catch(() => ({}))) as ApiErrorBody;
-        setError(messageForError(body, "Could not save this candidate. Please try again."));
+      const result = await postJson<PostResumeSaveResponse>("/api/resume/save", payload);
+      if (!result.ok) {
+        setError(
+          messageForError(result.failure, "Could not save this candidate. Please try again."),
+        );
         return;
       }
-      const body = (await res.json()) as PostResumeSaveResponse;
-      setSavedName(body.candidate.name);
+      setSavedName(result.data.candidate.name);
       setSavedData(data);
       setStep("saved");
-    } catch {
-      setError("Network error saving the candidate. Please try again.");
     } finally {
       setSubmitting(false);
     }

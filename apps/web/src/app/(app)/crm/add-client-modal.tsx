@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { CLIENT_PRIORITIES } from "@destaworks/domain/constants";
 import { createClientSchema } from "@destaworks/contracts/validation/client";
-import type { PostCrmClientResponse } from "@/app/api/crm/clients/route";
+import type { PostCrmClientResponse } from "@destaworks/contracts/http/crm";
 import { useApiForm } from "@/lib/forms/use-api-form";
 import { emptyToNull } from "@/lib/forms/empty-to-null";
 import { postJson } from "@/lib/api/client";

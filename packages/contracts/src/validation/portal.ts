@@ -50,6 +50,18 @@ export interface PortalDataDTO {
   roles: PortalRoleDTO[];
 }
 
+// --- Log a portal view (write) -----------------------------------------------
+
+/**
+ * The pages a portal view may be logged against — an allow-list, because `page` is the only value
+ * an external caller supplies that reaches an audit row, and an unbounded string would let a client
+ * write whatever it liked into the audit trail.
+ */
+export const PORTAL_VIEW_PAGES = ["portal"] as const;
+
+export const portalLogViewSchema = z.object({ page: z.enum(PORTAL_VIEW_PAGES) }).strict();
+export type PortalLogViewInput = z.infer<typeof portalLogViewSchema>;
+
 // --- Post a role (write) -----------------------------------------------------
 
 /** Same shape as `createOpenRoleSchema` minus `clientId`/`status` — both server-set from the
@@ -80,6 +92,11 @@ export const portalAccessRequestSchema = z
   })
   .strict();
 export type PortalAccessRequestInput = z.infer<typeof portalAccessRequestSchema>;
+
+/** Response body of `POST /portal/access-requests` — acceptance only, never the requester's details. */
+export interface PostPortalAccessRequestResponse {
+  ok: true;
+}
 
 export interface PortalAccessRequestDTO {
   id: string;
@@ -139,4 +156,20 @@ export interface GeneratedPortalLinkDTO {
  */
 export interface PostPortalRoleResponse {
   role: { id: string };
+}
+
+/**
+ * Response body of `GET /portal/data` — exactly `PortalDataDTO`, the allow-list projection above.
+ *
+ * An alias rather than a fresh shape on purpose: the projection IS the guarantee, and a second
+ * definition here would be a place for the two to drift apart in the direction that leaks.
+ */
+export type GetPortalDataResponse = PortalDataDTO;
+
+/**
+ * Response body of `POST /portal/log-view` — an acknowledgement and nothing else. The caller
+ * already knows who it is; echoing the contact or the client back would only widen the surface.
+ */
+export interface PostPortalLogViewResponse {
+  ok: true;
 }

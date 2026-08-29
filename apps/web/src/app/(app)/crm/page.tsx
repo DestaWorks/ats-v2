@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { hasCapability } from "@destaworks/domain/constants";
 import { getVerifiedUser } from "@destaworks/auth/guards";
-import { clientService } from "@destaworks/application/client.service";
+import type { GetCrmClientsResponse } from "@destaworks/contracts/http/crm";
+import { apiGet } from "@/lib/api/server";
 import { ErrorState } from "@destaworks/ui/error-state";
 import { EmptyState } from "@destaworks/ui/empty-state";
 import { Table, Td } from "@destaworks/ui/table";
@@ -26,7 +27,7 @@ export default async function CrmPage() {
     );
   }
 
-  const { clients } = await clientService.list(user);
+  const { clients } = await apiGet<GetCrmClientsResponse>("/crm/clients");
 
   return (
     <div className="flex flex-col gap-5 px-8 py-6">

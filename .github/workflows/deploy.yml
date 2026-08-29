@@ -23,9 +23,10 @@ concurrency:
 jobs:
   # The API is not hosted yet — the target and its cost are an owner decision (SAAS-RESTRUCTURE-PLAN
   # 4.4), and Vercel is not it: apps/api is a long-lived process, which is the whole reason it left
-  # serverless. What this job does is the part that does not depend on that decision — build the
-  # deployable artefact from the same pinned revision and prove it boots and serves before anyone
-  # promotes it. When a host is chosen, its deploy step slots in after the smoke test.
+  # serverless. The host is Render (`render.yaml`), which builds from the repo itself — so this job
+  # stays the gate rather than the shipper: it proves the pinned revision boots and serves before
+  # `deploy-api` asks Render to roll it out. Render is told WHICH revision by the deploy hook, so
+  # the bytes it runs and the bytes proven here come from the same SHA.
   api-artifact:
     name: Build the API from ${{ inputs.ref }}
     runs-on: ubuntu-latest
@@ -82,9 +83,56 @@ jobs:
           path: apps/api/dist/
           retention-days: 14
 
+  # Render builds from the repo, so "deploy" here is: ask it to build this exact SHA, then wait
+  # until it is actually serving. Without the wait a green workflow would only mean "the request
+  # was accepted", which is the failure mode where a broken API is reported as deployed.
+  deploy-api:
+    name: Roll out the API to Render (${{ inputs.environment }})
+    runs-on: ubuntu-latest
+    needs: api-artifact
+    environment: ${{ inputs.environment }}
+    permissions:
+      contents: read
+    steps:
+      - name: Trigger the Render deploy for this revision
+        env:
+          HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${HOOK}" ]; then
+            echo "::error::RENDER_DEPLOY_HOOK_URL is not set — the API would silently not deploy."
+            exit 1
+          fi
+          curl -fsS "${HOOK}?ref=${{ inputs.ref }}" > /dev/null
+          echo "Asked Render to deploy ${{ inputs.ref }}"
+
+      # The API is the read path for every ported page, so a web deploy on top of an API that is
+      # not yet serving shows users an error boundary. Block until /health answers.
+      - name: Wait for the API to serve this revision
+        env:
+          API_HEALTH_URL: ${{ vars.API_HEALTH_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${API_HEALTH_URL}" ]; then
+            echo "::error::API_HEALTH_URL is not set — cannot confirm the API came back up."
+            exit 1
+          fi
+          for _ in $(seq 1 60); do
+            if curl -fsS "${API_HEALTH_URL}" | grep -q '"status":"ok"'; then
+              echo "API is serving"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::API did not report healthy within 10 minutes."
+          exit 1
+
   deploy:
     name: Deploy ${{ inputs.ref }} to ${{ inputs.environment }}
     runs-on: ubuntu-latest
+    # After the API, never beside it: apps/web renders through it, so shipping web first would
+    # serve the error boundary until Render caught up.
+    needs: deploy-api
     # Attach GitHub environment protection rules (required reviewers for production) here.
     environment: ${{ inputs.environment }}
     permissions:

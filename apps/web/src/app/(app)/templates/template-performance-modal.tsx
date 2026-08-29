@@ -3,8 +3,10 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { getJson, messageForFailure } from "@/lib/api/client";
-import type { GetTemplatePerformanceResponse } from "@/app/api/templates/performance/route";
-import type { TemplatePerformanceRowDTO } from "@destaworks/contracts/validation/template-performance";
+import type {
+  TemplatePerformanceRowDTO,
+  TemplatePerformanceDTO as GetTemplatePerformanceResponse,
+} from "@destaworks/contracts/validation/template-performance";
 import { Button } from "@destaworks/ui/button";
 import { EmptyState } from "@destaworks/ui/empty-state";
 import { Modal } from "@destaworks/ui/modal";

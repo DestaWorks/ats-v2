@@ -1,43 +1,30 @@
 import "server-only";
 import { notFound } from "next/navigation";
 import { getVerifiedUser } from "@destaworks/auth/guards";
-import { candidateService } from "@destaworks/application/candidate.service";
-import { storageEnabled } from "@destaworks/integrations/storage";
+import type { GetCandidateDetailPageResponse } from "@destaworks/contracts/validation/candidate";
 import { AppError } from "@destaworks/integrations/http/app-error";
-import { cachedClientList, cachedUserList } from "@destaworks/integrations/http/request-cache";
+import { apiGet } from "@/lib/api/server";
 
 /**
  * Shared RSC loader for the candidate detail — used by BOTH renderings of `/candidates/[id]`:
  * the full page (hard load / deep link) and the route-INTERCEPTED modal (in-app navigation from
  * the board/list). One place owns the guard → composite-read → NOT_FOUND mapping so the two
  * entries can never drift. Returns everything `<CandidateDetail>` needs.
+ *
+ * The three parallel in-process reads this used to make are now ONE request: `GET
+ * /candidates/:id/detail` answers the candidate composite, the client and @mention option lists
+ * and the storage flag together (SAAS-RESTRUCTURE-PLAN 4.0 — a composite read becomes a composite
+ * endpoint, not N round trips).
  */
 export async function loadCandidateDetail(id: string) {
-  const user = await getVerifiedUser();
+  await getVerifiedUser();
 
-  // Perf audit 2026-08-04: `clients`/`taggable` only depend on `user` (already resolved above),
-  // not on the candidate detail result — kick off all three reads together instead of making two
-  // independent queries wait behind the (larger) detail fetch. Each round trip costs real time
-  // (cross-region DB), so an avoidable serial wait here was a full extra round trip on every load.
-  const detailPromise = candidateService.getCandidateDetail(id, user);
-  const clientsPromise = cachedClientList(user);
-  const taggablePromise = cachedUserList(); // @mention targets: id + display name only (no emails client-side)
-  // If `detailPromise` throws NOT_FOUND below, these two are never awaited — attach a no-op
-  // catch so a rare rejection on that path doesn't surface as an unhandled rejection; the real
-  // values/errors on the happy path are still handled by the `Promise.all` further down.
-  clientsPromise.catch(() => {});
-  taggablePromise.catch(() => {});
-
-  let detail;
   try {
-    detail = await detailPromise;
+    return await apiGet<GetCandidateDetailPageResponse>(
+      `/candidates/${encodeURIComponent(id)}/detail`,
+    );
   } catch (err) {
     if (err instanceof AppError && err.code === "NOT_FOUND") notFound();
     throw err;
   }
-
-  const [clientRows, taggable] = await Promise.all([clientsPromise, taggablePromise]);
-  const clients = clientRows.map((c) => ({ id: c.id, name: c.name }));
-
-  return { detail, clients, taggable, storageEnabled };
 }

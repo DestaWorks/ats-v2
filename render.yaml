@@ -1,0 +1,52 @@
+# Render blueprint for the backend — SAAS-RESTRUCTURE-PLAN 4.4.
+#
+# TWO services from one repo, deliberately. `main.ts` and `worker.ts` are separate processes
+# because they scale on different things and fail differently: the API is sized by request
+# concurrency and must answer in milliseconds, the worker is sized by queue depth and runs jobs
+# measured in minutes. Sharing a process means a burst of ETL work starves request handling, and a
+# rolling API deploy kills jobs mid-flight for no reason.
+#
+# `apps/web` stays on Vercel and is NOT described here. It reaches this API over HTTP as `API_URL`.
+services:
+  - type: web
+    name: destaworks-api
+    runtime: node
+    plan: starter
+    region: oregon
+    buildCommand: pnpm install --frozen-lockfile && pnpm db:generate && pnpm build:api
+    startCommand: pnpm start:api
+    healthCheckPath: /health/live
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Render provides PORT; `resolvePort()` reads it before falling back to API_PORT/3004.
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      # Comma-separated browser origins allowed to call this API WITH credentials. The session is a
+      # cookie, so this is an allowlist and never a reflected origin. Server-rendered reads from
+      # apps/web are server-to-server and do not need an entry.
+      - key: WEB_ORIGINS
+        sync: false
+      - key: BETTER_AUTH_SECRET
+        sync: false
+      - key: PLATFORM_ADMIN_USER_IDS
+        sync: false
+
+  - type: worker
+    name: destaworks-worker
+    runtime: node
+    plan: starter
+    region: oregon
+    buildCommand: pnpm install --frozen-lockfile && pnpm db:generate && pnpm build:api
+    startCommand: pnpm start:worker
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: BETTER_AUTH_SECRET
+        sync: false

@@ -5,9 +5,9 @@ import { toast } from "sonner";
 import {
   approvePortalRequestSchema,
   type PortalAccessRequestDTO,
+  type GeneratedPortalLinkDTO as PostAdminPortalRequestApproveResponse,
 } from "@destaworks/contracts/validation/portal";
-import type { PostAdminPortalRequestApproveResponse } from "@/app/api/admin/portal/requests/[id]/approve/route";
-import type { PostAdminPortalRequestDeclineResponse } from "@/app/api/admin/portal/requests/[id]/decline/route";
+import type { AcknowledgedIdDTO as PostAdminPortalRequestDeclineResponse } from "@destaworks/contracts/api";
 import { useApiForm } from "@/lib/forms/use-api-form";
 import { messageForFailure, postJson } from "@/lib/api/client";
 import { Badge } from "@destaworks/ui/badge";

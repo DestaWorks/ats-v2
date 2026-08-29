@@ -1,19 +1,19 @@
 import { hasCapability, isProspectStatus } from "@destaworks/domain/constants";
-import { defined } from "@destaworks/domain/utils/defined";
 import { getVerifiedUser } from "@destaworks/auth/guards";
-import { prospectService } from "@destaworks/application/prospect.service";
+import type { GetProspectListResponse } from "@destaworks/contracts/validation/prospect";
+import type { LookupOptionsDTO } from "@destaworks/contracts/validation/lookups";
 import { ErrorState } from "@destaworks/ui/error-state";
+import { apiGet, query } from "@/lib/api/server";
 import { ProspectsInventory } from "./prospects-inventory";
-import { cachedUserList } from "@destaworks/integrations/http/request-cache";
 
 /**
  * Client Discovery — B2B prospecting pipeline (RSC, new domain). Gated `viewClientDiscovery`
- * (leadership) — the `/api/prospects/**` routes enforce the same capability, so this is a
+ * (leadership) — the `/prospects/**` endpoints enforce the same capability, so this is a
  * friendly no-access screen + the real gate, matching `crm/page.tsx`. SSR-renders page 1 of the
- * filtered list directly (no fetch flash); filters seed from URL `searchParams` so a shared link
- * lands pre-filtered. The `/client-discovery/search` sub-route owns the NPPES search (RSC-driven
- * off its own `searchParams`, matching `/discover`'s pattern) — kept separate so this page's list
- * read and that page's live external-API search never compete for the same render.
+ * filtered list through the API (no fetch flash); filters seed from URL `searchParams` so a
+ * shared link lands pre-filtered. The `/client-discovery/search` sub-route owns the NPPES search
+ * (RSC-driven off its own `searchParams`, matching `/discover`'s pattern) — kept separate so this
+ * page's list read and that page's live external-API search never compete for the same render.
  */
 export default async function ClientDiscoveryPage({
   searchParams,
@@ -44,14 +44,12 @@ export default async function ClientDiscoveryPage({
   const rawPage = Number(one(sp.page));
   const page = Number.isInteger(rawPage) && rawPage > 0 ? rawPage : 1;
 
-  const [list, userRows] = await Promise.all([
-    prospectService.list(
-      defined({ status, ownerId, search, includeDeleted: showDeleted, page }),
-      user,
+  const [list, { users: owners }] = await Promise.all([
+    apiGet<GetProspectListResponse>(
+      `/prospects/list${query({ status, ownerId, search, deleted: showDeleted, page })}`,
     ),
-    cachedUserList(),
+    apiGet<LookupOptionsDTO>("/lookups"),
   ]);
-  const owners = userRows.map((u) => ({ id: u.id, name: u.name }));
 
   const listKey = [status, ownerId, search, showDeleted, page].join("|");
 

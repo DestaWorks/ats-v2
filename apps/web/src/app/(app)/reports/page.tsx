@@ -1,7 +1,8 @@
 import { hasCapability } from "@destaworks/domain/constants";
 import { getVerifiedUser } from "@destaworks/auth/guards";
-import { reportFilterOptionsService } from "@destaworks/application/reports/filter-options.service";
-import { pipelineReportsService } from "@destaworks/application/reports/pipeline-reports.service";
+import type { GetReportsFilterOptionsResponse } from "@destaworks/contracts/reports/filter-options";
+import type { ExecutiveSummaryDTO } from "@destaworks/contracts/validation/reports";
+import { apiGet } from "@/lib/api/server";
 import { ErrorState } from "@destaworks/ui/error-state";
 import { ReportsView } from "./reports-view";
 
@@ -30,8 +31,8 @@ export default async function ReportsPage() {
   // seed-then-refetch-on-interaction pattern used across the app. The other 9 tabs still
   // fetch client-side on first select.
   const [options, initialExecutive] = await Promise.all([
-    reportFilterOptionsService.load(user),
-    pipelineReportsService.executiveSummary(user, {}),
+    apiGet<GetReportsFilterOptionsResponse>("/reports/filter-options"),
+    apiGet<ExecutiveSummaryDTO>("/reports/executive"),
   ]);
 
   return (

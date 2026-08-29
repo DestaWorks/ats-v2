@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { SIGNATURE_PRESETS, defaultSignature } from "@destaworks/domain/constants/templates";
 import { patchJson, messageForFailure } from "@/lib/api/client";
-import type { PatchMePreferencesResponse } from "@/app/api/me/preferences/route";
+import type { UserPreferencesDTO as PatchMePreferencesResponse } from "@destaworks/contracts/validation/user-preferences";
 import { Button } from "@destaworks/ui/button";
 import { Textarea } from "@destaworks/ui/textarea";
 

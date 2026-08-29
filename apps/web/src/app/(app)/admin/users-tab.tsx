@@ -7,13 +7,11 @@ import {
   banUserSchema,
   createUserSchema,
   type AdminUserDTO,
+  type GeneratedPasswordDTO as PostAdminUserResponse,
+  type AdminUserEnvelopeDTO,
+  type ResetPasswordDTO as PostAdminUserResetPasswordResponse,
 } from "@destaworks/contracts/validation/admin";
-import type { PostAdminUserResponse } from "@/app/api/admin/users/route";
-import type { DeleteAdminUserResponse } from "@/app/api/admin/users/[id]/route";
-import type { PostAdminUserBanResponse } from "@/app/api/admin/users/[id]/ban/route";
-import type { PostAdminUserUnbanResponse } from "@/app/api/admin/users/[id]/unban/route";
-import type { PatchAdminUserRoleResponse } from "@/app/api/admin/users/[id]/role/route";
-import type { PostAdminUserResetPasswordResponse } from "@/app/api/admin/users/[id]/reset-password/route";
+import type { AcknowledgedIdDTO as DeleteAdminUserResponse } from "@destaworks/contracts/api";
 import { useApiForm } from "@/lib/forms/use-api-form";
 import { emptyToNull } from "@/lib/forms/empty-to-null";
 import { deleteJson, messageForFailure, patchJson, postJson } from "@/lib/api/client";
@@ -73,7 +71,7 @@ export function UsersTab({
 
   async function handleRoleChange(user: AdminUserDTO, role: string) {
     setBusyId(user.id);
-    const res = await patchJson<PatchAdminUserRoleResponse>(`/api/admin/users/${user.id}/role`, {
+    const res = await patchJson<AdminUserEnvelopeDTO>(`/api/admin/users/${user.id}/role`, {
       role,
     });
     setBusyId(null);
@@ -87,7 +85,7 @@ export function UsersTab({
 
   async function handleUnban(user: AdminUserDTO) {
     setBusyId(user.id);
-    const res = await postJson<PostAdminUserUnbanResponse>(`/api/admin/users/${user.id}/unban`, {});
+    const res = await postJson<AdminUserEnvelopeDTO>(`/api/admin/users/${user.id}/unban`, {});
     setBusyId(null);
     if (res.ok) {
       toast.success(`${user.name} unbanned`);
@@ -322,8 +320,7 @@ function BanForm({
   const [serverError, setServerError] = useState<string | null>(null);
   const { form, pending, onSubmit } = useApiForm(banUserSchema, {
     defaultValues: {},
-    submit: (values) =>
-      postJson<PostAdminUserBanResponse>(`/api/admin/users/${user.id}/ban`, values),
+    submit: (values) => postJson<AdminUserEnvelopeDTO>(`/api/admin/users/${user.id}/ban`, values),
     onSuccess: (data) => {
       toast.success(`${user.name} blocked`);
       onSaved(data.user);

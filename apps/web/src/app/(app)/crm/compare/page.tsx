@@ -2,7 +2,8 @@ import Link from "next/link";
 import { hasCapability } from "@destaworks/domain/constants";
 import type { ClientHealthTier } from "@destaworks/domain/rules/client-health";
 import { getVerifiedUser } from "@destaworks/auth/guards";
-import { crmAnalyticsService } from "@destaworks/application/crm-analytics.service";
+import type { GetCrmCompareResponse } from "@destaworks/contracts/http/crm";
+import { apiGet } from "@/lib/api/server";
 import { Badge, type BadgeTone } from "@destaworks/ui/badge";
 import { EmptyState } from "@destaworks/ui/empty-state";
 import { ErrorState } from "@destaworks/ui/error-state";
@@ -34,7 +35,7 @@ export default async function ComparePage() {
     );
   }
 
-  const rows = await crmAnalyticsService.compare(user);
+  const { clients: rows } = await apiGet<GetCrmCompareResponse>("/crm/compare");
 
   return (
     <div className="flex flex-col gap-5 px-8 py-6">

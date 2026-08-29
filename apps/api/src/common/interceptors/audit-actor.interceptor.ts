@@ -1,3 +1,4 @@
+import "reflect-metadata";
 import { AppError } from "@destaworks/integrations/http/app-error";
 
 /**
@@ -33,6 +34,9 @@ export interface HttpArgumentsHostLike {
 /** @see HttpArgumentsHostLike */
 export interface ExecutionContextLike {
   switchToHttp(): HttpArgumentsHostLike;
+  /** Optional so a hand-built test context stays assignable; Nest's own context provides both. */
+  getHandler?(): object;
+  getClass?(): object;
 }
 
 /** The minimal `CallHandler` surface: invoking it runs the route handler. */
@@ -45,16 +49,33 @@ export interface AuditActorRequest {
   method?: string;
   /** `unknown` on purpose: `getRequest<T>()` is an unchecked assertion, so this is narrowed. */
   user?: unknown;
+  /** What `PortalAuthGuard` attaches. A separate property because the two never merge. */
+  portal?: unknown;
 }
 
 /**
  * A named, reasoned exemption for a route that legitimately mutates without a signed-in operator
- * — the client portal's token-bearing contact, an inbound webhook, sign-up. Passed at the wiring
- * site so the exemption is visible in review, the way `PERMITTED` in `scripts/check-architecture.mjs`
- * and `RESPONSE_TYPE_EXEMPTIONS` in the contract test already are. There is no silent skip.
+ * — the client portal's token-bearing contact, an inbound webhook, sign-up. Declared per route
+ * with `@UnattributedMutation({ reason })`, or once for a whole host at the wiring site, so the
+ * exemption is visible in review the way `PERMITTED` in `scripts/check-architecture.mjs` and
+ * `RESPONSE_TYPE_EXEMPTIONS` in the contract test already are. There is no silent skip.
  */
 export interface UnattributedAllowance {
   reason: string;
+}
+
+/** Metadata key `@UnattributedMutation({ reason })` writes, so one route may carry the allowance. */
+export const UNATTRIBUTED_MUTATION_METADATA = "destaworks:unattributed-mutation";
+
+/** The allowance a route declared, narrowed by hand — decorator metadata is `unknown` at runtime. */
+function declaredAllowance(target: object | undefined): UnattributedAllowance | undefined {
+  if (target === undefined) return undefined;
+  const declared: unknown = Reflect.getMetadata(UNATTRIBUTED_MUTATION_METADATA, target);
+  if (typeof declared !== "object" || declared === null || !("reason" in declared)) {
+    return undefined;
+  }
+  const reason: unknown = declared.reason;
+  return typeof reason === "string" && reason.length > 0 ? { reason } : undefined;
 }
 
 const MUTATING_METHODS: ReadonlySet<string> = new Set(["POST", "PUT", "PATCH", "DELETE"]);
@@ -74,6 +95,22 @@ function resolvedActorId(user: unknown): string | null {
   if (typeof identity !== "object" || identity === null) return null;
   if (!("id" in identity)) return null;
   const id: unknown = identity.id;
+  return typeof id === "string" && id.length > 0 ? id : null;
+}
+
+/**
+ * The portal contact's id, or `null`.
+ *
+ * A portal mutation is ATTRIBUTED, not unattributed: `PortalAuthGuard` resolves an external client
+ * contact from the `portal_token` cookie server-side and attaches it as `request.portal`. It is a
+ * different principal from an operator, not the absence of one — so it resolves here rather than
+ * taking `@UnattributedMutation`, which would admit the route even when the guard populated
+ * nothing and is precisely the case this interceptor exists to fail.
+ */
+function resolvedPortalActorId(portal: unknown): string | null {
+  if (typeof portal !== "object" || portal === null) return null;
+  if (!("contactId" in portal)) return null;
+  const id: unknown = portal.contactId;
   return typeof id === "string" && id.length > 0 ? id : null;
 }
 
@@ -104,8 +141,14 @@ export class AuditActorInterceptor {
     const request = context.switchToHttp().getRequest<AuditActorRequest>();
     const method = (request.method ?? "").toUpperCase();
 
-    if (MUTATING_METHODS.has(method) && this.unattributed === undefined) {
-      if (resolvedActorId(request.user) === null) {
+    const allowance =
+      this.unattributed ??
+      declaredAllowance(context.getHandler?.()) ??
+      declaredAllowance(context.getClass?.());
+
+    if (MUTATING_METHODS.has(method) && allowance === undefined) {
+      const actor = resolvedActorId(request.user) ?? resolvedPortalActorId(request.portal);
+      if (actor === null) {
         throw new AppError("UNAUTHORIZED", "Sign in required");
       }
     }
