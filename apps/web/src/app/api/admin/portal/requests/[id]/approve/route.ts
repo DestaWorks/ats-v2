@@ -18,6 +18,6 @@ export const POST = apiHandler<{ params: Promise<{ id: string }> }>(async (req, 
   const user = await requireCapability("configureClientPortal");
   const { id } = await ctx.params;
   const input = approvePortalRequestSchema.parse(await req.json());
-  const result = await portalAccessRequestService.approve(id, input, user);
+  const result = await portalAccessRequestService.approve(user, id, input);
   return json<PostAdminPortalRequestApproveResponse>(result);
 });

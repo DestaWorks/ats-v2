@@ -4,6 +4,8 @@ import { accessRequestSchema } from "@destaworks/contracts/validation/auth";
 import { AppError } from "@destaworks/integrations/http/app-error";
 import { checkRateLimit } from "@destaworks/integrations/http/rate-limit";
 import { accessRequestService } from "@destaworks/application/access-request.service";
+import { publicTenantService } from "@destaworks/application/public-tenant.service";
+import { headers } from "next/headers";
 
 /**
  * Server Action: submit an access request. Thin — validates with the shared Zod schema,
@@ -30,7 +32,12 @@ export async function submitAccessRequest(
     return { ok: false, error: "Please check the form and try again." };
   }
   try {
-    await accessRequestService.submit(parsed.data);
+    const scope = await publicTenantService.contextForHost(
+      (await headers()).get("host") ?? undefined,
+    );
+    if (!scope) throw new AppError("NOT_FOUND", "No such workspace");
+
+    await accessRequestService.submit(scope, parsed.data);
   } catch (err) {
     if (err instanceof AppError && err.code === "CONFLICT") {
       return { ok: false, error: err.message };

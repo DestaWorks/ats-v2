@@ -59,6 +59,9 @@ describe("POST /api/briefs/weekly/patterns", () => {
     const res = await POST(req(), undefined);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(result);
-    expect(h.generatePatterns).toHaveBeenCalledWith({ weekStart: "2026-07-20", tz: -180 });
+    expect(h.generatePatterns).toHaveBeenCalledWith(
+      { weekStart: "2026-07-20", tz: -180 },
+      expect.objectContaining({ tenantId: "t1" }),
+    );
   });
 });

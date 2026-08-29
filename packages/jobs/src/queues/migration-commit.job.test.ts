@@ -171,7 +171,7 @@ vi.mock("@destaworks/db/repositories/migration-run.repository", () => ({
       if (run) run.jobId = jobId;
       return Promise.resolve(run);
     },
-    claimForAttempt: (id: string, attempt: number, now: Date) => {
+    claimForAttempt: (_ctx: unknown, id: string, attempt: number, now: Date) => {
       const run = store.runs.get(id);
       if (!run || !["queued", "running", "interrupted"].includes(run.status)) {
         return Promise.resolve(null);
@@ -181,12 +181,13 @@ vi.mock("@destaworks/db/repositories/migration-run.repository", () => ({
       run.startedAt = now;
       return Promise.resolve(run);
     },
-    recordProgress: (id: string, processedRows: number, totalRows: number) => {
+    recordProgress: (_ctx: unknown, id: string, processedRows: number, totalRows: number) => {
       const run = store.runs.get(id);
       if (run) Object.assign(run, { processedRows, totalRows, updatedAt: new Date() });
       return Promise.resolve(run);
     },
     finish: (
+      _ctx: unknown,
       id: string,
       data: { status: string; report?: unknown; failureCode?: string },
       now: Date,
@@ -204,7 +205,7 @@ vi.mock("@destaworks/db/repositories/migration-run.repository", () => ({
       }
       return Promise.resolve(run);
     },
-    markInterrupted: (id: string, processedRows: number) => {
+    markInterrupted: (_ctx: unknown, id: string, processedRows: number) => {
       const run = store.runs.get(id);
       if (run) Object.assign(run, { status: "interrupted", processedRows });
       return Promise.resolve(run);
@@ -237,7 +238,7 @@ function csv(count: number): string {
 }
 
 interface FakeCtx {
-  ctx: JobContext<{ runId: string }>;
+  ctx: JobContext<{ runId: string; tenantId: string }>;
   progress: { done: number; total: number }[];
   abort: (afterRows: number) => void;
 }
@@ -254,7 +255,7 @@ function fakeCtx(runId: string, attempt: number): FakeCtx {
       abortAfter = afterRows;
     },
     ctx: {
-      payload: { runId },
+      payload: { runId, tenantId: "t1" },
       attempt,
       signal: controller.signal,
       reportProgress: (done, total) => {
@@ -269,10 +270,10 @@ function fakeCtx(runId: string, attempt: number): FakeCtx {
 /** Stage a run the way the route does, with a stub enqueuer standing in for the driver. */
 async function stage(rowCount: number): Promise<string> {
   registerMigrationCommitEnqueuer((runId) => Promise.resolve(`job-${runId}`));
-  const accepted = await migrationRunService.start(
-    { format: "csv", content: csv(rowCount) },
-    OWNER,
-  );
+  const accepted = await migrationRunService.start(OWNER, {
+    format: "csv",
+    content: csv(rowCount),
+  });
   return accepted.runId;
 }
 
@@ -297,9 +298,15 @@ describe("the job definition", () => {
   });
 
   it("validates its payload on dequeue, not just on enqueue", () => {
-    expect(migrationCommitJob.schema.safeParse({ runId: "run-1" }).success).toBe(true);
+    expect(migrationCommitJob.schema.safeParse({ runId: "run-1", tenantId: "t1" }).success).toBe(
+      true,
+    );
     expect(migrationCommitJob.schema.safeParse({}).success).toBe(false);
-    expect(migrationCommitJob.schema.safeParse({ runId: "r", extra: 1 }).success).toBe(false);
+    // A payload without a tenant cannot be scoped, so it is refused rather than run unscoped.
+    expect(migrationCommitJob.schema.safeParse({ runId: "run-1" }).success).toBe(false);
+    expect(
+      migrationCommitJob.schema.safeParse({ runId: "r", tenantId: "t1", extra: 1 }).success,
+    ).toBe(false);
   });
 });
 
@@ -311,7 +318,7 @@ describe("a clean run", () => {
     await handleMigrationCommit(ctx);
 
     expect(store.candidates.size).toBe(3);
-    const run = await migrationRunService.state(runId, OWNER);
+    const run = await migrationRunService.state(OWNER, runId);
     expect(run.status).toBe("succeeded");
     expect(run.report?.counts.added).toBe(3);
     expect(progress.at(-1)).toEqual({ done: 3, total: 3 });
@@ -361,7 +368,7 @@ describe("idempotency — the same run handled twice", () => {
     expect(store.candidates.size).toBe(3); // ...and not one of them created a second candidate.
     expect([...store.candidates.keys()].sort()).toEqual(idsAfterFirst);
 
-    const state = await migrationRunService.state(runId, OWNER);
+    const state = await migrationRunService.state(OWNER, runId);
     const report: ImportReport | null = state.report;
     expect(report?.counts.added).toBe(0);
     expect(report?.counts.updated).toBe(3);
@@ -396,7 +403,7 @@ describe("abort", () => {
     // Only the three rows the first attempt never reached are written again.
     expect(store.upserts).toEqual(["L-3", "L-4", "L-5"]);
     expect(store.candidates.size).toBe(5);
-    const state = await migrationRunService.state(runId, OWNER);
+    const state = await migrationRunService.state(OWNER, runId);
     expect(state.status).toBe("succeeded");
     expect(state.report?.warnings).toContain("resumed-from-row:2");
   });

@@ -1,6 +1,6 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { CandidateNote } from "../generated/prisma/client";
-import { bridgeUnscopedCallers, db, type ScopedTx } from "../tenant-scope";
+import { db, type ScopedTx } from "../tenant-scope";
 
 /** A raw candidate-note row (Prisma model). Services/DTOs map this to API shapes. */
 export type NoteRow = CandidateNote;
@@ -22,7 +22,7 @@ export interface NoteCreateData {
  * soft-deleted notes never surface by accident. Every method accepts an optional `tx` so the
  * note service can compose the note write + `writeAudit` atomically.
  */
-export const noteRepository = bridgeUnscopedCallers({
+export const noteRepository = {
   create(ctx: TenantContext, data: NoteCreateData, tx?: ScopedTx) {
     return db(ctx, tx).candidateNote.create({
       data: {
@@ -70,4 +70,4 @@ export const noteRepository = bridgeUnscopedCallers({
       },
     });
   },
-});
+};

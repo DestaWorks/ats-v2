@@ -142,3 +142,22 @@ export type WeeklyPatternsInput = z.infer<typeof weeklyPatternsSchema>;
 /** `POST /api/targets/suggest` — feeds the existing 3.1 manager target-setting modal. */
 export const suggestTargetsSchema = z.object({ userId: z.string().min(1), date: dateKey }).strict();
 export type SuggestTargetsInput = z.infer<typeof suggestTargetsSchema>;
+
+// --- job payloads -------------------------------------------------------------------------
+
+/**
+ * What a brief-generation JOB carries, as distinct from what the endpoint accepts.
+ *
+ * The two must stay separate. A job resumes with no request and no session, so the tenant has to
+ * travel in the payload — but putting `tenantId` on the REQUEST schema would let a client name the
+ * tenant its brief is generated from, which is a forgeable claim rather than a scope. The enqueue
+ * site adds it from the context the guard resolved; the handler rebuilds a scope from it with
+ * `systemContextFor`. Same split, and the same reason, as `reportExportPayloadSchema`.
+ */
+const tenantIdShape = { tenantId: z.string().min(1) };
+
+export const generateDailyBriefJobSchema = generateDailyBriefRequestSchema.extend(tenantIdShape);
+export type GenerateDailyBriefJobPayload = z.infer<typeof generateDailyBriefJobSchema>;
+
+export const generateWeeklyBriefJobSchema = generateWeeklyBriefSchema.extend(tenantIdShape);
+export type GenerateWeeklyBriefJobPayload = z.infer<typeof generateWeeklyBriefJobSchema>;

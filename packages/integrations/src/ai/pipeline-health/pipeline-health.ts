@@ -3,6 +3,7 @@ import {
   type PipelineHealthDTO,
 } from "@destaworks/contracts/validation/pipeline-health";
 import { generateAi } from "../shared";
+import type { AiCallOptions } from "../deadline";
 
 /** One overdue candidate for the AI's attention — the longest-in-stage first. */
 export interface PipelineHealthOverdueCandidate {
@@ -47,8 +48,12 @@ function buildPrompt(ctx: PipelineHealthContext): string {
 }
 
 /** Generate a one-shot pipeline health read (legacy `ats_pipeline_health`). */
-export function generatePipelineHealth(ctx: PipelineHealthContext): Promise<PipelineHealthDTO> {
+export function generatePipelineHealth(
+  ctx: PipelineHealthContext,
+  options: AiCallOptions,
+): Promise<PipelineHealthDTO> {
   return generateAi("Pipeline Health", {
+    ...options,
     schema: pipelineHealthAiSchema,
     system: SYSTEM_PROMPT,
     prompt: buildPrompt(ctx),

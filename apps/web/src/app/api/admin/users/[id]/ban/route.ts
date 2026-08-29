@@ -14,6 +14,6 @@ export const POST = apiHandler<{ params: Promise<{ id: string }> }>(async (req, 
   const actor = await requireCapability("manageUsers");
   const { id } = await ctx.params;
   const input = banUserSchema.parse(await req.json());
-  const user = await adminUserService.ban(id, input, actor);
+  const user = await adminUserService.ban(actor, id, input);
   return json<PostAdminUserBanResponse>({ user });
 });

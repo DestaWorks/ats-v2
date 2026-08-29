@@ -57,8 +57,8 @@ describe("POST /api/admin/users/:id/reset-password", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ generatedPassword: "newpw123" });
     expect(h.resetPassword).toHaveBeenCalledWith(
-      "u2",
       expect.objectContaining({ user: expect.objectContaining({ id: "u1" }) }),
+      "u2",
     );
   });
 });

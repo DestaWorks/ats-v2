@@ -10,6 +10,6 @@ export type DeleteAdminUserResponse = AcknowledgedIdDTO;
 export const DELETE = apiHandler<{ params: Promise<{ id: string }> }>(async (_req, ctx) => {
   const actor = await requireCapability("manageUsers");
   const { id } = await ctx.params;
-  await adminUserService.remove(id, actor);
+  await adminUserService.remove(actor, id);
   return json<DeleteAdminUserResponse>({ ok: true, id });
 });

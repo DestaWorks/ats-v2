@@ -2,6 +2,7 @@ import { z } from "zod";
 import { ROLE_PRIORITIES } from "@destaworks/domain/constants/open-role";
 import type { ParsedJdDTO } from "@destaworks/contracts/validation/open-role";
 import { generateAi } from "./shared";
+import type { AiCallOptions } from "./deadline";
 
 /**
  * JD autofill (Wave 3.5, legacy `ats_parse_jd` — Gemini-only). Same provider-agnostic layer as
@@ -29,8 +30,9 @@ const jdSchema = z.object({
 });
 
 /** Extract role fields from a pasted job description. Gated on `aiEnabled`. */
-export async function extractJd(text: string): Promise<ParsedJdDTO> {
+export async function extractJd(text: string, options: AiCallOptions): Promise<ParsedJdDTO> {
   return generateAi("JD parsing", {
+    ...options,
     schema: jdSchema,
     system: SYSTEM_PROMPT,
     prompt: `Extract the role fields from this job description.\n\n--- JOB DESCRIPTION ---\n${text}`,

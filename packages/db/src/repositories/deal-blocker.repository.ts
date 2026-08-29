@@ -1,6 +1,6 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { DealBlocker, Prisma } from "../generated/prisma/client";
-import { bridgeUnscopedCallers, db, type ScopedTx } from "../tenant-scope";
+import { db, type ScopedTx } from "../tenant-scope";
 
 /** A raw deal-blocker row (Prisma model). Services/DTOs map this to API shapes. */
 export type DealBlockerRow = DealBlocker;
@@ -10,7 +10,7 @@ export type DealBlockerRow = DealBlocker;
  * `deal_blockers`. Hard-deletable (a small checklist item, no soft-delete — `resolved` already
  * captures the audit-worthy state).
  */
-export const dealBlockerRepository = bridgeUnscopedCallers({
+export const dealBlockerRepository = {
   create(ctx: TenantContext, data: Prisma.DealBlockerUncheckedCreateInput, tx?: ScopedTx) {
     return db(ctx, tx).dealBlocker.create({ data });
   },
@@ -45,4 +45,4 @@ export const dealBlockerRepository = bridgeUnscopedCallers({
     const { count } = await db(ctx, tx).dealBlocker.deleteMany({ where: { id, dealId } });
     return count;
   },
-});
+};

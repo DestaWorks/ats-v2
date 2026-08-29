@@ -1,6 +1,6 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { ClientTask, Prisma } from "../generated/prisma/client";
-import { bridgeUnscopedCallers, db, type ScopedTx } from "../tenant-scope";
+import { db, type ScopedTx } from "../tenant-scope";
 
 /** A raw client-task row (Prisma model). Services/DTOs map this to API shapes. */
 export type ClientTaskRow = ClientTask;
@@ -10,7 +10,7 @@ export type ClientTaskRow = ClientTask;
  * `client_tasks`. Soft-deleted rows are excluded from reads by default, matching the contact
  * repository's contract exactly.
  */
-export const clientTaskRepository = bridgeUnscopedCallers({
+export const clientTaskRepository = {
   create(ctx: TenantContext, data: Prisma.ClientTaskUncheckedCreateInput, tx?: ScopedTx) {
     return db(ctx, tx).clientTask.create({ data });
   },
@@ -59,4 +59,4 @@ export const clientTaskRepository = bridgeUnscopedCallers({
     });
     return count;
   },
-});
+};

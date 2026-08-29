@@ -146,7 +146,9 @@ export const inboundService = {
     ctx: TenantContext,
     clock: Clock = systemClock,
   ): Promise<TriageResultDTO> {
-    const extracted = await extractInbound(input.messageText, input.context ?? null);
+    const extracted = await extractInbound(input.messageText, input.context ?? null, {
+      tenantId: ctx.tenantId,
+    });
     const [existing, clientMatches] = await Promise.all([
       findExisting(ctx, extracted),
       matchClients(ctx, extracted, clock.now()),

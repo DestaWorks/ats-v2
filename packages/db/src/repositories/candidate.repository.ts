@@ -9,7 +9,7 @@ import {
   type Track,
 } from "@destaworks/domain/constants";
 import type { ListOrderBy, PageCursor } from "@destaworks/contracts/validation/cursor";
-import { bridgeUnscopedCallers, db, type ScopedTx } from "../tenant-scope";
+import { db, type ScopedTx } from "../tenant-scope";
 import { decryptField, encryptField } from "../field-crypto";
 
 /** A raw candidate row (Prisma model). Services/DTOs map this to API shapes. */
@@ -196,7 +196,7 @@ function decryptRow<T extends Candidate | null>(row: T): T {
  * accident. (Done here rather than as a global Prisma extension so the Better Auth models are
  * unaffected.) Every method accepts an optional `tx` so services can compose atomic writes.
  */
-export const candidateRepository = bridgeUnscopedCallers({
+export const candidateRepository = {
   async create(ctx: TenantContext, data: Prisma.CandidateUncheckedCreateInput, tx?: ScopedTx) {
     return decryptRow(await db(ctx, tx).candidate.create({ data: encryptLicense(data) }));
   },
@@ -632,4 +632,4 @@ export const candidateRepository = bridgeUnscopedCallers({
     });
     return rows.map(decryptRow);
   },
-});
+};

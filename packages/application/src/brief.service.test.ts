@@ -103,7 +103,7 @@ describe("briefService.saveDaily", () => {
 describe("briefService.getDaily", () => {
   it("returns null when nothing is saved for the date", async () => {
     h.findDailyByDate.mockResolvedValue(null);
-    expect(await briefService.getDaily("2026-07-23")).toBeNull();
+    expect(await briefService.getDaily("2026-07-23", actor)).toBeNull();
   });
 
   it("resolves savedByName via userRepository.namesByIds when a row exists", async () => {
@@ -123,8 +123,11 @@ describe("briefService.getDaily", () => {
       savedAt: new Date("2026-07-23T12:00:00Z"),
     });
     h.namesByIds.mockResolvedValue(new Map([["u1", "Owner"]]));
-    const dto = await briefService.getDaily("2026-07-23");
+    const dto = await briefService.getDaily("2026-07-23", actor);
     expect(dto?.savedByName).toBe("Owner");
+    expect(h.findDailyByDate).toHaveBeenCalledWith(actor, "2026-07-23");
+    // `User` is global — one human across every tenant — so this lookup takes no scope.
+    expect(h.namesByIds).toHaveBeenCalledWith(["u1"]);
   });
 });
 
@@ -174,6 +177,6 @@ describe("briefService.saveWeekly", () => {
 describe("briefService.getWeekly", () => {
   it("returns null when nothing is saved for the week", async () => {
     h.findWeeklyByWeekStart.mockResolvedValue(null);
-    expect(await briefService.getWeekly("2026-07-20")).toBeNull();
+    expect(await briefService.getWeekly("2026-07-20", actor)).toBeNull();
   });
 });

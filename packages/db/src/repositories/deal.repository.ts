@@ -1,6 +1,6 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { Deal, Prisma } from "../generated/prisma/client";
-import { bridgeUnscopedCallers, db, type ScopedTx } from "../tenant-scope";
+import { db, type ScopedTx } from "../tenant-scope";
 
 /** A raw deal row (Prisma model). Services/DTOs map this to API shapes. */
 export type DealRow = Deal;
@@ -9,7 +9,7 @@ export type DealRow = Deal;
  * Deal data access (Wave 4.2 slice 3, CRM) — the ONLY layer that touches Prisma for `deals`.
  * Soft-deleted rows are excluded from reads by default, matching every other CRM repository.
  */
-export const dealRepository = bridgeUnscopedCallers({
+export const dealRepository = {
   create(ctx: TenantContext, data: Prisma.DealUncheckedCreateInput, tx?: ScopedTx) {
     return db(ctx, tx).deal.create({ data });
   },
@@ -58,4 +58,4 @@ export const dealRepository = bridgeUnscopedCallers({
     });
     return count;
   },
-});
+};

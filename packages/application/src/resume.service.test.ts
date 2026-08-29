@@ -136,12 +136,19 @@ function assertNoPiiLogged() {
   }
 }
 
+const ctx = {
+  tenantId: "t1",
+  membershipId: "m1",
+  role: "Owner" as const,
+  user: { id: "u1", email: "u@desta.works", name: "U" },
+};
+
 describe("resumeService.extract", () => {
   it("returns the parsed data + the server-computed match (none on empty pipeline)", async () => {
     h.parseResume.mockResolvedValue(clinicalData());
     h.candidateRepo.list.mockResolvedValue([]);
 
-    const result = await resumeService.extract({ variant: "clinical", text: "x".repeat(60) });
+    const result = await resumeService.extract(ctx, { variant: "clinical", text: "x".repeat(60) });
 
     expect(result.variant).toBe("clinical");
     expect(result.match).toEqual({ status: "none", score: 0 });
@@ -152,7 +159,7 @@ describe("resumeService.extract", () => {
     h.parseResume.mockResolvedValue(clinicalData());
     h.candidateRepo.list.mockResolvedValue([{ id: "c1", name: "X", email: "jane@example.com" }]);
 
-    const result = await resumeService.extract({ variant: "clinical", text: "x".repeat(60) });
+    const result = await resumeService.extract(ctx, { variant: "clinical", text: "x".repeat(60) });
     expect(result.match).toMatchObject({ status: "auto", candidateId: "c1" });
   });
 });
@@ -174,7 +181,7 @@ describe("resumeService.save", () => {
     h.candidateRepo.update.mockResolvedValue({ id: "c1", name: "Jane Doe" });
     h.documentRepo.create.mockResolvedValue({ id: "d1", candidateId: "c1", type: "resume" });
 
-    await resumeService.save(saveInput(), h.user as TenantContext);
+    await resumeService.save(h.user as TenantContext, saveInput());
 
     // Attached to c1 via the shared tx; fills are empty-only (never overwrites name).
     const [, uid, fills, utx] = h.candidateRepo.update.mock.calls[0]!;
@@ -208,7 +215,7 @@ describe("resumeService.save", () => {
     h.candidateRepo.update.mockResolvedValue({ id: "c2" });
     h.documentRepo.create.mockResolvedValue({ id: "d2", candidateId: "c2", type: "resume" });
 
-    await resumeService.save(saveInput({ confirmedCandidateId: "c2" }), h.user as TenantContext);
+    await resumeService.save(h.user as TenantContext, saveInput({ confirmedCandidateId: "c2" }));
 
     expect(h.candidateRepo.findById).toHaveBeenCalledWith(h.user, "c2", undefined, h.fakeTx);
     expect(h.candidateRepo.create).not.toHaveBeenCalled();
@@ -220,7 +227,7 @@ describe("resumeService.save", () => {
     h.candidateRepo.create.mockResolvedValue({ id: "new5", name: "Jane Doe" });
     h.documentRepo.create.mockResolvedValue({ id: "d7", candidateId: "new5", type: "resume" });
 
-    await resumeService.save(saveInput(), h.user as TenantContext);
+    await resumeService.save(h.user as TenantContext, saveInput());
 
     expect(h.fakeTx.$executeRaw).not.toHaveBeenCalled();
     expect(h.candidateRepo.findById).not.toHaveBeenCalled();
@@ -234,7 +241,7 @@ describe("resumeService.save", () => {
     h.candidateRepo.create.mockResolvedValue({ id: "new1", name: "Jane Doe" });
     h.documentRepo.create.mockResolvedValue({ id: "d3", candidateId: "new1", type: "resume" });
 
-    await resumeService.save(saveInput(), h.user as TenantContext);
+    await resumeService.save(h.user as TenantContext, saveInput());
 
     const [, createData, ctx] = h.candidateRepo.create.mock.calls[0]!;
     expect(ctx).toBe(h.fakeTx);
@@ -263,7 +270,7 @@ describe("resumeService.save", () => {
       type: "resume",
     });
 
-    await resumeService.save(saveInput(), h.user as TenantContext);
+    await resumeService.save(h.user as TenantContext, saveInput());
 
     expect(h.fakeTx.$executeRaw).toHaveBeenCalled();
     expect(h.candidateRepo.create).not.toHaveBeenCalled();
@@ -281,7 +288,7 @@ describe("resumeService.save", () => {
     h.candidateRepo.create.mockResolvedValue({ id: "new2", name: "Jane Doe" });
     h.documentRepo.create.mockResolvedValue({ id: "d4", candidateId: "new2", type: "resume" });
 
-    await resumeService.save(saveInput({ confirmedCandidateId: "c9" }), h.user as TenantContext);
+    await resumeService.save(h.user as TenantContext, saveInput({ confirmedCandidateId: "c9" }));
 
     expect(h.candidateRepo.create).toHaveBeenCalledTimes(1); // no silent wrong-person attach
     expect(h.candidateRepo.findById).not.toHaveBeenCalled();
@@ -294,7 +301,7 @@ describe("resumeService.save", () => {
     h.candidateRepo.create.mockResolvedValue({ id: "new3", name: "Jane Doe" });
     h.documentRepo.create.mockResolvedValue({ id: "d5", candidateId: "new3", type: "resume" });
 
-    await resumeService.save(saveInput({ storageKey: "abc-jane.pdf" }), h.user as TenantContext);
+    await resumeService.save(h.user as TenantContext, saveInput({ storageKey: "abc-jane.pdf" }));
 
     const [, docData] = h.documentRepo.create.mock.calls[0]!;
     expect(docData).toMatchObject({ storageKey: "abc-jane.pdf" });
@@ -305,7 +312,7 @@ describe("resumeService.save", () => {
     h.candidateRepo.create.mockResolvedValue({ id: "new4", name: "Jane Doe" });
     h.documentRepo.create.mockResolvedValue({ id: "d6", candidateId: "new4", type: "resume" });
 
-    await resumeService.save(saveInput(), h.user as TenantContext);
+    await resumeService.save(h.user as TenantContext, saveInput());
 
     const [, docData] = h.documentRepo.create.mock.calls[0]!;
     expect(docData).toMatchObject({ storageKey: null });
@@ -316,13 +323,14 @@ describe("resumeService.requestUploadUrl", () => {
   it("builds a sanitized, unique storage key and returns the signed upload URL", async () => {
     h.createSignedUploadUrl.mockResolvedValue({ signedUrl: "https://x/upload", token: "tok" });
 
-    const result = await resumeService.requestUploadUrl({
+    const result = await resumeService.requestUploadUrl(ctx, {
       filename: "Jane Doe's Resume (final)!!.pdf",
       mimeType: "application/pdf",
     });
 
     expect(result.signedUrl).toBe("https://x/upload");
-    expect(result.storageKey).toMatch(/^[0-9a-f-]{36}-.+\.pdf$/);
+    // Tenant-prefixed now that this method has a context — one bucket, one namespace per tenant.
+    expect(result.storageKey).toMatch(/^t\/[^/]+\/[0-9a-f-]{36}-.+\.pdf$/);
     expect(result.storageKey).not.toMatch(/[()'!]/);
     const [bucket, , contentType] = h.createSignedUploadUrl.mock.calls[0]!;
     expect(bucket).toBe("resumes");
@@ -335,7 +343,7 @@ describe("resumeService.getDownloadUrl", () => {
     h.documentRepo.findById.mockResolvedValue({ id: "d1", storageKey: "abc-jane.pdf" });
     h.getSignedDownloadUrl.mockResolvedValue("https://x/download?sig=1");
 
-    const result = await resumeService.getDownloadUrl("d1");
+    const result = await resumeService.getDownloadUrl(ctx, "d1");
 
     expect(result).toEqual({ url: "https://x/download?sig=1" });
     expect(h.getSignedDownloadUrl).toHaveBeenCalledWith("resumes", "abc-jane.pdf", 300);
@@ -343,13 +351,15 @@ describe("resumeService.getDownloadUrl", () => {
 
   it("throws NOT_FOUND when the document has no storageKey", async () => {
     h.documentRepo.findById.mockResolvedValue({ id: "d1", storageKey: null });
-    await expect(resumeService.getDownloadUrl("d1")).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(resumeService.getDownloadUrl(ctx, "d1")).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
     expect(h.getSignedDownloadUrl).not.toHaveBeenCalled();
   });
 
   it("throws NOT_FOUND when the document doesn't exist", async () => {
     h.documentRepo.findById.mockResolvedValue(null);
-    await expect(resumeService.getDownloadUrl("missing")).rejects.toMatchObject({
+    await expect(resumeService.getDownloadUrl(ctx, "missing")).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
   });
@@ -369,16 +379,12 @@ describe("resumeService.attachToCandidate", () => {
       createdAt: new Date("2026-08-11T00:00:00.000Z"),
     });
 
-    const doc = await resumeService.attachToCandidate(
-      "c1",
-      {
-        originalFilename: "jane.pdf",
-        mimeType: "application/pdf",
-        extractedText: "some text",
-        storageKey: "k1-jane.pdf",
-      },
-      h.user as TenantContext,
-    );
+    const doc = await resumeService.attachToCandidate(h.user as TenantContext, "c1", {
+      originalFilename: "jane.pdf",
+      mimeType: "application/pdf",
+      extractedText: "some text",
+      storageKey: "k1-jane.pdf",
+    });
 
     expect(h.documentRepo.create).toHaveBeenCalledWith(
       h.user,
@@ -404,11 +410,10 @@ describe("resumeService.attachToCandidate", () => {
     h.candidateRepo.findById.mockResolvedValue({ id: "c1", name: "Jane Doe" });
     h.documentRepo.create.mockResolvedValue({ id: "d2" });
 
-    await resumeService.attachToCandidate(
-      "c1",
-      { originalFilename: "scan.pdf", mimeType: "application/pdf" },
-      h.user as TenantContext,
-    );
+    await resumeService.attachToCandidate(h.user as TenantContext, "c1", {
+      originalFilename: "scan.pdf",
+      mimeType: "application/pdf",
+    });
 
     expect(h.documentRepo.create).toHaveBeenCalledWith(
       h.user,
@@ -421,11 +426,10 @@ describe("resumeService.attachToCandidate", () => {
     h.candidateRepo.findById.mockResolvedValue(null);
 
     await expect(
-      resumeService.attachToCandidate(
-        "missing",
-        { originalFilename: "jane.pdf", mimeType: "application/pdf" },
-        h.user as TenantContext,
-      ),
+      resumeService.attachToCandidate(h.user as TenantContext, "missing", {
+        originalFilename: "jane.pdf",
+        mimeType: "application/pdf",
+      }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect(h.documentRepo.create).not.toHaveBeenCalled();
   });

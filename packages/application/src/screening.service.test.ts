@@ -204,6 +204,7 @@ describe("screeningService.listEligibleCandidates", () => {
     h.clientRepo.nameMap.mockResolvedValue(new Map([["cl1", "Sterling Institute"]]));
     const out = await screeningService.listEligibleCandidates(user, undefined);
     expect(h.candidateRepo.list).toHaveBeenCalledWith(
+      user,
       expect.objectContaining({
         statuses: ["QUALIFIED_PRESCREEN", "INITIAL_SCREENING", "DESTA_REVIEW"],
       }),

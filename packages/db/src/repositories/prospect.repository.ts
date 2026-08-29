@@ -1,6 +1,6 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { Prisma, Prospect } from "../generated/prisma/client";
-import { bridgeUnscopedCallers, db, type ScopedTx } from "../tenant-scope";
+import { db, type ScopedTx } from "../tenant-scope";
 
 /** A raw prospect row (Prisma model). Services/DTOs map this to API shapes. */
 export type ProspectRow = Prospect;
@@ -43,7 +43,7 @@ export function buildProspectWhere(filters: ProspectListFilters): Prisma.Prospec
  * `deletedAt: null` unless `includeDeleted`. Every method accepts an optional `tx` so the service
  * can compose atomic writes (bulk-add + audit, status update + audit).
  */
-export const prospectRepository = bridgeUnscopedCallers({
+export const prospectRepository = {
   create(ctx: TenantContext, data: Prisma.ProspectUncheckedCreateInput, tx?: ScopedTx) {
     return db(ctx, tx).prospect.create({ data });
   },
@@ -118,4 +118,4 @@ export const prospectRepository = bridgeUnscopedCallers({
   createMany(ctx: TenantContext, rows: Prisma.ProspectCreateManyInput[], tx?: ScopedTx) {
     return db(ctx, tx).prospect.createMany({ data: rows, skipDuplicates: true });
   },
-});
+};

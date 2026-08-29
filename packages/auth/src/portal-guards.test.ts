@@ -30,6 +30,10 @@ type TokenRow = {
 let mockToken: TokenRow | null = null;
 const touchLastUsed = vi.fn();
 
+vi.mock("@destaworks/db/tenancy/membership.repository", () => ({
+  tenantRepository: { findBySlug: async (slug: string) => (slug === "acme" ? { id: "t1" } : null) },
+}));
+
 vi.mock("@destaworks/db/repositories/client-portal-token.repository", () => ({
   clientPortalTokenRepository: {
     findByHash: async () => mockToken,
@@ -44,7 +48,7 @@ import { exchangePortalToken, resolvePortalContact, hashPortalToken } from "./po
 let mockCookie: string | undefined;
 
 installRequestContext({
-  headers: async () => new Headers(),
+  headers: async () => new Headers({ host: "acme.desta.works" }),
   cookie: async (name) => (name === PORTAL_TOKEN_COOKIE ? mockCookie : undefined),
 });
 

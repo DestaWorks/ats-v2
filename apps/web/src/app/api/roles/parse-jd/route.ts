@@ -19,5 +19,5 @@ export const POST = apiHandler(async (req: Request) => {
   const user = await requireUser();
   await checkRateLimit(`roles-parse-jd:${user.user.id}`, { limit: 20, windowMs: 60_000 });
   const input = parseJdSchema.parse(await req.json());
-  return json<PostRoleParseJdResponse>(await openRoleService.parseJd(input));
+  return json<PostRoleParseJdResponse>(await openRoleService.parseJd(user, input));
 });

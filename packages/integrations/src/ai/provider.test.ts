@@ -32,7 +32,7 @@ vi.mock("@destaworks/db/repositories/ai-usage-event.repository", () => ({
 import { generateStructured } from "./provider";
 
 const schema = z.object({ name: z.string() });
-const baseOpts = { operation: "Test op", schema, system: "sys", prompt: "prompt" };
+const baseOpts = { tenantId: "t1", operation: "Test op", schema, system: "sys", prompt: "prompt" };
 
 beforeEach(() => {
   h.generateObject.mockReset();
@@ -53,6 +53,7 @@ describe("generateStructured", () => {
     expect(h.generateObject).toHaveBeenCalledTimes(1);
     expect(h.record).toHaveBeenCalledTimes(1);
     expect(h.record).toHaveBeenCalledWith(
+      expect.objectContaining({ tenantId: "t1" }),
       expect.objectContaining({
         operation: "Test op",
         provider: "anthropic",
@@ -75,6 +76,7 @@ describe("generateStructured", () => {
     expect(h.generateObject).toHaveBeenCalledTimes(1);
     expect(h.record).toHaveBeenCalledTimes(1);
     expect(h.record).toHaveBeenCalledWith(
+      expect.objectContaining({ tenantId: "t1" }),
       expect.objectContaining({
         provider: "anthropic",
         model: "claude-opus-4-8",
@@ -103,8 +105,8 @@ describe("generateStructured", () => {
     expect(h.generateObject.mock.calls[1]![0].model).toEqual({ provider: "openai", id: "gpt-5" });
 
     expect(h.record).toHaveBeenCalledTimes(2);
-    expect(h.record.mock.calls[0]![0]).toMatchObject({ provider: "anthropic", status: "error" });
-    expect(h.record.mock.calls[1]![0]).toMatchObject({
+    expect(h.record.mock.calls[0]![1]).toMatchObject({ provider: "anthropic", status: "error" });
+    expect(h.record.mock.calls[1]![1]).toMatchObject({
       provider: "openai",
       model: "gpt-5",
       status: "success",
@@ -123,7 +125,7 @@ describe("generateStructured", () => {
 
     expect(h.generateObject).toHaveBeenCalledTimes(2);
     expect(h.record).toHaveBeenCalledTimes(2);
-    expect(h.record.mock.calls[1]![0]).toMatchObject({ provider: "openai", status: "error" });
+    expect(h.record.mock.calls[1]![1]).toMatchObject({ provider: "openai", status: "error" });
   });
 
   it("passes the caller's signal into the SDK call", async () => {
@@ -179,6 +181,7 @@ describe("generateStructured", () => {
     expect(h.generateObject).toHaveBeenCalledTimes(1);
     expect(h.record).toHaveBeenCalledTimes(1);
     expect(h.record).toHaveBeenCalledWith(
+      expect.objectContaining({ tenantId: "t1" }),
       expect.objectContaining({ provider: "anthropic", status: "error" }),
     );
   });

@@ -110,10 +110,11 @@ describe("adminUserService.create", () => {
     announced.length = 0;
     h.createUser.mockResolvedValue({ user: baseUser });
 
-    await adminUserService.create(
-      { name: "Ann Owner", email: "ann@desta.works", role: "Owner" },
-      adminCtx,
-    );
+    await adminUserService.create(adminCtx, {
+      name: "Ann Owner",
+      email: "ann@desta.works",
+      role: "Owner",
+    });
 
     // This service holds no repository — only Better Auth plus six audit writes into
     // `activity_log`, which is tenant-scoped with a WITH CHECK policy. Unannounced they are
@@ -123,15 +124,12 @@ describe("adminUserService.create", () => {
 
   it("forwards the given password verbatim and returns no generated password", async () => {
     h.createUser.mockResolvedValue({ user: baseUser });
-    const result = await adminUserService.create(
-      {
-        name: "Ann Owner",
-        email: "ann@desta.works",
-        role: "Owner",
-        password: "supplied-pw-123",
-      },
-      adminCtx,
-    );
+    const result = await adminUserService.create(adminCtx, {
+      name: "Ann Owner",
+      email: "ann@desta.works",
+      role: "Owner",
+      password: "supplied-pw-123",
+    });
     expect(h.createUser).toHaveBeenCalledWith(
       expect.objectContaining({
         body: expect.objectContaining({ password: "supplied-pw-123" }),
@@ -142,14 +140,11 @@ describe("adminUserService.create", () => {
 
   it("generates a password and returns it once when none is supplied", async () => {
     h.createUser.mockResolvedValue({ user: baseUser });
-    const result = await adminUserService.create(
-      {
-        name: "Ann Owner",
-        email: "ann@desta.works",
-        role: "Owner",
-      },
-      adminCtx,
-    );
+    const result = await adminUserService.create(adminCtx, {
+      name: "Ann Owner",
+      email: "ann@desta.works",
+      role: "Owner",
+    });
     expect(result.generatedPassword).toBeTruthy();
     expect(h.createUser).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -160,15 +155,12 @@ describe("adminUserService.create", () => {
 
   it("marks the new account emailVerified — required for Better Auth to later link a same-email Google sign-in", async () => {
     h.createUser.mockResolvedValue({ user: baseUser });
-    await adminUserService.create(
-      {
-        name: "Ann Owner",
-        email: "ann@desta.works",
-        role: "Owner",
-        password: "supplied-pw-123",
-      },
-      adminCtx,
-    );
+    await adminUserService.create(adminCtx, {
+      name: "Ann Owner",
+      email: "ann@desta.works",
+      role: "Owner",
+      password: "supplied-pw-123",
+    });
     expect(h.createUser).toHaveBeenCalledWith(
       expect.objectContaining({
         body: expect.objectContaining({ data: { emailVerified: true } }),
@@ -178,10 +170,11 @@ describe("adminUserService.create", () => {
 
   it("writes an audit entry for the acting admin", async () => {
     h.createUser.mockResolvedValue({ user: baseUser });
-    await adminUserService.create(
-      { name: "Ann Owner", email: "ann@desta.works", role: "Owner" },
-      adminCtx,
-    );
+    await adminUserService.create(adminCtx, {
+      name: "Ann Owner",
+      email: "ann@desta.works",
+      role: "Owner",
+    });
     expect(h.writeAudit).toHaveBeenCalledWith(
       h.fakeTx,
       expect.objectContaining({
@@ -197,7 +190,7 @@ describe("adminUserService.create", () => {
 describe("adminUserService.setRole", () => {
   it("calls setRole with userId + role, and audits the change", async () => {
     h.setRole.mockResolvedValue({ user: { ...baseUser, role: "Manager" } });
-    const result = await adminUserService.setRole("u1", "Manager", adminCtx);
+    const result = await adminUserService.setRole(adminCtx, "u1", "Manager");
     expect(h.setRole).toHaveBeenCalledWith(
       expect.objectContaining({ body: { userId: "u1", role: "Manager" } }),
     );
@@ -217,7 +210,7 @@ describe("adminUserService.setRole", () => {
 describe("adminUserService.ban / unban", () => {
   it("converts expiresInDays to banExpiresIn seconds, and audits the ban", async () => {
     h.banUser.mockResolvedValue({ user: { ...baseUser, banned: true } });
-    await adminUserService.ban("u1", { reason: "abuse", expiresInDays: 2 }, adminCtx);
+    await adminUserService.ban(adminCtx, "u1", { reason: "abuse", expiresInDays: 2 });
     expect(h.banUser).toHaveBeenCalledWith(
       expect.objectContaining({
         body: { userId: "u1", banReason: "abuse", banExpiresIn: 2 * 86_400 },
@@ -231,7 +224,7 @@ describe("adminUserService.ban / unban", () => {
 
   it("unban calls unbanUser with the userId, and audits the unban", async () => {
     h.unbanUser.mockResolvedValue({ user: baseUser });
-    await adminUserService.unban("u1", adminCtx);
+    await adminUserService.unban(adminCtx, "u1");
     expect(h.unbanUser).toHaveBeenCalledWith(expect.objectContaining({ body: { userId: "u1" } }));
     expect(h.writeAudit).toHaveBeenCalledWith(
       h.fakeTx,
@@ -243,7 +236,7 @@ describe("adminUserService.ban / unban", () => {
 describe("adminUserService.resetPassword", () => {
   it("generates and returns a password once, and audits the reset without the password", async () => {
     h.setUserPassword.mockResolvedValue({ status: true });
-    const result = await adminUserService.resetPassword("u1", adminCtx);
+    const result = await adminUserService.resetPassword(adminCtx, "u1");
     expect(result.generatedPassword).toBeTruthy();
     expect(h.setUserPassword).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -267,7 +260,7 @@ describe("adminUserService.resetPassword", () => {
 describe("adminUserService.remove", () => {
   it("calls removeUser with the userId, and audits the removal", async () => {
     h.removeUser.mockResolvedValue({ success: true });
-    await adminUserService.remove("u1", adminCtx);
+    await adminUserService.remove(adminCtx, "u1");
     expect(h.removeUser).toHaveBeenCalledWith(expect.objectContaining({ body: { userId: "u1" } }));
     expect(h.writeAudit).toHaveBeenCalledWith(
       h.fakeTx,

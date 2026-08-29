@@ -1,6 +1,6 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { Prisma, SavedIcp } from "../generated/prisma/client";
-import { bridgeUnscopedCallers, db, type ScopedTx } from "../tenant-scope";
+import { db, type ScopedTx } from "../tenant-scope";
 
 /** A raw saved-ICP row (Prisma model). Services/DTOs map this to API shapes. */
 export type SavedIcpRow = SavedIcp;
@@ -11,7 +11,7 @@ export type SavedIcpRow = SavedIcp;
  * trusts a client-supplied owner. Mirrors `savedViewRepository` (hard delete, no soft-delete
  * column — a saved search has nothing worth restoring from trash).
  */
-export const savedIcpRepository = bridgeUnscopedCallers({
+export const savedIcpRepository = {
   /** A user's saved ICPs (own private ones + everyone's shared ones), newest-first — the
    *  service applies the private/shared visibility filter, this just reads by user for the
    *  owned-name-uniqueness check and `listAll` covers the shared feed. */
@@ -41,4 +41,4 @@ export const savedIcpRepository = bridgeUnscopedCallers({
   deleteOwned(ctx: TenantContext, id: string, userId: string, tx?: ScopedTx) {
     return db(ctx, tx).savedIcp.deleteMany({ where: { id, userId } });
   },
-});
+};

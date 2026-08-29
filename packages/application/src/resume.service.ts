@@ -19,9 +19,9 @@ import { AppError } from "@destaworks/integrations/http/app-error";
 import {
   createSignedUploadUrl,
   getSignedDownloadUrl,
+  tenantStorageKey,
   persistedStorageKey,
   RESUME_BUCKET,
-  unscopedStorageKey,
 } from "@destaworks/integrations/storage";
 import { toCandidateDTO } from "./candidate.dto";
 import { toDocumentDTO } from "./document.dto";
@@ -74,9 +74,9 @@ export const resumeService = {
    * Extract a resume and compute the match against the current candidate list. Writes NOTHING —
    * returns the validated structured data + the match so the UI can render the review/confirm step.
    */
-  async extract(input: ParseResumeInput): Promise<ExtractResumeResponse> {
-    const data = await parseResume(input);
-    const candidates = await candidateRepository.listForMatch();
+  async extract(ctx: TenantContext, input: ParseResumeInput): Promise<ExtractResumeResponse> {
+    const data = await parseResume(input, { tenantId: ctx.tenantId });
+    const candidates = await candidateRepository.listForMatch(ctx);
     const match = matchResumeToCandidate(data, candidates);
     return { variant: input.variant, data, match };
   },
@@ -90,7 +90,7 @@ export const resumeService = {
    * `auto`/`confirm`. A below-threshold or absent confirmation creates a NEW candidate — the
    * client's match is never trusted.
    */
-  async save(input: SaveResumeInput, ctx: TenantContext) {
+  async save(ctx: TenantContext, input: SaveResumeInput) {
     // Re-validate the (client-editable) structured data against the variant's schema.
     const data = resumeSchemaFor(input.variant).parse(input.data);
 
@@ -189,9 +189,9 @@ export const resumeService = {
    * (pdf.js text extraction + an optional Storage PUT) as a new `Document`.
    */
   async attachToCandidate(
+    ctx: TenantContext,
     candidateId: string,
     input: UploadCandidateResumeInput,
-    ctx: TenantContext,
   ) {
     const candidate = await candidateRepository.findById(ctx, candidateId);
     if (!candidate) throw new AppError("NOT_FOUND", "Candidate not found");
@@ -225,13 +225,13 @@ export const resumeService = {
    * passes through our own server. Writes nothing; `save()` persists the resulting `storageKey`
    * once the upload succeeds and the user confirms.
    */
-  async requestUploadUrl(input: RequestResumeUploadUrlInput): Promise<ResumeUploadUrlDTO> {
-    // 6.6: this belongs at `t/<tenantId>/<uuid>-<filename>`, which becomes a one-line change
-    // (`tenantStorageKey(ctx.tenantId, …)`) the moment 6.5 gives this method a tenant. Until then
-    // the exception is declared rather than assumed — see `unscopedStorageKey`.
-    const key = unscopedStorageKey(
+  async requestUploadUrl(
+    ctx: TenantContext,
+    input: RequestResumeUploadUrlInput,
+  ): Promise<ResumeUploadUrlDTO> {
+    const key = tenantStorageKey(
+      ctx.tenantId,
       `${randomUUID()}-${sanitizeFilename(input.filename)}`,
-      "resume-upload-awaiting-6.5-tenant-resolution",
     );
     const { signedUrl } = await createSignedUploadUrl(RESUME_BUCKET, key, input.mimeType);
     return { signedUrl, storageKey: key };
@@ -242,8 +242,8 @@ export const resumeService = {
    * on demand, never persisted. Callers gate this on `viewCredentials` (same PII/PHI tier as
    * `extractedText`/`extractedData`) before calling.
    */
-  async getDownloadUrl(documentId: string): Promise<{ url: string }> {
-    const doc = await documentRepository.findById(documentId);
+  async getDownloadUrl(ctx: TenantContext, documentId: string): Promise<{ url: string }> {
+    const doc = await documentRepository.findById(ctx, documentId);
     if (!doc?.storageKey) throw new AppError("NOT_FOUND", "No stored file for this document");
     const url = await getSignedDownloadUrl(RESUME_BUCKET, persistedStorageKey(doc.storageKey), 300);
     return { url };

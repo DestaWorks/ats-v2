@@ -13,6 +13,6 @@ export type GetTemplatePerformanceResponse = TemplatePerformanceDTO;
  * (Credentials Intelligence used `viewCredentials`).
  */
 export const GET = apiHandler(async () => {
-  await requireCapability("viewAnalytics");
-  return json<GetTemplatePerformanceResponse>(await templatePerformanceService.overview());
+  const actor = await requireCapability("viewAnalytics");
+  return json<GetTemplatePerformanceResponse>(await templatePerformanceService.overview(actor));
 });

@@ -30,11 +30,11 @@ vi.mock("@destaworks/db/memberships", async () => ({
 
 import { POST } from "./route";
 
-const enqueued: { name: string; payload: unknown }[] = [];
+const enqueued: { name: string; payload: unknown; tenantId: string }[] = [];
 
 const fakeEnqueuer = {
-  daily: (input: unknown) => {
-    enqueued.push({ name: "briefs.daily.generate", payload: input });
+  daily: (input: unknown, tenantId: string) => {
+    enqueued.push({ name: "briefs.daily.generate", payload: input, tenantId });
     return Promise.resolve({ jobId: "job-1", job: "briefs.daily.generate" });
   },
 };
@@ -80,12 +80,22 @@ describe("POST /api/briefs/daily/generate", () => {
     expect(await res.json()).toEqual({ jobId: "job-1", job: "briefs.daily.generate" });
     // The singleton key is asserted in `packages/jobs/src/enqueue/briefs.test.ts`, where it is
     // defined. `apps/web` may not import `@destaworks/jobs`, so what this route owes is narrower:
-    // the parsed payload reaches the port intact.
+    // the parsed payload reaches the port intact, under the tenant the guard resolved.
     expect(enqueued).toEqual([
       {
         name: "briefs.daily.generate",
         payload: { date: "2026-07-23", tz: -180, priorityClientId: null },
+        tenantId: "t1",
       },
     ]);
+  });
+
+  it("takes the tenant from the guard, not from the body", async () => {
+    const res = await POST(req({ ...body, tenantId: "someone-elses-tenant" }), undefined);
+
+    expect(res.status).toBe(202);
+    expect(enqueued[0]?.tenantId).toBe("t1");
+    // The request schema strips it, so it never even reaches the port as part of the input.
+    expect(enqueued[0]?.payload).not.toHaveProperty("tenantId");
   });
 });

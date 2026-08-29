@@ -58,6 +58,13 @@ const adminCtx = {
   user: { id: "actor1", email: "admin@desta.works", name: "Admin" },
 };
 
+const ctx = {
+  tenantId: "t1",
+  membershipId: "m1",
+  role: "Owner" as const,
+  user: { id: "u1", email: "u@desta.works", name: "U" },
+};
+
 describe("accessRequestService.submit", () => {
   const input = {
     name: "Jane Doe",
@@ -69,14 +76,20 @@ describe("accessRequestService.submit", () => {
   it("creates the request when no pending request exists for this email", async () => {
     h.findPendingByEmail.mockResolvedValue(null);
     h.create.mockResolvedValue(pendingRequest);
-    await accessRequestService.submit(input);
-    expect(h.findPendingByEmail).toHaveBeenCalledWith("jane@example.com");
-    expect(h.create).toHaveBeenCalledWith(input);
+    await accessRequestService.submit(ctx, input);
+    expect(h.findPendingByEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ tenantId: expect.any(String) }),
+      "jane@example.com",
+    );
+    expect(h.create).toHaveBeenCalledWith(
+      expect.objectContaining({ tenantId: expect.any(String) }),
+      input,
+    );
   });
 
   it("409s without creating a second row when a pending request already exists for this email", async () => {
     h.findPendingByEmail.mockResolvedValue(pendingRequest);
-    await expect(accessRequestService.submit(input)).rejects.toMatchObject({
+    await expect(accessRequestService.submit(ctx, input)).rejects.toMatchObject({
       code: "CONFLICT",
       message: expect.stringContaining("already have a pending"),
     });
@@ -87,7 +100,7 @@ describe("accessRequestService.submit", () => {
 describe("accessRequestService.list", () => {
   it("maps rows to DTOs", async () => {
     h.list.mockResolvedValue([pendingRequest]);
-    const result = await accessRequestService.list();
+    const result = await accessRequestService.list(ctx);
     expect(result).toEqual([
       {
         id: "r1",
@@ -110,16 +123,17 @@ describe("accessRequestService.approve", () => {
       generatedPassword: "abc123",
     });
     h.sendEmail.mockResolvedValue({ previewUrl: null });
-    const result = await accessRequestService.approve("r1", "Associate", adminCtx);
-    expect(h.adminCreate).toHaveBeenCalledWith(
-      {
-        name: "Jane Doe",
-        email: "jane@example.com",
-        role: "Associate",
-      },
-      adminCtx,
+    const result = await accessRequestService.approve(adminCtx, "r1", "Associate");
+    expect(h.adminCreate).toHaveBeenCalledWith(adminCtx, {
+      name: "Jane Doe",
+      email: "jane@example.com",
+      role: "Associate",
+    });
+    expect(h.updateStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ tenantId: expect.any(String) }),
+      "r1",
+      "approved",
     );
-    expect(h.updateStatus).toHaveBeenCalledWith("r1", "approved");
     // Both happen, and creation happens BEFORE the status flip.
     const createOrder = h.adminCreate.mock.invocationCallOrder[0] ?? -1;
     const statusOrder = h.updateStatus.mock.invocationCallOrder[0] ?? -1;
@@ -134,7 +148,7 @@ describe("accessRequestService.approve", () => {
       generatedPassword: "abc123",
     });
     h.sendEmail.mockResolvedValue({ previewUrl: null });
-    await accessRequestService.approve("r1", "Associate", adminCtx);
+    await accessRequestService.approve(adminCtx, "r1", "Associate");
     expect(h.sendEmail).toHaveBeenCalledWith(
       expect.objectContaining({
         to: "jane@example.com",
@@ -152,15 +166,19 @@ describe("accessRequestService.approve", () => {
       generatedPassword: "abc123",
     });
     h.sendEmail.mockRejectedValue(new Error("SMTP down"));
-    const result = await accessRequestService.approve("r1", "Associate", adminCtx);
+    const result = await accessRequestService.approve(adminCtx, "r1", "Associate");
     expect(result.generatedPassword).toBe("abc123");
-    expect(h.updateStatus).toHaveBeenCalledWith("r1", "approved");
+    expect(h.updateStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ tenantId: expect.any(String) }),
+      "r1",
+      "approved",
+    );
   });
 
   it("404s when the request doesn't exist", async () => {
     h.findById.mockResolvedValue(null);
     await expect(
-      accessRequestService.approve("missing", "Associate", adminCtx),
+      accessRequestService.approve(adminCtx, "missing", "Associate"),
     ).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
@@ -169,7 +187,7 @@ describe("accessRequestService.approve", () => {
 
   it("409s when the request was already resolved", async () => {
     h.findById.mockResolvedValue({ ...pendingRequest, status: "approved" });
-    await expect(accessRequestService.approve("r1", "Associate", adminCtx)).rejects.toMatchObject({
+    await expect(accessRequestService.approve(adminCtx, "r1", "Associate")).rejects.toMatchObject({
       code: "CONFLICT",
     });
     expect(h.adminCreate).not.toHaveBeenCalled();
@@ -181,7 +199,7 @@ describe("accessRequestService.approve", () => {
   it("409s with a clear message when an account for this email already exists", async () => {
     h.findById.mockResolvedValue(pendingRequest);
     h.findUserByEmail.mockResolvedValue({ id: "existing-user-1" });
-    await expect(accessRequestService.approve("r1", "Associate", adminCtx)).rejects.toMatchObject({
+    await expect(accessRequestService.approve(adminCtx, "r1", "Associate")).rejects.toMatchObject({
       code: "CONFLICT",
       message: expect.stringContaining("already exists"),
     });
@@ -193,19 +211,25 @@ describe("accessRequestService.approve", () => {
 describe("accessRequestService.decline", () => {
   it("flips status to declined", async () => {
     h.findById.mockResolvedValue(pendingRequest);
-    await accessRequestService.decline("r1");
-    expect(h.updateStatus).toHaveBeenCalledWith("r1", "declined");
+    await accessRequestService.decline(ctx, "r1");
+    expect(h.updateStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ tenantId: expect.any(String) }),
+      "r1",
+      "declined",
+    );
   });
 
   it("404s when the request doesn't exist", async () => {
     h.findById.mockResolvedValue(null);
-    await expect(accessRequestService.decline("missing")).rejects.toMatchObject({
+    await expect(accessRequestService.decline(ctx, "missing")).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
   });
 
   it("409s when already resolved", async () => {
     h.findById.mockResolvedValue({ ...pendingRequest, status: "declined" });
-    await expect(accessRequestService.decline("r1")).rejects.toMatchObject({ code: "CONFLICT" });
+    await expect(accessRequestService.decline(ctx, "r1")).rejects.toMatchObject({
+      code: "CONFLICT",
+    });
   });
 });

@@ -63,8 +63,8 @@ describe("GET /api/migration/runs/:runId", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ status: "running", processedRows: 120 });
     expect(h.state).toHaveBeenCalledWith(
-      "run-1",
       expect.objectContaining({ user: expect.objectContaining({ id: "u1" }) }),
+      "run-1",
     );
   });
 

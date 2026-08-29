@@ -1,8 +1,9 @@
 import { briefService } from "@destaworks/application/brief.service";
 import type {
-  GenerateDailyBriefRequest,
-  GenerateWeeklyBriefInput,
+  GenerateDailyBriefJobPayload,
+  GenerateWeeklyBriefJobPayload,
 } from "@destaworks/contracts/validation/briefs";
+import { systemContextFor } from "@destaworks/domain/system-context";
 import type { JobHandler } from "../queue";
 import { generateDailyBriefJob, generateWeeklyBriefJob } from "../definitions/briefs";
 
@@ -15,11 +16,18 @@ import { generateDailyBriefJob, generateWeeklyBriefJob } from "../definitions/br
  * re-assembled the context would be a second implementation of the brief, drifting from the one
  * the (still-served) request path uses.
  *
+ * The scope is rebuilt from the payload's tenant with `systemContextFor`, which carries the least
+ * privileged role. That is safe HERE because a brief's content does not depend on who asked for
+ * it: `viewReports` gates the whole document at the endpoint, and nothing inside it is gated
+ * further — the context assembled below is counts, client names, associate names and lead names,
+ * with no credential or licence field anywhere. A brief that ever gained a capability-gated field
+ * would have to carry the requester's role instead.
+ *
  * Handlers live apart from the definitions because they pull the whole service graph in with them;
  * an enqueuer imports `../definitions/briefs` and nothing here.
  */
 
-export const generateDailyBriefHandler: JobHandler<GenerateDailyBriefRequest> = async (ctx) => {
+export const generateDailyBriefHandler: JobHandler<GenerateDailyBriefJobPayload> = async (ctx) => {
   const { payload } = ctx;
   await briefService.generateDailyDraft(
     { date: payload.date, tz: payload.tz },
@@ -29,12 +37,18 @@ export const generateDailyBriefHandler: JobHandler<GenerateDailyBriefRequest> = 
       shiftB: payload.shiftB ?? null,
       watchItems: payload.watchItems ?? null,
     },
+    systemContextFor(payload.tenantId),
     { signal: ctx.signal },
   );
 };
 
-export const generateWeeklyBriefHandler: JobHandler<GenerateWeeklyBriefInput> = async (ctx) => {
-  await briefService.generateWeeklyDraft(ctx.payload, { signal: ctx.signal });
+export const generateWeeklyBriefHandler: JobHandler<GenerateWeeklyBriefJobPayload> = async (
+  ctx,
+) => {
+  const { tenantId, ...input } = ctx.payload;
+  await briefService.generateWeeklyDraft(input, systemContextFor(tenantId), {
+    signal: ctx.signal,
+  });
 };
 
 /**

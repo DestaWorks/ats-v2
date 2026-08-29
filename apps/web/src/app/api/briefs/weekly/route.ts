@@ -14,11 +14,11 @@ export type GetBriefsWeeklyResponse = WeeklyBriefDTO | null;
  * 2026-08-04 gate; was `requireUser()`, an oversight the same design pass missed.
  */
 export const GET = apiHandler(async (req: Request) => {
-  await requireCapability("viewReports");
+  const user = await requireCapability("viewReports");
   const params = new URL(req.url).searchParams;
   const raw = params.get("weekStart");
   const weekStart = mondayOf(
     raw && DATE_KEY_RE.test(raw) ? raw : dateKeyForOffset((await viewerTzOffset()) ?? 0),
   );
-  return json<GetBriefsWeeklyResponse>(await briefService.getWeekly(weekStart));
+  return json<GetBriefsWeeklyResponse>(await briefService.getWeekly(weekStart, user));
 });

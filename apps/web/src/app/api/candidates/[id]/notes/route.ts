@@ -21,7 +21,7 @@ export const POST = apiHandler<{ params: Promise<{ id: string }> }>(async (req, 
   const user = await requireUser();
   const { id } = await ctx.params;
   const input = addNoteSchema.parse(await req.json());
-  const note = await noteService.add(id, input, user);
+  const note = await noteService.add(user, id, input);
   return json<PostCandidateNoteResponse>({ note }, 201);
 });
 
@@ -32,5 +32,5 @@ export const POST = apiHandler<{ params: Promise<{ id: string }> }>(async (req, 
 export const GET = apiHandler<{ params: Promise<{ id: string }> }>(async (_req, ctx) => {
   const user = await requireUser();
   const { id } = await ctx.params;
-  return json<GetCandidateNotesResponse>({ notes: await noteService.listByCandidate(id, user) });
+  return json<GetCandidateNotesResponse>({ notes: await noteService.listByCandidate(user, id) });
 });

@@ -55,6 +55,6 @@ describe("POST /api/roles/parse-jd", () => {
     const res = await POST(req(body), undefined);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(result);
-    expect(h.parseJd).toHaveBeenCalledWith(body);
+    expect(h.parseJd).toHaveBeenCalledWith(expect.anything(), body);
   });
 });

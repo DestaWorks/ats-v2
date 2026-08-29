@@ -19,5 +19,5 @@ export const POST = apiHandler(async (req: Request) => {
   const user = await requireCapability("viewReports");
   await checkRateLimit(`targets-suggest:${user.user.id}`, { limit: 20, windowMs: 60_000 });
   const input = suggestTargetsSchema.parse(await req.json());
-  return json<PostTargetsSuggestResponse>(await briefService.suggestTargets(input));
+  return json<PostTargetsSuggestResponse>(await briefService.suggestTargets(input, user));
 });

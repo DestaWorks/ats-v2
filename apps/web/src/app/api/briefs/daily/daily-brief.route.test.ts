@@ -50,6 +50,9 @@ describe("GET /api/briefs/daily", () => {
     const res = await GET(getReq(), undefined);
     expect(res.status).toBe(200);
     expect(await res.json()).toBeNull();
-    expect(h.getDaily).toHaveBeenCalledWith("2026-07-23");
+    expect(h.getDaily).toHaveBeenCalledWith(
+      "2026-07-23",
+      expect.objectContaining({ tenantId: "t1" }),
+    );
   });
 });

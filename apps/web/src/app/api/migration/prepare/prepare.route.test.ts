@@ -68,7 +68,7 @@ describe("POST /api/migration/prepare", () => {
     const res = await POST(req(body), undefined);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(report);
-    const [, user] = h.prepare.mock.calls[0]!;
+    const [user] = h.prepare.mock.calls[0]!;
     expect(user).toMatchObject({ user: { id: "u1" }, role: "Owner" });
   });
 });

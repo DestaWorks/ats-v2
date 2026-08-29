@@ -19,6 +19,6 @@ export type PostMigrationPrepareResponse = ImportReport;
 export const POST = apiHandler(async (req: Request) => {
   const user = await requireCapability("bulkImport");
   const input = importInputSchema.parse(await req.json());
-  const report = await migrationService.prepare(input, user);
+  const report = await migrationService.prepare(user, input);
   return json<PostMigrationPrepareResponse>(report);
 });

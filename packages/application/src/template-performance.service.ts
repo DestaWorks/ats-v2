@@ -1,3 +1,4 @@
+import type { TenantContext } from "@destaworks/domain/tenant";
 import type {
   TemplatePerformanceDTO,
   TemplatePerformanceRowDTO,
@@ -17,8 +18,8 @@ const MS_PER_DAY = 86_400_000;
  * ever sent to candidates, not a fabricated 0%.
  */
 export const templatePerformanceService = {
-  async overview(): Promise<TemplatePerformanceDTO> {
-    const attempts = await templatePerformanceRepository.attemptsWithTemplate();
+  async overview(ctx: TenantContext): Promise<TemplatePerformanceDTO> {
+    const attempts = await templatePerformanceRepository.attemptsWithTemplate(ctx);
 
     const byTemplate = new Map<string, typeof attempts>();
     for (const a of attempts) {

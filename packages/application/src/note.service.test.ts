@@ -88,11 +88,10 @@ describe("noteService.add", () => {
     h.candidateRepo.findById.mockResolvedValue({ id: "c1" });
     h.noteRepo.create.mockResolvedValue(noteRow({ body: xss, noteType: "client" }));
 
-    const dto = await noteService.add(
-      "c1",
-      { body: xss, noteType: "client" },
-      h.user as TenantContext,
-    );
+    const dto = await noteService.add(h.user as TenantContext, "c1", {
+      body: xss,
+      noteType: "client",
+    });
 
     // Body passed to the repo is BYTE-FOR-BYTE what was submitted — no sanitization at rest.
     expect(h.noteRepo.create).toHaveBeenCalledTimes(1);
@@ -112,7 +111,7 @@ describe("noteService.add", () => {
     h.candidateRepo.findById.mockResolvedValue({ id: "c1" });
     h.noteRepo.create.mockResolvedValue(noteRow());
 
-    await noteService.add("c1", { body: "hi", noteType: "internal" }, h.user as TenantContext);
+    await noteService.add(h.user as TenantContext, "c1", { body: "hi", noteType: "internal" });
 
     expect(h.writeAudit).toHaveBeenCalledTimes(1);
     const [atx, params] = h.writeAudit.mock.calls[0]!;
@@ -134,11 +133,10 @@ describe("noteService.add", () => {
       { id: "u2", name: "Biruh Desta" },
     ]);
 
-    await noteService.add(
-      "c1",
-      { body: "@Biruh @Test see this", noteType: "internal" },
-      h.user as TenantContext,
-    );
+    await noteService.add(h.user as TenantContext, "c1", {
+      body: "@Biruh @Test see this",
+      noteType: "internal",
+    });
 
     expect(h.mentionRepo.createMany).toHaveBeenCalledWith(
       h.user,
@@ -154,7 +152,7 @@ describe("noteService.add", () => {
   it("throws NOT_FOUND when the candidate is missing/soft-deleted and writes nothing", async () => {
     h.candidateRepo.findById.mockResolvedValue(null);
     await expect(
-      noteService.add("missing", { body: "hi", noteType: "internal" }, h.user as TenantContext),
+      noteService.add(h.user as TenantContext, "missing", { body: "hi", noteType: "internal" }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect(h.noteRepo.create).not.toHaveBeenCalled();
     expect(h.mentionRepo.createMany).not.toHaveBeenCalled();
@@ -167,11 +165,10 @@ describe("noteService.add", () => {
     h.userRepo.list.mockResolvedValue([{ id: "u2", name: "Biruh Desta" }]);
     h.userRepo.emailsByIds.mockResolvedValue(new Map([["u2", "biruh@desta.works"]]));
 
-    await noteService.add(
-      "c1",
-      { body: "@Biruh see this", noteType: "internal" },
-      h.user as TenantContext,
-    );
+    await noteService.add(h.user as TenantContext, "c1", {
+      body: "@Biruh see this",
+      noteType: "internal",
+    });
 
     expect(h.userRepo.emailsByIds).toHaveBeenCalledWith(["u2"]);
     expect(h.sendEmail).toHaveBeenCalledTimes(1);
@@ -187,11 +184,10 @@ describe("noteService.add", () => {
     h.userRepo.list.mockResolvedValue([{ id: "u2", name: "Biruh Desta" }]);
     h.userRepo.emailsByIds.mockResolvedValue(new Map()); // no email on file
 
-    await noteService.add(
-      "c1",
-      { body: "@Biruh see this", noteType: "internal" },
-      h.user as TenantContext,
-    );
+    await noteService.add(h.user as TenantContext, "c1", {
+      body: "@Biruh see this",
+      noteType: "internal",
+    });
 
     expect(h.sendEmail).not.toHaveBeenCalled();
   });
@@ -200,11 +196,10 @@ describe("noteService.add", () => {
     h.candidateRepo.findById.mockResolvedValue({ id: "c1", name: "Jane Doe" });
     h.noteRepo.create.mockResolvedValue(noteRow({ body: "no mentions here" }));
 
-    await noteService.add(
-      "c1",
-      { body: "no mentions here", noteType: "internal" },
-      h.user as TenantContext,
-    );
+    await noteService.add(h.user as TenantContext, "c1", {
+      body: "no mentions here",
+      noteType: "internal",
+    });
 
     expect(h.userRepo.emailsByIds).not.toHaveBeenCalled();
     expect(h.sendEmail).not.toHaveBeenCalled();
@@ -217,11 +212,10 @@ describe("noteService.add", () => {
     h.userRepo.emailsByIds.mockResolvedValue(new Map([["u2", "biruh@desta.works"]]));
     h.sendEmail.mockRejectedValue(new Error("SMTP down"));
 
-    const dto = await noteService.add(
-      "c1",
-      { body: "@Biruh see this", noteType: "internal" },
-      h.user as TenantContext,
-    );
+    const dto = await noteService.add(h.user as TenantContext, "c1", {
+      body: "@Biruh see this",
+      noteType: "internal",
+    });
 
     expect(dto.id).toBe("n1"); // the note itself still saved successfully
   });
@@ -233,7 +227,7 @@ describe("noteService.listByCandidate", () => {
       noteRow({ id: "n2", noteType: "call" }),
       noteRow({ id: "n1", noteType: "internal" }),
     ]);
-    const dtos = await noteService.listByCandidate("c1", h.owner as TenantContext);
+    const dtos = await noteService.listByCandidate(h.owner as TenantContext, "c1");
     expect(dtos.map((n) => n.id)).toEqual(["n2", "n1"]);
     expect(dtos[0]).toMatchObject({ id: "n2", noteType: "call" });
     // ISO string dates on the wire.
@@ -245,7 +239,7 @@ describe("noteService.listByCandidate", () => {
       noteRow({ id: "n2", noteType: "call" }),
       noteRow({ id: "n1", noteType: "internal" }),
     ]);
-    const dtos = await noteService.listByCandidate("c1", h.user as TenantContext);
+    const dtos = await noteService.listByCandidate(h.user as TenantContext, "c1");
     expect(dtos.map((n) => n.id)).toEqual(["n1"]);
   });
 });

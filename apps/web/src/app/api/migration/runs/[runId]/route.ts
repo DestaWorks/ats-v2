@@ -19,5 +19,5 @@ export type GetMigrationRunResponse = MigrationRunState;
 export const GET = apiHandler<{ params: Promise<{ runId: string }> }>(async (_req, ctx) => {
   const user = await requireCapability("bulkImport");
   const { runId } = await ctx.params;
-  return json<GetMigrationRunResponse>(await migrationRunService.state(runId, user));
+  return json<GetMigrationRunResponse>(await migrationRunService.state(user, runId));
 });

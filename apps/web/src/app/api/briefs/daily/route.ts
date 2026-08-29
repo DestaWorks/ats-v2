@@ -15,11 +15,11 @@ export type GetBriefsDailyResponse = DailyBriefDTO | null;
  * section instead of its own nav item).
  */
 export const GET = apiHandler(async (req: Request) => {
-  await requireCapability("viewReports");
+  const user = await requireCapability("viewReports");
   const params = new URL(req.url).searchParams;
   const rawDate = params.get("date") ?? "";
   const date = DATE_KEY_RE.test(rawDate)
     ? rawDate
     : dateKeyForOffset((await viewerTzOffset()) ?? 0);
-  return json<GetBriefsDailyResponse>(await briefService.getDaily(date));
+  return json<GetBriefsDailyResponse>(await briefService.getDaily(date, user));
 });

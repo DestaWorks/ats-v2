@@ -5,6 +5,8 @@ import { CapabilityGuard } from "../../common/guards/capability.guard";
 import { SessionAuthGuard } from "../../common/guards/session-auth.guard";
 import type { ServiceOf } from "../service-token";
 import { RESUME_SERVICE } from "./resume.tokens";
+import { CurrentUser } from "../../common/decorators/current-user.decorator";
+import type { AuthContext } from "@destaworks/auth/guards";
 
 /**
  * Stored documents. One endpoint, and it hands out access to the raw resume bytes, so it sits at
@@ -25,7 +27,10 @@ export class DocumentsController {
    */
   @Get(":id/download-url")
   @RequireCapability("viewCredentials")
-  async downloadUrl(@Param("id") id: string): Promise<DownloadUrlEnvelope> {
-    return this.resumes.getDownloadUrl(id);
+  async downloadUrl(
+    @CurrentUser() user: AuthContext,
+    @Param("id") id: string,
+  ): Promise<DownloadUrlEnvelope> {
+    return this.resumes.getDownloadUrl(user, id);
   }
 }

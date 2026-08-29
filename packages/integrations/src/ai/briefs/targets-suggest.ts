@@ -4,6 +4,7 @@ import {
   type TargetsSuggestAiOutput,
 } from "@destaworks/contracts/validation/briefs";
 import { generateAi } from "../shared";
+import type { AiCallOptions } from "../deadline";
 
 export interface TargetsSuggestContext {
   associateName: string;
@@ -39,8 +40,12 @@ function buildPrompt(ctx: TargetsSuggestContext): string {
 }
 
 /** Suggest one associate's day targets (legacy `ats_targets_suggest`). */
-export function suggestTargets(ctx: TargetsSuggestContext): Promise<TargetsSuggestAiOutput> {
+export function suggestTargets(
+  ctx: TargetsSuggestContext,
+  options: AiCallOptions,
+): Promise<TargetsSuggestAiOutput> {
   return generateAi("Target suggestion", {
+    ...options,
     schema: targetsSuggestAiSchema,
     system: SYSTEM_PROMPT,
     prompt: buildPrompt(ctx),

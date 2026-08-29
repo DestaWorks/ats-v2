@@ -74,7 +74,7 @@ export const adminUserService = {
    * every admin-created account would otherwise permanently fail to link ("account not linked"),
    * blocking the "sign in with either Google or password" flow entirely.
    */
-  async create(input: CreateUserInput, ctx: TenantContext): Promise<GeneratedPasswordDTO> {
+  async create(ctx: TenantContext, input: CreateUserInput): Promise<GeneratedPasswordDTO> {
     const password = input.password ?? generatePassword();
     const generatedPassword = input.password ? null : password;
     const result = await auth.api.createUser({
@@ -99,7 +99,7 @@ export const adminUserService = {
     return { user: toDTO(result.user), generatedPassword };
   },
 
-  async setRole(userId: string, role: Role, ctx: TenantContext): Promise<AdminUserDTO> {
+  async setRole(ctx: TenantContext, userId: string, role: Role): Promise<AdminUserDTO> {
     const result = await auth.api.setRole({
       headers: await requestContext().headers(),
       body: { userId, role },
@@ -116,7 +116,7 @@ export const adminUserService = {
     return toDTO(result.user);
   },
 
-  async ban(userId: string, input: BanUserInput, ctx: TenantContext): Promise<AdminUserDTO> {
+  async ban(ctx: TenantContext, userId: string, input: BanUserInput): Promise<AdminUserDTO> {
     const result = await auth.api.banUser({
       headers: await requestContext().headers(),
       body: {
@@ -137,7 +137,7 @@ export const adminUserService = {
     return toDTO(result.user);
   },
 
-  async unban(userId: string, ctx: TenantContext): Promise<AdminUserDTO> {
+  async unban(ctx: TenantContext, userId: string): Promise<AdminUserDTO> {
     const result = await auth.api.unbanUser({
       headers: await requestContext().headers(),
       body: { userId },
@@ -150,7 +150,7 @@ export const adminUserService = {
 
   /** Generates + returns a new password once (never persisted in plaintext — the audit row
    *  records that a reset happened, never the password itself). */
-  async resetPassword(userId: string, ctx: TenantContext): Promise<{ generatedPassword: string }> {
+  async resetPassword(ctx: TenantContext, userId: string): Promise<{ generatedPassword: string }> {
     const generatedPassword = generatePassword();
     await auth.api.setUserPassword({
       headers: await requestContext().headers(),
@@ -167,7 +167,7 @@ export const adminUserService = {
     return { generatedPassword };
   },
 
-  async remove(userId: string, ctx: TenantContext): Promise<void> {
+  async remove(ctx: TenantContext, userId: string): Promise<void> {
     await auth.api.removeUser({ headers: await requestContext().headers(), body: { userId } });
     await withAnnouncedTenant(ctx.tenantId, (tx) =>
       writeAudit(tx, { entity: "user", entityId: userId, actor: ctx.user.id, action: "remove" }),

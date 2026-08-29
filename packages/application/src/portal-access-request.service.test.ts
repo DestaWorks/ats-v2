@@ -56,10 +56,17 @@ beforeEach(() => {
   Object.values(h).forEach((fn) => fn.mockReset());
 });
 
+const ctx = {
+  tenantId: "t1",
+  membershipId: "m1",
+  role: "Owner" as const,
+  user: { id: "u1", email: "u@desta.works", name: "U" },
+};
+
 describe("portalAccessRequestService.list", () => {
   it("maps rows to DTOs", async () => {
     h.list.mockResolvedValue([pendingRequest]);
-    const result = await portalAccessRequestService.list();
+    const result = await portalAccessRequestService.list(ctx);
     expect(result).toEqual([
       {
         id: "r1",
@@ -84,7 +91,7 @@ describe("portalAccessRequestService.approve", () => {
       token: "rawtoken",
     });
 
-    const result = await portalAccessRequestService.approve("r1", { clientId: "cl1" }, actor);
+    const result = await portalAccessRequestService.approve(actor, "r1", { clientId: "cl1" });
 
     expect(h.claimPending).toHaveBeenCalledWith(actor, "r1", "approved");
     expect(h.createContact).toHaveBeenCalledWith(
@@ -108,11 +115,10 @@ describe("portalAccessRequestService.approve", () => {
       token: "rawtoken",
     });
 
-    await portalAccessRequestService.approve(
-      "r1",
-      { clientId: "cl1", contactId: "existing" },
-      actor,
-    );
+    await portalAccessRequestService.approve(actor, "r1", {
+      clientId: "cl1",
+      contactId: "existing",
+    });
 
     expect(h.createContact).not.toHaveBeenCalled();
     expect(h.generateLink).toHaveBeenCalledWith("cl1", "existing", actor);
@@ -121,7 +127,7 @@ describe("portalAccessRequestService.approve", () => {
   it("404s when the request doesn't exist", async () => {
     h.findById.mockResolvedValue(null);
     await expect(
-      portalAccessRequestService.approve("missing", { clientId: "cl1" }, actor),
+      portalAccessRequestService.approve(actor, "missing", { clientId: "cl1" }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect(h.claimPending).not.toHaveBeenCalled();
     expect(h.generateLink).not.toHaveBeenCalled();
@@ -131,7 +137,7 @@ describe("portalAccessRequestService.approve", () => {
     h.findById.mockResolvedValue(pendingRequest);
     h.claimPending.mockResolvedValue(0);
     await expect(
-      portalAccessRequestService.approve("r1", { clientId: "cl1" }, actor),
+      portalAccessRequestService.approve(actor, "r1", { clientId: "cl1" }),
     ).rejects.toMatchObject({ code: "CONFLICT" });
     expect(h.createContact).not.toHaveBeenCalled();
     expect(h.generateLink).not.toHaveBeenCalled();
@@ -143,11 +149,11 @@ describe("portalAccessRequestService.approve", () => {
     h.createContact.mockResolvedValue({ id: "newcontact" });
     h.generateLink.mockResolvedValue({ contact: { id: "newcontact" }, token: "rawtoken" });
 
-    const winner = await portalAccessRequestService.approve("r1", { clientId: "cl1" }, actor);
+    const winner = await portalAccessRequestService.approve(actor, "r1", { clientId: "cl1" });
     expect(winner.token).toBe("rawtoken");
 
     await expect(
-      portalAccessRequestService.approve("r1", { clientId: "cl1" }, actor),
+      portalAccessRequestService.approve(actor, "r1", { clientId: "cl1" }),
     ).rejects.toMatchObject({ code: "CONFLICT" });
 
     expect(h.createContact).toHaveBeenCalledTimes(1);
@@ -161,7 +167,7 @@ describe("portalAccessRequestService.approve", () => {
     h.generateLink.mockRejectedValue(new Error("contact not in client"));
 
     await expect(
-      portalAccessRequestService.approve("r1", { clientId: "cl1" }, actor),
+      portalAccessRequestService.approve(actor, "r1", { clientId: "cl1" }),
     ).rejects.toThrow("contact not in client");
 
     expect(h.revertToPending).toHaveBeenCalledWith(actor, "r1");
@@ -172,13 +178,13 @@ describe("portalAccessRequestService.decline", () => {
   it("claims the row (pending → declined)", async () => {
     h.findById.mockResolvedValue(pendingRequest);
     h.claimPending.mockResolvedValue(1);
-    await portalAccessRequestService.decline("r1");
-    expect(h.claimPending).toHaveBeenCalledWith("r1", "declined");
+    await portalAccessRequestService.decline(ctx, "r1");
+    expect(h.claimPending).toHaveBeenCalledWith(ctx, "r1", "declined");
   });
 
   it("404s when missing", async () => {
     h.findById.mockResolvedValue(null);
-    await expect(portalAccessRequestService.decline("missing")).rejects.toMatchObject({
+    await expect(portalAccessRequestService.decline(ctx, "missing")).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
     expect(h.claimPending).not.toHaveBeenCalled();
@@ -187,7 +193,7 @@ describe("portalAccessRequestService.decline", () => {
   it("409s when already resolved (claimPending affected 0 rows)", async () => {
     h.findById.mockResolvedValue(pendingRequest);
     h.claimPending.mockResolvedValue(0);
-    await expect(portalAccessRequestService.decline("r1")).rejects.toMatchObject({
+    await expect(portalAccessRequestService.decline(ctx, "r1")).rejects.toMatchObject({
       code: "CONFLICT",
     });
   });

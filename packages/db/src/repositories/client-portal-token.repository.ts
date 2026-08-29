@@ -1,12 +1,12 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
-import { bridgeUnscopedCallers, db, type ScopedTx } from "../tenant-scope";
+import { db, type ScopedTx } from "../tenant-scope";
 
 /**
  * Client-portal-token data access (Wave 4.3) — the ONLY layer that touches Prisma for
  * `ClientPortalToken`. Only `tokenHash` is ever persisted (see `client-portal.service.ts`); this
  * repository never sees or returns a raw token.
  */
-export const clientPortalTokenRepository = bridgeUnscopedCallers({
+export const clientPortalTokenRepository = {
   create(
     ctx: TenantContext,
     data: { contactId: string; tokenHash: string; expiresAt: Date; createdById?: string },
@@ -77,4 +77,4 @@ export const clientPortalTokenRepository = bridgeUnscopedCallers({
       data: { lastUsedAt: new Date() },
     });
   },
-});
+};

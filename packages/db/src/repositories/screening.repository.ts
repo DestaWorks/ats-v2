@@ -1,6 +1,6 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { ScreeningScorecard } from "../generated/prisma/client";
-import { bridgeUnscopedCallers, db, type ScopedTx } from "../tenant-scope";
+import { db, type ScopedTx } from "../tenant-scope";
 
 /** A raw screening-scorecard row (Prisma model). Services/DTOs map this to API shapes. */
 export type ScreeningScorecardRow = ScreeningScorecard;
@@ -30,7 +30,7 @@ export interface CreateScorecardData {
  * Screening-scorecard data access (Wave 3.3) — the ONLY layer that touches Prisma for scorecards.
  * Append-only: one row per scoring event (mirrors `stageHistoryRepository`), never an upsert.
  */
-export const screeningRepository = bridgeUnscopedCallers({
+export const screeningRepository = {
   create(ctx: TenantContext, data: CreateScorecardData, tx?: ScopedTx) {
     return db(ctx, tx).screeningScorecard.create({ data });
   },
@@ -42,4 +42,4 @@ export const screeningRepository = bridgeUnscopedCallers({
       orderBy: { scoredAt: "desc" },
     });
   },
-});
+};

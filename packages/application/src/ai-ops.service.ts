@@ -15,8 +15,8 @@ export const aiOpsService = {
   },
 
   async setDisabled(
-    disabled: boolean,
     actor: TenantContext,
+    disabled: boolean,
     reason?: string | null,
   ): Promise<AiSettingsDTO> {
     const trimmedReason = reason?.trim();
@@ -25,7 +25,7 @@ export const aiOpsService = {
       await aiSettingsRepository.setDisabled(actor, disabled, actor.user.id, disabledReason, tx);
       await writeAudit(tx, {
         entity: "ai_settings",
-        entityId: "singleton",
+        entityId: actor.tenantId,
         actor: actor.user.id,
         action: disabled ? "disable" : "enable",
         after: { disabledReason },

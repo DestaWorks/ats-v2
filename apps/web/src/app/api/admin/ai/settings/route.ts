@@ -18,6 +18,6 @@ export const PATCH = apiHandler(async (req: Request) => {
   const actor = await requireCapability("manageAiSettings");
   const input = setAiDisabledSchema.parse(await req.json());
   return json<PatchAdminAiSettingsResponse>(
-    await aiOpsService.setDisabled(input.disabled, actor, input.reason),
+    await aiOpsService.setDisabled(actor, input.disabled, input.reason),
   );
 });

@@ -65,9 +65,9 @@ describe("POST /api/candidates/:id/notes", () => {
     const res = await POST(post({ body: "hi", noteType: "call" }), ctx);
     expect(res.status).toBe(201);
     expect(h.add).toHaveBeenCalledWith(
+      expect.objectContaining({ user: expect.objectContaining({ id: "u1", name: "Test User" }) }),
       "c1",
       { body: "hi", noteType: "call" },
-      expect.objectContaining({ user: expect.objectContaining({ id: "u1", name: "Test User" }) }),
     );
     expect((await res.json()).note.id).toBe("n1");
   });
@@ -76,11 +76,10 @@ describe("POST /api/candidates/:id/notes", () => {
     h.add.mockResolvedValue({ id: "n1" });
     const res = await POST(post({ body: "hi" }), ctx);
     expect(res.status).toBe(201);
-    expect(h.add).toHaveBeenCalledWith(
-      "c1",
-      { body: "hi", noteType: "internal" },
-      expect.anything(),
-    );
+    expect(h.add).toHaveBeenCalledWith(expect.anything(), "c1", {
+      body: "hi",
+      noteType: "internal",
+    });
   });
 
   it("422 on an empty body", async () => {
@@ -115,8 +114,8 @@ describe("GET /api/candidates/:id/notes", () => {
     const res = await GET(getReq, ctx);
     expect(res.status).toBe(200);
     expect(h.listByCandidate).toHaveBeenCalledWith(
+      expect.objectContaining({ tenantId: expect.any(String) }),
       "c1",
-      expect.objectContaining({ user: expect.objectContaining({ id: "u1" }) }),
     );
     expect((await res.json()).notes).toHaveLength(1);
   });

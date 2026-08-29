@@ -19,6 +19,6 @@ export const POST = apiHandler(async (req: Request) => {
   const user = await requireCapability("viewReports");
   await checkRateLimit(`briefs-weekly-generate:${user.user.id}`, { limit: 10, windowMs: 60_000 });
   const input = generateWeeklyBriefSchema.parse(await req.json());
-  const queued = await requireBriefGenerationEnqueuer().weekly(input);
+  const queued = await requireBriefGenerationEnqueuer().weekly(input, user.tenantId);
   return json<PostBriefsWeeklyGenerateResponse>(queued, 202);
 });

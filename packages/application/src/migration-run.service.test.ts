@@ -98,6 +98,13 @@ function actorIs(role: string, tenantId = "t1"): void {
   ]);
 }
 
+const ctx = {
+  tenantId: "t1",
+  membershipId: "m1",
+  role: "Owner" as const,
+  user: { id: "u1", email: "u@desta.works", name: "U" },
+};
+
 describe("start", () => {
   it("stages the upload, queues it, and answers with the run id", async () => {
     h.runRepo.create.mockResolvedValue({ id: "run-1" });
@@ -105,13 +112,14 @@ describe("start", () => {
     const enqueue = vi.fn().mockResolvedValue("job-1");
     registerMigrationCommitEnqueuer(enqueue);
 
-    const accepted = await migrationRunService.start(
-      { format: "csv", content: CONTENT, filename: "export.csv" },
-      owner,
-    );
+    const accepted = await migrationRunService.start(owner, {
+      format: "csv",
+      content: CONTENT,
+      filename: "export.csv",
+    });
 
     expect(accepted).toEqual({ runId: "run-1", jobId: "job-1", status: "queued" });
-    expect(enqueue).toHaveBeenCalledWith("run-1");
+    expect(enqueue).toHaveBeenCalledWith("run-1", "t1");
     expect(h.runRepo.setJobId).toHaveBeenCalledWith(owner, "run-1", "job-1");
     // The staged row carries the content and the same checksum the ETL will recompute.
     const [, staged] = h.runRepo.create.mock.calls[0]!;
@@ -122,7 +130,7 @@ describe("start", () => {
   it("refuses a role without bulkImport before writing anything", async () => {
     registerMigrationCommitEnqueuer(vi.fn());
     await expect(
-      migrationRunService.start({ format: "csv", content: CONTENT }, associate),
+      migrationRunService.start(associate, { format: "csv", content: CONTENT }),
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
     expect(h.runRepo.create).not.toHaveBeenCalled();
   });
@@ -130,7 +138,7 @@ describe("start", () => {
   it("fails loudly when no runner is registered, rather than importing inline", async () => {
     h.runRepo.create.mockResolvedValue({ id: "run-1" });
     await expect(
-      migrationRunService.start({ format: "csv", content: CONTENT }, owner),
+      migrationRunService.start(owner, { format: "csv", content: CONTENT }),
     ).rejects.toMatchObject({ code: "INTERNAL" });
   });
 });
@@ -138,7 +146,7 @@ describe("start", () => {
 describe("state", () => {
   it("maps the row onto the wire shape, dates as ISO strings", async () => {
     h.runRepo.findById.mockResolvedValue(runRow());
-    const state = await migrationRunService.state("run-1", owner);
+    const state = await migrationRunService.state(owner, "run-1");
     expect(state).toMatchObject({
       runId: "run-1",
       status: "running",
@@ -152,13 +160,13 @@ describe("state", () => {
 
   it("404s an unknown run", async () => {
     h.runRepo.findById.mockResolvedValue(null);
-    await expect(migrationRunService.state("nope", owner)).rejects.toMatchObject({
+    await expect(migrationRunService.state(owner, "nope")).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
   });
 
   it("is gated on bulkImport — the report names candidates", async () => {
-    await expect(migrationRunService.state("run-1", associate)).rejects.toMatchObject({
+    await expect(migrationRunService.state(associate, "run-1")).rejects.toMatchObject({
       code: "FORBIDDEN",
     });
     expect(h.runRepo.findById).not.toHaveBeenCalled();
@@ -168,7 +176,7 @@ describe("state", () => {
 describe("claim", () => {
   it("returns null when the conditional claim finds nothing to take", async () => {
     h.runRepo.claimForAttempt.mockResolvedValue(null);
-    expect(await migrationRunService.claim("run-1", 1)).toBeNull();
+    expect(await migrationRunService.claim(ctx, "run-1", 1)).toBeNull();
     expect(h.userRepo.findActorById).not.toHaveBeenCalled();
   });
 
@@ -176,7 +184,7 @@ describe("claim", () => {
     h.runRepo.claimForAttempt.mockResolvedValue(runRow({ extractWithAi: true }));
     actorIs("Owner");
 
-    const claimed = await migrationRunService.claim("run-1", 2);
+    const claimed = await migrationRunService.claim(ctx, "run-1", 2);
 
     expect(h.userRepo.findActorById).toHaveBeenCalledWith("u1");
     expect(claimed?.input).toMatchObject({
@@ -204,7 +212,7 @@ describe("claim", () => {
     ]);
 
     // A Screener holds no `bulkImport`, so picking the run's tenant is what refuses this.
-    await expect(migrationRunService.claim("run-1", 1)).rejects.toMatchObject({
+    await expect(migrationRunService.claim(ctx, "run-1", 1)).rejects.toMatchObject({
       code: "FORBIDDEN",
     });
   });
@@ -212,7 +220,7 @@ describe("claim", () => {
   it("refuses a run whose actor lost the capability after it was queued", async () => {
     h.runRepo.claimForAttempt.mockResolvedValue(runRow());
     actorIs("Associate");
-    await expect(migrationRunService.claim("run-1", 1)).rejects.toMatchObject({
+    await expect(migrationRunService.claim(ctx, "run-1", 1)).rejects.toMatchObject({
       code: "FORBIDDEN",
     });
   });
@@ -220,13 +228,15 @@ describe("claim", () => {
   it("refuses a run whose actor is no longer a member of its tenant", async () => {
     h.runRepo.claimForAttempt.mockResolvedValue(runRow());
     actorIs("Owner", "some-other-tenant");
-    await expect(migrationRunService.claim("run-1", 1)).rejects.toMatchObject({
+    await expect(migrationRunService.claim(ctx, "run-1", 1)).rejects.toMatchObject({
       code: "FORBIDDEN",
     });
   });
 
   it("refuses a run whose staged upload has already been cleared", async () => {
     h.runRepo.claimForAttempt.mockResolvedValue(runRow({ content: null }));
-    await expect(migrationRunService.claim("run-1", 1)).rejects.toMatchObject({ code: "INTERNAL" });
+    await expect(migrationRunService.claim(ctx, "run-1", 1)).rejects.toMatchObject({
+      code: "INTERNAL",
+    });
   });
 });

@@ -1,5 +1,5 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
-import { bridgeUnscopedCallers, db, type ScopedTx } from "../tenant-scope";
+import { db, type ScopedTx } from "../tenant-scope";
 
 /**
  * Wave 4.1 (Templates) — every outreach attempt that was logged via a template. ONE query, not a
@@ -9,7 +9,7 @@ import { bridgeUnscopedCallers, db, type ScopedTx } from "../tenant-scope";
  * `credentials-intelligence.repository.ts`'s gap-analysis query for the same one-query-then-
  * in-memory-group pattern).
  */
-export const templatePerformanceRepository = bridgeUnscopedCallers({
+export const templatePerformanceRepository = {
   attemptsWithTemplate(ctx: TenantContext, tx?: ScopedTx) {
     return db(ctx, tx).outreachAttempt.findMany({
       where: { templateId: { not: null } },
@@ -24,4 +24,4 @@ export const templatePerformanceRepository = bridgeUnscopedCallers({
       },
     });
   },
-});
+};

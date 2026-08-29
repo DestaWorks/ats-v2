@@ -19,7 +19,7 @@ import type {
 } from "@destaworks/contracts/validation/briefs";
 import { toIso } from "@destaworks/domain/utils/iso";
 import type { TenantContext } from "@destaworks/domain/tenant";
-import type { AiCallOptions } from "@destaworks/integrations/ai/deadline";
+import type { AiCancellation } from "@destaworks/integrations/ai/deadline";
 import { writeAudit } from "@destaworks/db/audit";
 import { withTenantTransaction } from "@destaworks/db/with-transaction";
 import {
@@ -94,12 +94,15 @@ function toWeeklyDTO(row: WeeklyBriefRow, savedByName: string | null): WeeklyBri
 }
 
 /** Top clients by CURRENT active-candidate count (legacy `perClient`, "top 5 by active count"). */
-async function topClientsByActiveCandidates(): Promise<
-  { clientName: string; activityCount: number }[]
-> {
-  const clients = await clientRepository.list();
+async function topClientsByActiveCandidates(
+  scope: TenantContext,
+): Promise<{ clientName: string; activityCount: number }[]> {
+  const clients = await clientRepository.list(scope);
   const grouped: { clientId: string | null; _count: { _all: number } }[] =
-    await candidateRepository.countActiveByClient(clients.map((c) => c.id));
+    await candidateRepository.countActiveByClient(
+      scope,
+      clients.map((c) => c.id),
+    );
   const countByClientId = new Map(grouped.map((g) => [g.clientId, g._count._all]));
   return clients
     .map((c) => ({ clientName: c.name, activityCount: countByClientId.get(c.id) ?? 0 }))
@@ -116,6 +119,8 @@ export const briefService = {
    *
    * `options` is the caller's cancellation and time budget: the generate JOB passes its
    * `ctx.signal`, so a worker killing the job also cancels the provider call it is waiting on.
+   *
+   * The tenant is `scope`, not `ctx`: `ctx` is the AI's `DailyBriefContext`, assembled below.
    */
   async generateDaily(
     input: GenerateDailyBriefInput,
@@ -125,7 +130,8 @@ export const briefService = {
       shiftB: string | null;
       watchItems: string | null;
     },
-    options?: AiCallOptions,
+    scope: TenantContext,
+    options?: AiCancellation,
   ) {
     const w = dayWindow(input.date, input.tz);
     const now = new Date();
@@ -144,19 +150,19 @@ export const briefService = {
       yesterdayRow,
     ] = await Promise.all([
       cachedUserList(),
-      dailyRepository.sourcedCountsByRange(w),
-      dailyRepository.outreachCountsByRange(w),
-      topClientsByActiveCandidates(),
-      leadRepository.stuckSourced(now, BRIEF_STUCK_CANDIDATE_LIMIT),
-      leadRepository.stuckOutreach(now, BRIEF_STUCK_CANDIDATE_LIMIT),
-      openRoleRepository.count({ status: "Open", priority: "P1" }),
-      openRoleRepository.count({ status: "Open", priority: "P2" }),
-      openRoleRepository.count({ status: "Open", priority: "P3" }),
-      openRoleRepository.list({ status: "Open", take: 5 }),
+      dailyRepository.sourcedCountsByRange(scope, w),
+      dailyRepository.outreachCountsByRange(scope, w),
+      topClientsByActiveCandidates(scope),
+      leadRepository.stuckSourced(scope, now, BRIEF_STUCK_CANDIDATE_LIMIT),
+      leadRepository.stuckOutreach(scope, now, BRIEF_STUCK_CANDIDATE_LIMIT),
+      openRoleRepository.count(scope, { status: "Open", priority: "P1" }),
+      openRoleRepository.count(scope, { status: "Open", priority: "P2" }),
+      openRoleRepository.count(scope, { status: "Open", priority: "P3" }),
+      openRoleRepository.list(scope, { status: "Open", take: 5 }),
       manualInputs.priorityClientId
-        ? clientRepository.findById(manualInputs.priorityClientId)
+        ? clientRepository.findById(scope, manualInputs.priorityClientId)
         : null,
-      briefRepository.findDailyByDate(daysBefore(input.date, 1)),
+      briefRepository.findDailyByDate(scope, daysBefore(input.date, 1)),
     ]);
 
     const userIds = users.map((u) => u.id);
@@ -164,8 +170,8 @@ export const briefService = {
       { createdById: string | null; _count: { _all: number } }[],
       { createdById: string | null; _count: { _all: number } }[],
     ] = await Promise.all([
-      candidateRepository.countActiveByCreatedBy(userIds),
-      candidateRepository.countStuckByCreatedBy(userIds, now),
+      candidateRepository.countActiveByCreatedBy(scope, userIds),
+      candidateRepository.countStuckByCreatedBy(scope, userIds, now),
     ]);
     const activeCountOf = new Map(activeByUser.map((g) => [g.createdById, g._count._all]));
     const stuckCountOf = new Map(stuckByUser.map((g) => [g.createdById, g._count._all]));
@@ -202,7 +208,7 @@ export const briefService = {
           }
         : null,
     };
-    return generateDailyBrief(ctx, options);
+    return generateDailyBrief(ctx, { ...options, tenantId: scope.tenantId });
   },
 
   /**
@@ -221,17 +227,18 @@ export const briefService = {
       shiftB: string | null;
       watchItems: string | null;
     },
-    options?: AiCallOptions,
+    scope: TenantContext,
+    options?: AiCancellation,
   ): Promise<void> {
-    const draft = await this.generateDaily(input, manualInputs, options);
-    await briefRepository.upsertDailyDraft(input.date, draft);
+    const draft = await this.generateDaily(input, manualInputs, scope, options);
+    await briefRepository.upsertDailyDraft(scope, input.date, draft);
   },
 
   /** Persist the (possibly edited) draft + manual inputs (legacy `daily_brief_save`). */
-  async saveDaily(input: SaveDailyBriefInput, ctx: TenantContext): Promise<DailyBriefDTO> {
-    const row = await withTenantTransaction(ctx, async (tx) => {
+  async saveDaily(input: SaveDailyBriefInput, scope: TenantContext): Promise<DailyBriefDTO> {
+    const row = await withTenantTransaction(scope, async (tx) => {
       const saved = await briefRepository.upsertDaily(
-        ctx,
+        scope,
         {
           date: input.date,
           headline: input.headline,
@@ -244,7 +251,7 @@ export const briefService = {
           shiftA: input.shiftA ?? null,
           shiftB: input.shiftB ?? null,
           watchItems: input.watchItems ?? null,
-          savedById: ctx.user.id,
+          savedById: scope.user.id,
           savedAt: new Date(),
         },
         tx,
@@ -252,17 +259,17 @@ export const briefService = {
       await writeAudit(tx, {
         entity: "daily_brief",
         entityId: saved.id,
-        actor: ctx.user.id,
+        actor: scope.user.id,
         action: "save_daily_brief",
         after: { date: input.date },
       });
       return saved;
     });
-    return toDailyDTO(row, ctx.user.name);
+    return toDailyDTO(row, scope.user.name);
   },
 
-  async getDaily(date: string): Promise<DailyBriefDTO | null> {
-    const row = await briefRepository.findDailyByDate(date);
+  async getDaily(date: string, scope: TenantContext): Promise<DailyBriefDTO | null> {
+    const row = await briefRepository.findDailyByDate(scope, date);
     if (!row) return null;
     const names = row.savedById
       ? await userRepository.namesByIds([row.savedById])
@@ -272,7 +279,12 @@ export const briefService = {
 
   // --- Weekly Brief ---
 
-  async generateWeekly(input: GenerateWeeklyBriefInput, options?: AiCallOptions) {
+  /** `scope` rather than `ctx`, for the reason `generateDaily` gives. */
+  async generateWeekly(
+    input: GenerateWeeklyBriefInput,
+    scope: TenantContext,
+    options?: AiCancellation,
+  ) {
     const weekStart = mondayOf(input.weekStart);
     const lastWeekStart = daysBefore(weekStart, 7);
     const thisW = weekWindow(weekStart, input.tz);
@@ -280,18 +292,18 @@ export const briefService = {
 
     const [users, thisTotals, lastTotals, clientCards, lastWeekRow] = await Promise.all([
       cachedUserList(),
-      weekTotals(thisW),
-      weekTotals(lastW),
-      topClientsByActiveCandidates(),
-      briefRepository.findWeeklyByWeekStart(lastWeekStart),
+      weekTotals(thisW, scope),
+      weekTotals(lastW, scope),
+      topClientsByActiveCandidates(scope),
+      briefRepository.findWeeklyByWeekStart(scope, lastWeekStart),
     ]);
 
     const [sourced, outreach, responses, promoted, hires] = await Promise.all([
-      dailyRepository.sourcedCountsByRange(thisW),
-      dailyRepository.outreachCountsByRange(thisW),
-      dailyRepository.responseCountsByRange(thisW),
-      dailyRepository.promotedCountsByRange(thisW),
-      stageHistoryRepository.enteredStatusCountsByRange(HIRE_STATUS, thisW),
+      dailyRepository.sourcedCountsByRange(scope, thisW),
+      dailyRepository.outreachCountsByRange(scope, thisW),
+      dailyRepository.responseCountsByRange(scope, thisW),
+      dailyRepository.promotedCountsByRange(scope, thisW),
+      stageHistoryRepository.enteredStatusCountsByRange(scope, HIRE_STATUS, thisW),
     ]);
     const perAssociate = users
       .map((u) => ({
@@ -319,23 +331,24 @@ export const briefService = {
           }
         : null,
     };
-    return generateWeeklyBrief(ctx, options);
+    return generateWeeklyBrief(ctx, { ...options, tenantId: scope.tenantId });
   },
 
   /** What the `briefs.weekly.generate` JOB runs. See `generateDailyDraft` for the reasoning. */
   async generateWeeklyDraft(
     input: GenerateWeeklyBriefInput,
-    options?: AiCallOptions,
+    scope: TenantContext,
+    options?: AiCancellation,
   ): Promise<void> {
-    const draft = await this.generateWeekly(input, options);
-    await briefRepository.upsertWeeklyDraft(mondayOf(input.weekStart), draft);
+    const draft = await this.generateWeekly(input, scope, options);
+    await briefRepository.upsertWeeklyDraft(scope, mondayOf(input.weekStart), draft);
   },
 
-  async saveWeekly(input: SaveWeeklyBriefInput, ctx: TenantContext): Promise<WeeklyBriefDTO> {
+  async saveWeekly(input: SaveWeeklyBriefInput, scope: TenantContext): Promise<WeeklyBriefDTO> {
     const weekStart = mondayOf(input.weekStart);
-    const row = await withTenantTransaction(ctx, async (tx) => {
+    const row = await withTenantTransaction(scope, async (tx) => {
       const saved = await briefRepository.upsertWeekly(
-        ctx,
+        scope,
         {
           weekStart,
           headline: input.headline,
@@ -347,7 +360,7 @@ export const briefService = {
           highlights: input.highlights,
           blockers: input.blockers,
           statsSnapshot: {},
-          savedById: ctx.user.id,
+          savedById: scope.user.id,
           savedAt: new Date(),
         },
         tx,
@@ -355,17 +368,17 @@ export const briefService = {
       await writeAudit(tx, {
         entity: "weekly_brief",
         entityId: saved.id,
-        actor: ctx.user.id,
+        actor: scope.user.id,
         action: "save_weekly_brief",
         after: { weekStart },
       });
       return saved;
     });
-    return toWeeklyDTO(row, ctx.user.name);
+    return toWeeklyDTO(row, scope.user.name);
   },
 
-  async getWeekly(weekStart: string): Promise<WeeklyBriefDTO | null> {
-    const row = await briefRepository.findWeeklyByWeekStart(mondayOf(weekStart));
+  async getWeekly(weekStart: string, scope: TenantContext): Promise<WeeklyBriefDTO | null> {
+    const row = await briefRepository.findWeeklyByWeekStart(scope, mondayOf(weekStart));
     if (!row) return null;
     const names = row.savedById
       ? await userRepository.namesByIds([row.savedById])
@@ -374,17 +387,17 @@ export const briefService = {
   },
 
   /** 4-week pattern detection (legacy `weekly_brief_patterns`). Generate-only, never persisted. */
-  async generatePatterns(input: WeeklyPatternsInput) {
+  async generatePatterns(input: WeeklyPatternsInput, scope: TenantContext) {
     const weekStart = mondayOf(input.weekStart);
     const weekStarts = [0, 1, 2, 3].map((n) => daysBefore(weekStart, n * 7));
     const weeks: WeeklyPatternsWeek[] = await Promise.all(
       weekStarts.map(async (ws) => {
         const w = weekWindow(ws, input.tz);
         const [totals, sourced, outreach, responses] = await Promise.all([
-          weekTotals(w),
-          dailyRepository.sourcedCountsByRange(w),
-          dailyRepository.outreachCountsByRange(w),
-          dailyRepository.responseCountsByRange(w),
+          weekTotals(w, scope),
+          dailyRepository.sourcedCountsByRange(scope, w),
+          dailyRepository.outreachCountsByRange(scope, w),
+          dailyRepository.responseCountsByRange(scope, w),
         ]);
         const names = await userRepository.namesByIds([
           ...new Set([...sourced.keys(), ...outreach.keys(), ...responses.keys()]),
@@ -401,36 +414,43 @@ export const briefService = {
         return { weekStart: ws, ...totals, topAssociates };
       }),
     );
-    return generateWeeklyPatterns({ weeks });
+    return generateWeeklyPatterns({ weeks }, { tenantId: scope.tenantId });
   },
 
   // --- AI-suggested targets (legacy `ats_targets_suggest`) ---
 
-  async suggestTargets(input: SuggestTargetsInput) {
+  async suggestTargets(input: SuggestTargetsInput, scope: TenantContext) {
     const [userRow, history] = await Promise.all([
       userRepository.findTenureBasis(input.userId),
-      dailyRepository.logsForUser(input.userId, 5),
+      dailyRepository.logsForUser(scope, input.userId, 5),
     ]);
     if (!userRow) throw new AppError("NOT_FOUND", "User not found");
     const weekNum = tenureWeek(userRow.createdAt, input.date);
     const ramp = rampFor(weekNum);
-    return aiSuggestTargets({
-      associateName: userRow.name,
-      date: input.date,
-      ramp: { label: ramp.label, sourcing: ramp.sourced, outreach: ramp.outreach },
-      recentDays: history.map((h) => ({ date: h.date, sourced: h.sourced, outreach: h.outreach })),
-    });
+    return aiSuggestTargets(
+      {
+        associateName: userRow.name,
+        date: input.date,
+        ramp: { label: ramp.label, sourcing: ramp.sourced, outreach: ramp.outreach },
+        recentDays: history.map((h) => ({
+          date: h.date,
+          sourced: h.sourced,
+          outreach: h.outreach,
+        })),
+      },
+      { tenantId: scope.tenantId },
+    );
   },
 };
 
 /** This-week/last-week KPI totals for the ribbon (sourced/outreach team-wide + promoted/hires). */
-async function weekTotals(w: { start: Date; end: Date }) {
+async function weekTotals(w: { start: Date; end: Date }, scope: TenantContext) {
   const [sourced, outreach, responses, promoted, hires] = await Promise.all([
-    dailyRepository.sourcedCountsByRange(w),
-    dailyRepository.outreachCountsByRange(w),
-    dailyRepository.responseCountsByRange(w),
-    dailyRepository.promotedCountsByRange(w),
-    stageHistoryRepository.enteredStatusCountsByRange(HIRE_STATUS, w),
+    dailyRepository.sourcedCountsByRange(scope, w),
+    dailyRepository.outreachCountsByRange(scope, w),
+    dailyRepository.responseCountsByRange(scope, w),
+    dailyRepository.promotedCountsByRange(scope, w),
+    stageHistoryRepository.enteredStatusCountsByRange(scope, HIRE_STATUS, w),
   ]);
   const sum = (m: Map<string, number>) => [...m.values()].reduce((a, b) => a + b, 0);
   return {

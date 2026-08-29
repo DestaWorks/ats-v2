@@ -74,9 +74,13 @@ export class BriefsController {
 
   /** GET /briefs/daily?date=YYYY-MM-DD — the saved brief for that day, or `null`. */
   @Get("daily")
-  async daily(@Query("date") date: string | undefined, @Res() response: HttpResponseLike) {
+  async daily(
+    @CurrentUser() user: AuthContext,
+    @Query("date") date: string | undefined,
+    @Res() response: HttpResponseLike,
+  ) {
     const day = viewerDay(date, await resolveViewerTz());
-    sendJson(response, await this.briefs.getDaily(day));
+    sendJson(response, await this.briefs.getDaily(day, user));
   }
 
   /**
@@ -92,8 +96,9 @@ export class BriefsController {
   @RateLimit({ name: "briefs-daily-generate", limit: 20, windowMs: 60_000 })
   generateDaily(
     @Body(generateDailyPipe) body: ContractOutput<typeof generateDailyBriefRequestSchema>,
+    @CurrentUser() user: AuthContext,
   ): Promise<EnqueuedJobResponse> {
-    return enqueueDailyBriefGeneration(body);
+    return enqueueDailyBriefGeneration(body, user.tenantId);
   }
 
   /** POST /briefs/daily/save — persist the (possibly edited) draft. */
@@ -109,11 +114,12 @@ export class BriefsController {
   /** GET /briefs/weekly?weekStart=YYYY-MM-DD — the saved brief for that week, or `null`. */
   @Get("weekly")
   async weekly(
+    @CurrentUser() user: AuthContext,
     @Query("weekStart") weekStart: string | undefined,
     @Res() response: HttpResponseLike,
   ) {
     const monday = mondayOf(viewerDay(weekStart, await resolveViewerTz()));
-    sendJson(response, await this.briefs.getWeekly(monday));
+    sendJson(response, await this.briefs.getWeekly(monday, user));
   }
 
   /** POST /briefs/weekly/generate — QUEUE the AI generation. See `generateDaily` above. */
@@ -122,8 +128,9 @@ export class BriefsController {
   @RateLimit({ name: "briefs-weekly-generate", limit: 10, windowMs: 60_000 })
   generateWeekly(
     @Body(generateWeeklyPipe) body: ContractOutput<typeof generateWeeklyBriefSchema>,
+    @CurrentUser() user: AuthContext,
   ): Promise<EnqueuedJobResponse> {
-    return enqueueWeeklyBriefGeneration(body);
+    return enqueueWeeklyBriefGeneration(body, user.tenantId);
   }
 
   /** POST /briefs/weekly/save — persist the (possibly edited) draft. */
@@ -142,7 +149,8 @@ export class BriefsController {
   @RateLimit({ name: "briefs-weekly-patterns", limit: 10, windowMs: 60_000 })
   patterns(
     @Body(weeklyPatternsPipe) body: ContractOutput<typeof weeklyPatternsSchema>,
+    @CurrentUser() user: AuthContext,
   ): Promise<WeeklyPatternsAiOutput> {
-    return this.briefs.generatePatterns(body);
+    return this.briefs.generatePatterns(body, user);
   }
 }

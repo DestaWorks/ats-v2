@@ -37,7 +37,7 @@ export default async function WeeklyBriefPage() {
   const seed =
     initialTz !== undefined && initialWeekStart !== undefined
       ? {
-          initial: await briefService.getWeekly(initialWeekStart),
+          initial: await briefService.getWeekly(initialWeekStart, user),
           initialWeekStart,
           initialTz,
         }

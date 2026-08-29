@@ -36,8 +36,8 @@ export class AdminPortalRequestsController {
 
   @Get()
   @RequireCapability("configureClientPortal")
-  async list(): Promise<PortalAccessRequestListDTO> {
-    return { requests: await this.requests.list() };
+  async list(@CurrentUser() actor: AuthContext): Promise<PortalAccessRequestListDTO> {
+    return { requests: await this.requests.list(actor) };
   }
 
   /** 200: the request already existed — approving transitions it and mints the link. */
@@ -50,14 +50,17 @@ export class AdminPortalRequestsController {
     @Body(new ZodValidationPipe(approvePortalRequestSchema))
     body: ContractOutput<typeof approvePortalRequestSchema>,
   ): Promise<GeneratedPortalLinkDTO> {
-    return await this.requests.approve(id, body, actor);
+    return await this.requests.approve(actor, id, body);
   }
 
   @Post(":id/decline")
   @HttpCode(200)
   @RequireCapability("configureClientPortal")
-  async decline(@Param("id") id: string): Promise<AcknowledgedIdDTO> {
-    await this.requests.decline(id);
+  async decline(
+    @CurrentUser() actor: AuthContext,
+    @Param("id") id: string,
+  ): Promise<AcknowledgedIdDTO> {
+    await this.requests.decline(actor, id);
     return { ok: true, id };
   }
 }

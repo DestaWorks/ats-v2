@@ -28,12 +28,12 @@ describe("registerEnqueuePorts", () => {
     const { queue, enqueue } = fakeQueue();
     registerEnqueuePorts(queue);
 
-    const jobId = await requireMigrationCommitEnqueuer()("run-1");
+    const jobId = await requireMigrationCommitEnqueuer()("run-1", "t1");
 
     expect(jobId).toBe("job-1");
     expect(enqueue).toHaveBeenCalledWith(
       migrationCommitJob,
-      { runId: "run-1" },
+      { runId: "run-1", tenantId: "t1" },
       {
         singletonKey: "migration.commit:run-1",
       },

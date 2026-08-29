@@ -43,10 +43,17 @@ afterEach(() => {
 
 const doc = { originalFilename: "r.pdf", mimeType: "application/pdf" };
 
+const ctx = {
+  tenantId: "t1",
+  membershipId: "m1",
+  role: "Owner" as const,
+  user: { id: "u1", email: "u@desta.works", name: "U" },
+};
+
 describe("documentRepository field encryption", () => {
   it("NO key: stores extractedData as a NATIVE object (not a string) and reads it back as an object", async () => {
     const data = { snapshot: "x", licensure: [{ number: "L1" }] };
-    const row = await documentRepository.create({
+    const row = await documentRepository.create(ctx, {
       ...doc,
       extractedText: "plain",
       extractedData: data,
@@ -64,7 +71,7 @@ describe("documentRepository field encryption", () => {
   it("WITH key: stores enc:v1: ciphertext and decrypts back to the original object + string", async () => {
     process.env.FIELD_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString("base64");
     const data = { npi: "1234567890" };
-    const row = await documentRepository.create({
+    const row = await documentRepository.create(ctx, {
       ...doc,
       extractedText: "secret",
       extractedData: data,

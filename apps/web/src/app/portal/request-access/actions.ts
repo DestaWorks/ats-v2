@@ -1,5 +1,7 @@
 "use server";
 
+import { headers } from "next/headers";
+import { publicTenantService } from "@destaworks/application/public-tenant.service";
 import { portalAccessRequestSchema } from "@destaworks/contracts/validation/portal";
 import { AppError } from "@destaworks/integrations/http/app-error";
 import { checkRateLimit } from "@destaworks/integrations/http/rate-limit";
@@ -26,6 +28,11 @@ export async function submitPortalAccessRequest(
   if (!parsed.success) {
     return { ok: false, error: "Please check the form and try again." };
   }
-  await portalAccessRequestService.submit(parsed.data);
+  const scope = await publicTenantService.contextForHost(
+    (await headers()).get("host") ?? undefined,
+  );
+  if (!scope) return { ok: false, error: "Please check the form and try again." };
+
+  await portalAccessRequestService.submit(scope, parsed.data);
   return { ok: true };
 }

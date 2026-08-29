@@ -465,7 +465,7 @@ export const clientService = {
   ): Promise<ClientTaskDTO> {
     await requireClient(ctx, clientId);
     const updated = await withTenantTransaction(ctx, async (tx) => {
-      const data: Parameters<typeof clientTaskRepository.update>[2] = { ...defined(input) };
+      const data: Parameters<typeof clientTaskRepository.update>[3] = { ...defined(input) };
       if (input.status === "done") data.completedAt = new Date();
       else if (input.status === "open") data.completedAt = null;
       const count = await clientTaskRepository.update(ctx, clientId, taskId, data, tx);
@@ -580,7 +580,7 @@ export const clientService = {
   ): Promise<DealDTO> {
     await requireClient(ctx, clientId);
     const updated = await withTenantTransaction(ctx, async (tx) => {
-      const data: Parameters<typeof dealRepository.update>[2] = { ...defined(input) };
+      const data: Parameters<typeof dealRepository.update>[3] = { ...defined(input) };
       if (input.stage) data.closedAt = isClosedDealStage(input.stage) ? new Date() : null;
       const count = await dealRepository.update(ctx, clientId, dealId, data, tx);
       if (count === 0) throw new AppError("NOT_FOUND", "Deal not found");

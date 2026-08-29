@@ -8,8 +8,8 @@ export type PostAdminAccessRequestDeclineResponse = AcknowledgedIdDTO;
 
 /** POST /api/admin/access-requests/:id/decline — mark a request declined. Gated `manageAccessRequests`. */
 export const POST = apiHandler<{ params: Promise<{ id: string }> }>(async (_req, ctx) => {
-  await requireCapability("manageAccessRequests");
+  const actor = await requireCapability("manageAccessRequests");
   const { id } = await ctx.params;
-  await accessRequestService.decline(id);
+  await accessRequestService.decline(actor, id);
   return json<PostAdminAccessRequestDeclineResponse>({ ok: true, id });
 });

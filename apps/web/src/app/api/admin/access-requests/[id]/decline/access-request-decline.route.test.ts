@@ -56,6 +56,9 @@ describe("POST /api/admin/access-requests/:id/decline", () => {
     const res = await POST(postReq(), ctx);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true, id: "r1" });
-    expect(h.decline).toHaveBeenCalledWith("r1");
+    expect(h.decline).toHaveBeenCalledWith(
+      expect.objectContaining({ tenantId: expect.any(String) }),
+      "r1",
+    );
   });
 });

@@ -139,8 +139,8 @@ describe("RolesController — delegation and response envelope", () => {
     const parseJd = vi.fn().mockResolvedValue(parsed);
     const body = { text: "We are hiring a PMHNP" };
 
-    expect(await controllerWith({ parseJd }).parseJd(body)).toBe(parsed);
-    expect(parseJd).toHaveBeenCalledWith(body);
+    expect(await controllerWith({ parseJd }).parseJd(USER, body)).toBe(parsed);
+    expect(parseJd).toHaveBeenCalledWith(USER, body);
   });
 
   it("GET /roles/:id returns the role envelope", async () => {
@@ -281,7 +281,7 @@ describe("RolesController — authorization", () => {
       method: "parseJd",
       guards: [new SessionAuthGuard(), new RateLimitGuard()],
       request: { headers: {} },
-      invoke: () => controllerWith({ parseJd }).parseJd({ text: "hiring" }),
+      invoke: () => controllerWith({ parseJd }).parseJd(USER, { text: "hiring" }),
     });
 
     expect(h.checkRateLimit).toHaveBeenCalledWith("roles-parse-jd:u1", {

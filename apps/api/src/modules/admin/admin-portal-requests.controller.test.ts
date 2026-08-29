@@ -92,6 +92,13 @@ beforeEach(() => {
   h.decline.mockReset();
 });
 
+const ACTOR = {
+  tenantId: "t1",
+  membershipId: "m1",
+  role: "Owner" as const,
+  user: { id: "owner1", email: "o@desta.works", name: "Owner" },
+} as never;
+
 describe("the admin portal-request routes keep the Next.js verbs, paths and statuses", () => {
   it("mounts the queue and both transitions where their routes were", () => {
     expect(routeOf(AdminPortalRequestsController, "list")).toMatchObject({
@@ -146,7 +153,7 @@ describe("authorization", () => {
 describe("the queue and its transitions", () => {
   it("lists every submitted request under the route's own key", async () => {
     h.list.mockResolvedValue([REQUEST_ROW]);
-    expect(await controller().list()).toEqual({ requests: [REQUEST_ROW] });
+    expect(await controller().list(ACTOR)).toEqual({ requests: [REQUEST_ROW] });
   });
 
   it("approves with the parsed body and the session actor, returning the generated link", async () => {
@@ -154,7 +161,7 @@ describe("the queue and its transitions", () => {
     h.approve.mockResolvedValue(link);
     const actor = await admitted("approve");
     expect(await controller().approve(actor, "p1", { clientId: "cl1" })).toEqual(link);
-    expect(h.approve).toHaveBeenCalledWith("p1", { clientId: "cl1" }, actor);
+    expect(h.approve).toHaveBeenCalledWith(actor, "p1", { clientId: "cl1" });
   });
 
   it("validates the approve body with the contract schema — a missing clientId is 422", async () => {
@@ -168,8 +175,11 @@ describe("the queue and its transitions", () => {
 
   it("declines and acknowledges the id", async () => {
     h.decline.mockResolvedValue(undefined);
-    expect(await controller().decline("p1")).toEqual({ ok: true, id: "p1" });
-    expect(h.decline).toHaveBeenCalledWith("p1");
+    expect(await controller().decline(ACTOR, "p1")).toEqual({ ok: true, id: "p1" });
+    expect(h.decline).toHaveBeenCalledWith(
+      expect.objectContaining({ tenantId: expect.any(String) }),
+      "p1",
+    );
   });
 
   it("carries an unknown request through as the route's 404 envelope", async () => {

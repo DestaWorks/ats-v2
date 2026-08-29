@@ -5,6 +5,7 @@ import { AppError } from "../http/app-error";
 import { logger } from "@destaworks/config/logger";
 import { getLogContext } from "@destaworks/config/logger/request-context";
 import { aiSettingsRepository } from "@destaworks/db/repositories/ai-settings.repository";
+import { systemContextFor } from "@destaworks/domain/system-context";
 import { aiEnabled } from "./config";
 import { isAbortError, startAiDeadline, type AiCallOptions } from "./deadline";
 import { generateStructured } from "./provider";
@@ -16,9 +17,9 @@ import { generateStructured } from "./provider";
  * factored out once rather than re-implemented per module. Originally lived at
  * `ai/briefs/shared.ts`; relocated here once a second, non-brief module (CRM) needed it too.
  */
-export async function isAiAvailable(): Promise<boolean> {
+export async function isAiAvailable(tenantId: string): Promise<boolean> {
   if (!aiEnabled) return false;
-  const { disabled } = await aiSettingsRepository.getCached();
+  const { disabled } = await aiSettingsRepository.getCached(systemContextFor(tenantId));
   return !disabled;
 }
 
@@ -42,12 +43,13 @@ export async function generateAi<T>(
     maxOutputTokens?: number;
   } & AiCallOptions,
 ): Promise<T> {
-  if (!(await isAiAvailable())) {
+  if (!(await isAiAvailable(opts.tenantId))) {
     throw new AppError("FEATURE_DISABLED", `${featureLabel} is not configured`);
   }
   const deadline = startAiDeadline(opts);
   try {
     return await generateStructured({
+      tenantId: opts.tenantId,
       operation: featureLabel,
       schema: opts.schema,
       system: opts.system,

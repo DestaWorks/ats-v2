@@ -38,8 +38,9 @@ function toDTO(row: {
  * of the 6 internal RBAC roles (conflating the two would be a real bug, not just a naming clash).
  */
 export const portalAccessRequestService = {
-  submit(input: PortalAccessRequestInput) {
+  submit(ctx: TenantContext, input: PortalAccessRequestInput) {
     return portalAccessRequestRepository.create(
+      ctx,
       defined({
         name: input.name,
         email: input.email,
@@ -49,8 +50,8 @@ export const portalAccessRequestService = {
     );
   },
 
-  async list(): Promise<PortalAccessRequestDTO[]> {
-    const rows = await portalAccessRequestRepository.list();
+  async list(ctx: TenantContext): Promise<PortalAccessRequestDTO[]> {
+    const rows = await portalAccessRequestRepository.list(ctx);
     return rows.map(toDTO);
   },
 
@@ -60,9 +61,9 @@ export const portalAccessRequestService = {
    * `input.clientId`, then generates a portal link.
    */
   async approve(
+    actor: TenantContext,
     id: string,
     input: ApprovePortalRequestInput,
-    actor: TenantContext,
   ): Promise<GeneratedPortalLinkDTO> {
     const request = await portalAccessRequestRepository.findById(actor, id);
     if (!request) throw new AppError("NOT_FOUND", "Access request not found");
@@ -92,10 +93,10 @@ export const portalAccessRequestService = {
     }
   },
 
-  async decline(id: string): Promise<void> {
-    const request = await portalAccessRequestRepository.findById(id);
+  async decline(ctx: TenantContext, id: string): Promise<void> {
+    const request = await portalAccessRequestRepository.findById(ctx, id);
     if (!request) throw new AppError("NOT_FOUND", "Access request not found");
-    const claimed = await portalAccessRequestRepository.claimPending(id, "declined");
+    const claimed = await portalAccessRequestRepository.claimPending(ctx, id, "declined");
     if (claimed !== 1) {
       throw new AppError("CONFLICT", "This request has already been resolved");
     }

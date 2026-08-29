@@ -1216,12 +1216,15 @@ export interface TenantContext {
       `@unique`s → `@@unique([tenantId, …])`. Both are blocked on the value this sub-phase supplies,
       and the migrations that make them true are already written (`20260829112500_tenants_contract`).
       Expect ~65 create sites and ~10 `findUnique`/`upsert` sites to need the context
-- [ ] **Fix `AiSettings`** — found while writing 6.2. It is a singleton keyed by the literal primary
-      key `id = "singleton"` (the app-wide AI kill switch), and 6.1 made it tenant-scoped. A literal
-      PK admits exactly one row for the whole installation, so tenant #2's settings row cannot exist
-      and `findUnique({ id: "singleton" })` through the seam returns nothing for it. Either key it
-      `@@id([tenantId, id])`, or move it back to the global allowlist and accept the kill switch is
-      platform-wide — but decide, because today it is neither
+- [x] **Fix `AiSettings`** — found while writing 6.2, decided and fixed with the bridge deletion:
+      **the kill switch is per tenant**, not platform-wide. A workspace that turns AI off must not
+      turn it off for every other workspace, and the usage ledger behind it is per-tenant spend.
+      `AiSettings` and `AiUsageEvent` are out of `GLOBAL_MODELS`, the row is keyed `id = tenantId`
+      (one per workspace, reached by a scoped `findFirst` rather than a literal PK), and the
+      settings cache is keyed by tenant too. `tenantId` threads through `AiCallOptions` →
+      `generateAi` → `generateStructured` → the usage ledger, so no AI call can bill or gate against
+      the wrong workspace. Both tables already carried an RLS policy, so leaving them global would
+      have returned zero rows at cutover — a silent, installation-wide AI outage
 - **Done-when:** a repository call cannot omit tenant scoping and still compile ✅, **and**
   `schema.prisma` agrees with the contract migration
 
@@ -1245,10 +1248,15 @@ export interface TenantContext {
       changed only a type annotation** and 4 moved an identity read one level in. No guard,
       decorator, capability or route table moved. Zero role names found, and the existing source
       scan now covers the controllers so it stays that way
-- **Done-when:** every endpoint resolves a tenant before touching data — **resolution ✅, but the
-  data half is NOT met**: services hold the context and still reach repositories through the
-  compile-time bridge, so a query can still run unscoped. That is the ratchet below, and it is what
-  stands between this phase being written and being enforced
+- [x] **Delete the compile-time bridge.** `bridgeUnscopedCallers` is removed from `tenant-scope.ts`
+      and from all 35 tenant-scoped repositories, so no wrapper reorders arguments behind a caller's
+      back and no service reaches a repository without passing its context. The ratchet fell from
+      **100 escape-hatch uses across 45 files to 29 across 10** (`dbUnscoped` 17, `withTransaction`
+      8, `UNSCOPED_CONTEXT` 4, `bridgeUnscopedCallers` 0) and the baseline is ratcheted down.
+      Removing it exposed two unscoped reads the wrapper had been hiding — see 6.6
+- **Done-when:** every endpoint resolves a tenant before touching data ✅ — both halves. Resolution
+  is the `TenantGuard`/`getCurrentUser` work above; the data half is the bridge deletion, after
+  which a repository call without a context is a compile error rather than a silent full-table read
 
 ### 6.5 Tenant resolution and membership
 - [x] Resolve the active tenant from session plus subdomain, path segment or cookie
@@ -1271,7 +1279,16 @@ export interface TenantContext {
       get it wrong. Cost: an unbatched scoped query becomes BEGIN / `set_config` / query / COMMIT.
 - [x] Per-tenant object-storage key prefixes — `t/<tenantId>/…` and `u/<userId>/…`, enforced by a
       branded key type; existing objects keep resolving, migration path in `storage.ts`
-- [ ] Wire the last two un-scoped storage keys (resume upload, report export) once 6.5 resolves a
+- [x] **Scope the client-portal token lookup.** Found by deleting 6.4's bridge: `findByHash` and
+      `touchLastUsed` were reading `ClientPortalToken` through `dbUnscoped`. That table is `FORCE
+      ROW LEVEL SECURITY` with a `tenantId = current_setting('app.tenant_id')` policy, so at RLS
+      cutover every portal login would have resolved to zero rows — a total client-portal outage,
+      invisible until the day it mattered. `portal-guards.ts` now resolves the tenant claim off the
+      request host FIRST and looks the token up inside that workspace, so a token presented on
+      another tenant's host does not resolve either
+- [x] Resume upload is now tenant-prefixed — `tenantStorageKey(ctx.tenantId, …)`, since the method
+      that mints the key carries a context. One un-scoped key remains (report export)
+- [ ] Wire the last un-scoped storage key (report export) once 6.5 resolves a
       tenant — ratcheted by `scripts/check-rls-coverage.mjs`
 - [ ] Deploy step, not a code change: `DATABASE_URL`'s role must be neither `SUPERUSER` nor
       `BYPASSRLS`, or none of the above applies to it
@@ -1284,8 +1301,9 @@ export interface TenantContext {
       through the real policies, which is what caught the seam adding a `where` to `create`
 - [x] Run it on every PR as a required check — `isolation` job in `ci.yml`, on a throwaway
       `postgres:16` service container; plus the database-free `rls:check` in the static job
-- [ ] Add tenant context to the existing test files (they mock at the repository boundary, so none
-      needed changing for 6.6 — this lands with 6.3/6.4's context threading)
+- [x] Add tenant context to the existing test files — landed with the bridge deletion. The whole
+      suite (**2464 tests**) now asserts the context-first argument order rather than the bridge's
+      reordered one, so a repository call that drops its context fails a test as well as the compiler
 - **Done-when:** isolation is proven per table on every change, not asserted in a document
 
 **Count correction:** the schema has **39** tenant-scoped models, not 37 — `ReportExport` and
@@ -1307,37 +1325,35 @@ a brief for the same day. They belong in 6.2's re-keying as `@@unique([tenantId,
 - **Done-when:** no tenant role value, including Owner, can reach another tenant's data
 
 **Phase 6 done-when:** two tenants coexist on staging with isolation proven by the suite and by RLS
-independently. **NOT met, and two distinct things stand in the way.**
+independently. **NOT met — but only one thing stands in the way now: the migrations have not run.**
+The code half is done and enforced; what remains is applying it to a database.
 
-**Written, not yet enforced — 222 → 111 escape hatches.** 282 repository call sites now pass a
-context and 79 transactions announce their tenant. The remaining 111 are NOT more of the same
-sweep, and the bridge cannot simply be deleted: four structural blockers stand behind them, each
-needing a decision rather than an edit.
+**Enforced, not just written — 222 → 29 escape hatches.** Every repository call site passes a
+context, every transaction announces its tenant, and the compile-time bridge is deleted. The four
+structural blockers that stood behind the last 111 were each solved rather than worked around:
 
-1. **181 call sites have no context in scope.** 6.4's claim that every service holds one is not
-   true. `admin-user.service.ts` is the clearest case — it touches no repository at all, only
-   Better Auth plus six `writeAudit` calls, and every public method takes `actorId: string`.
-   Threading it changes a public signature used by another service, six web routes and a
-   controller.
-2. **A portal contact is not a member.** `PortalContext` carries no tenant, and the client portal's
-   public surface (`data`, `postRole`, `logView`) has no `TenantContext` to pass.
-   `domain/tenant.ts` already anticipates widening the viewer type; the widening is not built.
-3. **`reports/*` is blocked on the background export job.** Every report reaches data through
-   `loadCohort`, which reaches `exportService.candidatesCsv`, which runs in the export job whose
-   payload is `{exportId, filters}` — no tenant, and it cannot read one off its own row because
-   that read needs a context. Threading reports without solving this half-threads four files.
-4. **`packages/integrations/src/http/request-cache.ts`** — flagged independently by all three
-   workstreams. `cachedClientList` / `cachedClientRulesList` / `cachedUserList` read tenant-scoped
-   tables unscoped on nearly every render path. They are React `cache()` memos, so adding a context
-   keys the memo on object identity: this one needs design, not a codemod.
+1. **Call sites with no context in scope.** Solved by `systemContextFor(tenantId)` and
+   `portalScopeFor(tenantId, contactId)` — least-privileged, scoping-only contexts that reach a
+   repository but are refused by every capability check, so misusing one fails loudly instead of
+   acting with authority nobody granted. `admin-user.service.ts` was normalised to context-first
+   across its six public methods and all seven callers.
+2. **A portal contact is not a member.** `PortalContext` now carries `tenantId`, derived from the
+   contact's client — a fact about the token, not a decision — and the portal's public surface
+   scopes through it.
+3. **`reports/*` blocked on the background export job.** The job payload carries `tenantId`, kept in
+   a **schema separate from the request schema**: a client-supplied tenant is a forgeable claim, so
+   the endpoint body can never name one. Fixing the one blocked function (`loadCohort`) unblocked
+   all five report files behind it.
+4. **`request-cache.ts`.** Keyed on the tenant **id** (a string), not the context object — `cache()`
+   memoises on argument identity, so passing the context itself would have made every render a miss.
 
-**Two paths break the day RLS is applied, and both were found by reading rather than by a test.**
-`activity_log` is tenant-scoped with `FORCE` and a `WITH CHECK` policy, and two flows write to it
-through a transaction that announces no tenant: `membership.acceptInvitation` (an invitation grants
-no tenant until it is accepted) and `platformAdminService.readTenant` (cross-tenant by design).
-`current_setting` returns NULL, the INSERT is refused, and because the audit must succeed for the
-operation to succeed, **accepting an invitation and the whole 6.8 admin plane stop working**. Both
-fail closed, which is the right direction and still an outage.
+**Three paths that would have broken the day RLS is applied, all found by reading or by deleting the
+bridge — all fixed.** `membership.acceptInvitation` and `platformAdminService.readTenant` wrote to
+`activity_log` through a transaction announcing no tenant (`withAnnouncedTenant` now supplies one);
+admin user writes had the same shape. The fourth and worst was invisible until the bridge came off:
+`ClientPortalToken.findByHash` read unscoped, which under `FORCE ROW LEVEL SECURITY` returns zero
+rows — **every client-portal login would have failed at cutover.** All four fail closed, which is
+the right direction and would still have been an outage.
 
 **One regression was introduced and fixed here.** Converting `withTransaction` to
 `withTenantTransaction` silently disarmed an advisory lock: the callback receives the extended
@@ -1351,13 +1367,10 @@ nullable, the uniqueness rules are still global, and RLS is inert. The isolation
 proves isolation against a throwaway CI Postgres, not against staging — which is the second half of
 this done-when and cannot be closed until the migrations land.
 
-Three items are owed to someone other than the code:
+Two items are owed to someone other than the code:
 - **`DATABASE_URL`'s role must be neither `SUPERUSER` nor `BYPASSRLS`**, or RLS is decorative. The
   suite refuses to trust its own results without checking, after a first run passed 195 assertions
   with the policies entirely inert.
-- **`AiSettings`** is a tenant-scoped singleton keyed by a literal primary key: one row for the whole
-  installation, readable by tenant #1 alone. Re-key it or return it to the global allowlist — today
-  it is neither.
 - **`User.role`** still exists because it is Better Auth's column, cached in the session cookie. Its
   removal is 6.4's last bullet and needs the auth surface changed, not just a migration.
 

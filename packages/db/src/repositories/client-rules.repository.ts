@@ -1,7 +1,7 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { ClientRules as ClientRulesModel } from "../generated/prisma/client";
 import type { ClientRules } from "@destaworks/domain/rules/types";
-import { bridgeUnscopedCallers, db, type ScopedTx } from "../tenant-scope";
+import { db, type ScopedTx } from "../tenant-scope";
 
 /** A raw client-rules row (Prisma model). Services map this to the pure `ClientRules` (via `toClientRules`). */
 export type ClientRulesRow = ClientRulesModel;
@@ -13,11 +13,11 @@ export type ClientRulesRow = ClientRulesModel;
  * rather than joining per candidate row. Rules are seed-only for now (`db:seed:rules`); an editing UI
  * is a later CRM wave.
  */
-export const clientRulesRepository = bridgeUnscopedCallers({
+export const clientRulesRepository = {
   list(ctx: TenantContext, tx?: ScopedTx) {
     return db(ctx, tx).clientRules.findMany();
   },
-});
+};
 
 /**
  * Build the pure-rule `ClientRules` (the shape `scoreCandidate` / `getAutoDisqualify` consume) from a

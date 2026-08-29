@@ -3,7 +3,7 @@ import type { Prisma } from "../generated/prisma/client";
 import { COMPACT_STATES, UNVERIFIED_LICENSE_STATUSES } from "@destaworks/domain/constants";
 import { MS_PER_DAY } from "@destaworks/domain/clock";
 import { utcDayStart } from "@destaworks/domain/daily";
-import { bridgeUnscopedCallers, db, type ScopedTx } from "../tenant-scope";
+import { db, type ScopedTx } from "../tenant-scope";
 import { FIRST_TERMINAL_ORDER } from "./candidate.repository";
 
 /** Credentials eligible for NLC (Nurse Licensure Compact) multi-state practice — matches
@@ -24,7 +24,7 @@ function nlcWhere(): Prisma.CandidateWhereInput {
  * totals (unlike `licenseVerifyRepository`'s capped queue/timeline), so these are fresh `count`/
  * `groupBy` queries, not reuses of the Wave 3.4 reads.
  */
-export const credentialsIntelligenceRepository = bridgeUnscopedCallers({
+export const credentialsIntelligenceRepository = {
   /** The 6 stat-card counts, in one round of parallel queries. */
   async statCounts(ctx: TenantContext, now: Date, tx?: ScopedTx) {
     const from = utcDayStart(now);
@@ -98,4 +98,4 @@ export const credentialsIntelligenceRepository = bridgeUnscopedCallers({
       take: limit,
     });
   },
-});
+};

@@ -57,9 +57,9 @@ describe("PATCH /api/admin/users/:id/role", () => {
     const res = await PATCH(patchReq({ role: "Manager" }), ctx);
     expect(res.status).toBe(200);
     expect(h.setRole).toHaveBeenCalledWith(
+      expect.objectContaining({ user: expect.objectContaining({ id: "u1" }) }),
       "u2",
       "Manager",
-      expect.objectContaining({ user: expect.objectContaining({ id: "u1" }) }),
     );
   });
 

@@ -1,3 +1,4 @@
+import { systemContextFor } from "@destaworks/domain/system-context";
 import { z } from "zod";
 import { logger } from "@destaworks/config/logger";
 import { CommitAbortedError, migrationService } from "@destaworks/application/migration.service";
@@ -13,7 +14,11 @@ import type { JobDefinition, JobHandler } from "../queue";
  * stay small, and the handler reads the same input every attempt.
  */
 
-export const migrationCommitPayloadSchema = z.object({ runId: z.string().min(1) }).strict();
+/** `tenantId` rides along: a job resumes with no session, and reading it off the run row would
+ *  itself need a scope. */
+export const migrationCommitPayloadSchema = z
+  .object({ runId: z.string().min(1), tenantId: z.string().min(1) })
+  .strict();
 export type MigrationCommitPayload = z.infer<typeof migrationCommitPayloadSchema>;
 
 /**
@@ -55,7 +60,8 @@ const PROGRESS_PERSIST_INTERVAL_MS = 2_000;
  * human needs afterwards is on the run row, not in this function's return value.
  */
 export const handleMigrationCommit: JobHandler<MigrationCommitPayload> = async (ctx) => {
-  const { runId } = ctx.payload;
+  const { runId, tenantId } = ctx.payload;
+  const scope = systemContextFor(tenantId);
   const log = logger.child({ runId, job: migrationCommitJob.name });
 
   let lastPersistedAt = 0;
@@ -67,7 +73,7 @@ export const handleMigrationCommit: JobHandler<MigrationCommitPayload> = async (
   // failure after it — a deleted actor, an unreadable staged payload — would otherwise leave the
   // run stuck in `running` forever with nothing recorded about why.
   try {
-    const claimed = await migrationRunService.claim(runId, ctx.attempt);
+    const claimed = await migrationRunService.claim(scope, runId, ctx.attempt);
 
     // Null means the run already finished, or another worker holds it. A duplicate delivery lands
     // here and stops without writing anything — the claim is a conditional update, so exactly one
@@ -94,20 +100,20 @@ export const handleMigrationCommit: JobHandler<MigrationCommitPayload> = async (
         lastPersistedAt = now;
         // Progress is an observability aid, not part of the import. A failed counter write must
         // not fail rows that already committed.
-        await migrationRunService.recordProgress(runId, done, total).catch(() => {
+        await migrationRunService.recordProgress(scope, runId, done, total).catch(() => {
           log.warn("migration.commit.progress_write_failed", { processedRows: done });
         });
       },
     });
 
-    await migrationRunService.succeed(runId, report);
+    await migrationRunService.succeed(scope, runId, report);
     log.info("migration.commit.finished", { counts: report.counts });
     return;
   } catch (err) {
     if (err instanceof CommitAbortedError) {
       // Stopped at a row boundary. The rows before this point are committed and the run resumes
       // from them, so this is a retry, not a failure — rethrow to let the queue count the attempt.
-      await migrationRunService.interrupt(runId, err.processedRows);
+      await migrationRunService.interrupt(scope, runId, err.processedRows);
       throw err;
     }
 
@@ -118,11 +124,11 @@ export const handleMigrationCommit: JobHandler<MigrationCommitPayload> = async (
     // upload the retry still needs, and would tell an operator the import is over while a worker
     // is about to start it again.
     if (lastAttempt) {
-      await migrationRunService.fail(runId, failureCode);
+      await migrationRunService.fail(scope, runId, failureCode);
     } else if (processedRows === null) {
-      await migrationRunService.interrupt(runId);
+      await migrationRunService.interrupt(scope, runId);
     } else {
-      await migrationRunService.interrupt(runId, processedRows);
+      await migrationRunService.interrupt(scope, runId, processedRows);
     }
 
     // Never log the error's message: this ETL's failures quote the row that caused them.

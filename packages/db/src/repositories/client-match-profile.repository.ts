@@ -1,13 +1,13 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { Prisma } from "../generated/prisma/client";
-import { bridgeUnscopedCallers, db, type ScopedTx } from "../tenant-scope";
+import { db, type ScopedTx } from "../tenant-scope";
 
 /**
  * Client-match-profile data access (Wave 3.5) — the active-matcher weight overrides, one row per
  * client. Mirrors `clientRulesRepository`: the table is tiny, so callers fetch what they need by
  * client id (or all, for a batch map) rather than joining per lead/role row.
  */
-export const clientMatchProfileRepository = bridgeUnscopedCallers({
+export const clientMatchProfileRepository = {
   findByClientId(ctx: TenantContext, clientId: string, tx?: ScopedTx) {
     return db(ctx, tx).clientMatchProfile.findUnique({ where: { clientId } });
   },
@@ -33,4 +33,4 @@ export const clientMatchProfileRepository = bridgeUnscopedCallers({
   delete(ctx: TenantContext, clientId: string, tx?: ScopedTx) {
     return db(ctx, tx).clientMatchProfile.delete({ where: { clientId } });
   },
-});
+};

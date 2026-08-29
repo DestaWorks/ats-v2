@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { AiWorkspacePreset } from "@destaworks/contracts/validation/crm-ai-workspace";
 import { generateAi } from "../shared";
+import type { AiCallOptions } from "../deadline";
 
 /**
  * AI Client Workspace (Wave 4.2 flex, legacy `crm_ai_workspace`, `Code.gs:4694-4843`) — a
@@ -61,10 +62,12 @@ function buildContext(ctx: WorkspaceContext): string {
 export function generateWorkspaceText(
   ctx: WorkspaceContext,
   input: { preset?: AiWorkspacePreset | null; customPrompt?: string | null },
+  options: AiCallOptions,
 ): Promise<{ text: string }> {
   const task = input.preset ? PRESET_PROMPTS[input.preset] : (input.customPrompt as string);
   const prompt = `${buildContext(ctx)}\n\n---\n\nTASK: ${task}`;
   return generateAi("AI Client Workspace", {
+    ...options,
     schema: workspaceSchema,
     system: SYSTEM_PROMPT,
     prompt,

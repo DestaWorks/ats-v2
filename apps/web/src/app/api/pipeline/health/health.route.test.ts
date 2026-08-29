@@ -44,6 +44,6 @@ describe("POST /api/pipeline/health", () => {
     const res = await POST(req(), undefined);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(health);
-    expect(h.generate).toHaveBeenCalled();
+    expect(h.generate.mock.calls[0]?.[0]).toMatchObject({ tenantId: expect.any(String) });
   });
 });

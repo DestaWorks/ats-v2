@@ -94,7 +94,7 @@ export const noteService = {
    * body against the real user table (the legacy `ats_notify_mention` trusted a client-supplied
    * recipient list); self-mentions are dropped.
    */
-  async add(candidateId: string, input: AddNoteServiceInput, ctx: TenantContext): Promise<NoteDTO> {
+  async add(ctx: TenantContext, candidateId: string, input: AddNoteServiceInput): Promise<NoteDTO> {
     const candidate = await candidateRepository.findById(ctx, candidateId);
     if (!candidate) throw new AppError("NOT_FOUND", "Candidate not found");
     const users = await userRepository.list();
@@ -145,7 +145,7 @@ export const noteService = {
   },
 
   /** List a candidate's notes, server-scoped by `visibleNotes`, mapped to DTOs (newest-first). */
-  async listByCandidate(candidateId: string, ctx: TenantContext): Promise<NoteDTO[]> {
+  async listByCandidate(ctx: TenantContext, candidateId: string): Promise<NoteDTO[]> {
     const notes = await noteRepository.listByCandidate(ctx, candidateId);
     return visibleNotes(notes, ctx).map(toNoteDTO);
   },

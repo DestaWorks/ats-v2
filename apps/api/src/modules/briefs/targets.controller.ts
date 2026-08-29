@@ -3,6 +3,8 @@ import {
   suggestTargetsSchema,
   type TargetsSuggestAiOutput,
 } from "@destaworks/contracts/validation/briefs";
+import type { AuthContext } from "@destaworks/auth/guards";
+import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { RateLimit } from "../../common/decorators/rate-limit.decorator";
 import { RequireCapability } from "../../common/decorators/require-capability.decorator";
 import { CapabilityGuard } from "../../common/guards/capability.guard";
@@ -34,7 +36,8 @@ export class TargetsController {
   @RateLimit({ name: "targets-suggest", limit: 20, windowMs: 60_000 })
   suggest(
     @Body(suggestTargetsPipe) body: ContractOutput<typeof suggestTargetsSchema>,
+    @CurrentUser() user: AuthContext,
   ): Promise<TargetsSuggestAiOutput> {
-    return this.briefs.suggestTargets(body);
+    return this.briefs.suggestTargets(body, user);
   }
 }

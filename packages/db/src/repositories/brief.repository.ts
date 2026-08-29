@@ -1,6 +1,6 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { DailyBrief, Prisma, WeeklyBrief } from "../generated/prisma/client";
-import { bridgeUnscopedCallers, db, type ScopedTx } from "../tenant-scope";
+import { db, type ScopedTx } from "../tenant-scope";
 
 export type DailyBriefRow = DailyBrief;
 export type WeeklyBriefRow = WeeklyBrief;
@@ -9,7 +9,7 @@ export type WeeklyBriefRow = WeeklyBrief;
  * Daily/Weekly Brief data access (Wave 5.1) — one row per period (`date`/`weekStart`), upserted
  * on save. Mirrors `daily.repository.ts`'s target/actual CRUD shape.
  */
-export const briefRepository = bridgeUnscopedCallers({
+export const briefRepository = {
   findDailyByDate(ctx: TenantContext, date: string, tx?: ScopedTx) {
     return db(ctx, tx).dailyBrief.findUnique({ where: { date } });
   },
@@ -58,4 +58,4 @@ export const briefRepository = bridgeUnscopedCallers({
       update: { draft, draftAt },
     });
   },
-});
+};

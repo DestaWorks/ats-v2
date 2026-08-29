@@ -50,6 +50,9 @@ describe("GET /api/briefs/weekly", () => {
     const res = await GET(getReq(), undefined);
     expect(res.status).toBe(200);
     expect(await res.json()).toBeNull();
-    expect(h.getWeekly).toHaveBeenCalledWith("2026-07-20");
+    expect(h.getWeekly).toHaveBeenCalledWith(
+      "2026-07-20",
+      expect.objectContaining({ tenantId: "t1" }),
+    );
   });
 });

@@ -1,8 +1,11 @@
 import { createHash } from "node:crypto";
-import { PORTAL_TOKEN_COOKIE } from "@destaworks/domain/constants";
+import { PORTAL_TOKEN_COOKIE, TENANT_COOKIE } from "@destaworks/domain/constants";
 import { AppError } from "@destaworks/integrations/http/app-error";
 import { clientPortalTokenRepository } from "@destaworks/db/repositories/client-portal-token.repository";
 import { requestContext } from "@destaworks/config/request-context";
+import { tenantRepository } from "@destaworks/db/tenancy/membership.repository";
+import { systemContextFor } from "@destaworks/domain/system-context";
+import { readTenantClaim } from "./tenant-claim";
 
 /**
  * Client Portal auth (Wave 4.3) — completely separate from `server/auth/guards.ts`. Never imports
@@ -36,10 +39,25 @@ export function hashPortalToken(rawToken: string): string {
  * can set its `Max-Age` to the token's actual remaining lifetime, not a fresh full TTL — re-visiting
  * a near-expiry link must not silently extend access.
  */
+async function claimedTenantScope() {
+  const ctx = requestContext();
+  const claim = readTenantClaim({
+    host: (await ctx.headers()).get("host") ?? undefined,
+    cookie: await ctx.cookie(TENANT_COOKIE),
+  });
+  if (!claim) return null;
+  const tenant = await tenantRepository.findBySlug(claim.slug);
+  return tenant ? systemContextFor(tenant.id) : null;
+}
+
 async function resolveByRawToken(
   rawToken: string,
 ): Promise<{ contact: PortalContext; expiresAt: Date } | null> {
-  const tokenRow = await clientPortalTokenRepository.findByHash(hashPortalToken(rawToken));
+  // The token is looked up INSIDE the workspace its link was issued for. A hash presented on a
+  // different tenant's host does not resolve, and the read is scoped so RLS can serve it at all.
+  const scope = await claimedTenantScope();
+  if (!scope) return null;
+  const tokenRow = await clientPortalTokenRepository.findByHash(scope, hashPortalToken(rawToken));
   if (!tokenRow) return null;
   if (tokenRow.revokedAt) return null;
   if (tokenRow.expiresAt.getTime() <= Date.now()) return null;
@@ -54,7 +72,7 @@ async function resolveByRawToken(
   // Nullable until 6.2's contract migration. Unscopeable means refused, not served unscoped.
   if (tokenRow.contact.tenantId === null) return null;
 
-  await clientPortalTokenRepository.touchLastUsed(tokenRow.id);
+  await clientPortalTokenRepository.touchLastUsed(scope, tokenRow.id);
 
   return {
     contact: {

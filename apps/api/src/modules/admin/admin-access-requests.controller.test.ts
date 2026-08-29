@@ -89,6 +89,13 @@ beforeEach(() => {
   h.decline.mockReset();
 });
 
+const ACTOR = {
+  tenantId: "t1",
+  membershipId: "m1",
+  role: "Owner" as const,
+  user: { id: "owner1", email: "o@desta.works", name: "Owner" },
+} as never;
+
 describe("the access-request routes keep the Next.js verbs, paths and statuses", () => {
   it("mounts the queue and both transitions where their routes were", () => {
     expect(routeOf(AdminAccessRequestsController, "list")).toMatchObject({
@@ -143,7 +150,7 @@ describe("authorization", () => {
 describe("the queue and its transitions", () => {
   it("lists every submitted request under the route's own key", async () => {
     h.list.mockResolvedValue([REQUEST_ROW]);
-    expect(await controller().list()).toEqual({ requests: [REQUEST_ROW] });
+    expect(await controller().list(ACTOR)).toEqual({ requests: [REQUEST_ROW] });
   });
 
   it("approves with the chosen role, attributed to the session actor", async () => {
@@ -154,9 +161,9 @@ describe("the queue and its transitions", () => {
       generatedPassword: "pw",
     });
     expect(h.approve).toHaveBeenCalledWith(
+      expect.objectContaining({ user: expect.objectContaining({ id: "owner1" }) }),
       "r1",
       "Screener",
-      expect.objectContaining({ user: expect.objectContaining({ id: "owner1" }) }),
     );
   });
 
@@ -171,13 +178,16 @@ describe("the queue and its transitions", () => {
 
   it("declines and acknowledges the id", async () => {
     h.decline.mockResolvedValue(undefined);
-    expect(await controller().decline("r1")).toEqual({ ok: true, id: "r1" });
-    expect(h.decline).toHaveBeenCalledWith("r1");
+    expect(await controller().decline(ACTOR, "r1")).toEqual({ ok: true, id: "r1" });
+    expect(h.decline).toHaveBeenCalledWith(
+      expect.objectContaining({ tenantId: expect.any(String) }),
+      "r1",
+    );
   });
 
   it("carries an unknown request through as the route's 404 envelope", async () => {
     h.decline.mockRejectedValue(new AppError("NOT_FOUND", "Request not found"));
-    expect(await renderFailure(() => controller().decline("gone"))).toEqual({
+    expect(await renderFailure(() => controller().decline(ACTOR, "gone"))).toEqual({
       status: 404,
       body: { error: { code: "NOT_FOUND", message: "Request not found" } },
     });

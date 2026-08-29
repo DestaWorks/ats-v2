@@ -52,8 +52,8 @@ describe("POST /api/admin/users/:id/unban", () => {
     const res = await POST(postReq(), ctx);
     expect(res.status).toBe(200);
     expect(h.unban).toHaveBeenCalledWith(
-      "u2",
       expect.objectContaining({ user: expect.objectContaining({ id: "u1" }) }),
+      "u2",
     );
   });
 });

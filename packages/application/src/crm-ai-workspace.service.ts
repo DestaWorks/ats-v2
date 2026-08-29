@@ -69,7 +69,7 @@ export const crmAiWorkspaceService = {
     ctx: TenantContext,
   ): Promise<WorkspaceResultDTO> {
     const workspace = await buildContext(ctx, clientId);
-    return generateWorkspaceText(workspace, defined(input));
+    return generateWorkspaceText(workspace, defined(input), { tenantId: ctx.tenantId });
   },
 
   async logNote(clientId: string, text: string, ctx: TenantContext): Promise<ClientNoteDTO> {

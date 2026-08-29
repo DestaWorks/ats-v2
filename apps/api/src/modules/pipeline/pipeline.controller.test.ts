@@ -38,8 +38,16 @@ import {
   throughGuards,
 } from "../../common/testing/controller-contract";
 import { PipelineController } from "./pipeline.controller";
+import type { AuthContext } from "@destaworks/auth/guards";
 
 installNestRequestContext();
+
+const actor: AuthContext = {
+  tenantId: "t1",
+  membershipId: "m1",
+  user: { id: "u7", email: "op@desta.works", name: "Operator" },
+  role: "Screener",
+};
 
 type PipelineHealthService = ConstructorParameters<typeof PipelineController>[0];
 
@@ -67,7 +75,7 @@ describe("PipelineController — declared routes", () => {
 });
 
 describe("PipelineController — delegation", () => {
-  it("returns the generated summary unwrapped and passes no filter to the generator", async () => {
+  it("returns the generated summary unwrapped and scopes it to the caller's tenant", async () => {
     const summary = {
       diagnostic: "Two candidates are overdue",
       healthScore: 62,
@@ -75,8 +83,8 @@ describe("PipelineController — delegation", () => {
     };
     const generate = vi.fn().mockResolvedValue(summary);
 
-    expect(await controllerWith({ generate }).health()).toBe(summary);
-    expect(generate).toHaveBeenCalledWith();
+    expect(await controllerWith({ generate }).health(actor)).toBe(summary);
+    expect(generate).toHaveBeenCalledWith(actor);
   });
 });
 
@@ -90,7 +98,7 @@ describe("PipelineController — authentication and rate limiting", () => {
         method: "health",
         guards: [new SessionAuthGuard(), new RateLimitGuard()],
         request: { headers: {} },
-        invoke: () => controllerWith({ generate }).health(),
+        invoke: () => controllerWith({ generate }).health(actor),
       }),
     ).rejects.toMatchObject({ code: "UNAUTHORIZED", status: 401 });
 
@@ -107,7 +115,7 @@ describe("PipelineController — authentication and rate limiting", () => {
       method: "health",
       guards: [new SessionAuthGuard(), new RateLimitGuard()],
       request: { headers: {} },
-      invoke: () => controllerWith({ generate }).health(),
+      invoke: () => controllerWith({ generate }).health(actor),
     });
 
     expect(h.checkRateLimit).toHaveBeenCalledWith("pipeline-health:u7", {

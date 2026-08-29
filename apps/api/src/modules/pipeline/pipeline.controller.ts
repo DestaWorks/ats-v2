@@ -1,5 +1,7 @@
 import { Controller, HttpCode, HttpStatus, Inject, Post, UseGuards } from "@nestjs/common";
 import type { PostPipelineHealthResponse } from "@destaworks/contracts/validation/pipeline-health";
+import type { AuthContext } from "@destaworks/auth/guards";
+import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { RateLimit } from "../../common/decorators/rate-limit.decorator";
 import { RateLimitGuard } from "../../common/guards/rate-limit.guard";
 import { SessionAuthGuard } from "../../common/guards/session-auth.guard";
@@ -26,7 +28,7 @@ export class PipelineController {
   @HttpCode(HttpStatus.OK)
   @UseGuards(RateLimitGuard)
   @RateLimit({ name: "pipeline-health", limit: 20, windowMs: 60_000 })
-  async health(): Promise<PostPipelineHealthResponse> {
-    return await this.pipelineHealth.generate();
+  async health(@CurrentUser() user: AuthContext): Promise<PostPipelineHealthResponse> {
+    return await this.pipelineHealth.generate(user);
   }
 }

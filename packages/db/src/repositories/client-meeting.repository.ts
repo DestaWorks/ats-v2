@@ -1,6 +1,6 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { ClientMeeting, Prisma } from "../generated/prisma/client";
-import { bridgeUnscopedCallers, db, type ScopedTx } from "../tenant-scope";
+import { db, type ScopedTx } from "../tenant-scope";
 
 /** A raw client-meeting row (Prisma model). Services/DTOs map this to API shapes. */
 export type ClientMeetingRow = ClientMeeting;
@@ -10,7 +10,7 @@ export type ClientMeetingRow = ClientMeeting;
  * `client_meetings`. No `update` method — meetings are genuinely append-only in legacy (no edit
  * anywhere) and stay that way here; correction is soft-delete only, matching `CandidateNote`.
  */
-export const clientMeetingRepository = bridgeUnscopedCallers({
+export const clientMeetingRepository = {
   create(ctx: TenantContext, data: Prisma.ClientMeetingUncheckedCreateInput, tx?: ScopedTx) {
     return db(ctx, tx).clientMeeting.create({ data });
   },
@@ -43,4 +43,4 @@ export const clientMeetingRepository = bridgeUnscopedCallers({
     });
     return count;
   },
-});
+};

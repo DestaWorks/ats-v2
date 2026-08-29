@@ -4,6 +4,7 @@ import {
   type InboundExtractedDTO,
 } from "@destaworks/contracts/validation/inbound";
 import { generateAi } from "./shared";
+import type { AiCallOptions } from "./deadline";
 
 /**
  * Inbound-message extraction (Wave 2.8, legacy `inbound_triage` — Gemini-only). Provider-agnostic
@@ -52,7 +53,8 @@ const extractionSchema = z.object({
  */
 export async function extractInbound(
   messageText: string,
-  context?: string | null,
+  context: string | null,
+  options: AiCallOptions,
 ): Promise<InboundExtractedDTO> {
   const prompt = [
     context ? `Context from the recruiter: ${context}` : null,
@@ -63,6 +65,7 @@ export async function extractInbound(
     .join("\n");
 
   return generateAi("Inbound triage", {
+    ...options,
     schema: extractionSchema,
     system: SYSTEM_PROMPT.join(" "),
     prompt,

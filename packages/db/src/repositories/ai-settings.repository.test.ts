@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
-const h = vi.hoisted(() => ({ findUnique: vi.fn(), upsert: vi.fn() }));
+const h = vi.hoisted(() => ({ findFirst: vi.fn(), update: vi.fn(), create: vi.fn() }));
 
 vi.mock("server-only", () => ({}));
 vi.mock("../prisma", () => {
   const prisma: Record<string, unknown> = {
-    aiSettings: { findUnique: h.findUnique, upsert: h.upsert },
+    aiSettings: { findFirst: h.findFirst, update: h.update, create: h.create },
   };
   // The seam builds its client with `prisma.$extends(...)`. Returning the fake unchanged keeps
   // these assertions about the query the REPOSITORY composes; that the extension then adds the
@@ -16,41 +16,54 @@ vi.mock("../prisma", () => {
 
 import { aiSettingsRepository } from "./ai-settings.repository";
 
+const ctx = { tenantId: "t1" } as never;
+
 beforeEach(() => {
-  h.findUnique.mockReset();
-  h.upsert.mockReset();
+  h.findFirst.mockReset();
+  h.update.mockReset();
+  h.create.mockReset();
 });
 
 describe("aiSettingsRepository.get", () => {
   it("defaults to not-disabled when no row exists", async () => {
-    h.findUnique.mockResolvedValue(null);
-    expect(await aiSettingsRepository.get()).toEqual({ disabled: false, disabledReason: null });
+    h.findFirst.mockResolvedValue(null);
+    expect(await aiSettingsRepository.get(ctx)).toEqual({ disabled: false, disabledReason: null });
   });
 
   it("reflects the stored value", async () => {
-    h.findUnique.mockResolvedValue({ disabled: true, disabledReason: "incident" });
-    expect(await aiSettingsRepository.get()).toEqual({
+    h.findFirst.mockResolvedValue({ disabled: true, disabledReason: "incident" });
+    expect(await aiSettingsRepository.get(ctx)).toEqual({
       disabled: true,
       disabledReason: "incident",
     });
   });
 
   it("fails open (not disabled) when the read throws", async () => {
-    h.findUnique.mockRejectedValue(new Error("connection refused"));
+    h.findFirst.mockRejectedValue(new Error("connection refused"));
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    expect(await aiSettingsRepository.get()).toEqual({ disabled: false, disabledReason: null });
+    expect(await aiSettingsRepository.get(ctx)).toEqual({ disabled: false, disabledReason: null });
     errorSpy.mockRestore();
   });
 });
 
 describe("aiSettingsRepository.setDisabled", () => {
-  it("upserts the singleton row", async () => {
-    h.upsert.mockResolvedValue({});
-    await aiSettingsRepository.setDisabled(true, "u1", "incident");
-    expect(h.upsert).toHaveBeenCalledWith({
-      where: { id: "singleton" },
-      create: { id: "singleton", disabled: true, disabledReason: "incident", updatedBy: "u1" },
-      update: { disabled: true, disabledReason: "incident", updatedBy: "u1" },
+  it("creates the tenant's row when it has none yet", async () => {
+    h.findFirst.mockResolvedValue(null);
+    h.create.mockResolvedValue({});
+    await aiSettingsRepository.setDisabled(ctx, true, "u1", "incident");
+    expect(h.create).toHaveBeenCalledWith({
+      data: { id: "t1", disabled: true, disabledReason: "incident", updatedBy: "u1" },
+    });
+  });
+
+  it("updates the existing row rather than creating a second one", async () => {
+    h.findFirst.mockResolvedValue({ id: "t1" });
+    h.update.mockResolvedValue({});
+    await aiSettingsRepository.setDisabled(ctx, false, "u2", null);
+    expect(h.create).not.toHaveBeenCalled();
+    expect(h.update).toHaveBeenCalledWith({
+      where: { id: "t1" },
+      data: { disabled: false, disabledReason: null, updatedBy: "u2" },
     });
   });
 });
@@ -61,24 +74,26 @@ describe("aiSettingsRepository.getCached", () => {
   });
 
   it("reuses the first read within the TTL window instead of hitting the DB again", async () => {
-    h.findUnique.mockResolvedValue({ disabled: false, disabledReason: null });
+    h.findFirst.mockResolvedValue({ disabled: false, disabledReason: null });
     const { aiSettingsRepository: fresh } = await import("./ai-settings.repository");
 
-    await fresh.getCached();
-    await fresh.getCached();
+    await fresh.getCached(ctx);
+    await fresh.getCached(ctx);
 
-    expect(h.findUnique).toHaveBeenCalledTimes(1);
+    expect(h.findFirst).toHaveBeenCalledTimes(1);
   });
 
   it("setDisabled updates the cache directly, so the next getCached reflects it without a DB read", async () => {
-    h.findUnique.mockResolvedValue({ disabled: false, disabledReason: null });
-    h.upsert.mockResolvedValue({});
+    h.findFirst.mockResolvedValue({ disabled: false, disabledReason: null });
+    h.create.mockResolvedValue({});
     const { aiSettingsRepository: fresh } = await import("./ai-settings.repository");
 
-    expect(await fresh.getCached()).toEqual({ disabled: false, disabledReason: null });
-    await fresh.setDisabled(true, "u1", "incident");
-    expect(await fresh.getCached()).toEqual({ disabled: true, disabledReason: "incident" });
+    expect(await fresh.getCached(ctx)).toEqual({ disabled: false, disabledReason: null });
+    await fresh.setDisabled(ctx, true, "u1", "incident");
+    expect(await fresh.getCached(ctx)).toEqual({ disabled: true, disabledReason: "incident" });
 
-    expect(h.findUnique).toHaveBeenCalledTimes(1);
+    // One read for the first getCached, one for setDisabled's own row lookup — the second
+    // getCached is served from the cache setDisabled primed.
+    expect(h.findFirst).toHaveBeenCalledTimes(2);
   });
 });

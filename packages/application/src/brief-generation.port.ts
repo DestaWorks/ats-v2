@@ -16,10 +16,14 @@ import type { EnqueuedJobResponse } from "@destaworks/contracts/validation/jobs"
  *
  * Both stacks resolve the same registered implementation, so the singleton key that stops a second
  * paid LLM run is defined once, in the job package, where the definitions already live.
+ *
+ * `tenantId` is a separate argument rather than a field on `input`: the input is the parsed
+ * request body, and a tenant a client could put there would be a claim, not a scope. Callers pass
+ * the one their guard resolved.
  */
 export interface BriefGenerationEnqueuer {
-  daily(input: GenerateDailyBriefRequest): Promise<EnqueuedJobResponse>;
-  weekly(input: GenerateWeeklyBriefInput): Promise<EnqueuedJobResponse>;
+  daily(input: GenerateDailyBriefRequest, tenantId: string): Promise<EnqueuedJobResponse>;
+  weekly(input: GenerateWeeklyBriefInput, tenantId: string): Promise<EnqueuedJobResponse>;
 }
 
 let enqueuer: BriefGenerationEnqueuer | null = null;

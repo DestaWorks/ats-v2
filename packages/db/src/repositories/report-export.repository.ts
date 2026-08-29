@@ -1,6 +1,6 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { Prisma } from "../generated/prisma/client";
-import { bridgeUnscopedCallers, db, type ScopedTx } from "../tenant-scope";
+import { db, type ScopedTx } from "../tenant-scope";
 
 /** Lifecycle of one requested export. `ready` is the only state with a `storageKey`. */
 export type ReportExportStatus = "pending" | "ready" | "failed";
@@ -17,7 +17,7 @@ export interface ReportExportRow {
   readyAt: Date | null;
 }
 
-export const reportExportRepository = bridgeUnscopedCallers({
+export const reportExportRepository = {
   /**
    * Record the request. Accepts a transaction so the row and the job that fulfils it can be
    * committed together — the queue port's `tx` option exists for exactly this pairing.
@@ -58,4 +58,4 @@ export const reportExportRepository = bridgeUnscopedCallers({
   ): Promise<void> {
     await db(ctx, tx).reportExport.update({ where: { id }, data: { status: "failed", errorCode } });
   },
-});
+};

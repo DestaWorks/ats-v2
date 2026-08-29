@@ -42,13 +42,13 @@ describe("aiOpsService.getSettings", () => {
 
 describe("aiOpsService.setDisabled", () => {
   it("upserts the flag + reason and writes an audit entry inside one transaction", async () => {
-    await aiOpsService.setDisabled(true, actor, "incident");
+    await aiOpsService.setDisabled(actor, true, "incident");
     expect(h.setDisabled).toHaveBeenCalledWith(actor, true, "u1", "incident", {});
     expect(h.writeAudit).toHaveBeenCalledWith(
       {},
       expect.objectContaining({
         entity: "ai_settings",
-        entityId: "singleton",
+        entityId: actor.tenantId,
         actor: "u1",
         action: "disable",
         after: { disabledReason: "incident" },
@@ -57,22 +57,22 @@ describe("aiOpsService.setDisabled", () => {
   });
 
   it("nulls the reason out when re-enabling, even if one was passed", async () => {
-    await aiOpsService.setDisabled(false, actor, "ignored");
+    await aiOpsService.setDisabled(actor, false, "ignored");
     expect(h.setDisabled).toHaveBeenCalledWith(actor, false, "u1", null, {});
   });
 
   it("normalizes a blank/whitespace-only reason to null instead of storing an empty string", async () => {
-    await aiOpsService.setDisabled(true, actor, "   ");
+    await aiOpsService.setDisabled(actor, true, "   ");
     expect(h.setDisabled).toHaveBeenCalledWith(actor, true, "u1", null, {});
   });
 
   it("trims a reason with surrounding whitespace", async () => {
-    await aiOpsService.setDisabled(true, actor, "  incident  ");
+    await aiOpsService.setDisabled(actor, true, "  incident  ");
     expect(h.setDisabled).toHaveBeenCalledWith(actor, true, "u1", "incident", {});
   });
 
   it("logs 'enable' when re-enabling", async () => {
-    await aiOpsService.setDisabled(false, actor);
+    await aiOpsService.setDisabled(actor, false);
     expect(h.writeAudit).toHaveBeenCalledWith({}, expect.objectContaining({ action: "enable" }));
   });
 });

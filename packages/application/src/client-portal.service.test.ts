@@ -216,6 +216,7 @@ describe("clientPortalService.postRole", () => {
     };
     const result = await clientPortalService.postRole(ctx, { title: "NP", priority: "P2" });
     expect(h.createRole).toHaveBeenCalledWith(
+      expect.objectContaining({ tenantId: "t1" }),
       expect.objectContaining({ clientId: "cl1", postedByContactId: "c1", status: "Open" }),
       expect.anything(),
     );

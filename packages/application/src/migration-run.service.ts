@@ -109,7 +109,7 @@ export const migrationRunService = {
    * and re-queueable, unlike the opposite order, which would hand a worker a run id that does not
    * exist yet.
    */
-  async start(input: ImportInput, ctx: TenantContext): Promise<MigrationCommitAccepted> {
+  async start(ctx: TenantContext, input: ImportInput): Promise<MigrationCommitAccepted> {
     assertCanImport(ctx);
 
     const run = await migrationRunRepository.create(ctx, {
@@ -122,7 +122,7 @@ export const migrationRunService = {
       startedById: ctx.user.id,
     });
 
-    const jobId = await requireMigrationCommitEnqueuer()(run.id);
+    const jobId = await requireMigrationCommitEnqueuer()(run.id, ctx.tenantId);
     await migrationRunRepository.setJobId(ctx, run.id, jobId);
 
     logger.info("migration.run.queued", { runId: run.id, jobId, actorId: ctx.user.id });
@@ -130,7 +130,7 @@ export const migrationRunService = {
   },
 
   /** The operator's read. Same `bulkImport` gate as starting one — a run report lists candidates. */
-  async state(runId: string, ctx: TenantContext): Promise<MigrationRunState> {
+  async state(ctx: TenantContext, runId: string): Promise<MigrationRunState> {
     assertCanImport(ctx);
     const run = await migrationRunRepository.findById(ctx, runId);
     if (!run) throw new AppError("NOT_FOUND", "Import run not found");
@@ -152,8 +152,12 @@ export const migrationRunService = {
    * "whichever the actor happens to default to"; reading it from the row it is doing work for is
    * what stops that. A run staged before 6.2's backfill carries no tenant and cannot be resumed.
    */
-  async claim(runId: string, attempt: number): Promise<ClaimedMigrationRun | null> {
-    const run = await migrationRunRepository.claimForAttempt(runId, attempt, new Date());
+  async claim(
+    ctx: TenantContext,
+    runId: string,
+    attempt: number,
+  ): Promise<ClaimedMigrationRun | null> {
+    const run = await migrationRunRepository.claimForAttempt(ctx, runId, attempt, new Date());
     if (!run) return null;
     if (run.content === null) {
       throw new AppError("INTERNAL", "The staged import is no longer available.");
@@ -197,25 +201,25 @@ export const migrationRunService = {
     };
   },
 
-  recordProgress(runId: string, done: number, total: number): Promise<unknown> {
-    return migrationRunRepository.recordProgress(runId, done, total);
+  recordProgress(ctx: TenantContext, runId: string, done: number, total: number): Promise<unknown> {
+    return migrationRunRepository.recordProgress(ctx, runId, done, total);
   },
 
-  async succeed(runId: string, report: ImportReport): Promise<void> {
-    await migrationRunRepository.finish(runId, { status: "succeeded", report }, new Date());
+  async succeed(ctx: TenantContext, runId: string, report: ImportReport): Promise<void> {
+    await migrationRunRepository.finish(ctx, runId, { status: "succeeded", report }, new Date());
     logger.info("migration.run.succeeded", { runId, counts: report.counts });
   },
 
   /** The attempt stopped short; the queue will retry it from `processedRows`. Omit that argument
    *  when the attempt failed before it knew how far it got — the marker already on the row wins. */
-  async interrupt(runId: string, processedRows?: number): Promise<void> {
-    await migrationRunRepository.markInterrupted(runId, processedRows);
+  async interrupt(ctx: TenantContext, runId: string, processedRows?: number): Promise<void> {
+    await migrationRunRepository.markInterrupted(ctx, runId, processedRows);
     logger.warn("migration.run.interrupted", { runId, processedRows: processedRows ?? null });
   },
 
   /** No attempts left. `failureCode` is a code, never a message — a message can quote a row. */
-  async fail(runId: string, failureCode: string): Promise<void> {
-    await migrationRunRepository.finish(runId, { status: "failed", failureCode }, new Date());
+  async fail(ctx: TenantContext, runId: string, failureCode: string): Promise<void> {
+    await migrationRunRepository.finish(ctx, runId, { status: "failed", failureCode }, new Date());
     logger.error("migration.run.failed", { runId, failureCode });
   },
 };

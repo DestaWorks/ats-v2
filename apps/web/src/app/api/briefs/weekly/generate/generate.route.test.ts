@@ -26,11 +26,11 @@ vi.mock("@destaworks/db/memberships", async () => ({
 
 import { POST } from "./route";
 
-const enqueued: { name: string; payload: unknown }[] = [];
+const enqueued: { name: string; payload: unknown; tenantId: string }[] = [];
 
 const fakeEnqueuer = {
-  weekly: (input: unknown) => {
-    enqueued.push({ name: "briefs.weekly.generate", payload: input });
+  weekly: (input: unknown, tenantId: string) => {
+    enqueued.push({ name: "briefs.weekly.generate", payload: input, tenantId });
     return Promise.resolve({ jobId: "job-1", job: "briefs.weekly.generate" });
   },
 };
@@ -76,7 +76,11 @@ describe("POST /api/briefs/weekly/generate", () => {
     // where it is defined. `apps/web` may not import `@destaworks/jobs`, so this route owes only
     // that the parsed payload reaches the port intact.
     expect(enqueued).toEqual([
-      { name: "briefs.weekly.generate", payload: { weekStart: "2026-07-23", tz: -180 } },
+      {
+        name: "briefs.weekly.generate",
+        payload: { weekStart: "2026-07-23", tz: -180 },
+        tenantId: "t1",
+      },
     ]);
   });
 });

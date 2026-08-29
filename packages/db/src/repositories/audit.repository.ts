@@ -1,6 +1,6 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { Prisma } from "../generated/prisma/client";
-import { bridgeUnscopedCallers, db } from "../tenant-scope";
+import { db } from "../tenant-scope";
 import type { AuditAction, AuditEntity } from "@destaworks/domain/constants";
 import type { PageCursor } from "@destaworks/contracts/validation/cursor";
 
@@ -48,7 +48,7 @@ function filterWhere(filters: AuditListFilters): Prisma.ActivityLogWhereInput {
  *  history in one query. 200 comfortably covers any real per-entity trail while staying bounded. */
 const ENTITY_TRAIL_CAP = 200;
 
-export const auditRepository = bridgeUnscopedCallers({
+export const auditRepository = {
   listForEntity(ctx: TenantContext, entity: string, entityId: string) {
     return db(ctx).activityLog.findMany({
       where: { entity, entityId },
@@ -104,4 +104,4 @@ export const auditRepository = bridgeUnscopedCallers({
       .activityLog.groupBy({ by: ["actor"] })
       .then((rows) => rows.map((r) => r.actor));
   },
-});
+};

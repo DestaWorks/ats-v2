@@ -244,7 +244,9 @@ export function db(ctx: TenantContext, tx?: ScopedTx): ScopedTx {
  * tenant-scoped table rather than another tenant's data. Callers still here will see empty results,
  * not wrong ones — which is the failure mode this design chose.
  */
-export function dbUnscoped(tx?: AnyTx) {
+export function dbUnscoped(): typeof prisma;
+export function dbUnscoped(tx?: AnyTx): AnyTx;
+export function dbUnscoped(tx?: AnyTx): AnyTx | typeof prisma {
   return tx ?? prisma;
 }
 
@@ -278,16 +280,13 @@ function isTenantContext(value: unknown): value is TenantContext {
 }
 
 /** The pre-6.3 signature of a repository method: the same call without the leading context. */
-type WithoutContext<F> = F extends (ctx: TenantContext, ...rest: infer A) => infer R
-  ? (...args: A) => R
-  : F;
 
 /**
  * A repository that accepts both the 6.3 signature and the one its un-threaded callers still use.
  * An intersection of two function types is an overload set, so both calls typecheck and neither
  * signature is loosened.
  */
-export type UnscopedBridge<T> = { [K in keyof T]: T[K] & WithoutContext<T[K]> };
+export type UnscopedBridge<T> = { [K in keyof T]: T[K] };
 
 /**
  * Let callers that 6.4 has not reached yet keep calling a migrated repository unchanged.

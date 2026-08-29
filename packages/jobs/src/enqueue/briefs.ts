@@ -21,22 +21,31 @@ import { jobQueue } from "../runtime";
  *
  * These import the DEFINITIONS, never the handlers — so enqueuing from a Next.js route does not
  * pull the service graph and Prisma into the route's bundle.
+ *
+ * This is also where the tenant enters the payload. It comes from `tenantId`, which every caller
+ * reads off the context its guard resolved — never off the request body, which the client controls.
  */
 
 export async function enqueueDailyBriefGeneration(
   input: GenerateDailyBriefRequest,
+  tenantId: string,
 ): Promise<EnqueuedJobResponse> {
-  const jobId = await jobQueue.enqueue(generateDailyBriefJob, input, {
-    singletonKey: dailyBriefSingletonKey(input.date),
-  });
+  const jobId = await jobQueue.enqueue(
+    generateDailyBriefJob,
+    { ...input, tenantId },
+    { singletonKey: dailyBriefSingletonKey(tenantId, input.date) },
+  );
   return { jobId, job: generateDailyBriefJob.name };
 }
 
 export async function enqueueWeeklyBriefGeneration(
   input: GenerateWeeklyBriefInput,
+  tenantId: string,
 ): Promise<EnqueuedJobResponse> {
-  const jobId = await jobQueue.enqueue(generateWeeklyBriefJob, input, {
-    singletonKey: weeklyBriefSingletonKey(input.weekStart),
-  });
+  const jobId = await jobQueue.enqueue(
+    generateWeeklyBriefJob,
+    { ...input, tenantId },
+    { singletonKey: weeklyBriefSingletonKey(tenantId, input.weekStart) },
+  );
   return { jobId, job: generateWeeklyBriefJob.name };
 }

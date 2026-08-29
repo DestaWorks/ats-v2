@@ -116,7 +116,7 @@ describe("POST /resume/save", () => {
     const res = await api.request("/resume/save", jsonBody(body));
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(saved);
-    expect(h.resume.save.mock.calls[0]?.[1]).toMatchObject({ user: { id: "u1" } });
+    expect(h.resume.save.mock.calls[0]?.[0]).toMatchObject({ user: { id: "u1" } });
   });
 
   it("refuses a signed-out caller with 401 and writes nothing", async () => {

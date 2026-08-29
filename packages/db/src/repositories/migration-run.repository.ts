@@ -1,6 +1,6 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { Prisma } from "../generated/prisma/client";
-import { bridgeUnscopedCallers, db, type ScopedTx } from "../tenant-scope";
+import { db, type ScopedTx } from "../tenant-scope";
 
 /**
  * The `migration_runs` table (Phase 5) — the durable record of one asynchronous ETL commit.
@@ -25,7 +25,7 @@ export interface MigrationRunCreateInput {
  *  readers never branch on "absent" vs "none". */
 const NO_RESUMES: Prisma.InputJsonValue = [];
 
-export const migrationRunRepository = bridgeUnscopedCallers({
+export const migrationRunRepository = {
   create(ctx: TenantContext, data: MigrationRunCreateInput, tx?: ScopedTx) {
     // `as`: see `finish` below — the same JSON conversion at the same boundary.
     const resumes = (data.resumes ?? NO_RESUMES) as Prisma.InputJsonValue;
@@ -114,4 +114,4 @@ export const migrationRunRepository = bridgeUnscopedCallers({
       data: { status: "interrupted", ...(processedRows !== undefined && { processedRows }) },
     });
   },
-});
+};

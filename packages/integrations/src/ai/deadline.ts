@@ -18,6 +18,11 @@
 /** What every caller of `generateAi` may say about how long it is willing to wait. */
 export interface AiCallOptions {
   /**
+   * The workspace this generation is billed and gated against. Required, because the kill switch
+   * and the usage ledger are both per tenant — there is no platform-wide "the AI".
+   */
+  readonly tenantId: string;
+  /**
    * The caller's own cancellation: a job's `ctx.signal`, or a request's. Composed WITH the budget,
    * never instead of it — a caller that cancels early must win, and a caller that never cancels
    * must still hit the ceiling.
@@ -26,6 +31,9 @@ export interface AiCallOptions {
   /** Override the wall-clock ceiling for this operation. Defaults to `AI_BUDGET_MS`. */
   readonly budgetMs?: number;
 }
+
+/** What a CALLER supplies: their own cancellation. The tenant is the service's to add, not theirs. */
+export type AiCancellation = Omit<AiCallOptions, "tenantId">;
 
 const DEFAULT_AI_BUDGET_MS = 120_000;
 

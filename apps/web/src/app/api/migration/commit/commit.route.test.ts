@@ -61,7 +61,7 @@ describe("POST /api/migration/commit", () => {
     const res = await POST(req(body), undefined);
     expect(res.status).toBe(202);
     expect(await res.json()).toEqual({ runId: "run-1", jobId: "job-1", status: "queued" });
-    const [, user] = h.start.mock.calls[0]!;
+    const [user] = h.start.mock.calls[0]!;
     expect(user).toMatchObject({ user: { id: "u1" }, role: "Owner" });
   });
 });

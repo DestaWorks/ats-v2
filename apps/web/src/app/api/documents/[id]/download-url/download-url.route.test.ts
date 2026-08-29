@@ -60,7 +60,10 @@ describe("GET /api/documents/:id/download-url", () => {
     const res = await GET(req(), ctx());
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ url: "https://x/download?sig=1" });
-    expect(h.getDownloadUrl).toHaveBeenCalledWith("d1");
+    expect(h.getDownloadUrl).toHaveBeenCalledWith(
+      expect.objectContaining({ tenantId: expect.any(String) }),
+      "d1",
+    );
   });
 
   it("returns 404 when the document has no stored file", async () => {

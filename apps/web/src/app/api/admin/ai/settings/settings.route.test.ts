@@ -71,8 +71,8 @@ describe("PATCH /api/admin/ai/settings", () => {
     const res = await PATCH(patchReq({ disabled: true, reason: "incident" }), undefined);
     expect(res.status).toBe(200);
     expect(h.setDisabled).toHaveBeenCalledWith(
-      true,
       expect.objectContaining({ user: expect.objectContaining({ id: "u1" }), role: "Owner" }),
+      true,
       "incident",
     );
   });

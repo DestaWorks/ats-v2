@@ -14,7 +14,7 @@ import { AppError } from "@destaworks/integrations/http/app-error";
  * adapter, set once during composition. Unset is a deployment fault, not a user error, so it
  * fails loudly rather than degrading into a synchronous commit that would blow the request budget.
  */
-export type MigrationCommitEnqueuer = (runId: string) => Promise<string>;
+export type MigrationCommitEnqueuer = (runId: string, tenantId: string) => Promise<string>;
 
 let enqueuer: MigrationCommitEnqueuer | null = null;
 

@@ -62,9 +62,9 @@ describe("POST /api/admin/portal/requests/:id/approve", () => {
     const res = await POST(postReq({ clientId: "cl1" }), ctx);
     expect(res.status).toBe(200);
     expect(h.approve).toHaveBeenCalledWith(
+      expect.objectContaining({ user: expect.objectContaining({ id: "u1" }) }),
       "r1",
       expect.objectContaining({ clientId: "cl1" }),
-      expect.objectContaining({ user: expect.objectContaining({ id: "u1" }) }),
     );
   });
 

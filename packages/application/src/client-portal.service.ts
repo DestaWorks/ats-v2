@@ -210,8 +210,10 @@ export const clientPortalService = {
   },
 
   async postRole(ctx: PortalContext, input: PostPortalRoleInput): Promise<{ id: string }> {
-    const role = await withTransaction(async (tx) => {
+    const scope = portalScopeFor(ctx.tenantId, ctx.contactId);
+    const role = await withTenantTransaction(scope, async (tx) => {
       const row = await openRoleRepository.create(
+        scope,
         {
           clientId: ctx.clientId,
           postedByContactId: ctx.contactId,

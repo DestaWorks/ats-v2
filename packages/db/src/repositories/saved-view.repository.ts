@@ -1,6 +1,6 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { SavedView } from "../generated/prisma/client";
-import { bridgeUnscopedCallers, db, type ScopedTx } from "../tenant-scope";
+import { db, type ScopedTx } from "../tenant-scope";
 
 /** A raw saved-view row (Prisma model). Services/DTOs map this to API shapes. */
 export type SavedViewRow = SavedView;
@@ -11,7 +11,7 @@ export type SavedViewRow = SavedView;
  * trusts a client-supplied owner. Hard delete (no soft-delete column — see the model's doc
  * comment in `prisma/schema.prisma`).
  */
-export const savedViewRepository = bridgeUnscopedCallers({
+export const savedViewRepository = {
   /** A user's saved views for one scope (pipeline/candidates), oldest-first. */
   listByUser(ctx: TenantContext, userId: string, scope: string, tx?: ScopedTx) {
     return db(ctx, tx).savedView.findMany({
@@ -43,4 +43,4 @@ export const savedViewRepository = bridgeUnscopedCallers({
   deleteOwned(ctx: TenantContext, id: string, userId: string, tx?: ScopedTx) {
     return db(ctx, tx).savedView.deleteMany({ where: { id, userId } });
   },
-});
+};

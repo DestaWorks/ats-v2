@@ -1,8 +1,8 @@
 import {
-  generateDailyBriefRequestSchema,
-  generateWeeklyBriefSchema,
-  type GenerateDailyBriefRequest,
-  type GenerateWeeklyBriefInput,
+  generateDailyBriefJobSchema,
+  generateWeeklyBriefJobSchema,
+  type GenerateDailyBriefJobPayload,
+  type GenerateWeeklyBriefJobPayload,
 } from "@destaworks/contracts/validation/briefs";
 import { mondayOf } from "@destaworks/domain/daily";
 import type { JobDefinition } from "../queue";
@@ -13,10 +13,12 @@ import type { JobDefinition } from "../queue";
  * and nothing else: a route that imports `./handlers/briefs` would drag the whole service graph
  * (and Prisma) into a Next.js route bundle to send one row to a queue.
  *
- * The payload schemas are the SAME schemas the endpoints validate their request bodies against.
- * Reusing them is what keeps the queue from becoming a second, drifting definition of "what a
- * brief generation needs" — and the port revalidates on dequeue, so a payload written by an older
- * deploy is checked against the code that will actually run it.
+ * The payload schemas EXTEND the schemas the endpoints validate their request bodies against,
+ * adding only the tenant the job runs in. Extending rather than restating is what keeps the queue
+ * from becoming a second, drifting definition of "what a brief generation needs" — and the port
+ * revalidates on dequeue, so a payload written by an older deploy is checked against the code that
+ * will actually run it. The tenant is not on the request schema on purpose: see
+ * `generateDailyBriefJobSchema` for why a client-supplied tenant would be a forgeable claim.
  */
 
 /**
@@ -34,36 +36,40 @@ const BRIEF_JOB_TIMEOUT_MS = 180_000;
  */
 const BRIEF_JOB_MAX_ATTEMPTS = 2;
 
-export const generateDailyBriefJob: JobDefinition<GenerateDailyBriefRequest> = {
+export const generateDailyBriefJob: JobDefinition<GenerateDailyBriefJobPayload> = {
   name: "briefs.daily.generate",
-  schema: generateDailyBriefRequestSchema,
+  schema: generateDailyBriefJobSchema,
   maxAttempts: BRIEF_JOB_MAX_ATTEMPTS,
   timeoutMs: BRIEF_JOB_TIMEOUT_MS,
 };
 
-export const generateWeeklyBriefJob: JobDefinition<GenerateWeeklyBriefInput> = {
+export const generateWeeklyBriefJob: JobDefinition<GenerateWeeklyBriefJobPayload> = {
   name: "briefs.weekly.generate",
-  schema: generateWeeklyBriefSchema,
+  schema: generateWeeklyBriefJobSchema,
   maxAttempts: BRIEF_JOB_MAX_ATTEMPTS,
   timeoutMs: BRIEF_JOB_TIMEOUT_MS,
 };
 
 /**
- * Singleton keys are keyed on the PERIOD, not on the user.
+ * Singleton keys are keyed on the TENANT and the PERIOD, not on the user.
  *
  * A daily brief is one team-wide document per day: two people (or one person clicking twice)
  * asking for today's brief want the same artefact, and charging for a second identical LLM run
  * would be paying twice for one answer. Keying on the user would collapse only the double-click
  * and miss the far likelier case of two leads opening the page in the same minute.
  *
+ * The tenant is in the key because collapsing is per tenant: two tenants asking for the same day
+ * want two different briefs over two different pipelines, and a key that named only the date would
+ * serve the second one nothing at all.
+ *
  * The week key is normalised through `mondayOf` for the same reason the service normalises it:
  * "this week" reaches the server as any day inside it, and three spellings of one week must not
  * become three jobs.
  */
-export function dailyBriefSingletonKey(date: string): string {
-  return `${generateDailyBriefJob.name}:${date}`;
+export function dailyBriefSingletonKey(tenantId: string, date: string): string {
+  return `${generateDailyBriefJob.name}:${tenantId}:${date}`;
 }
 
-export function weeklyBriefSingletonKey(weekStart: string): string {
-  return `${generateWeeklyBriefJob.name}:${mondayOf(weekStart)}`;
+export function weeklyBriefSingletonKey(tenantId: string, weekStart: string): string {
+  return `${generateWeeklyBriefJob.name}:${tenantId}:${mondayOf(weekStart)}`;
 }

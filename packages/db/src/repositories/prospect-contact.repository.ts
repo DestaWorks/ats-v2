@@ -1,6 +1,6 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { Prisma, ProspectContact } from "../generated/prisma/client";
-import { bridgeUnscopedCallers, db, type ScopedTx } from "../tenant-scope";
+import { db, type ScopedTx } from "../tenant-scope";
 
 /** A raw prospect-contact row (Prisma model). */
 export type ProspectContactRow = ProspectContact;
@@ -11,7 +11,7 @@ export type ProspectContactRow = ProspectContact;
  * `updateMany`/`deleteMany` so an id belonging to another prospect is a 0-row no-op, never a
  * cross-prospect write — mirrors `leadRepository.updateOutreachAttempt`/`deleteOutreachAttempt`.
  */
-export const prospectContactRepository = bridgeUnscopedCallers({
+export const prospectContactRepository = {
   create(ctx: TenantContext, data: Prisma.ProspectContactUncheckedCreateInput, tx?: ScopedTx) {
     return db(ctx, tx).prospectContact.create({ data });
   },
@@ -36,4 +36,4 @@ export const prospectContactRepository = bridgeUnscopedCallers({
     });
     return count;
   },
-});
+};

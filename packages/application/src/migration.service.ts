@@ -280,7 +280,7 @@ async function attachResumeWithAi(
   try {
     await checkRateLimit(`migration-resume-ai:${ctx.user.id}`, { limit: 20, windowMs: 60_000 });
     const variant = variantForPlan(plan);
-    data = await parseResume({ variant, text: resumeText });
+    data = await parseResume({ variant, text: resumeText }, { tenantId: ctx.tenantId });
     const mapped = toCandidateCreateInput(variant, data) as unknown as Record<string, unknown>;
 
     await withTenantTransaction(ctx, async (tx) => {
@@ -326,7 +326,7 @@ async function attachResumeWithAi(
 
 export const migrationService = {
   /** Parse + transform + dedupe → a diffable report. Writes NOTHING. */
-  async prepare(input: ImportInput, ctx: TenantContext): Promise<ImportReport> {
+  async prepare(ctx: TenantContext, input: ImportInput): Promise<ImportReport> {
     assertCanImport(ctx);
     return buildReport(await planImport(ctx, input));
   },

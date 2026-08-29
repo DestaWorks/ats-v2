@@ -53,8 +53,8 @@ describe("DELETE /api/admin/users/:id", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true, id: "u2" });
     expect(h.remove).toHaveBeenCalledWith(
-      "u2",
       expect.objectContaining({ user: expect.objectContaining({ id: "u1" }) }),
+      "u2",
     );
   });
 });

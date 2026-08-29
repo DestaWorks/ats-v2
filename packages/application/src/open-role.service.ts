@@ -477,7 +477,7 @@ export const openRoleService = {
   },
 
   /** JD-paste-to-autofill (legacy `ats_parse_jd`). */
-  async parseJd(input: ParseJdInput): Promise<ParsedJdDTO> {
-    return extractJd(input.text);
+  async parseJd(ctx: TenantContext, input: ParseJdInput): Promise<ParsedJdDTO> {
+    return extractJd(input.text, { tenantId: ctx.tenantId });
   },
 };

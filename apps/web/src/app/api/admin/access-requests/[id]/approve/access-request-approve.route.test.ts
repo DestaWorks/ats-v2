@@ -62,9 +62,9 @@ describe("POST /api/admin/access-requests/:id/approve", () => {
     const res = await POST(postReq({ role: "Associate" }), ctx);
     expect(res.status).toBe(200);
     expect(h.approve).toHaveBeenCalledWith(
+      expect.objectContaining({ user: expect.objectContaining({ id: "u1" }) }),
       "r1",
       "Associate",
-      expect.objectContaining({ user: expect.objectContaining({ id: "u1" }) }),
     );
   });
 

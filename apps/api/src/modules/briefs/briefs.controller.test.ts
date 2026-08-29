@@ -61,6 +61,8 @@ const fakeQueue: JobQueue = {
 };
 
 const OWNER = { user: { id: "u1", email: "o@desta.works", name: "O", role: "Owner" } };
+/** The tenant the guard resolves for `OWNER`, as every read the controller forwards must carry. */
+const SCOPE = expect.objectContaining({ tenantId: "t1" }) as unknown;
 const ASSOCIATE = { user: { id: "u2", email: "a@desta.works", name: "A", role: "Associate" } };
 
 /** A complete `dailyBriefAiSchema` draft — the save endpoint's schema is `.strict()` and total. */
@@ -243,14 +245,14 @@ describe("GET /briefs/daily — the nullable body", () => {
     h.getDaily.mockResolvedValue(DAILY_DRAFT);
     const res = await api.fetch("/briefs/daily?date=2026-08-25");
     expect(await res.json()).toEqual(DAILY_DRAFT);
-    expect(h.getDaily).toHaveBeenCalledWith("2026-08-25");
+    expect(h.getDaily).toHaveBeenCalledWith("2026-08-25", SCOPE);
   });
 
   it("ignores a malformed date and falls back to the viewer's day", async () => {
     h.session = OWNER;
     h.getDaily.mockResolvedValue(null);
     await api.fetch("/briefs/daily?date=25-08-2026");
-    expect(h.getDaily).not.toHaveBeenCalledWith("25-08-2026");
+    expect(h.getDaily).not.toHaveBeenCalledWith("25-08-2026", SCOPE);
   });
 });
 
@@ -274,25 +276,25 @@ describe("today resolves in the VIEWER's timezone, not the host's", () => {
 
   it("gives a UTC+3 viewer the NEXT day", async () => {
     await api.fetch("/briefs/daily", { headers: { cookie: "app-tz=-180" } });
-    expect(h.getDaily).toHaveBeenCalledWith("2026-08-26");
+    expect(h.getDaily).toHaveBeenCalledWith("2026-08-26", SCOPE);
     vi.useRealTimers();
   });
 
   it("gives a UTC-5 viewer the SAME day the host is on", async () => {
     await api.fetch("/briefs/daily", { headers: { cookie: "app-tz=300" } });
-    expect(h.getDaily).toHaveBeenCalledWith("2026-08-25");
+    expect(h.getDaily).toHaveBeenCalledWith("2026-08-25", SCOPE);
     vi.useRealTimers();
   });
 
   it("falls back to UTC when the cookie is absent, exactly as the route does", async () => {
     await api.fetch("/briefs/daily");
-    expect(h.getDaily).toHaveBeenCalledWith("2026-08-25");
+    expect(h.getDaily).toHaveBeenCalledWith("2026-08-25", SCOPE);
     vi.useRealTimers();
   });
 
   it("anchors the weekly brief on the Monday of the VIEWER's week", async () => {
     await api.fetch("/briefs/weekly", { headers: { cookie: "app-tz=-180" } });
-    expect(h.getWeekly).toHaveBeenCalledWith("2026-08-24");
+    expect(h.getWeekly).toHaveBeenCalledWith("2026-08-24", SCOPE);
     vi.useRealTimers();
   });
 });
@@ -319,8 +321,16 @@ describe("request validation", () => {
     expect(enqueued).toEqual([
       {
         name: "briefs.daily.generate",
-        payload: { date: "2026-08-25", tz: -180, priorityClientId: "c1", shiftA: "A" },
-        options: { singletonKey: "briefs.daily.generate:2026-08-25" },
+        // `tenantId` is added by the enqueue helper from the guard's context, never parsed from
+        // the body — the request schema has no such field, so a client cannot name its own tenant.
+        payload: {
+          date: "2026-08-25",
+          tz: -180,
+          priorityClientId: "c1",
+          shiftA: "A",
+          tenantId: "t1",
+        },
+        options: { singletonKey: "briefs.daily.generate:t1:2026-08-25" },
       },
     ]);
   });

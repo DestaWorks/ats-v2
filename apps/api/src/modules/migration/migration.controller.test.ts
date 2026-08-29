@@ -106,8 +106,8 @@ describe.each([
     expect(res.status).toBe(ok);
     expect(await res.json()).toEqual({ created: 1 });
     expect(call).toHaveBeenCalledWith(
-      expect.objectContaining({ format: "csv" }),
       expect.objectContaining({ user: expect.objectContaining({ id: "u1" }) }),
+      expect.objectContaining({ format: "csv" }),
     );
   });
 });
@@ -135,8 +135,8 @@ describe("GET /migration/runs/:runId", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ status: "running", processedRows: 12 });
     expect(h.state).toHaveBeenCalledWith(
-      "run-1",
       expect.objectContaining({ user: expect.objectContaining({ id: "u1" }) }),
+      "run-1",
     );
   });
 });

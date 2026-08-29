@@ -366,10 +366,12 @@ describe("openRoleService.parseJd", () => {
       priority: "P2",
       description: "A telehealth role.",
     });
-    const parsed = await openRoleService.parseJd({
+    const parsed = await openRoleService.parseJd(owner, {
       text: "We are hiring a PMHNP for telehealth work in NJ.",
     });
-    expect(h.extractJd).toHaveBeenCalledWith("We are hiring a PMHNP for telehealth work in NJ.");
+    expect(h.extractJd).toHaveBeenCalledWith("We are hiring a PMHNP for telehealth work in NJ.", {
+      tenantId: owner.tenantId,
+    });
     expect(parsed.title).toBe("PMHNP");
   });
 });

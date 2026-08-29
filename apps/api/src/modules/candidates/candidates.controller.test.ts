@@ -345,7 +345,7 @@ describe("candidate mutations", () => {
     const res = await api.request("/candidates/c1/notes", jsonBody({ body: "Called back" }));
     expect(res.status).toBe(201);
     expect(await res.json()).toEqual({ note: { id: "n1", body: "Called back" } });
-    expect(h.note.add.mock.calls[0]?.[2]).toMatchObject({ user: { id: "u1" } });
+    expect(h.note.add.mock.calls[0]?.[0]).toMatchObject({ user: { id: "u1" } });
   });
 
   it("refuses a client-supplied note author — `addNoteSchema` is strict", async () => {

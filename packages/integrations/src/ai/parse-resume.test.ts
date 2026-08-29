@@ -78,7 +78,7 @@ function assertNoPiiLogged() {
 describe("parseResume", () => {
   it("throws FEATURE_DISABLED when the key is absent", async () => {
     h.enabled = false;
-    await expect(parseResume(input)).rejects.toMatchObject({
+    await expect(parseResume(input, { tenantId: "t1" })).rejects.toMatchObject({
       code: "FEATURE_DISABLED",
       status: 503,
     });
@@ -88,14 +88,14 @@ describe("parseResume", () => {
   it("returns the schema-validated data on success", async () => {
     const parsed = { name: "Jane Doe", email: "jane.secret@example.com" };
     h.gen.mockResolvedValue(parsed);
-    const result = await parseResume(input);
+    const result = await parseResume(input, { tenantId: "t1" });
     expect(result).toBe(parsed);
     assertNoPiiLogged();
   });
 
   it("maps a 401/403 provider error → FEATURE_DISABLED", async () => {
     h.gen.mockRejectedValue(new h.APICallError("bad key", 401));
-    await expect(parseResume(input)).rejects.toMatchObject({
+    await expect(parseResume(input, { tenantId: "t1" })).rejects.toMatchObject({
       code: "FEATURE_DISABLED",
       status: 503,
     });
@@ -104,13 +104,16 @@ describe("parseResume", () => {
 
   it("maps a 429 provider error → RATE_LIMITED", async () => {
     h.gen.mockRejectedValue(new h.APICallError("slow down", 429));
-    await expect(parseResume(input)).rejects.toMatchObject({ code: "RATE_LIMITED", status: 429 });
+    await expect(parseResume(input, { tenantId: "t1" })).rejects.toMatchObject({
+      code: "RATE_LIMITED",
+      status: 429,
+    });
     assertNoPiiLogged();
   });
 
   it("maps any other error → EXTRACTION_FAILED without leaking the raw message", async () => {
     h.gen.mockRejectedValue(new Error("raw model body with jane.secret@example.com"));
-    await expect(parseResume(input)).rejects.toMatchObject({
+    await expect(parseResume(input, { tenantId: "t1" })).rejects.toMatchObject({
       code: "EXTRACTION_FAILED",
       status: 502,
     });

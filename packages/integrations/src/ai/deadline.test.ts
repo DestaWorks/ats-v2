@@ -72,7 +72,12 @@ vi.mock("@destaworks/db/repositories/ai-settings.repository", () => ({
 import { AI_BUDGET_MS, isAbortError, startAiDeadline } from "./deadline";
 import { generateAi } from "./shared";
 
-const opts = { schema: z.object({ name: z.string() }), system: "sys", prompt: "prompt" };
+const opts = {
+  tenantId: "t1",
+  schema: z.object({ name: z.string() }),
+  system: "sys",
+  prompt: "prompt",
+};
 
 /**
  * The SDK's first retry backoff is 2000ms (measured: attempts land at +0ms, +2000ms, +6000ms).
@@ -144,7 +149,11 @@ describe("startAiDeadline", () => {
   });
 
   it("reports an already-cancelled caller as cancelled, not as an expired budget", () => {
-    const deadline = startAiDeadline({ signal: AbortSignal.abort(), budgetMs: 60_000 });
+    const deadline = startAiDeadline({
+      tenantId: "t1",
+      signal: AbortSignal.abort(),
+      budgetMs: 60_000,
+    });
     expect(deadline.signal.aborted).toBe(true);
     expect(deadline.expired()).toBe(false);
   });

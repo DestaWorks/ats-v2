@@ -4,6 +4,7 @@ import {
   type WeeklyPatternsAiOutput,
 } from "@destaworks/contracts/validation/briefs";
 import { generateAi } from "../shared";
+import type { AiCallOptions } from "../deadline";
 
 export interface WeeklyPatternsWeek {
   weekStart: string;
@@ -50,8 +51,10 @@ function buildPrompt(ctx: WeeklyPatternsContext): string {
 /** 4-week pattern detection (legacy `weekly_brief_patterns`). Never persisted, generate-only. */
 export function generateWeeklyPatterns(
   ctx: WeeklyPatternsContext,
+  options: AiCallOptions,
 ): Promise<WeeklyPatternsAiOutput> {
   return generateAi("Weekly Patterns", {
+    ...options,
     schema: weeklyPatternsAiSchema,
     system: SYSTEM_PROMPT,
     prompt: buildPrompt(ctx),

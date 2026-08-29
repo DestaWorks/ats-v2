@@ -15,6 +15,6 @@ export type PostResumeSaveResponse = ResumeSaveEnvelope;
 export const POST = apiHandler(async (req: Request) => {
   const user = await requireUser();
   const input = saveResumeInputSchema.parse(await req.json());
-  const result = await resumeService.save(input, user);
+  const result = await resumeService.save(user, input);
   return json<PostResumeSaveResponse>(result);
 });

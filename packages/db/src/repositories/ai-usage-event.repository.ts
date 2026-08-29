@@ -1,5 +1,5 @@
+import { db } from "../tenant-scope";
 import type { TenantContext } from "@destaworks/domain/tenant";
-import { bridgeUnscopedCallers, db } from "../tenant-scope";
 import { logger } from "@destaworks/config/logger";
 
 export interface AiUsageEventInput {
@@ -22,7 +22,7 @@ export interface AiUsageStatusBreakdown {
   latencyMsSum: number;
 }
 
-export const aiUsageEventRepository = bridgeUnscopedCallers({
+export const aiUsageEventRepository = {
   async record(ctx: TenantContext, data: AiUsageEventInput): Promise<void> {
     try {
       await db(ctx).aiUsageEvent.create({ data });
@@ -52,4 +52,4 @@ export const aiUsageEventRepository = bridgeUnscopedCallers({
       latencyMsSum: g._sum.latencyMs ?? 0,
     }));
   },
-});
+};

@@ -236,7 +236,7 @@ export class CandidatesController {
     @Param("id") id: string,
     @CurrentUser() user: AuthContext,
   ): Promise<NoteListEnvelope> {
-    return { notes: await this.notes.listByCandidate(id, user) };
+    return { notes: await this.notes.listByCandidate(user, id) };
   }
 
   /**
@@ -249,7 +249,7 @@ export class CandidatesController {
     @Body(new ZodValidationPipe(addNoteSchema)) body: ContractOutput<typeof addNoteSchema>,
     @CurrentUser() user: AuthContext,
   ): Promise<NoteEnvelope> {
-    return { note: await this.notes.add(id, body, user) };
+    return { note: await this.notes.add(user, id, body) };
   }
 
   /** POST /candidates/:id/outreach — log one attempt; the lead-side twin is `/leads/:id/outreach`. */
@@ -303,7 +303,7 @@ export class CandidatesController {
     body: ContractOutput<typeof uploadCandidateResumeSchema>,
     @CurrentUser() user: AuthContext,
   ): Promise<DocumentSummaryEnvelope> {
-    const document = await this.resumes.attachToCandidate(id, body, user);
+    const document = await this.resumes.attachToCandidate(user, id, body);
     return { document: toDocumentSummaryDTO(document) };
   }
 

@@ -49,7 +49,9 @@ beforeEach(() => {
 describe("generateWorkspaceText", () => {
   it("503s when AI isn't configured — never calls the provider", async () => {
     h.enabled = false;
-    await expect(generateWorkspaceText(ctx, { preset: "brief" })).rejects.toMatchObject({
+    await expect(
+      generateWorkspaceText(ctx, { preset: "brief" }, { tenantId: "t1" }),
+    ).rejects.toMatchObject({
       code: "FEATURE_DISABLED",
     });
     expect(h.gen).not.toHaveBeenCalled();
@@ -57,7 +59,7 @@ describe("generateWorkspaceText", () => {
 
   it("builds the prompt from context + the preset task, returns the model's text", async () => {
     h.gen.mockResolvedValue({ text: "Acme is engaged, one open req in progress." });
-    const result = await generateWorkspaceText(ctx, { preset: "brief" });
+    const result = await generateWorkspaceText(ctx, { preset: "brief" }, { tenantId: "t1" });
     expect(result.text).toBe("Acme is engaged, one open req in progress.");
     const call = h.gen.mock.calls[0]![0];
     expect(call.prompt).toContain("Acme Health");
@@ -67,19 +69,27 @@ describe("generateWorkspaceText", () => {
 
   it("uses the custom prompt verbatim when no preset is given", async () => {
     h.gen.mockResolvedValue({ text: "..." });
-    await generateWorkspaceText(ctx, { customPrompt: "What's their renewal risk?" });
+    await generateWorkspaceText(
+      ctx,
+      { customPrompt: "What's their renewal risk?" },
+      { tenantId: "t1" },
+    );
     const call = h.gen.mock.calls[0]![0];
     expect(call.prompt).toContain("What's their renewal risk?");
   });
 
   it("maps a 429 to RATE_LIMITED, and 401/403 to FEATURE_DISABLED", async () => {
     h.gen.mockRejectedValueOnce(new h.APICallError("busy", 429));
-    await expect(generateWorkspaceText(ctx, { preset: "summary" })).rejects.toMatchObject({
+    await expect(
+      generateWorkspaceText(ctx, { preset: "summary" }, { tenantId: "t1" }),
+    ).rejects.toMatchObject({
       code: "RATE_LIMITED",
     });
 
     h.gen.mockRejectedValueOnce(new h.APICallError("unauthorized", 401));
-    await expect(generateWorkspaceText(ctx, { preset: "summary" })).rejects.toMatchObject({
+    await expect(
+      generateWorkspaceText(ctx, { preset: "summary" }, { tenantId: "t1" }),
+    ).rejects.toMatchObject({
       code: "FEATURE_DISABLED",
     });
   });

@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import type { TenantContext } from "@destaworks/domain/tenant";
 
 /**
  * Proves `pipelineHealthService.generate` assembles the AI context correctly (team-wide counts +
@@ -25,6 +26,13 @@ vi.mock("@destaworks/integrations/ai/pipeline-health/pipeline-health", () => ({
 
 import { pipelineHealthService } from "./pipeline-health.service";
 
+const actor: TenantContext = {
+  tenantId: "t1",
+  membershipId: "u1-m",
+  user: { id: "u1", email: "u@desta.works", name: "Test User" },
+  role: "Associate",
+};
+
 beforeEach(() => {
   h.candidateRepo.count.mockReset();
   h.candidateRepo.topOverdue.mockReset().mockResolvedValue([]);
@@ -43,12 +51,19 @@ describe("pipelineHealthService.generate", () => {
       .mockResolvedValueOnce(5)
       .mockResolvedValueOnce(2);
 
-    await pipelineHealthService.generate();
+    await pipelineHealthService.generate(actor);
 
     const ctx = h.generatePipelineHealth.mock.calls[0]![0];
     expect(ctx.totalActive).toBe(42);
     expect(ctx.overdueCount).toBe(5);
     expect(ctx.stuckCount).toBe(2);
+    for (const call of h.candidateRepo.count.mock.calls) expect(call[0]).toBe(actor);
+    expect(h.candidateRepo.topOverdue).toHaveBeenCalledWith(
+      actor,
+      expect.anything(),
+      expect.any(Date),
+    );
+    expect(h.clientRepo.nameMap).toHaveBeenCalledWith(actor);
   });
 
   it("resolves client names and computes daysInStage for each overdue candidate", async () => {
@@ -71,7 +86,7 @@ describe("pipelineHealthService.generate", () => {
     ]);
     h.clientRepo.nameMap.mockResolvedValue(new Map([["cl1", "Acme Health"]]));
 
-    await pipelineHealthService.generate();
+    await pipelineHealthService.generate(actor);
 
     const ctx = h.generatePipelineHealth.mock.calls[0]![0];
     expect(ctx.topOverdue).toHaveLength(2);
@@ -82,7 +97,7 @@ describe("pipelineHealthService.generate", () => {
 
   it("returns whatever the AI module returns", async () => {
     h.candidateRepo.count.mockResolvedValue(0);
-    const result = await pipelineHealthService.generate();
+    const result = await pipelineHealthService.generate(actor);
     expect(result).toEqual({ diagnostic: "d", healthScore: 80, topAction: "a" });
   });
 });

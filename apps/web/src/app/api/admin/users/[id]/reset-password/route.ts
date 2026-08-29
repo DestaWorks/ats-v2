@@ -13,6 +13,6 @@ export type PostAdminUserResetPasswordResponse = ResetPasswordDTO;
 export const POST = apiHandler<{ params: Promise<{ id: string }> }>(async (_req, ctx) => {
   const actor = await requireCapability("manageUsers");
   const { id } = await ctx.params;
-  const result = await adminUserService.resetPassword(id, actor);
+  const result = await adminUserService.resetPassword(actor, id);
   return json<PostAdminUserResetPasswordResponse>(result);
 });

@@ -19,10 +19,10 @@ import type { JobQueue } from "./queue";
  */
 
 export function registerEnqueuePorts(queue: JobQueue): void {
-  registerMigrationCommitEnqueuer((runId) =>
+  registerMigrationCommitEnqueuer((runId, tenantId) =>
     queue.enqueue(
       migrationCommitJob,
-      { runId },
+      { runId, tenantId },
       // One in-flight job per run. A retried POST, or a double-click on "commit", stages a new run
       // and gets its own job; what this stops is the same run being handed to two workers at once.
       { singletonKey: `${migrationCommitJob.name}:${runId}` },

@@ -128,7 +128,8 @@ describe("the AI ops routes keep the Next.js verbs, paths and gate", () => {
 describe("the kill switch and the spend behind it", () => {
   it("reads the current settings", async () => {
     h.getSettings.mockResolvedValue(SETTINGS);
-    expect(await controller().getSettings(await admitted("getSettings"))).toEqual(SETTINGS);
+    const actor = await admitted("getSettings");
+    expect(await controller().getSettings(actor)).toEqual(SETTINGS);
   });
 
   it("flips the switch with the session actor and the supplied reason", async () => {
@@ -139,7 +140,7 @@ describe("the kill switch and the spend behind it", () => {
       disabled: true,
       reason: "cost",
     });
-    expect(h.setDisabled).toHaveBeenCalledWith(true, actor, "cost");
+    expect(h.setDisabled).toHaveBeenCalledWith(actor, true, "cost");
   });
 
   it("validates the settings body with the contract schema, answering 422 + issues", async () => {
@@ -153,7 +154,8 @@ describe("the kill switch and the spend behind it", () => {
 
   it("returns the usage overview", async () => {
     h.getUsageOverview.mockResolvedValue({ totals: {}, byFeature: [] });
-    expect(await controller().getUsage(await admitted("getUsage"))).toEqual({
+    const actor = await admitted("getUsage");
+    expect(await controller().getUsage(actor)).toEqual({
       totals: {},
       byFeature: [],
     });

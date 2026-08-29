@@ -40,10 +40,11 @@ export class ResumeController {
   @HttpCode(200)
   @RateLimit({ name: "resume-extract", limit: 20, windowMs: 60_000 })
   async extract(
+    @CurrentUser() user: AuthContext,
     @Body(new ZodValidationPipe(parseResumeInputSchema))
     body: ContractOutput<typeof parseResumeInputSchema>,
   ): Promise<ExtractResumeResponse> {
-    return this.resumes.extract(body);
+    return this.resumes.extract(user, body);
   }
 
   /**
@@ -54,11 +55,11 @@ export class ResumeController {
   @Post("save")
   @HttpCode(200)
   async save(
+    @CurrentUser() user: AuthContext,
     @Body(new ZodValidationPipe(saveResumeInputSchema))
     body: ContractOutput<typeof saveResumeInputSchema>,
-    @CurrentUser() user: AuthContext,
   ): Promise<ResumeSaveEnvelope> {
-    return this.resumes.save(body, user);
+    return this.resumes.save(user, body);
   }
 
   /**
@@ -69,9 +70,10 @@ export class ResumeController {
   @HttpCode(200)
   @RateLimit({ name: "resume-upload-url", limit: 20, windowMs: 60_000 })
   async uploadUrl(
+    @CurrentUser() user: AuthContext,
     @Body(new ZodValidationPipe(requestResumeUploadUrlSchema))
     body: ContractOutput<typeof requestResumeUploadUrlSchema>,
   ): Promise<ResumeUploadUrlDTO> {
-    return this.resumes.requestUploadUrl(body);
+    return this.resumes.requestUploadUrl(user, body);
   }
 }

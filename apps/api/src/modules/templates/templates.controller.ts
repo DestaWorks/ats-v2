@@ -5,6 +5,8 @@ import { CapabilityGuard } from "../../common/guards/capability.guard";
 import { SessionAuthGuard } from "../../common/guards/session-auth.guard";
 import type { ServiceOf } from "../service-token";
 import { TEMPLATE_PERFORMANCE_SERVICE } from "./templates.tokens";
+import { CurrentUser } from "../../common/decorators/current-user.decorator";
+import type { AuthContext } from "@destaworks/auth/guards";
 
 /**
  * Outreach templates and how each one is actually performing.
@@ -23,7 +25,7 @@ export class TemplatesController {
   /** GET /templates/performance — usage and response rate per template. No parameters: one snapshot. */
   @Get("performance")
   @RequireCapability("viewAnalytics")
-  async overview(): Promise<TemplatePerformanceDTO> {
-    return this.performance.overview();
+  async overview(@CurrentUser() user: AuthContext): Promise<TemplatePerformanceDTO> {
+    return this.performance.overview(user);
   }
 }

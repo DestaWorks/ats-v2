@@ -1,10 +1,10 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
-import { bridgeUnscopedCallers, db } from "../tenant-scope";
+import { db } from "../tenant-scope";
 
 /**
  * Access-request data access. Repositories are the ONLY layer that touches Prisma.
  */
-export const accessRequestRepository = bridgeUnscopedCallers({
+export const accessRequestRepository = {
   create(
     ctx: TenantContext,
     data: { name: string; email: string; organization?: string; message?: string },
@@ -32,4 +32,4 @@ export const accessRequestRepository = bridgeUnscopedCallers({
   updateStatus(ctx: TenantContext, id: string, status: "approved" | "declined") {
     return db(ctx).accessRequest.update({ where: { id }, data: { status } });
   },
-});
+};

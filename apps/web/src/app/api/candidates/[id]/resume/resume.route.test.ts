@@ -66,9 +66,9 @@ describe("POST /api/candidates/:id/resume", () => {
     const res = await POST(post({ ...validBody, storageKey: "k1.pdf" }), ctx);
     expect(res.status).toBe(201);
     expect(h.attachToCandidate).toHaveBeenCalledWith(
+      expect.objectContaining({ user: expect.objectContaining({ id: "u1", name: "Test User" }) }),
       "c1",
       { ...validBody, storageKey: "k1.pdf" },
-      expect.objectContaining({ user: expect.objectContaining({ id: "u1", name: "Test User" }) }),
     );
     expect((await res.json()).document).toMatchObject({ id: "d1", storageKey: "k1.pdf" });
   });

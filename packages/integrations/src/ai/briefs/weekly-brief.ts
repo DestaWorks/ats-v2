@@ -74,7 +74,7 @@ function buildPrompt(ctx: WeeklyBriefContext): string {
 /** Generate this week's Weekly Brief from live context (legacy `weekly_brief_generate`). */
 export function generateWeeklyBrief(
   ctx: WeeklyBriefContext,
-  options?: AiCallOptions,
+  options: AiCallOptions,
 ): Promise<WeeklyBriefAiOutput> {
   return generateAi("Weekly Brief", {
     ...options,

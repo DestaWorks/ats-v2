@@ -51,16 +51,23 @@ beforeEach(() => {
   h.delete.mockReset().mockResolvedValue({ id: "c1" });
 });
 
+const ctx = {
+  tenantId: "t1",
+  membershipId: "m1",
+  role: "Owner" as const,
+  user: { id: "u1", email: "u@desta.works", name: "U" },
+};
+
 describe("purge — permanent hard delete", () => {
   it("calls candidate.delete keyed on the id (cascade is a DB-level FK concern)", async () => {
-    await candidateRepository.purge("c1");
+    await candidateRepository.purge(ctx, "c1");
     expect(h.delete).toHaveBeenCalledWith({ where: { id: "c1" } });
   });
 });
 
 describe("listDeleted — the Trash read", () => {
   it("queries ONLY soft-deleted rows, newest-deleted first", async () => {
-    await candidateRepository.listDeleted();
+    await candidateRepository.listDeleted(ctx);
     expect(h.findMany).toHaveBeenCalledWith({
       where: { deletedAt: { not: null } },
       orderBy: { deletedAt: "desc" },
@@ -68,7 +75,7 @@ describe("listDeleted — the Trash read", () => {
   });
 
   it("applies the `take` cap when given", async () => {
-    await candidateRepository.listDeleted(200);
+    await candidateRepository.listDeleted(ctx, 200);
     expect(h.findMany).toHaveBeenCalledWith({
       where: { deletedAt: { not: null } },
       orderBy: { deletedAt: "desc" },
@@ -155,7 +162,7 @@ describe("overdueWhere / stuckWhere predicates", () => {
 
 describe("list — keyset predicate + orderBy tuple", () => {
   it("createdAt_desc: orderBy [createdAt desc, id desc], keyset uses lt", async () => {
-    await candidateRepository.list({
+    await candidateRepository.list(ctx, {
       orderBy: "createdAt_desc",
       cursor: { kind: "createdAt", value: "2026-06-01T00:00:00.000Z", id: "c1" },
       take: 26,
@@ -171,7 +178,7 @@ describe("list — keyset predicate + orderBy tuple", () => {
   });
 
   it("createdAt_asc: orderBy asc + keyset uses gt", async () => {
-    await candidateRepository.list({
+    await candidateRepository.list(ctx, {
       orderBy: "createdAt_asc",
       cursor: { kind: "createdAt", value: "2026-06-01T00:00:00.000Z", id: "c1" },
       now: NOW,
@@ -185,7 +192,7 @@ describe("list — keyset predicate + orderBy tuple", () => {
   });
 
   it("name_asc: orderBy [name asc, id asc], keyset walks name", async () => {
-    await candidateRepository.list({
+    await candidateRepository.list(ctx, {
       orderBy: "name_asc",
       cursor: { kind: "name", value: "Jane", id: "c1" },
       now: NOW,
@@ -198,14 +205,14 @@ describe("list — keyset predicate + orderBy tuple", () => {
   });
 
   it("no cursor → no keyset clause; default orderBy is createdAt_desc", async () => {
-    await candidateRepository.list({ now: NOW });
+    await candidateRepository.list(ctx, { now: NOW });
     const arg = h.findMany.mock.calls[0]![0];
     expect(arg.orderBy).toEqual([{ createdAt: "desc" }, { id: "desc" }]);
     expect(arg.where.AND).toBeUndefined();
   });
 
   it("keyset composes UNDER the same AND as the filters (mine + cursor)", async () => {
-    await candidateRepository.list({
+    await candidateRepository.list(ctx, {
       createdById: "u1",
       orderBy: "createdAt_desc",
       cursor: { kind: "createdAt", value: "2026-06-01T00:00:00.000Z", id: "c1" },
@@ -219,14 +226,14 @@ describe("list — keyset predicate + orderBy tuple", () => {
 
 describe("count / groupByStatusFiltered", () => {
   it("count uses the shared where (no cursor/orderBy/take)", async () => {
-    await candidateRepository.count({ track: "Operations", now: NOW });
+    await candidateRepository.count(ctx, { track: "Operations", now: NOW });
     const arg = h.count.mock.calls[0]![0];
     expect(arg.where).toMatchObject({ track: "Operations", deletedAt: null });
     expect("orderBy" in arg).toBe(false);
   });
 
   it("groupByStatusFiltered drops the status filter and groups by status", async () => {
-    await candidateRepository.groupByStatusFiltered({
+    await candidateRepository.groupByStatusFiltered(ctx, {
       status: "NEW_CANDIDATE",
       clientId: "cl1",
       now: NOW,
@@ -240,7 +247,7 @@ describe("count / groupByStatusFiltered", () => {
 
 describe("topOverdue — AI Pipeline Health strip's context (Wave 5.5 backlog)", () => {
   it("uses the SAME overdueWhere predicate, team-wide, oldest-in-stage first, capped", async () => {
-    await candidateRepository.topOverdue(5, NOW);
+    await candidateRepository.topOverdue(ctx, 5, NOW);
     const arg = h.findMany.mock.calls[0]![0];
     expect(arg.where.deletedAt).toBeNull();
     expect(arg.where.AND).toEqual([overdueWhere(NOW)]);
@@ -252,7 +259,7 @@ describe("topOverdue — AI Pipeline Health strip's context (Wave 5.5 backlog)",
 
 describe("groupActiveByCredentialState — Discover coverage-gap widget (Wave 5.5 backlog)", () => {
   it("groups by (credential, state), active-only, excluding nulls", async () => {
-    await candidateRepository.groupActiveByCredentialState();
+    await candidateRepository.groupActiveByCredentialState(ctx);
     const arg = h.groupBy.mock.calls[0]![0];
     expect(arg.by).toEqual(["credential", "state"]);
     expect(arg.where.deletedAt).toBeNull();

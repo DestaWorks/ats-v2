@@ -37,7 +37,7 @@ export class AdminAiController {
     @Body(new ZodValidationPipe(setAiDisabledSchema))
     body: ContractOutput<typeof setAiDisabledSchema>,
   ): Promise<AiSettingsDTO> {
-    return await this.aiOps.setDisabled(body.disabled, actor, body.reason);
+    return await this.aiOps.setDisabled(actor, body.disabled, body.reason);
   }
 
   @Get("usage")

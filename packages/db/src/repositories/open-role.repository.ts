@@ -1,6 +1,6 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { OpenRole, Prisma } from "../generated/prisma/client";
-import { bridgeUnscopedCallers, db, type ScopedTx } from "../tenant-scope";
+import { db, type ScopedTx } from "../tenant-scope";
 
 /** A raw open-role row (Prisma model). Services/DTOs map this to API shapes. */
 export type OpenRoleRow = OpenRole;
@@ -29,7 +29,7 @@ function buildWhere(filters: OpenRoleFilters): Prisma.OpenRoleWhereInput {
  * here, unlike candidates/leads. Every method accepts an optional `tx` so the service can compose
  * the write + `writeAudit` atomically.
  */
-export const openRoleRepository = bridgeUnscopedCallers({
+export const openRoleRepository = {
   create(ctx: TenantContext, data: Prisma.OpenRoleUncheckedCreateInput, tx?: ScopedTx) {
     return db(ctx, tx).openRole.create({ data });
   },
@@ -138,4 +138,4 @@ export const openRoleRepository = bridgeUnscopedCallers({
       data: { deletedAt: new Date(), deletedById: actorId },
     });
   },
-});
+};

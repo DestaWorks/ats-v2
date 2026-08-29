@@ -42,6 +42,9 @@ const dailyInput = {
   watchItems: null,
 };
 
+const TENANT = "t1";
+const OTHER_TENANT = "t2";
+
 beforeEach(() => {
   queue = new FakeQueue();
   setJobQueue(queue);
@@ -53,29 +56,42 @@ afterEach(() => {
 
 describe("enqueueDailyBriefGeneration", () => {
   it("queues the job and reports its id and name", async () => {
-    const result = await enqueueDailyBriefGeneration(dailyInput);
+    const result = await enqueueDailyBriefGeneration(dailyInput, TENANT);
 
     expect(result).toEqual({ jobId: "job-1", job: "briefs.daily.generate" });
     expect(queue.enqueued).toHaveLength(1);
     expect(queue.enqueued[0]).toMatchObject({
       name: "briefs.daily.generate",
-      payload: dailyInput,
-      options: { singletonKey: "briefs.daily.generate:2026-08-25" },
+      // The tenant is added HERE, from the caller's resolved context — never read off the
+      // request body, which is why it is absent from the endpoint's own schema.
+      payload: { ...dailyInput, tenantId: TENANT },
+      options: { singletonKey: `briefs.daily.generate:${TENANT}:2026-08-25` },
     });
   });
 
   it("charges for ONE AI run when generate is clicked twice for the same day", async () => {
-    const first = await enqueueDailyBriefGeneration(dailyInput);
-    const second = await enqueueDailyBriefGeneration({ ...dailyInput, shiftA: "different note" });
+    const first = await enqueueDailyBriefGeneration(dailyInput, TENANT);
+    const second = await enqueueDailyBriefGeneration(
+      { ...dailyInput, shiftA: "different note" },
+      TENANT,
+    );
 
     expect(second.jobId).toBe(first.jobId);
     expect(queue.enqueued).toHaveLength(1);
   });
 
   it("still queues a separate job for a different day", async () => {
-    await enqueueDailyBriefGeneration(dailyInput);
-    await enqueueDailyBriefGeneration({ ...dailyInput, date: "2026-08-26" });
+    await enqueueDailyBriefGeneration(dailyInput, TENANT);
+    await enqueueDailyBriefGeneration({ ...dailyInput, date: "2026-08-26" }, TENANT);
 
+    expect(queue.enqueued).toHaveLength(2);
+  });
+
+  it("does NOT collapse two tenants asking for the same day onto one brief", async () => {
+    const first = await enqueueDailyBriefGeneration(dailyInput, TENANT);
+    const second = await enqueueDailyBriefGeneration(dailyInput, OTHER_TENANT);
+
+    expect(second.jobId).not.toBe(first.jobId);
     expect(queue.enqueued).toHaveLength(2);
   });
 });
@@ -83,17 +99,27 @@ describe("enqueueDailyBriefGeneration", () => {
 describe("enqueueWeeklyBriefGeneration", () => {
   it("collapses every spelling of one ISO week onto a single job", async () => {
     // Tuesday and Thursday of the week whose Monday is 2026-08-24.
-    const first = await enqueueWeeklyBriefGeneration({ weekStart: "2026-08-25", tz: 0 });
-    const second = await enqueueWeeklyBriefGeneration({ weekStart: "2026-08-27", tz: 0 });
+    const first = await enqueueWeeklyBriefGeneration({ weekStart: "2026-08-25", tz: 0 }, TENANT);
+    const second = await enqueueWeeklyBriefGeneration({ weekStart: "2026-08-27", tz: 0 }, TENANT);
 
     expect(second.jobId).toBe(first.jobId);
     expect(queue.enqueued).toHaveLength(1);
-    expect(queue.enqueued[0]?.options?.singletonKey).toBe("briefs.weekly.generate:2026-08-24");
+    expect(queue.enqueued[0]?.options?.singletonKey).toBe(
+      `briefs.weekly.generate:${TENANT}:2026-08-24`,
+    );
+    expect(queue.enqueued[0]?.payload).toMatchObject({ tenantId: TENANT });
   });
 
   it("queues a separate job for the following week", async () => {
-    await enqueueWeeklyBriefGeneration({ weekStart: "2026-08-24", tz: 0 });
-    await enqueueWeeklyBriefGeneration({ weekStart: "2026-08-31", tz: 0 });
+    await enqueueWeeklyBriefGeneration({ weekStart: "2026-08-24", tz: 0 }, TENANT);
+    await enqueueWeeklyBriefGeneration({ weekStart: "2026-08-31", tz: 0 }, TENANT);
+
+    expect(queue.enqueued).toHaveLength(2);
+  });
+
+  it("does NOT collapse two tenants asking for the same week", async () => {
+    await enqueueWeeklyBriefGeneration({ weekStart: "2026-08-24", tz: 0 }, TENANT);
+    await enqueueWeeklyBriefGeneration({ weekStart: "2026-08-24", tz: 0 }, OTHER_TENANT);
 
     expect(queue.enqueued).toHaveLength(2);
   });
@@ -105,7 +131,9 @@ describe("the queue handle", () => {
 
     // The handle resolves the driver at call time, so an unconfigured process rejects the enqueue
     // rather than throwing when the module is imported — a route answers 503, it does not crash.
-    await expect(enqueueDailyBriefGeneration({ date: "2026-08-28", tz: 0 })).rejects.toMatchObject({
+    await expect(
+      enqueueDailyBriefGeneration({ date: "2026-08-28", tz: 0 }, TENANT),
+    ).rejects.toMatchObject({
       code: "FEATURE_DISABLED",
       status: 503,
     });

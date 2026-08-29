@@ -7,7 +7,7 @@ import type {
   ManagerFeedback,
   Prisma,
 } from "../generated/prisma/client";
-import { bridgeUnscopedCallers, db, type ScopedTx } from "../tenant-scope";
+import { db, type ScopedTx } from "../tenant-scope";
 
 export type DailyTargetRow = DailyTarget;
 export type DailyLogRow = DailyLog;
@@ -28,7 +28,7 @@ const CLEANUP_ACTIONS = ["move", "update", "verify_license"];
  * Daily-loop data access — targets/actuals/logs/journal CRUD plus the COUNTING predicates the
  * live-actuals service uses (all `count()`s over indexed columns; never loads rows to count).
  */
-export const dailyRepository = bridgeUnscopedCallers({
+export const dailyRepository = {
   // --- targets ---
   upsertTarget(ctx: TenantContext, data: Prisma.DailyTargetUncheckedCreateInput, tx?: ScopedTx) {
     const { userId, date, ...rest } = data;
@@ -266,4 +266,4 @@ export const dailyRepository = bridgeUnscopedCallers({
   countOutreachSince(ctx: TenantContext, since: Date, tx?: ScopedTx) {
     return db(ctx, tx).outreachAttempt.count({ where: { at: { gt: since } } });
   },
-});
+};

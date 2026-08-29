@@ -63,6 +63,9 @@ describe("POST /api/targets/suggest", () => {
     const res = await POST(req(), undefined);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(suggestion);
-    expect(h.suggestTargets).toHaveBeenCalledWith({ userId: "u2", date: "2026-07-23" });
+    expect(h.suggestTargets).toHaveBeenCalledWith(
+      { userId: "u2", date: "2026-07-23" },
+      expect.objectContaining({ tenantId: "t1" }),
+    );
   });
 });

@@ -21,6 +21,6 @@ export const POST = apiHandler<{ params: Promise<{ id: string }> }>(async (req, 
   await checkRateLimit(`candidate-resume-upload:${user.user.id}`, { limit: 20, windowMs: 60_000 });
   const { id } = await ctx.params;
   const input = uploadCandidateResumeSchema.parse(await req.json());
-  const document = await resumeService.attachToCandidate(id, input, user);
+  const document = await resumeService.attachToCandidate(user, id, input);
   return json<PostCandidateResumeResponse>({ document: toDocumentSummaryDTO(document) }, 201);
 });

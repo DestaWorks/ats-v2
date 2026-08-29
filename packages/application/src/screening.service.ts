@@ -69,7 +69,7 @@ export const screeningService = {
     search: string | undefined,
   ): Promise<ScreeningCandidateDTO[]> {
     const [rows, clientNames, rulesRows] = await Promise.all([
-      candidateRepository.list({
+      candidateRepository.list(ctx, {
         statuses: [...SCREENING_ELIGIBLE_STATUSES],
         ...(search !== undefined && { search }),
         take: 20,

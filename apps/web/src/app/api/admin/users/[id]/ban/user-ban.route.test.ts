@@ -55,9 +55,9 @@ describe("POST /api/admin/users/:id/ban", () => {
     const res = await POST(postReq({ reason: "abuse" }), ctx);
     expect(res.status).toBe(200);
     expect(h.ban).toHaveBeenCalledWith(
+      expect.objectContaining({ user: expect.objectContaining({ id: "u1" }) }),
       "u2",
       expect.objectContaining({ reason: "abuse" }),
-      expect.objectContaining({ user: expect.objectContaining({ id: "u1" }) }),
     );
   });
 });

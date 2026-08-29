@@ -96,7 +96,7 @@ function buildPrompt(ctx: DailyBriefContext): string {
  */
 export function generateDailyBrief(
   ctx: DailyBriefContext,
-  options?: AiCallOptions,
+  options: AiCallOptions,
 ): Promise<DailyBriefAiOutput> {
   return generateAi("Daily Brief", {
     ...options,

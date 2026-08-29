@@ -98,9 +98,10 @@ export class RolesController {
   @UseGuards(RateLimitGuard)
   @RateLimit({ name: "roles-parse-jd", limit: 20, windowMs: 60_000 })
   async parseJd(
+    @CurrentUser() user: AuthContext,
     @Body(new ZodValidationPipe(parseJdSchema)) body: ContractOutput<typeof parseJdSchema>,
   ): Promise<PostRoleParseJdResponse> {
-    return await this.roles.parseJd(body);
+    return await this.roles.parseJd(user, body);
   }
 
   /** GET /roles/:id — one role's detail, notes included. */

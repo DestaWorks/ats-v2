@@ -251,7 +251,7 @@ describe("POST /reports/export/jobs", () => {
     expect(res.status).toBe(201);
     expect(await res.json()).toEqual({ id: "exp1", status: "pending" });
     expect(h.requestExport).toHaveBeenCalledWith(
-      expect.objectContaining({ user: expect.objectContaining({ id: "u1" }) }),
+      expect.objectContaining({ tenantId: expect.any(String) }),
       "u1",
       { clientId: "c1" },
     );
@@ -286,7 +286,7 @@ describe("GET /reports/export/jobs/:id", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ id: "exp1", status: "ready", downloadUrl: "https://s/x" });
     expect(h.getExport).toHaveBeenCalledWith(
-      expect.objectContaining({ user: expect.objectContaining({ id: "u1" }) }),
+      expect.objectContaining({ tenantId: expect.any(String) }),
       "exp1",
       "u1",
     );

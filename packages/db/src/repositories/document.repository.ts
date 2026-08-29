@@ -1,7 +1,7 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import { Prisma } from "../generated/prisma/client";
 import type { Document } from "../generated/prisma/client";
-import { bridgeUnscopedCallers, db, type ScopedTx } from "../tenant-scope";
+import { db, type ScopedTx } from "../tenant-scope";
 import { decryptField, encryptField, isEncryptionEnabled } from "../field-crypto";
 
 /** A raw document row (Prisma model). Services/DTOs map this to API shapes. */
@@ -77,7 +77,7 @@ function decryptRow<T extends Document | null>(row: T): T {
  * is set, so soft-deleted rows never surface by accident. Every method accepts an optional `tx`
  * so the resume service can compose the candidate write + document write + audit atomically.
  */
-export const documentRepository = bridgeUnscopedCallers({
+export const documentRepository = {
   async create(ctx: TenantContext, data: DocumentCreateData, tx?: ScopedTx) {
     const { extractedData, extractedText, ...rest } = data;
     const text = encryptText(extractedText);
@@ -157,4 +157,4 @@ export const documentRepository = bridgeUnscopedCallers({
       }),
     );
   },
-});
+};

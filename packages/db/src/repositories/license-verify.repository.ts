@@ -1,6 +1,6 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import { UNVERIFIED_LICENSE_STATUSES } from "@destaworks/domain/constants";
-import { bridgeUnscopedCallers, db, type ScopedTx } from "../tenant-scope";
+import { db, type ScopedTx } from "../tenant-scope";
 import { FIRST_TERMINAL_ORDER } from "./candidate.repository";
 
 /**
@@ -10,7 +10,7 @@ import { FIRST_TERMINAL_ORDER } from "./candidate.repository";
  * Both reads use a narrow Prisma `select` (matches `candidateRepository.alertBuckets`) — no PII
  * columns, so no `decryptRow` step is needed.
  */
-export const licenseVerifyRepository = bridgeUnscopedCallers({
+export const licenseVerifyRepository = {
   /**
    * Candidates needing license verification — the Verification Queue
    * (`legacy/index.html:3001-3016`). Scoped to ACTIVE stages (`stageOrder < FIRST_TERMINAL_ORDER`,
@@ -68,4 +68,4 @@ export const licenseVerifyRepository = bridgeUnscopedCallers({
       take: limit,
     });
   },
-});
+};

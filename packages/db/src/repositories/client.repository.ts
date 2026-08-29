@@ -1,6 +1,6 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { Client, Prisma } from "../generated/prisma/client";
-import { bridgeUnscopedCallers, db, type ScopedTx } from "../tenant-scope";
+import { db, type ScopedTx } from "../tenant-scope";
 
 /** A raw client row (Prisma model). */
 export type ClientRow = Client;
@@ -11,7 +11,7 @@ export type ClientRow = Client;
  * `id → name` map rather than joining per candidate row (see `candidateService.listBoard`).
  * Soft-deleted rows are excluded by default (mirrors the candidate repository contract).
  */
-export const clientRepository = bridgeUnscopedCallers({
+export const clientRepository = {
   list(ctx: TenantContext, opts?: { includeDeleted?: boolean }, tx?: ScopedTx) {
     return db(ctx, tx).client.findMany({
       where: opts?.includeDeleted ? {} : { deletedAt: null },
@@ -59,4 +59,4 @@ export const clientRepository = bridgeUnscopedCallers({
     });
     return new Map(rows.map((r) => [r.clientId, r._count._all]));
   },
-});
+};

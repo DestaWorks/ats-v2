@@ -102,7 +102,7 @@ describe("migrationService.prepare", () => {
       { ID: "L-1", Name: "Jane", Status: NEW, Email: "jane@x.com" },
       { ID: "L-2", Name: "Bad", Status: "99 - Bogus" },
     ]);
-    const report = await migrationService.prepare({ format: "csv", content }, owner);
+    const report = await migrationService.prepare(owner, { format: "csv", content });
 
     expect(h.candidateRepo.upsertByLegacyId).not.toHaveBeenCalled();
     expect(h.documentRepo.upsertByLegacyId).not.toHaveBeenCalled();
@@ -117,7 +117,7 @@ describe("migrationService.prepare", () => {
 
   it("403 for a non-bulkImport role", async () => {
     const content = csv([{ ID: "L-1", Name: "Jane", Status: NEW }]);
-    await expect(migrationService.prepare({ format: "csv", content }, associate)).rejects.toThrow();
+    await expect(migrationService.prepare(associate, { format: "csv", content })).rejects.toThrow();
   });
 });
 
@@ -277,25 +277,22 @@ describe("migrationService — resume ZIP matching (Wave 1.3 backlog, Indrasur f
       { ID: "L-1", Name: "Jane Doe", Status: NEW },
       { ID: "L-2", Name: "No Resume Here", Status: NEW },
     ]);
-    const report = await migrationService.prepare(
-      {
-        format: "csv",
-        content,
-        resumes: [
-          {
-            filenamePrefix: "Jane Doe",
-            originalFilename: "Jane Doe.pdf",
-            text: "resume text for jane",
-          },
-          {
-            filenamePrefix: "Someone Else",
-            originalFilename: "Someone Else.pdf",
-            text: "orphaned resume text",
-          },
-        ],
-      },
-      owner,
-    );
+    const report = await migrationService.prepare(owner, {
+      format: "csv",
+      content,
+      resumes: [
+        {
+          filenamePrefix: "Jane Doe",
+          originalFilename: "Jane Doe.pdf",
+          text: "resume text for jane",
+        },
+        {
+          filenamePrefix: "Someone Else",
+          originalFilename: "Someone Else.pdf",
+          text: "orphaned resume text",
+        },
+      ],
+    });
     expect(report.rows.find((r) => r.legacyId === "L-1")!.resumeMatch).toBe("matched");
     expect(report.rows.find((r) => r.legacyId === "L-1")!.resumeFilename).toBe("Jane Doe.pdf");
     expect(report.rows.find((r) => r.legacyId === "L-2")!.resumeMatch).toBe("none");
@@ -305,37 +302,31 @@ describe("migrationService — resume ZIP matching (Wave 1.3 backlog, Indrasur f
 
   it("a row with no resume still imports normally (never hard-blocked, unlike legacy)", async () => {
     const content = csv([{ ID: "L-1", Name: "No Resume", Status: NEW }]);
-    const report = await migrationService.prepare(
-      {
-        format: "csv",
-        content,
-        resumes: [
-          {
-            filenamePrefix: "Somebody Else",
-            originalFilename: "Somebody Else.pdf",
-            text: "x".repeat(60),
-          },
-        ],
-      },
-      owner,
-    );
+    const report = await migrationService.prepare(owner, {
+      format: "csv",
+      content,
+      resumes: [
+        {
+          filenamePrefix: "Somebody Else",
+          originalFilename: "Somebody Else.pdf",
+          text: "x".repeat(60),
+        },
+      ],
+    });
     expect(report.rows[0]!.action).toBe("add");
     expect(report.rows[0]!.resumeMatch).toBe("none");
   });
 
   it("collision — >1 resume file for one name → ambiguous for every affected row, no silent overwrite", async () => {
     const content = csv([{ ID: "L-1", Name: "Jane Doe", Status: NEW }]);
-    const report = await migrationService.prepare(
-      {
-        format: "csv",
-        content,
-        resumes: [
-          { filenamePrefix: "Jane Doe", originalFilename: "Jane Doe.pdf", text: "resume A" },
-          { filenamePrefix: "jane doe", originalFilename: "jane doe.pdf", text: "resume B" }, // same normalized key
-        ],
-      },
-      owner,
-    );
+    const report = await migrationService.prepare(owner, {
+      format: "csv",
+      content,
+      resumes: [
+        { filenamePrefix: "Jane Doe", originalFilename: "Jane Doe.pdf", text: "resume A" },
+        { filenamePrefix: "jane doe", originalFilename: "jane doe.pdf", text: "resume B" }, // same normalized key
+      ],
+    });
     expect(report.rows[0]!.resumeMatch).toBe("ambiguous");
     expect(report.rows[0]!.reasons).toContain("resume-ambiguous");
   });
@@ -345,22 +336,19 @@ describe("migrationService — resume ZIP matching (Wave 1.3 backlog, Indrasur f
       { ID: "L-1", Name: "Same Name", Status: NEW },
       { ID: "L-2", Name: "Same Name", Status: NEW },
     ]);
-    const report = await migrationService.prepare(
-      {
-        format: "csv",
-        content,
-        resumes: [
-          { filenamePrefix: "Same Name", originalFilename: "Same Name.pdf", text: "one resume" },
-        ],
-      },
-      owner,
-    );
+    const report = await migrationService.prepare(owner, {
+      format: "csv",
+      content,
+      resumes: [
+        { filenamePrefix: "Same Name", originalFilename: "Same Name.pdf", text: "one resume" },
+      ],
+    });
     expect(report.rows.every((r) => r.resumeMatch === "ambiguous")).toBe(true);
   });
 
   it('no ZIP uploaded at all → every row reports resumeMatch "none", no unmatchedResumeFiles/resumeCounts', async () => {
     const content = csv([{ ID: "L-1", Name: "Jane", Status: NEW }]);
-    const report = await migrationService.prepare({ format: "csv", content }, owner);
+    const report = await migrationService.prepare(owner, { format: "csv", content });
     expect(report.rows[0]!.resumeMatch).toBe("none");
     expect(report.unmatchedResumeFiles).toBeUndefined();
     expect(report.resumeCounts).toBeUndefined();
@@ -414,10 +402,10 @@ describe("migrationService.commit — AI resume extraction (Wave 1.3 backlog, In
       "migration-resume-ai:u1",
       expect.objectContaining({ limit: 20 }),
     );
-    expect(h.parseResume).toHaveBeenCalledWith({
-      variant: "clinical",
-      text: "resume text for jane",
-    });
+    expect(h.parseResume).toHaveBeenCalledWith(
+      { variant: "clinical", text: "resume text for jane" },
+      expect.objectContaining({ tenantId: expect.any(String) }),
+    );
     expect(h.documentRepo.upsertByLegacyId).toHaveBeenCalledTimes(1);
     const [, legacyId, docData] = h.documentRepo.upsertByLegacyId.mock.calls[0]!;
     expect(legacyId).toBe("resume-ai:L-1");

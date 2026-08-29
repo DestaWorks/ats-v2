@@ -8,8 +8,8 @@ export type GetAdminPortalRequestsResponse = PortalAccessRequestListDTO;
 
 /** GET /api/admin/portal/requests — every submitted portal-access request. Gated `configureClientPortal`. */
 export const GET = apiHandler(async () => {
-  await requireCapability("configureClientPortal");
+  const actor = await requireCapability("configureClientPortal");
   return json<GetAdminPortalRequestsResponse>({
-    requests: await portalAccessRequestService.list(),
+    requests: await portalAccessRequestService.list(actor),
   });
 });

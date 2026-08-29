@@ -66,7 +66,7 @@ describe("POST /api/resume/upload-url", () => {
     const res = await POST(req(validBody), undefined);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ signedUrl: "https://x/upload", storageKey: "k1.pdf" });
-    expect(h.requestUploadUrl).toHaveBeenCalledWith(validBody);
+    expect(h.requestUploadUrl).toHaveBeenCalledWith(expect.anything(), validBody);
   });
 
   it("propagates FEATURE_DISABLED as 503 when storage isn't configured", async () => {

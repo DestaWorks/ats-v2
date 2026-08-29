@@ -59,7 +59,7 @@ describe("POST /api/resume/save", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ candidate: { id: "c1" }, document: { id: "d1" } });
     // The route forwards the authenticated user to the service.
-    const [, user] = h.save.mock.calls[0]!;
+    const [user] = h.save.mock.calls[0]!;
     expect(user).toMatchObject({ user: { id: "u1" }, role: "Owner" });
   });
 });

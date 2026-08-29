@@ -6,6 +6,7 @@ import {
   type ResumeData,
 } from "@destaworks/contracts/validation/resume";
 import { generateAi } from "./shared";
+import type { AiCallOptions } from "./deadline";
 
 /**
  * Structured extraction of a resume (Wave 1.2, Module 8). Replaces the legacy Gemini
@@ -69,13 +70,17 @@ const SYSTEM_PROMPTS: Record<ResumeVariant, string> = {
  * `AppError`. The zod schema is enforced by `generateObject`, so an invalid/absent object
  * surfaces as EXTRACTION_FAILED — no manual JSON parsing.
  */
-export async function parseResume(input: ParseResumeInput): Promise<ResumeData> {
+export async function parseResume(
+  input: ParseResumeInput,
+  options: AiCallOptions,
+): Promise<ResumeData> {
   // resumeSchemaFor returns a union of the 3 variant schemas; the result is a ResumeData member.
   const schema = resumeSchemaFor(input.variant) as unknown as ZodType<ResumeData>;
   const system = SYSTEM_PROMPTS[input.variant];
   const text = input.text.slice(0, MAX_RESUME_CHARS);
 
   return generateAi("Resume extraction", {
+    ...options,
     schema,
     system,
     prompt: `Extract the resume below into the required structured fields.\n\nRESUME:\n${text}`,

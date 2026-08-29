@@ -32,8 +32,8 @@ export class AdminAccessRequestsController {
 
   @Get()
   @RequireCapability("manageAccessRequests")
-  async list(): Promise<AccessRequestListDTO> {
-    return { requests: await this.requests.list() };
+  async list(@CurrentUser() actor: AuthContext): Promise<AccessRequestListDTO> {
+    return { requests: await this.requests.list(actor) };
   }
 
   /** 200: the request already existed — approving transitions it and creates the account. */
@@ -46,14 +46,17 @@ export class AdminAccessRequestsController {
     @Body(new ZodValidationPipe(approveRequestSchema))
     body: ContractOutput<typeof approveRequestSchema>,
   ): Promise<GeneratedPasswordDTO> {
-    return await this.requests.approve(id, body.role, actor);
+    return await this.requests.approve(actor, id, body.role);
   }
 
   @Post(":id/decline")
   @HttpCode(200)
   @RequireCapability("manageAccessRequests")
-  async decline(@Param("id") id: string): Promise<AcknowledgedIdDTO> {
-    await this.requests.decline(id);
+  async decline(
+    @CurrentUser() actor: AuthContext,
+    @Param("id") id: string,
+  ): Promise<AcknowledgedIdDTO> {
+    await this.requests.decline(actor, id);
     return { ok: true, id };
   }
 }

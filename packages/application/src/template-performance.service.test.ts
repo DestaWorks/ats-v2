@@ -35,10 +35,17 @@ beforeEach(() => {
   h.repo.attemptsWithTemplate.mockReset();
 });
 
+const ctx = {
+  tenantId: "t1",
+  membershipId: "m1",
+  role: "Owner" as const,
+  user: { id: "u1", email: "u@desta.works", name: "U" },
+};
+
 describe("templatePerformanceService.overview", () => {
   it("returns an empty row set when there are no template-tagged attempts", async () => {
     h.repo.attemptsWithTemplate.mockResolvedValue([]);
-    expect(await templatePerformanceService.overview()).toEqual({ rows: [] });
+    expect(await templatePerformanceService.overview(ctx)).toEqual({ rows: [] });
   });
 
   it("counts sends across BOTH recipient types, resolves name/category from TEMPLATES", async () => {
@@ -46,7 +53,7 @@ describe("templatePerformanceService.overview", () => {
       attempt({ leadId: "l1", candidateId: null }),
       attempt({ leadId: null, candidateId: "c1" }),
     ]);
-    const { rows } = await templatePerformanceService.overview();
+    const { rows } = await templatePerformanceService.overview(ctx);
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
       templateId: "initial",
@@ -62,7 +69,7 @@ describe("templatePerformanceService.overview", () => {
     h.repo.attemptsWithTemplate.mockResolvedValue([
       attempt({ leadId: null, candidateId: "c1", templateId: "present_short" }),
     ]);
-    const { rows } = await templatePerformanceService.overview();
+    const { rows } = await templatePerformanceService.overview(ctx);
     expect(rows[0]).toMatchObject({ leadSends: 0, responses: 0, rate: null, avgDays: null });
   });
 
@@ -72,7 +79,7 @@ describe("templatePerformanceService.overview", () => {
       attempt({ leadId: "l2", response: null }),
       attempt({ leadId: "l3", response: "cold" }),
     ]);
-    const { rows } = await templatePerformanceService.overview();
+    const { rows } = await templatePerformanceService.overview(ctx);
     // 2 of 3 leads responded → 66.67% → rounds to 67
     expect(rows[0]).toMatchObject({ leadSends: 3, responses: 2, rate: 67 });
   });
@@ -93,7 +100,7 @@ describe("templatePerformanceService.overview", () => {
       }),
       attempt({ leadId: "l3", response: null, respondedAt: null }), // excluded — no response
     ]);
-    const { rows } = await templatePerformanceService.overview();
+    const { rows } = await templatePerformanceService.overview(ctx);
     expect(rows[0]!.avgDays).toBe(3); // (2+4)/2
   });
 
@@ -103,13 +110,13 @@ describe("templatePerformanceService.overview", () => {
       attempt({ channel: "email" }),
       attempt({ channel: "phone" }),
     ]);
-    const { rows } = await templatePerformanceService.overview();
+    const { rows } = await templatePerformanceService.overview(ctx);
     expect(rows[0]!.topChannel).toBe("email");
   });
 
   it("falls back to the raw id/'unknown' category for a templateId no longer in TEMPLATES", async () => {
     h.repo.attemptsWithTemplate.mockResolvedValue([attempt({ templateId: "removed-template" })]);
-    const { rows } = await templatePerformanceService.overview();
+    const { rows } = await templatePerformanceService.overview(ctx);
     expect(rows[0]).toMatchObject({
       templateId: "removed-template",
       templateName: "removed-template",
@@ -123,7 +130,7 @@ describe("templatePerformanceService.overview", () => {
       attempt({ templateId: "followup1", leadId: "l2" }),
       attempt({ templateId: "followup1", leadId: "l3" }),
     ]);
-    const { rows } = await templatePerformanceService.overview();
+    const { rows } = await templatePerformanceService.overview(ctx);
     expect(rows.map((r) => r.templateId)).toEqual(["followup1", "initial"]);
   });
 });

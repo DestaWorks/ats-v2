@@ -1,6 +1,6 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { Prisma } from "../generated/prisma/client";
-import { bridgeUnscopedCallers, db, type ScopedTx } from "../tenant-scope";
+import { db, type ScopedTx } from "../tenant-scope";
 
 /** A raw outreach-attempt row (Prisma model). Services map this to `OutreachAttemptDTO`. */
 export type OutreachAttemptRow = Prisma.OutreachAttemptGetPayload<Record<string, never>>;
@@ -11,7 +11,7 @@ export type OutreachAttemptRow = Prisma.OutreachAttemptGetPayload<Record<string,
  * attempts logged directly on the candidate with the history of the lead that was PROMOTED into it
  * (`lead.promotedCandidateId`), so a promoted candidate keeps its sourcing trail visible.
  */
-export const outreachRepository = bridgeUnscopedCallers({
+export const outreachRepository = {
   /** All attempts for a candidate — direct + promoted-lead history, newest first. */
   listForCandidate(ctx: TenantContext, candidateId: string, tx?: ScopedTx) {
     return db(ctx, tx).outreachAttempt.findMany({
@@ -39,4 +39,4 @@ export const outreachRepository = bridgeUnscopedCallers({
       },
     });
   },
-});
+};

@@ -45,9 +45,13 @@ export const accessRequestService = {
    * form 4 times, all landing as separate "pending" rows an admin then has to sort through/
    * decline individually). Declined/approved requests don't block a fresh submission — only an
    * unresolved one does.
+   *
+   * UNSCOPED, and cannot be threaded yet: the form is public, so there is no session, and with no
+   * tenant routing on `/request-access` there is no claim to resolve either. Which tenant a
+   * pre-signup request belongs to is a Phase 9 onboarding decision, not a codemod.
    */
-  async submit(input: AccessRequestInput) {
-    const existing = await accessRequestRepository.findPendingByEmail(input.email);
+  async submit(ctx: TenantContext, input: AccessRequestInput) {
+    const existing = await accessRequestRepository.findPendingByEmail(ctx, input.email);
     if (existing) {
       throw new AppError(
         "CONFLICT",
@@ -55,6 +59,7 @@ export const accessRequestService = {
       );
     }
     return accessRequestRepository.create(
+      ctx,
       defined({
         name: input.name,
         email: input.email,
@@ -64,8 +69,8 @@ export const accessRequestService = {
     );
   },
 
-  async list(): Promise<AccessRequestDTO[]> {
-    const rows = await accessRequestRepository.list();
+  async list(ctx: TenantContext): Promise<AccessRequestDTO[]> {
+    const rows = await accessRequestRepository.list(ctx);
     return rows.map(toDTO);
   },
 
@@ -80,8 +85,8 @@ export const accessRequestService = {
    * unmapped `APIError` — not one of our own `AppError`s, so it fell through to the generic
    * catch-all as an opaque 500 instead of a clear message. Pre-check and reject with CONFLICT.
    */
-  async approve(id: string, role: Role, ctx: TenantContext): Promise<GeneratedPasswordDTO> {
-    const request = await accessRequestRepository.findById(id);
+  async approve(ctx: TenantContext, id: string, role: Role): Promise<GeneratedPasswordDTO> {
+    const request = await accessRequestRepository.findById(ctx, id);
     if (!request) throw new AppError("NOT_FOUND", "Access request not found");
     if (request.status !== "pending") {
       throw new AppError("CONFLICT", "This request has already been resolved");
@@ -89,15 +94,12 @@ export const accessRequestService = {
     if (await userRepository.findByEmail(request.email)) {
       throw new AppError("CONFLICT", "An account with this email already exists");
     }
-    const created = await adminUserService.create(
-      {
-        name: request.name,
-        email: request.email,
-        role,
-      },
-      ctx,
-    );
-    await accessRequestRepository.updateStatus(id, "approved");
+    const created = await adminUserService.create(ctx, {
+      name: request.name,
+      email: request.email,
+      role,
+    });
+    await accessRequestRepository.updateStatus(ctx, id, "approved");
     // Best-effort: the account is already created and the request already resolved by this
     // point, so a failed/unconfigured send shouldn't turn into a false "approval failed" error
     // for the admin (who'd then retry into a CONFLICT on an already-approved request). The
@@ -118,12 +120,12 @@ export const accessRequestService = {
     return created;
   },
 
-  async decline(id: string): Promise<void> {
-    const request = await accessRequestRepository.findById(id);
+  async decline(ctx: TenantContext, id: string): Promise<void> {
+    const request = await accessRequestRepository.findById(ctx, id);
     if (!request) throw new AppError("NOT_FOUND", "Access request not found");
     if (request.status !== "pending") {
       throw new AppError("CONFLICT", "This request has already been resolved");
     }
-    await accessRequestRepository.updateStatus(id, "declined");
+    await accessRequestRepository.updateStatus(ctx, id, "declined");
   },
 };

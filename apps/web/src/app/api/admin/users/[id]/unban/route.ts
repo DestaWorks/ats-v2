@@ -10,6 +10,6 @@ export type PostAdminUserUnbanResponse = AdminUserEnvelopeDTO;
 export const POST = apiHandler<{ params: Promise<{ id: string }> }>(async (_req, ctx) => {
   const actor = await requireCapability("manageUsers");
   const { id } = await ctx.params;
-  const user = await adminUserService.unban(id, actor);
+  const user = await adminUserService.unban(actor, id);
   return json<PostAdminUserUnbanResponse>({ user });
 });

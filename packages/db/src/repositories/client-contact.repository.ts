@@ -1,6 +1,6 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { ClientContact, Prisma } from "../generated/prisma/client";
-import { bridgeUnscopedCallers, db, type ScopedTx } from "../tenant-scope";
+import { db, type ScopedTx } from "../tenant-scope";
 
 /** A raw client-contact row (Prisma model). Services/DTOs map this to API shapes. */
 export type ClientContactRow = ClientContact;
@@ -11,7 +11,7 @@ export type ClientContactRow = ClientContact;
  * candidate/lead/note repositories); a "left" contact (`status`) stays visible until explicitly
  * deleted — those are separate concerns, matching legacy parity.
  */
-export const clientContactRepository = bridgeUnscopedCallers({
+export const clientContactRepository = {
   create(ctx: TenantContext, data: Prisma.ClientContactUncheckedCreateInput, tx?: ScopedTx) {
     return db(ctx, tx).clientContact.create({ data });
   },
@@ -52,4 +52,4 @@ export const clientContactRepository = bridgeUnscopedCallers({
     });
     return count;
   },
-});
+};

@@ -28,7 +28,12 @@ vi.mock("ai", () => ({ APICallError: h.APICallError }));
 
 import { generateAi, isAiAvailable } from "./shared";
 
-const opts = { schema: { parse: (v: unknown) => v } as never, system: "sys", prompt: "prompt" };
+const opts = {
+  tenantId: "t1",
+  schema: { parse: (v: unknown) => v } as never,
+  system: "sys",
+  prompt: "prompt",
+};
 
 beforeEach(() => {
   h.enabled = true;
@@ -67,16 +72,16 @@ describe("generateAi", () => {
 describe("isAiAvailable", () => {
   it("is false when the provider key isn't configured, without checking admin settings", async () => {
     h.enabled = false;
-    expect(await isAiAvailable()).toBe(false);
+    expect(await isAiAvailable("t1")).toBe(false);
     expect(h.getSettings).not.toHaveBeenCalled();
   });
 
   it("is false when an admin has disabled AI", async () => {
     h.getSettings.mockResolvedValue({ disabled: true });
-    expect(await isAiAvailable()).toBe(false);
+    expect(await isAiAvailable("t1")).toBe(false);
   });
 
   it("is true when enabled and not admin-disabled", async () => {
-    expect(await isAiAvailable()).toBe(true);
+    expect(await isAiAvailable("t1")).toBe(true);
   });
 });

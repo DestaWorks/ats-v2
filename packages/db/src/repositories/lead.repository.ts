@@ -1,6 +1,6 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { OutreachAttempt, Prisma, SourceLead } from "../generated/prisma/client";
-import { bridgeUnscopedCallers, db, type ScopedTx } from "../tenant-scope";
+import { db, type ScopedTx } from "../tenant-scope";
 
 /** A raw source-lead row (Prisma model). Services/DTOs map this to API shapes. */
 export type LeadRow = SourceLead;
@@ -82,7 +82,7 @@ export function buildLeadWhere(filters: LeadListFilters): Prisma.SourceLeadWhere
  * Every method accepts an optional `tx` so the service can compose atomic writes (attempt + denorm +
  * audit; candidate-create + lead flip). Leads carry no encrypted columns → no field crypto here.
  */
-export const leadRepository = bridgeUnscopedCallers({
+export const leadRepository = {
   create(ctx: TenantContext, data: Prisma.SourceLeadUncheckedCreateInput, tx?: ScopedTx) {
     return db(ctx, tx).sourceLead.create({ data });
   },
@@ -405,4 +405,4 @@ export const leadRepository = bridgeUnscopedCallers({
       take,
     });
   },
-});
+};

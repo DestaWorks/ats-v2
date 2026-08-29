@@ -13,7 +13,7 @@ export type GetDocumentDownloadUrlResponse = DownloadUrlEnvelope;
  * the document has no `storageKey` (metadata-only or legacy-link rows).
  */
 export const GET = apiHandler<{ params: Promise<{ id: string }> }>(async (_req, ctx) => {
-  await requireCapability("viewCredentials");
+  const viewer = await requireCapability("viewCredentials");
   const { id } = await ctx.params;
-  return json<GetDocumentDownloadUrlResponse>(await resumeService.getDownloadUrl(id));
+  return json<GetDocumentDownloadUrlResponse>(await resumeService.getDownloadUrl(viewer, id));
 });

@@ -8,6 +8,6 @@ export type GetAdminAccessRequestsResponse = AccessRequestListDTO;
 
 /** GET /api/admin/access-requests — every submitted request, newest first. Gated `manageAccessRequests`. */
 export const GET = apiHandler(async () => {
-  await requireCapability("manageAccessRequests");
-  return json<GetAdminAccessRequestsResponse>({ requests: await accessRequestService.list() });
+  const actor = await requireCapability("manageAccessRequests");
+  return json<GetAdminAccessRequestsResponse>({ requests: await accessRequestService.list(actor) });
 });

@@ -1,6 +1,6 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { ClientNote, Prisma } from "../generated/prisma/client";
-import { bridgeUnscopedCallers, db, type ScopedTx } from "../tenant-scope";
+import { db, type ScopedTx } from "../tenant-scope";
 
 /** A raw client-note row (Prisma model). Services/DTOs map this to API shapes. */
 export type ClientNoteRow = ClientNote;
@@ -10,7 +10,7 @@ export type ClientNoteRow = ClientNote;
  * Prisma for `client_notes`. Same append + soft-delete-for-correction shape as
  * `client-meeting.repository.ts` (no `update` — a note is a point-in-time log entry).
  */
-export const clientNoteRepository = bridgeUnscopedCallers({
+export const clientNoteRepository = {
   create(ctx: TenantContext, data: Prisma.ClientNoteUncheckedCreateInput, tx?: ScopedTx) {
     return db(ctx, tx).clientNote.create({ data });
   },
@@ -43,4 +43,4 @@ export const clientNoteRepository = bridgeUnscopedCallers({
     });
     return count;
   },
-});
+};

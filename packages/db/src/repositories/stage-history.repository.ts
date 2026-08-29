@@ -1,6 +1,6 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { StageHistory } from "../generated/prisma/client";
-import { bridgeUnscopedCallers, db, type ScopedTx } from "../tenant-scope";
+import { db, type ScopedTx } from "../tenant-scope";
 import { FIRST_TERMINAL_ORDER } from "./candidate.repository";
 
 /** A raw stage-history row (Prisma model). */
@@ -21,7 +21,7 @@ export interface StageHistoryAddInput {
  * normally called inside the same transaction as the candidate `update` + `writeAudit` (pass
  * the shared `tx`) so the history can't drift from the candidate's current stage.
  */
-export const stageHistoryRepository = bridgeUnscopedCallers({
+export const stageHistoryRepository = {
   add(ctx: TenantContext, input: StageHistoryAddInput, tx?: ScopedTx) {
     return db(ctx, tx).stageHistory.create({
       data: {
@@ -120,4 +120,4 @@ export const stageHistoryRepository = bridgeUnscopedCallers({
     }
     return max;
   },
-});
+};

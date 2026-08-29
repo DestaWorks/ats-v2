@@ -16,6 +16,8 @@ vi.mock("../prisma", () => {
 
 import { aiUsageEventRepository } from "./ai-usage-event.repository";
 
+const ctx = { tenantId: "t1" } as never;
+
 beforeEach(() => {
   h.create.mockReset();
   h.findMany.mockReset();
@@ -25,7 +27,7 @@ beforeEach(() => {
 describe("aiUsageEventRepository.record", () => {
   it("writes the metadata row", async () => {
     h.create.mockResolvedValue({});
-    await aiUsageEventRepository.record({
+    await aiUsageEventRepository.record(ctx, {
       operation: "Resume extraction",
       provider: "anthropic",
       model: "claude-opus-4-8",
@@ -51,7 +53,7 @@ describe("aiUsageEventRepository.record", () => {
     h.create.mockRejectedValue(new Error("connection refused"));
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     await expect(
-      aiUsageEventRepository.record({
+      aiUsageEventRepository.record(ctx, {
         operation: "JD parsing",
         provider: "anthropic",
         model: "claude-opus-4-8",
@@ -68,7 +70,7 @@ describe("aiUsageEventRepository.record", () => {
 describe("aiUsageEventRepository.listRecent", () => {
   it("orders by newest first", async () => {
     h.findMany.mockResolvedValue([]);
-    await aiUsageEventRepository.listRecent(20);
+    await aiUsageEventRepository.listRecent(ctx, 20);
     expect(h.findMany).toHaveBeenCalledWith({ orderBy: { createdAt: "desc" }, take: 20 });
   });
 });
@@ -89,7 +91,7 @@ describe("aiUsageEventRepository.summarySince", () => {
       },
     ]);
 
-    const result = await aiUsageEventRepository.summarySince(since);
+    const result = await aiUsageEventRepository.summarySince(ctx, since);
 
     expect(h.groupBy).toHaveBeenCalledWith({
       by: ["status"],

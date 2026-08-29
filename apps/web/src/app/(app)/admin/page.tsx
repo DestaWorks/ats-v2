@@ -33,8 +33,8 @@ export default async function AdminPage() {
   const canManageAi = hasCapability(user.role, "manageAiSettings");
   const [{ users }, requests, portalRequests, clientRows, aiSettings, aiUsage] = await Promise.all([
     adminUserService.list(),
-    accessRequestService.list(),
-    canConfigurePortal ? portalAccessRequestService.list() : Promise.resolve([]),
+    accessRequestService.list(user),
+    canConfigurePortal ? portalAccessRequestService.list(user) : Promise.resolve([]),
     canConfigurePortal ? cachedClientList(user) : Promise.resolve([]),
     canManageAi
       ? aiOpsService.getSettings(user)

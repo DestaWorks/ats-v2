@@ -11,7 +11,8 @@ import { ResumeFlow } from "./resume-flow";
  * client flow may NOT.
  */
 export default async function ResumePage() {
-  const [user, resumeExtractionEnabled] = await Promise.all([getVerifiedUser(), isAiAvailable()]);
+  const user = await getVerifiedUser();
+  const resumeExtractionEnabled = await isAiAvailable(user.tenantId);
 
   return (
     <div className="flex flex-col gap-6 px-8 py-6">

@@ -5,6 +5,7 @@ import { google } from "@ai-sdk/google";
 import type { ZodType } from "zod";
 import { AI_MODEL, AI_MODEL_FALLBACK, parseModel, type AiProvider } from "./config";
 import { aiUsageEventRepository } from "@destaworks/db/repositories/ai-usage-event.repository";
+import { systemContextFor } from "@destaworks/domain/system-context";
 
 /**
  * Provider-agnostic structured generation. One `generateObject` call over the Vercel AI SDK; the
@@ -69,6 +70,7 @@ async function attempt<T>(
 }
 
 function logUsage(
+  tenantId: string,
   operation: string,
   provider: string,
   model: string,
@@ -77,7 +79,7 @@ function logUsage(
     | { status: "success"; inputTokens?: number; outputTokens?: number }
     | { status: "error"; errorName?: string; errorStatusCode?: number },
 ) {
-  void aiUsageEventRepository.record({
+  void aiUsageEventRepository.record(systemContextFor(tenantId), {
     operation,
     provider,
     model,
@@ -111,6 +113,7 @@ function parseFallbackModel(
 }
 
 export async function generateStructured<T>(opts: {
+  tenantId: string;
   operation: string;
   schema: ZodType<T>;
   system: string;
@@ -129,13 +132,13 @@ export async function generateStructured<T>(opts: {
   const startedAt = Date.now();
   try {
     const result = await attempt(primaryModel, opts);
-    logUsage(opts.operation, result.provider, result.modelId, startedAt, {
+    logUsage(opts.tenantId, opts.operation, result.provider, result.modelId, startedAt, {
       status: "success",
       ...usageTokens(result.usage),
     });
     return result.object;
   } catch (primaryErr) {
-    logUsage(opts.operation, primaryProvider, primaryModelId, startedAt, {
+    logUsage(opts.tenantId, opts.operation, primaryProvider, primaryModelId, startedAt, {
       status: "error",
       errorName: primaryErr instanceof Error ? primaryErr.name : "UnknownError",
       ...errorStatus(primaryErr),
@@ -152,17 +155,24 @@ export async function generateStructured<T>(opts: {
     const fallbackStartedAt = Date.now();
     try {
       const result = await attempt(fallback.model, opts);
-      logUsage(opts.operation, result.provider, result.modelId, fallbackStartedAt, {
+      logUsage(opts.tenantId, opts.operation, result.provider, result.modelId, fallbackStartedAt, {
         status: "success",
         ...usageTokens(result.usage),
       });
       return result.object;
     } catch (fallbackErr) {
-      logUsage(opts.operation, fallback.provider, fallback.modelId, fallbackStartedAt, {
-        status: "error",
-        errorName: fallbackErr instanceof Error ? fallbackErr.name : "UnknownError",
-        ...errorStatus(fallbackErr),
-      });
+      logUsage(
+        opts.tenantId,
+        opts.operation,
+        fallback.provider,
+        fallback.modelId,
+        fallbackStartedAt,
+        {
+          status: "error",
+          errorName: fallbackErr instanceof Error ? fallbackErr.name : "UnknownError",
+          ...errorStatus(fallbackErr),
+        },
+      );
       throw fallbackErr;
     }
   }

@@ -1,6 +1,6 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { Prisma } from "../generated/prisma/client";
-import { bridgeUnscopedCallers, db, type ScopedTx } from "../tenant-scope";
+import { db, type ScopedTx } from "../tenant-scope";
 
 /** A mention row joined with the context the alerts panel renders (author, type, candidate). */
 export type MentionRow = Prisma.MentionGetPayload<{ include: typeof MENTION_INCLUDE }>;
@@ -22,7 +22,7 @@ const MENTION_INCLUDE = {
  * server-side alongside the note (same `tx`); the read side powers the bell badge + alerts
  * panel (`recipientId + readAt` is the indexed pair).
  */
-export const mentionRepository = bridgeUnscopedCallers({
+export const mentionRepository = {
   /** Insert one row per recipient (already resolved + deduped by the service). */
   async createMany(
     ctx: TenantContext,
@@ -94,4 +94,4 @@ export const mentionRepository = bridgeUnscopedCallers({
     });
     return res.count;
   },
-});
+};

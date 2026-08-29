@@ -59,7 +59,7 @@ export class MigrationController {
     @Body(importInputPipe) body: ContractOutput<typeof importInputSchema>,
     @CurrentUser() user: AuthContext,
   ): Promise<ImportReport> {
-    return this.migration.prepare(body, user);
+    return this.migration.prepare(user, body);
   }
 
   /**
@@ -74,7 +74,7 @@ export class MigrationController {
     @Body(importInputPipe) body: ContractOutput<typeof importInputSchema>,
     @CurrentUser() user: AuthContext,
   ): Promise<MigrationCommitAccepted> {
-    return this.runs.start(body, user);
+    return this.runs.start(user, body);
   }
 
   /**
@@ -84,6 +84,6 @@ export class MigrationController {
   @Get("runs/:runId")
   @HttpCode(HttpStatus.OK)
   run(@Param("runId") runId: string, @CurrentUser() user: AuthContext): Promise<MigrationRunState> {
-    return this.runs.state(runId, user);
+    return this.runs.state(user, runId);
   }
 }
