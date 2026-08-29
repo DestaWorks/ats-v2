@@ -5,16 +5,20 @@ import {
   isRoleStatus,
 } from "@destaworks/domain/constants";
 import { getVerifiedUser } from "@destaworks/auth/guards";
-import { openRoleService } from "@destaworks/application/open-role.service";
+import type {
+  GetRoleListResponse,
+  GetRoleTriageResponse,
+} from "@destaworks/contracts/validation/open-role";
+import type { LookupOptionsDTO } from "@destaworks/contracts/validation/lookups";
+import { apiGet, query } from "@/lib/api/server";
 import { AddRoleButton } from "./add-role-modal";
 import { RoleFilters } from "./role-filters";
 import { RolesInventory } from "./roles-inventory";
 import { TriageStrip } from "./triage-strip";
-import { cachedClientList } from "@destaworks/integrations/http/request-cache";
 
 /**
  * Open Roles (RSC, Wave 3.5) — the client-requisition board. SSR-renders page 1 of the filtered
- * list + the triage strip directly (no fetch flash); the client `<RolesInventory>` handles
+ * list + the triage strip through the API (no fetch flash); the client `<RolesInventory>` handles
  * filters and pagination. `<AddRoleButton>` sits in the page HEADER next to the title (matches
  * `candidates/page.tsx` — NOT inside the table toolbar). Filters seed from URL `searchParams` so
  * a shared link lands pre-filtered.
@@ -36,22 +40,12 @@ export default async function RolesPage({
   const rawPage = Number(one(sp.page));
   const page = Number.isInteger(rawPage) && rawPage > 0 ? rawPage : 1;
 
-  const user = await getVerifiedUser();
-  const [list, triage, clientRows] = await Promise.all([
-    openRoleService.list(
-      {
-        ...(clientId !== undefined && { clientId }),
-        ...(status !== undefined && { status }),
-        ...(priority !== undefined && { priority }),
-        ...(search !== undefined && { search }),
-        page,
-      },
-      user,
-    ),
-    openRoleService.triage(user),
-    cachedClientList(user),
+  await getVerifiedUser();
+  const [list, { roles: triage }, { clients }] = await Promise.all([
+    apiGet<GetRoleListResponse>(`/roles${query({ clientId, status, priority, search, page })}`),
+    apiGet<GetRoleTriageResponse>("/roles/triage"),
+    apiGet<LookupOptionsDTO>("/lookups"),
   ]);
-  const clients = clientRows.map((c) => ({ id: c.id, name: c.name }));
   const listKey = [clientId, status, priority, search, page].join("|");
 
   return (
