@@ -861,14 +861,50 @@ surface has had a security review.
 
 ## Phase 5 — Job runner
 
+> **Migrations are deferred to the end of the restructure (owner decision, 2026-08-29).**
+> Phase 5 adds three: `migration_runs`, `draft`/`draftAt` on the brief tables, and
+> `schedule_runs` + `report_exports`. They are authored and committed but **deliberately unapplied**,
+> and so is pg-boss's own schema.
+>
+> **What that means, so it is not discovered at deploy time.** The features that depend on those
+> tables cannot run in any environment until the migrations do: enqueuing the ETL commit, brief
+> generation (the draft columns), the scheduler's claim table, and CSV export delivery. Their code,
+> contracts and tests are complete and green — what is missing is only the schema.
+>
+> This is safe today because nothing here is deployed: `main` is what is live, the restructure runs
+> on its own branch, and `apps/api` has no host yet. It stops being safe the moment either is
+> deployed, so:
+>
+> **Deploy gate — the migrations run BEFORE any deploy that carries Phase 5 code, staging first.**
+> A deploy of the web app alone is enough to matter: the brief-generate routes enqueue and the
+> handler writes `draft`, so shipping the route without the column turns a working button into a
+> 500. `docs/DECISIONS.md` D6 (separate staging and production databases) is a prerequisite for
+> rehearsing them anywhere other than production.
+
+
 **Goal:** slow work leaves the request path. Built on NestJS now that Phase 4 has landed.
 
 - [ ] Choose the queue and document the choice; bind it through NestJS
 - [ ] Create `@destaworks/jobs` — background jobs, queues, schedulers, consuming `@destaworks/application`
-- [ ] Move the ETL commit off the request path — it cannot finish inside `maxDuration = 300`
+- [x] Move the ETL commit off the request path — it cannot finish inside `maxDuration = 300`
+      *(`migration.commit`, `maxAttempts: 2`. `POST /migration/commit` stages the upload on a
+      `migration_runs` row and answers `202 { runId, jobId, status }`; `GET /migration/runs/:runId`
+      is the operator's read. Idempotent on `legacy_id`, resumable from `processedRows`, aborts at
+      a row boundary. Both stacks changed together.)*
 - [ ] Give AI calls an overall deadline; they currently retry up to six times holding a function slot
-- [ ] Move brief generation and CSV export to jobs
-- [ ] Add the scheduler — nothing scheduled runs today
+- [ ] Move brief generation and CSV export to jobs *(CSV export done: `reports.export.candidates`
+  + `POST /reports/export/jobs` / `GET /reports/export/jobs/:id` on the API. The finished file goes
+  to the PRIVATE `exports` bucket and is collected through a 5-minute signed URL minted per
+  request — a job cannot stream into a response that has already returned. The Next.js
+  `GET /api/reports/export` and its `<a href>` are unchanged and still synchronous: `apps/web` may
+  not import `@destaworks/jobs` (web → api is HTTP), so the link moves to the async flow as part
+  of the 4.3 traffic switch. Brief generation not started.)*
+- [x] Add the scheduler — nothing scheduled runs today *(`packages/jobs/src/{schedule,scheduler,
+  schedules}.ts`. Schedules are data with a REQUIRED IANA `timeZone` — no default, no host zone;
+  resolution goes through the real tz database so DST is right. Single-fire across N workers is a
+  unique `(schedule, occurrenceAt)` claim in `schedule_runs`, not leader election and not the
+  driver's `singletonKey` (which only dedupes still-pending jobs). The live registry is
+  deliberately EMPTY — the mechanism ships, no recurring business job was invented to justify it.)*
 - [ ] Job observability: failures visible, retries bounded, dead-letter handling
 - **Done-when:** no request handler performs unbounded work; a failed job is visible and retryable
 
