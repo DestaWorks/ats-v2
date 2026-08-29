@@ -11,7 +11,9 @@ export type GetReportsTeamPerformanceResponse = TeamPerformanceDTO;
 
 /** GET /api/reports/team-performance (legacy `index.html:8452-8530`). */
 export const GET = apiHandler(async (req: Request) => {
-  await requireCapability("viewReports");
+  const viewer = await requireCapability("viewReports");
   const filters = reportFiltersFromParams(new URL(req.url).searchParams);
-  return json<GetReportsTeamPerformanceResponse>(await teamReportsService.teamPerformance(filters));
+  return json<GetReportsTeamPerformanceResponse>(
+    await teamReportsService.teamPerformance(viewer, filters),
+  );
 });

@@ -227,6 +227,12 @@ export interface TrendsDTO {
  */
 export const reportExportPayloadSchema = z.object({
   exportId: z.string().min(1),
+  /**
+   * The tenant whose data this export reads. It travels in the payload because a job resumes with
+   * no request and no session: the alternative — reading it off the `report_exports` row — needs a
+   * scoped query to do the read, which needs the tenant. Circular. The enqueuing endpoint has it.
+   */
+  tenantId: z.string().min(1),
   filters: reportFiltersSchema,
 });
 export type ReportExportPayload = z.infer<typeof reportExportPayloadSchema>;

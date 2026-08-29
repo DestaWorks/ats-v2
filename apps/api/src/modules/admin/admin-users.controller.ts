@@ -61,7 +61,7 @@ export class AdminUsersController {
     @CurrentUser() actor: AuthContext,
     @Body(new ZodValidationPipe(createUserSchema)) body: ContractOutput<typeof createUserSchema>,
   ): Promise<GeneratedPasswordDTO> {
-    return await this.users.create(body, actor.user.id);
+    return await this.users.create(body, actor);
   }
 
   @Delete(":id")
@@ -70,7 +70,7 @@ export class AdminUsersController {
     @CurrentUser() actor: AuthContext,
     @Param("id") id: string,
   ): Promise<AcknowledgedIdDTO> {
-    await this.users.remove(id, actor.user.id);
+    await this.users.remove(id, actor);
     return { ok: true, id };
   }
 
@@ -82,7 +82,7 @@ export class AdminUsersController {
     @Param("id") id: string,
     @Body(new ZodValidationPipe(banUserSchema)) body: ContractOutput<typeof banUserSchema>,
   ): Promise<AdminUserEnvelopeDTO> {
-    return { user: await this.users.ban(id, body, actor.user.id) };
+    return { user: await this.users.ban(id, body, actor) };
   }
 
   @Post(":id/unban")
@@ -92,7 +92,7 @@ export class AdminUsersController {
     @CurrentUser() actor: AuthContext,
     @Param("id") id: string,
   ): Promise<AdminUserEnvelopeDTO> {
-    return { user: await this.users.unban(id, actor.user.id) };
+    return { user: await this.users.unban(id, actor) };
   }
 
   /** `manageRoles`, not `manageUsers` — this is the privilege-escalation surface. */
@@ -103,7 +103,7 @@ export class AdminUsersController {
     @Param("id") id: string,
     @Body(new ZodValidationPipe(setRoleSchema)) body: ContractOutput<typeof setRoleSchema>,
   ): Promise<AdminUserEnvelopeDTO> {
-    return { user: await this.users.setRole(id, body.role, actor.user.id) };
+    return { user: await this.users.setRole(id, body.role, actor) };
   }
 
   @Post(":id/reset-password")
@@ -113,6 +113,6 @@ export class AdminUsersController {
     @CurrentUser() actor: AuthContext,
     @Param("id") id: string,
   ): Promise<ResetPasswordDTO> {
-    return await this.users.resetPassword(id, actor.user.id);
+    return await this.users.resetPassword(id, actor);
   }
 }

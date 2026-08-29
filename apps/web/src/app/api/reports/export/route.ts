@@ -19,9 +19,9 @@ import { exportService } from "@destaworks/application/reports/export.service";
  * would break the only download the UI has; changing its shape would break the link for no gain.
  */
 export const GET = apiHandler(async (req: Request) => {
-  await requireCapability("viewReports");
+  const viewer = await requireCapability("viewReports");
   const filters = reportFiltersFromParams(new URL(req.url).searchParams);
-  const csv = await exportService.candidatesCsv(filters);
+  const csv = await exportService.candidatesCsv(viewer, filters);
   return new Response(csv, {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",

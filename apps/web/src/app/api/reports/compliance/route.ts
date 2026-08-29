@@ -11,7 +11,7 @@ export type GetReportsComplianceResponse = ComplianceDTO;
 
 /** GET /api/reports/compliance (legacy `index.html:8656-8683`). */
 export const GET = apiHandler(async (req: Request) => {
-  await requireCapability("viewReports");
+  const viewer = await requireCapability("viewReports");
   const filters = reportFiltersFromParams(new URL(req.url).searchParams);
-  return json<GetReportsComplianceResponse>(await timeReportsService.compliance(filters));
+  return json<GetReportsComplianceResponse>(await timeReportsService.compliance(viewer, filters));
 });

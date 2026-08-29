@@ -1,3 +1,4 @@
+import type { TenantContext } from "@destaworks/domain/tenant";
 import { scoreCandidate } from "@destaworks/domain/rules/scoring";
 import type { ClientRules } from "@destaworks/domain/rules/types";
 import { utcDayStart, utcNextDayStart } from "@destaworks/domain/daily";
@@ -33,11 +34,15 @@ export interface ReportCohort {
  * The one filtered read every report derives from (legacy's single `rCands` array, loaded server-
  * side ONCE per request instead of recomputed per metric). `clientNames`/`userNames`/`rulesByClient`
  * are the same small "load once, map lookups after" bundle used throughout this codebase
- * (`clientRepository.nameMap()`, `userRepository.namesByIds()`, `buildRulesMap`-equivalent).
+ * (`clientRepository.nameMap(ctx)`, `userRepository.namesByIds()`, `buildRulesMap`-equivalent).
  */
-export async function loadCohort(filters: ReportFilters): Promise<ReportCohort> {
+export async function loadCohort(
+  ctx: TenantContext,
+  filters: ReportFilters,
+): Promise<ReportCohort> {
   const [candidates, clientNames, rulesRows] = await Promise.all([
     candidateRepository.list(
+      ctx,
       defined({
         clientId: filters.clientId,
         createdById: filters.createdById,

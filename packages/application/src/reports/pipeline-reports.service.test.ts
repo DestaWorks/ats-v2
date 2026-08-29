@@ -56,9 +56,16 @@ beforeEach(() => {
   h.maxStageOrderAsOf.mockResolvedValue(new Map([["rejected-1", 4]]));
 });
 
+const ctx = {
+  tenantId: "t1",
+  membershipId: "m1",
+  role: "Owner" as const,
+  user: { id: "u1", email: "u@desta.works", name: "U" },
+};
+
 describe("pipelineReportsService.pipelineFunnel", () => {
   it("counts a later-rejected candidate toward every ACTIVE stage they actually reached", async () => {
-    const dto = await pipelineReportsService.pipelineFunnel({});
+    const dto = await pipelineReportsService.pipelineFunnel(ctx, {});
     const byStatus = new Map(dto.stages.map((s) => [s.status, s.reachedCount]));
 
     // Reached New Candidate, Qualified, Initial Screening, Desta Review, Submitted (orders 0-4).
@@ -67,14 +74,14 @@ describe("pipelineReportsService.pipelineFunnel", () => {
   });
 
   it("does NOT count the rejected candidate toward Started (Day 1) — the bug this fixes", async () => {
-    const dto = await pipelineReportsService.pipelineFunnel({});
+    const dto = await pipelineReportsService.pipelineFunnel(ctx, {});
     const started = dto.stages.find((s) => s.status === "STARTED_DAY1");
     expect(started?.reachedCount).toBe(0);
   });
 
   it("a brand-new candidate with zero history rows still counts toward New Candidate", async () => {
     h.maxStageOrderAsOf.mockResolvedValue(new Map()); // no history rows at all
-    const dto = await pipelineReportsService.pipelineFunnel({});
+    const dto = await pipelineReportsService.pipelineFunnel(ctx, {});
     const newCandidateStage = dto.stages.find((s) => s.status === "NEW_CANDIDATE");
     expect(newCandidateStage?.reachedCount).toBe(2);
   });

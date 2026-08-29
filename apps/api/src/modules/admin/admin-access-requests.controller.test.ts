@@ -153,7 +153,11 @@ describe("the queue and its transitions", () => {
       user: { id: "u9" },
       generatedPassword: "pw",
     });
-    expect(h.approve).toHaveBeenCalledWith("r1", "Screener", "owner1");
+    expect(h.approve).toHaveBeenCalledWith(
+      "r1",
+      "Screener",
+      expect.objectContaining({ user: expect.objectContaining({ id: "owner1" }) }),
+    );
   });
 
   it("validates the approve body with the contract schema — an unknown role is 422", async () => {

@@ -83,56 +83,80 @@ export class ReportsController {
 
   /** GET /reports/executive — Executive Summary. */
   @Get("executive")
-  executive(@Filters() filters: ReportFilters): Promise<ExecutiveSummaryDTO> {
-    return this.pipelineReports.executiveSummary(filters);
+  executive(
+    @CurrentUser() user: AuthContext,
+    @Filters() filters: ReportFilters,
+  ): Promise<ExecutiveSummaryDTO> {
+    return this.pipelineReports.executiveSummary(user, filters);
   }
 
   /** GET /reports/pipeline-funnel — stage-by-stage funnel with conversion. */
   @Get("pipeline-funnel")
-  pipelineFunnel(@Filters() filters: ReportFilters): Promise<PipelineFunnelDTO> {
-    return this.pipelineReports.pipelineFunnel(filters);
+  pipelineFunnel(
+    @CurrentUser() user: AuthContext,
+    @Filters() filters: ReportFilters,
+  ): Promise<PipelineFunnelDTO> {
+    return this.pipelineReports.pipelineFunnel(user, filters);
   }
 
   /** GET /reports/client-funnel — per-client funnel plus week-over-week deltas. */
   @Get("client-funnel")
-  clientFunnel(@Filters() filters: ReportFilters): Promise<ClientFunnelDTO> {
-    return this.clientReports.perClientFunnel(filters);
+  clientFunnel(
+    @CurrentUser() user: AuthContext,
+    @Filters() filters: ReportFilters,
+  ): Promise<ClientFunnelDTO> {
+    return this.clientReports.perClientFunnel(user, filters);
   }
 
   /** GET /reports/client-portfolio — placements and pipeline value per client. */
   @Get("client-portfolio")
-  clientPortfolio(@Filters() filters: ReportFilters): Promise<ClientPortfolioDTO> {
-    return this.clientReports.clientPortfolio(filters);
+  clientPortfolio(
+    @CurrentUser() user: AuthContext,
+    @Filters() filters: ReportFilters,
+  ): Promise<ClientPortfolioDTO> {
+    return this.clientReports.clientPortfolio(user, filters);
   }
 
   /** GET /reports/client-capacity — unfiltered/all-time by design, matching legacy `vw="kpi"`. */
   @Get("client-capacity")
-  clientCapacity(): Promise<ClientCapacityDTO> {
-    return this.clientReports.clientCapacity();
+  clientCapacity(@CurrentUser() user: AuthContext): Promise<ClientCapacityDTO> {
+    return this.clientReports.clientCapacity(user);
   }
 
   /** GET /reports/team-performance — per-recruiter throughput. */
   @Get("team-performance")
-  teamPerformance(@Filters() filters: ReportFilters): Promise<TeamPerformanceDTO> {
-    return this.teamReports.teamPerformance(filters);
+  teamPerformance(
+    @CurrentUser() user: AuthContext,
+    @Filters() filters: ReportFilters,
+  ): Promise<TeamPerformanceDTO> {
+    return this.teamReports.teamPerformance(user, filters);
   }
 
   /** GET /reports/source-roi — yield per sourcing channel. */
   @Get("source-roi")
-  sourceRoi(@Filters() filters: ReportFilters): Promise<SourceRoiDTO> {
-    return this.teamReports.sourceRoi(filters);
+  sourceRoi(
+    @CurrentUser() user: AuthContext,
+    @Filters() filters: ReportFilters,
+  ): Promise<SourceRoiDTO> {
+    return this.teamReports.sourceRoi(user, filters);
   }
 
   /** GET /reports/time-analysis — time-in-stage and cycle time. */
   @Get("time-analysis")
-  timeAnalysis(@Filters() filters: ReportFilters): Promise<TimeAnalysisDTO> {
-    return this.timeReports.timeAnalysis(filters);
+  timeAnalysis(
+    @CurrentUser() user: AuthContext,
+    @Filters() filters: ReportFilters,
+  ): Promise<TimeAnalysisDTO> {
+    return this.timeReports.timeAnalysis(user, filters);
   }
 
   /** GET /reports/compliance — credential/licence expiry exposure. */
   @Get("compliance")
-  compliance(@Filters() filters: ReportFilters): Promise<ComplianceDTO> {
-    return this.timeReports.compliance(filters);
+  compliance(
+    @CurrentUser() user: AuthContext,
+    @Filters() filters: ReportFilters,
+  ): Promise<ComplianceDTO> {
+    return this.timeReports.compliance(user, filters);
   }
 
   /** GET /reports/mass-journey — the Gantt view of candidate journeys. */
@@ -141,7 +165,7 @@ export class ReportsController {
     @Filters() filters: ReportFilters,
     @CurrentUser() user: AuthContext,
   ): Promise<MassJourneyDTO> {
-    return this.massJourney.massJourney(filters, user);
+    return this.massJourney.massJourney(user, filters);
   }
 
   /** GET /reports/trends — rolling W/M/Q anomalies. Team-wide, matching legacy's scope. */
@@ -163,8 +187,8 @@ export class ReportsController {
   @Get("export")
   @Header("Content-Type", "text/csv; charset=utf-8")
   @Header("Content-Disposition", 'attachment; filename="candidates-report.csv"')
-  exportCsv(@Filters() filters: ReportFilters): Promise<string> {
-    return this.exports.candidatesCsv(filters);
+  exportCsv(@CurrentUser() user: AuthContext, @Filters() filters: ReportFilters): Promise<string> {
+    return this.exports.candidatesCsv(user, filters);
   }
 
   /**
@@ -185,18 +209,24 @@ export class ReportsController {
     @CurrentUser() user: AuthContext,
     @Filters() filters: ReportFilters,
   ): Promise<ReportExportDTO> {
-    const row = await this.exportJobs.request(user.user.id, filters);
+    const row = await this.exportJobs.request(user, user.user.id, filters);
     try {
-      await this.queue.enqueue(reportExportJob, { exportId: row.id, filters });
+      // The tenant enters the payload HERE, at the one point in the export's life where a
+      // membership is present. The handler resumes with no session and cannot look it up.
+      await this.queue.enqueue(reportExportJob, {
+        exportId: row.id,
+        tenantId: user.tenantId,
+        filters,
+      });
     } catch (err) {
-      await this.exportJobs.fail(row.id, "INTERNAL");
+      await this.exportJobs.fail(row.id, user.tenantId, "INTERNAL");
       logger.error("reports.export.enqueue_failed", {
         exportId: row.id,
         errorType: err instanceof Error ? err.name : "UnknownError",
       });
       throw err;
     }
-    return this.exportJobs.get(row.id, user.user.id);
+    return this.exportJobs.get(user, row.id, user.user.id);
   }
 
   /**
@@ -209,6 +239,6 @@ export class ReportsController {
    */
   @Get("export/jobs/:id")
   getExport(@CurrentUser() user: AuthContext, @Param("id") id: string): Promise<ReportExportDTO> {
-    return this.exportJobs.get(id, user.user.id);
+    return this.exportJobs.get(user, id, user.user.id);
   }
 }

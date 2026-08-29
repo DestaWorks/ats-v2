@@ -1,3 +1,4 @@
+import type { TenantContext } from "@destaworks/domain/tenant";
 import { systemClock, type Clock } from "@destaworks/domain/clock";
 import {
   ACTION_LICENSE_STATUSES,
@@ -21,8 +22,8 @@ const REQUIRING_ACTION_LIMIT = 200;
 
 export const timeReportsService = {
   /** Time Analysis — time-in-stage + Time-to-Fill (legacy `index.html:8611-8654`). */
-  async timeAnalysis(filters: ReportFilters): Promise<TimeAnalysisDTO> {
-    const cohort = await loadCohort(filters);
+  async timeAnalysis(ctx: TenantContext, filters: ReportFilters): Promise<TimeAnalysisDTO> {
+    const cohort = await loadCohort(ctx, filters);
     const now = new Date();
 
     const timeInStage = ACTIVE_STATUS_CODES.map((status) => {
@@ -49,8 +50,12 @@ export const timeReportsService = {
   },
 
   /** Compliance — license-status breakdown + candidates requiring action (legacy `:8656-8683`). */
-  async compliance(filters: ReportFilters, clock: Clock = systemClock): Promise<ComplianceDTO> {
-    const cohort = await loadCohort(filters);
+  async compliance(
+    ctx: TenantContext,
+    filters: ReportFilters,
+    clock: Clock = systemClock,
+  ): Promise<ComplianceDTO> {
+    const cohort = await loadCohort(ctx, filters);
     const now = clock.now();
 
     const countByLicenseStatus = new Map<string, number>();

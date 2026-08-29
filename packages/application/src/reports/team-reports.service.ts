@@ -1,3 +1,4 @@
+import type { TenantContext } from "@destaworks/domain/tenant";
 import {
   SOURCES,
   isTerminalStatus,
@@ -21,11 +22,11 @@ const SUBMITTED_THRESHOLD = statusOrder("SUBMITTED_TO_CLIENT");
 
 export const teamReportsService = {
   /** Team Performance — per-associate rollup (legacy `index.html:8452-8530`). */
-  async teamPerformance(filters: ReportFilters): Promise<TeamPerformanceDTO> {
+  async teamPerformance(ctx: TenantContext, filters: ReportFilters): Promise<TeamPerformanceDTO> {
     const now = new Date();
     const [cohort, historyMax, users] = await Promise.all([
-      loadCohort(filters),
-      stageHistoryRepository.maxStageOrderAsOf(now),
+      loadCohort(ctx, filters),
+      stageHistoryRepository.maxStageOrderAsOf(ctx, now),
       userRepository.list(),
     ]);
 
@@ -68,11 +69,11 @@ export const teamReportsService = {
   },
 
   /** Source ROI — per-source funnel (legacy `index.html:8532-8571`). */
-  async sourceRoi(filters: ReportFilters): Promise<SourceRoiDTO> {
+  async sourceRoi(ctx: TenantContext, filters: ReportFilters): Promise<SourceRoiDTO> {
     const now = new Date();
     const [cohort, historyMax] = await Promise.all([
-      loadCohort(filters),
-      stageHistoryRepository.maxStageOrderAsOf(now),
+      loadCohort(ctx, filters),
+      stageHistoryRepository.maxStageOrderAsOf(ctx, now),
     ]);
 
     const bySource = new Map<string, typeof cohort.candidates>();

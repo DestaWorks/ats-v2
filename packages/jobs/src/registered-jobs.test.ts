@@ -35,7 +35,7 @@ describe("the job registry", () => {
 
   it("hands the handler the parsed payload", async () => {
     const job = jobByName("reports.export.candidates");
-    await job?.run({ exportId: "exp1", filters: {} }, runContext());
-    expect(h.fulfil).toHaveBeenCalledWith("exp1", {}, expect.any(Date));
+    await job?.run({ exportId: "exp1", tenantId: "t1", filters: {} }, runContext());
+    expect(h.fulfil).toHaveBeenCalledWith("exp1", "t1", {}, expect.any(Date));
   });
 });

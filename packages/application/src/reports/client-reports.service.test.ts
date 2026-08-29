@@ -33,13 +33,23 @@ beforeEach(() => {
   h.countStartedByClient.mockReset();
 });
 
+const ctx = {
+  tenantId: "t1",
+  membershipId: "m1",
+  role: "Owner" as const,
+  user: { id: "u1", email: "u@desta.works", name: "U" },
+};
+
 describe("clientReportsService.clientCapacity", () => {
   it("skips clients with no capacity set", async () => {
     h.listClients.mockResolvedValue([{ id: "c1", name: "Acme", capacity: null }]);
     h.countStartedByClient.mockResolvedValue([]);
-    const dto = await clientReportsService.clientCapacity();
+    const dto = await clientReportsService.clientCapacity(ctx);
     expect(dto.clients).toEqual([]);
-    expect(h.countStartedByClient).toHaveBeenCalledWith([]);
+    expect(h.countStartedByClient).toHaveBeenCalledWith(
+      expect.objectContaining({ tenantId: expect.any(String) }),
+      [],
+    );
   });
 
   it("tones red at >=80%, orange at >=60%, green below — and flags approachingCapacity only at red", async () => {
@@ -54,7 +64,7 @@ describe("clientReportsService.clientCapacity", () => {
       { clientId: "green", _count: { _all: 3 } },
     ]);
 
-    const dto = await clientReportsService.clientCapacity();
+    const dto = await clientReportsService.clientCapacity(ctx);
     const byId = new Map(dto.clients.map((c) => [c.clientId, c]));
 
     expect(byId.get("red")).toMatchObject({ pct: 80, tone: "red", approachingCapacity: true });
@@ -70,7 +80,7 @@ describe("clientReportsService.clientCapacity", () => {
     h.listClients.mockResolvedValue([{ id: "c1", name: "Acme", capacity: 5 }]);
     h.countStartedByClient.mockResolvedValue([]);
 
-    const dto = await clientReportsService.clientCapacity();
+    const dto = await clientReportsService.clientCapacity(ctx);
 
     expect(dto.clients).toMatchObject([{ clientId: "c1", placed: 0, pct: 0 }]);
   });

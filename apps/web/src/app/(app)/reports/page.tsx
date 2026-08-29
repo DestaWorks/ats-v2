@@ -30,8 +30,8 @@ export default async function ReportsPage() {
   // seed-then-refetch-on-interaction pattern used across the app. The other 9 tabs still
   // fetch client-side on first select.
   const [options, initialExecutive] = await Promise.all([
-    reportFilterOptionsService.load(),
-    pipelineReportsService.executiveSummary({}),
+    reportFilterOptionsService.load(user),
+    pipelineReportsService.executiveSummary(user, {}),
   ]);
 
   return (

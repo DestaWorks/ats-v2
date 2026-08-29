@@ -198,7 +198,10 @@ describe("GET/POST /admin/users", () => {
     const actor = await admitted("create");
     const body = { name: "Jane", email: "jane@desta.works", role: "Associate" as const };
     expect(await controller().create(actor, body)).toEqual({ user: USER, generatedPassword: "pw" });
-    expect(h.create).toHaveBeenCalledWith(body, "owner1");
+    expect(h.create).toHaveBeenCalledWith(
+      body,
+      expect.objectContaining({ user: expect.objectContaining({ id: "owner1" }) }),
+    );
   });
 
   it("validates the create body with the contract schema, answering 422 + issues", async () => {
@@ -217,14 +220,21 @@ describe("the account mutations", () => {
     expect(await controller().ban(actor, "u9", { reason: "spam", expiresInDays: 7 })).toEqual({
       user: { ...USER, banned: true },
     });
-    expect(h.ban).toHaveBeenCalledWith("u9", { reason: "spam", expiresInDays: 7 }, "owner1");
+    expect(h.ban).toHaveBeenCalledWith(
+      "u9",
+      { reason: "spam", expiresInDays: 7 },
+      expect.objectContaining({ user: expect.objectContaining({ id: "owner1" }) }),
+    );
   });
 
   it("unbans and returns the same envelope shape", async () => {
     h.unban.mockResolvedValue(USER);
     const actor = await admitted("unban");
     expect(await controller().unban(actor, "u9")).toEqual({ user: USER });
-    expect(h.unban).toHaveBeenCalledWith("u9", "owner1");
+    expect(h.unban).toHaveBeenCalledWith(
+      "u9",
+      expect.objectContaining({ user: expect.objectContaining({ id: "owner1" }) }),
+    );
   });
 
   it("sets a role and returns the same envelope shape", async () => {
@@ -233,21 +243,31 @@ describe("the account mutations", () => {
     expect(await controller().setRole(actor, "u9", { role: "Manager" })).toEqual({
       user: { ...USER, role: "Manager" },
     });
-    expect(h.setRole).toHaveBeenCalledWith("u9", "Manager", "owner1");
+    expect(h.setRole).toHaveBeenCalledWith(
+      "u9",
+      "Manager",
+      expect.objectContaining({ user: expect.objectContaining({ id: "owner1" }) }),
+    );
   });
 
   it("resets a password and returns it once", async () => {
     h.resetPassword.mockResolvedValue({ generatedPassword: "pw" });
     const actor = await admitted("resetPassword");
     expect(await controller().resetPassword(actor, "u9")).toEqual({ generatedPassword: "pw" });
-    expect(h.resetPassword).toHaveBeenCalledWith("u9", "owner1");
+    expect(h.resetPassword).toHaveBeenCalledWith(
+      "u9",
+      expect.objectContaining({ user: expect.objectContaining({ id: "owner1" }) }),
+    );
   });
 
   it("deletes and acknowledges the id that was removed", async () => {
     h.remove.mockResolvedValue(undefined);
     const actor = await admitted("remove");
     expect(await controller().remove(actor, "u9")).toEqual({ ok: true, id: "u9" });
-    expect(h.remove).toHaveBeenCalledWith("u9", "owner1");
+    expect(h.remove).toHaveBeenCalledWith(
+      "u9",
+      expect.objectContaining({ user: expect.objectContaining({ id: "owner1" }) }),
+    );
   });
 
   it("carries an unknown user through as the route's 404 envelope", async () => {

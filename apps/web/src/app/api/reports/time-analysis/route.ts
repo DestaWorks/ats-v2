@@ -11,7 +11,9 @@ export type GetReportsTimeAnalysisResponse = TimeAnalysisDTO;
 
 /** GET /api/reports/time-analysis (legacy `index.html:8611-8654`). */
 export const GET = apiHandler(async (req: Request) => {
-  await requireCapability("viewReports");
+  const viewer = await requireCapability("viewReports");
   const filters = reportFiltersFromParams(new URL(req.url).searchParams);
-  return json<GetReportsTimeAnalysisResponse>(await timeReportsService.timeAnalysis(filters));
+  return json<GetReportsTimeAnalysisResponse>(
+    await timeReportsService.timeAnalysis(viewer, filters),
+  );
 });

@@ -11,9 +11,9 @@ export type GetReportsClientPortfolioResponse = ClientPortfolioDTO;
 
 /** GET /api/reports/client-portfolio (legacy `index.html:8573-8609`). */
 export const GET = apiHandler(async (req: Request) => {
-  await requireCapability("viewReports");
+  const viewer = await requireCapability("viewReports");
   const filters = reportFiltersFromParams(new URL(req.url).searchParams);
   return json<GetReportsClientPortfolioResponse>(
-    await clientReportsService.clientPortfolio(filters),
+    await clientReportsService.clientPortfolio(viewer, filters),
   );
 });

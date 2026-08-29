@@ -1,3 +1,4 @@
+import type { TenantContext } from "@destaworks/domain/tenant";
 import { statusLabel, type CandidateStatus } from "@destaworks/domain/constants";
 import { toCsv, type CsvColumn } from "@destaworks/domain/reports/csv";
 import { getDaysInStage } from "@destaworks/domain/rules/stage-timing";
@@ -36,8 +37,8 @@ const COLUMNS: CsvColumn<{ row: CandidateRow; cohort: ReportCohort; now: Date }>
  * filtered cohort every report derives from, so the export always matches what's on screen.
  */
 export const exportService = {
-  async candidatesCsv(filters: ReportFilters): Promise<string> {
-    const cohort = await loadCohort(filters);
+  async candidatesCsv(ctx: TenantContext, filters: ReportFilters): Promise<string> {
+    const cohort = await loadCohort(ctx, filters);
     const now = new Date();
     return toCsv(
       cohort.candidates.map((row) => ({ row, cohort, now })),

@@ -35,7 +35,9 @@ export const EXAMPLE_DAILY_EXPORT_SCHEDULE: Schedule = dailySchedule({
   at: { hour: 6, minute: 0 },
   timeZone: "Africa/Addis_Ababa",
   job: reportExportJob,
-  payload: { exportId: "example", filters: {} },
+  // A scheduled job has no request to take a tenant from, which is exactly why the payload
+  // carries one. A real registration would name the tenant it runs for.
+  payload: { exportId: "example", tenantId: "example-tenant", filters: {} },
 });
 
 /**

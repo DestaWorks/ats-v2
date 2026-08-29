@@ -11,9 +11,9 @@ export type GetReportsPipelineFunnelResponse = PipelineFunnelDTO;
 
 /** GET /api/reports/pipeline-funnel (legacy `index.html:8427-8450`). */
 export const GET = apiHandler(async (req: Request) => {
-  await requireCapability("viewReports");
+  const viewer = await requireCapability("viewReports");
   const filters = reportFiltersFromParams(new URL(req.url).searchParams);
   return json<GetReportsPipelineFunnelResponse>(
-    await pipelineReportsService.pipelineFunnel(filters),
+    await pipelineReportsService.pipelineFunnel(viewer, filters),
   );
 });

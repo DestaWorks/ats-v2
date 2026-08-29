@@ -16,7 +16,7 @@ const NOW = "2026-03-10T03:00:00.000Z";
 /** A fake `JobContext` — the handler is driven directly, with no driver anywhere in the test. */
 function context(overrides?: Partial<JobContext<ReportExportJobPayload>>) {
   const base: JobContext<ReportExportJobPayload> = {
-    payload: { exportId: "exp1", filters: { clientId: "c1" } },
+    payload: { exportId: "exp1", tenantId: "t1", filters: { clientId: "c1" } },
     attempt: 1,
     signal: new AbortController().signal,
     reportProgress: () => Promise.resolve(),
@@ -34,7 +34,7 @@ beforeEach(() => {
 describe("report export handler", () => {
   it("fulfils the export with the injected clock, never an ambient one", async () => {
     await handler(context());
-    expect(h.fulfil).toHaveBeenCalledWith("exp1", { clientId: "c1" }, new Date(NOW));
+    expect(h.fulfil).toHaveBeenCalledWith("exp1", "t1", { clientId: "c1" }, new Date(NOW));
   });
 
   it("rethrows a non-final failure without marking the export dead", async () => {
@@ -46,13 +46,13 @@ describe("report export handler", () => {
   it("marks the export failed on the final attempt, recording the code and not the message", async () => {
     h.fulfil.mockRejectedValue(new AppError("UPSTREAM_ERROR", "candidate Jane Doe broke it"));
     await expect(handler(context({ attempt: 3 }))).rejects.toThrow(AppError);
-    expect(h.fail).toHaveBeenCalledWith("exp1", "UPSTREAM_ERROR");
+    expect(h.fail).toHaveBeenCalledWith("exp1", "t1", "UPSTREAM_ERROR");
   });
 
   it("records INTERNAL for a failure that is not an AppError", async () => {
     h.fulfil.mockRejectedValue(new Error("boom"));
     await expect(handler(context({ attempt: 3 }))).rejects.toThrow("boom");
-    expect(h.fail).toHaveBeenCalledWith("exp1", "INTERNAL");
+    expect(h.fail).toHaveBeenCalledWith("exp1", "t1", "INTERNAL");
   });
 
   it("does not start the cohort query when the deadline has already passed", async () => {

@@ -21,7 +21,7 @@ export function createReportExportHandler(
   clock: Clock = systemClock,
 ): JobHandler<ReportExportJobPayload> {
   return async (ctx: JobContext<ReportExportJobPayload>): Promise<void> => {
-    const { exportId, filters } = ctx.payload;
+    const { exportId, tenantId, filters } = ctx.payload;
     // The deadline may already have passed while this attempt waited for a worker slot; the
     // cohort query is minutes of work, so it is worth not starting one that cannot be delivered.
     ctx.signal.throwIfAborted();
@@ -29,11 +29,11 @@ export function createReportExportHandler(
     // a client or a recruiter, and the CSV itself is PII — neither ever reaches a log line.
     logger.info("reports.export.started", { exportId, attempt: ctx.attempt });
     try {
-      await reportExportService.fulfil(exportId, filters, clock.now());
+      await reportExportService.fulfil(exportId, tenantId, filters, clock.now());
     } catch (err) {
       if (ctx.attempt >= reportExportJob.maxAttempts) {
         const code = err instanceof AppError ? err.code : "INTERNAL";
-        await reportExportService.fail(exportId, code);
+        await reportExportService.fail(exportId, tenantId, code);
         logger.error("reports.export.dead_lettered", { exportId, errorCode: code });
       }
       throw err;

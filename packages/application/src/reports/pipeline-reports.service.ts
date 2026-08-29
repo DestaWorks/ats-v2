@@ -1,3 +1,4 @@
+import type { TenantContext } from "@destaworks/domain/tenant";
 import {
   ACTIVE_STATUS_CODES,
   statusLabel,
@@ -25,8 +26,8 @@ const TOP_CANDIDATES_LIMIT = 10;
 
 export const pipelineReportsService = {
   /** Executive Summary — the top-level pipeline snapshot (legacy `index.html:8228-8265`). */
-  async executiveSummary(filters: ReportFilters): Promise<ExecutiveSummaryDTO> {
-    const cohort = await loadCohort(filters);
+  async executiveSummary(ctx: TenantContext, filters: ReportFilters): Promise<ExecutiveSummaryDTO> {
+    const cohort = await loadCohort(ctx, filters);
     const now = new Date();
     const total = cohort.candidates.length;
 
@@ -79,11 +80,11 @@ export const pipelineReportsService = {
    * order — the fix for legacy's `STATUSES.indexOf` bug that silently counted rejected candidates
    * as having "reached" every earlier stage, including Placed.
    */
-  async pipelineFunnel(filters: ReportFilters): Promise<PipelineFunnelDTO> {
+  async pipelineFunnel(ctx: TenantContext, filters: ReportFilters): Promise<PipelineFunnelDTO> {
     const now = new Date();
     const [cohort, historyMax] = await Promise.all([
-      loadCohort(filters),
-      stageHistoryRepository.maxStageOrderAsOf(now),
+      loadCohort(ctx, filters),
+      stageHistoryRepository.maxStageOrderAsOf(ctx, now),
     ]);
 
     const reachedCounts = ACTIVE_STATUS_CODES.map((status) => {

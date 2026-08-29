@@ -11,7 +11,9 @@ export type GetReportsClientFunnelResponse = ClientFunnelDTO;
 
 /** GET /api/reports/client-funnel — Per-Client Funnel + WoW (legacy `index.html:8374-8425`). */
 export const GET = apiHandler(async (req: Request) => {
-  await requireCapability("viewReports");
+  const viewer = await requireCapability("viewReports");
   const filters = reportFiltersFromParams(new URL(req.url).searchParams);
-  return json<GetReportsClientFunnelResponse>(await clientReportsService.perClientFunnel(filters));
+  return json<GetReportsClientFunnelResponse>(
+    await clientReportsService.perClientFunnel(viewer, filters),
+  );
 });

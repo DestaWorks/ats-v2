@@ -1,3 +1,4 @@
+import type { TenantContext } from "@destaworks/domain/tenant";
 import {
   ACTIVE_STATUS_CODES,
   ALL_STATUS_CODES,
@@ -33,14 +34,14 @@ export const clientReportsService = {
    * lagged (7d-ago − 14d-ago) delta shown next to a THIRD, current-day count — internally
    * inconsistent. Here: `current` and `weekAgo` are the same two numbers the delta is drawn from.
    */
-  async perClientFunnel(filters: ReportFilters): Promise<ClientFunnelDTO> {
+  async perClientFunnel(ctx: TenantContext, filters: ReportFilters): Promise<ClientFunnelDTO> {
     const now = new Date();
     const weekAgo = new Date(now.getTime() - MS_PER_WEEK);
     const [cohort, historyNow, historyWeekAgo, clients] = await Promise.all([
-      loadCohort(filters),
-      stageHistoryRepository.maxStageOrderAsOf(now),
-      stageHistoryRepository.maxStageOrderAsOf(weekAgo),
-      clientRepository.list(),
+      loadCohort(ctx, filters),
+      stageHistoryRepository.maxStageOrderAsOf(ctx, now),
+      stageHistoryRepository.maxStageOrderAsOf(ctx, weekAgo),
+      clientRepository.list(ctx),
     ]);
 
     const byClient = new Map<string, typeof cohort.candidates>();
@@ -51,7 +52,7 @@ export const clientReportsService = {
       byClient.set(c.clientId, list);
     }
 
-    const openRoleGroups = await openRoleRepository.countOpenByClient([...byClient.keys()]);
+    const openRoleGroups = await openRoleRepository.countOpenByClient(ctx, [...byClient.keys()]);
     const openRolesByClient = new Map(openRoleGroups.map((r) => [r.clientId, r._count._all]));
 
     const clients_ = clients
@@ -86,8 +87,11 @@ export const clientReportsService = {
   },
 
   /** Client Portfolio — per-client snapshot + avg fit score (legacy `index.html:8573-8609`). */
-  async clientPortfolio(filters: ReportFilters): Promise<ClientPortfolioDTO> {
-    const [cohort, clients] = await Promise.all([loadCohort(filters), clientRepository.list()]);
+  async clientPortfolio(ctx: TenantContext, filters: ReportFilters): Promise<ClientPortfolioDTO> {
+    const [cohort, clients] = await Promise.all([
+      loadCohort(ctx, filters),
+      clientRepository.list(ctx),
+    ]);
     const now = new Date();
 
     const byClient = new Map<string, typeof cohort.candidates>();
@@ -146,10 +150,11 @@ export const clientReportsService = {
    * and doesn't load a cohort at all. No hardcoded per-client capacity map like legacy's three
    * separate ones; reads the real `Client.capacity` column.
    */
-  async clientCapacity(): Promise<ClientCapacityDTO> {
-    const clients = await clientRepository.list();
+  async clientCapacity(ctx: TenantContext): Promise<ClientCapacityDTO> {
+    const clients = await clientRepository.list(ctx);
     const capacityClients = clients.filter((c) => c.capacity !== null && c.capacity > 0);
     const placedGroups = await candidateRepository.countStartedByClient(
+      ctx,
       capacityClients.map((c) => c.id),
     );
     const placedByClient = new Map<string, number>();

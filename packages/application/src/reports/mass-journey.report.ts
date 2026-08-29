@@ -44,9 +44,9 @@ function buildSegments(createdAt: Date, history: StageHistoryRow[], now: Date): 
 
 export const massJourneyReport = {
   /** Mass Journey Gantt (legacy `index.html:8267-8372`, the peak-complexity module). */
-  async massJourney(filters: ReportFilters, ctx: TenantContext): Promise<MassJourneyDTO> {
+  async massJourney(ctx: TenantContext, filters: ReportFilters): Promise<MassJourneyDTO> {
     const now = new Date();
-    const cohort = await loadCohort(filters);
+    const cohort = await loadCohort(ctx, filters);
     const history = await stageHistoryRepository.listByCandidateIds(
       ctx,
       cohort.candidates.map((c) => c.id),

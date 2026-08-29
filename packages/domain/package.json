@@ -16,6 +16,7 @@
     "./reports/*": "./src/reports/*.ts",
     "./rules": "./src/rules/index.ts",
     "./rules/*": "./src/rules/*.ts",
+    "./system-context": "./src/system-context.ts",
     "./tenant": "./src/tenant.ts",
     "./utils/*": "./src/utils/*.ts"
   },

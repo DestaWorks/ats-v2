@@ -12,6 +12,6 @@ export type GetReportsClientCapacityResponse = ClientCapacityDTO;
  * Reports 2026-08-03). Unfiltered/all-time, matching legacy's own scope for this widget.
  */
 export const GET = apiHandler(async () => {
-  await requireCapability("viewReports");
-  return json<GetReportsClientCapacityResponse>(await clientReportsService.clientCapacity());
+  const viewer = await requireCapability("viewReports");
+  return json<GetReportsClientCapacityResponse>(await clientReportsService.clientCapacity(viewer));
 });

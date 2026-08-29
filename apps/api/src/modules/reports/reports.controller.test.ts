@@ -126,9 +126,7 @@ const REPORTS = [
   { path: "trends", call: h.trends, filtered: false, tenanted: true },
 ] as const;
 
-describe.each(REPORTS)("GET /reports/$path", ({ path, call, filtered, ...report }) => {
-  /** The reports whose service has been threaded a `TenantContext` (SAAS-RESTRUCTURE-PLAN 6.4). */
-  const tenanted = "tenanted" in report;
+describe.each(REPORTS)("GET /reports/$path", ({ path, call, filtered }) => {
   it("401 when signed out, and never reaches the service", async () => {
     const res = await api.fetch(`/reports/${path}`);
     expect(res.status).toBe(401);
@@ -156,12 +154,11 @@ describe.each(REPORTS)("GET /reports/$path", ({ path, call, filtered, ...report 
     h.session = OWNER;
     call.mockResolvedValue({});
     await api.fetch(`/reports/${path}?clientId=c1&source=LinkedIn&addedFrom=2026-01-02`);
+    // The resolved context comes FIRST now — every report scopes before it filters.
     expect(call).toHaveBeenCalledWith(
+      expect.objectContaining({ user: expect.objectContaining({ id: "u1" }) }),
       ...(filtered
         ? [{ clientId: "c1", source: "LinkedIn", addedFrom: new Date("2026-01-02") }]
-        : []),
-      ...(tenanted
-        ? [expect.objectContaining({ user: expect.objectContaining({ id: "u1" }) })]
         : []),
     );
   });
@@ -182,7 +179,10 @@ describe("GET /reports/* filter validation", () => {
     h.session = OWNER;
     h.executiveSummary.mockResolvedValue({});
     await api.fetch("/reports/executive?clientId=c1&sneaky=1");
-    expect(h.executiveSummary).toHaveBeenCalledWith({ clientId: "c1" });
+    expect(h.executiveSummary).toHaveBeenCalledWith(
+      expect.objectContaining({ tenantId: expect.any(String) }),
+      { clientId: "c1" },
+    );
   });
 });
 
@@ -210,7 +210,10 @@ describe("GET /reports/export", () => {
       'attachment; filename="candidates-report.csv"',
     );
     expect(await res.text()).toBe("name,email\nJane,jane@example.com\n");
-    expect(h.candidatesCsv).toHaveBeenCalledWith({ clientId: "c1" });
+    expect(h.candidatesCsv).toHaveBeenCalledWith(
+      expect.objectContaining({ tenantId: expect.any(String) }),
+      { clientId: "c1" },
+    );
   });
 
   it("still renders the JSON error envelope on failure, not a CSV file", async () => {
@@ -247,10 +250,16 @@ describe("POST /reports/export/jobs", () => {
     const res = await api.fetch("/reports/export/jobs?clientId=c1", { method: "POST" });
     expect(res.status).toBe(201);
     expect(await res.json()).toEqual({ id: "exp1", status: "pending" });
-    expect(h.requestExport).toHaveBeenCalledWith("u1", { clientId: "c1" });
+    expect(h.requestExport).toHaveBeenCalledWith(
+      expect.objectContaining({ user: expect.objectContaining({ id: "u1" }) }),
+      "u1",
+      { clientId: "c1" },
+    );
     expect(h.enqueue).toHaveBeenCalledWith(
       expect.objectContaining({ name: "reports.export.candidates" }),
-      { exportId: "exp1", filters: { clientId: "c1" } },
+      // The tenant rides in the payload: the handler resumes with no session and cannot
+      // look one up without a scoped query, which would need the tenant it is looking for.
+      { exportId: "exp1", tenantId: "t1", filters: { clientId: "c1" } },
     );
   });
 
@@ -260,7 +269,7 @@ describe("POST /reports/export/jobs", () => {
     h.enqueue.mockRejectedValue(new Error("queue down"));
     const res = await api.fetch("/reports/export/jobs", { method: "POST" });
     expect(res.status).toBe(500);
-    expect(h.failExport).toHaveBeenCalledWith("exp2", "INTERNAL");
+    expect(h.failExport).toHaveBeenCalledWith("exp2", "t1", "INTERNAL");
     expect(h.getExport).not.toHaveBeenCalled();
   });
 });
@@ -278,6 +287,10 @@ describe("GET /reports/export/jobs/:id", () => {
     const res = await api.fetch("/reports/export/jobs/exp1");
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ id: "exp1", status: "ready", downloadUrl: "https://s/x" });
-    expect(h.getExport).toHaveBeenCalledWith("exp1", "u1");
+    expect(h.getExport).toHaveBeenCalledWith(
+      expect.objectContaining({ user: expect.objectContaining({ id: "u1" }) }),
+      "exp1",
+      "u1",
+    );
   });
 });

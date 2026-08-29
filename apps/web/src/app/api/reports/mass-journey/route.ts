@@ -13,5 +13,5 @@ export type GetReportsMassJourneyResponse = MassJourneyDTO;
 export const GET = apiHandler(async (req: Request) => {
   const user = await requireCapability("viewReports");
   const filters = reportFiltersFromParams(new URL(req.url).searchParams);
-  return json<GetReportsMassJourneyResponse>(await massJourneyReport.massJourney(filters, user));
+  return json<GetReportsMassJourneyResponse>(await massJourneyReport.massJourney(user, filters));
 });

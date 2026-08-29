@@ -11,7 +11,7 @@ export type GetReportsSourceRoiResponse = SourceRoiDTO;
 
 /** GET /api/reports/source-roi (legacy `index.html:8532-8571`). */
 export const GET = apiHandler(async (req: Request) => {
-  await requireCapability("viewReports");
+  const viewer = await requireCapability("viewReports");
   const filters = reportFiltersFromParams(new URL(req.url).searchParams);
-  return json<GetReportsSourceRoiResponse>(await teamReportsService.sourceRoi(filters));
+  return json<GetReportsSourceRoiResponse>(await teamReportsService.sourceRoi(viewer, filters));
 });

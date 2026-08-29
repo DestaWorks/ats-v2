@@ -1,3 +1,4 @@
+import type { TenantContext } from "@destaworks/domain/tenant";
 import {
   reportFiltersSchema,
   type ReportExportDTO,
@@ -22,6 +23,7 @@ import {
   uploadPrivate,
 } from "@destaworks/integrations/storage";
 import { exportService } from "./export.service";
+import { systemContextFor } from "@destaworks/domain/system-context";
 
 /**
  * Asynchronous CSV export (Phase 5) — the half of the flow that does NOT belong to the queue.
@@ -92,6 +94,7 @@ export const reportExportService = {
    * enqueuing work that can only ever dead-letter.
    */
   async request(
+    ctx: TenantContext,
     requestedById: string,
     filters: ReportFilters,
     tx?: ScopedTx,
@@ -102,7 +105,7 @@ export const reportExportService = {
     // Dates are not JSON, and the payload has to survive a round trip through the queue and the
     // `filters` column identically. ISO strings re-parse through `reportFiltersSchema`'s coercion.
     const serialized: Prisma.InputJsonValue = JSON.parse(JSON.stringify(filters));
-    return reportExportRepository.create(requestedById, serialized, tx);
+    return reportExportRepository.create(ctx, requestedById, serialized, tx);
   },
 
   /**
@@ -112,8 +115,8 @@ export const reportExportService = {
    * read someone else's export. A mismatch answers NOT_FOUND rather than FORBIDDEN so the
    * endpoint cannot be used to probe which export ids exist.
    */
-  async get(id: string, viewerId: string): Promise<ReportExportDTO> {
-    const row = await reportExportRepository.findById(id);
+  async get(ctx: TenantContext, id: string, viewerId: string): Promise<ReportExportDTO> {
+    const row = await reportExportRepository.findById(ctx, id);
     if (!row || row.requestedById !== viewerId) {
       throw new AppError("NOT_FOUND", "Export not found");
     }
@@ -134,20 +137,27 @@ export const reportExportService = {
    * Reuses `exportService.candidatesCsv` verbatim — the synchronous route and the job must
    * produce the same bytes from the same filters, or the migration off the route is a rewrite.
    */
-  async fulfil(exportId: string, rawFilters: unknown, now: Date): Promise<void> {
+  /**
+   * `tenantId` rather than a `TenantContext`: a job resumes with no session, and this reads only
+   * published columns — the CSV carries no capability-gated field — so a scoping context is all it
+   * needs, and `systemContextFor` says so explicitly.
+   */
+  async fulfil(exportId: string, tenantId: string, rawFilters: unknown, now: Date): Promise<void> {
+    const ctx = systemContextFor(tenantId);
     const filters = reportFiltersSchema.parse(rawFilters);
-    const csv = await exportService.candidatesCsv(filters);
+    const csv = await exportService.candidatesCsv(ctx, filters);
     const bytes = Buffer.from(csv, "utf8");
     const key = storageKeyFor(exportId);
     await uploadPrivate(EXPORT_BUCKET, key, bytes, "text/csv; charset=utf-8");
-    await reportExportRepository.markReady(exportId, key, bytes.byteLength, now);
+    await reportExportRepository.markReady(ctx, exportId, key, bytes.byteLength, now);
     // Size and identifiers only. The CSV itself is candidate PII and never reaches a log line.
     logger.info("reports.export.stored", { exportId, byteSize: bytes.byteLength });
   },
 
   /** Mark an export dead after its last attempt, so the poller stops waiting for a file that is
    *  never coming. Records the `AppError` code only — a message can quote the data that broke. */
-  async fail(exportId: string, errorCode: string): Promise<void> {
-    await reportExportRepository.markFailed(exportId, errorCode);
+  /** Job-facing like `fulfil`: takes the payload's tenant, not a context it cannot have. */
+  async fail(exportId: string, tenantId: string, errorCode: string): Promise<void> {
+    await reportExportRepository.markFailed(systemContextFor(tenantId), exportId, errorCode);
   },
 };
