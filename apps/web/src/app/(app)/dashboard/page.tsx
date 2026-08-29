@@ -2,8 +2,9 @@ import Link from "next/link";
 import { BoltIcon, FlagIcon, UserGroupIcon } from "@heroicons/react/24/outline";
 import { getVerifiedUser } from "@destaworks/auth/guards";
 import { viewerTzOffset } from "@destaworks/integrations/http/viewer-tz";
-import { candidateService } from "@destaworks/application/candidate.service";
-import { dailyService } from "@destaworks/application/daily.service";
+import type { DashboardStatsDTO } from "@destaworks/contracts/validation/pipeline";
+import type { DailyOverviewDTO } from "@destaworks/contracts/validation/daily";
+import { apiGet, query } from "@/lib/api/server";
 import { dateKeyForOffset } from "@destaworks/domain/daily";
 import type { CandidateCardDTO } from "@destaworks/contracts/validation/pipeline";
 import { EmptyState } from "@destaworks/ui/empty-state";
@@ -16,7 +17,7 @@ import { SinceYouClosed } from "./since-you-closed";
 import { PipelineDistributionChart } from "./pipeline-distribution-chart-lazy";
 
 /**
- * Overview (RSC, legacy-parity). Reads a lightweight summary (`candidateService.dashboardStats`)
+ * Overview (RSC, legacy-parity). Reads a lightweight summary (`GET /candidates/dashboard-stats`)
  * that gets its per-stage counts from a Prisma `groupBy` and its "needs attention" list from a
  * small targeted query — it never loads the whole candidate table. Renders the legacy greeting
  * header, the single STACKED Pipeline-Distribution bar (proportional segment per non-empty
@@ -31,9 +32,11 @@ export default async function DashboardPage() {
   const initialTz = await viewerTzOffset();
 
   const [stats, initialDailyOverview] = await Promise.all([
-    candidateService.dashboardStats(user),
+    apiGet<DashboardStatsDTO>("/candidates/dashboard-stats"),
     initialTz !== undefined
-      ? dailyService.overview(user, dateKeyForOffset(initialTz), initialTz)
+      ? apiGet<DailyOverviewDTO>(
+          `/daily/overview${query({ date: dateKeyForOffset(initialTz), tz: initialTz })}`,
+        )
       : Promise.resolve(undefined),
   ]);
   const attention: CandidateCardDTO[] = stats.attention;

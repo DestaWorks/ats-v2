@@ -7,7 +7,11 @@ import {
 } from "@destaworks/domain/constants";
 import { EmptyState } from "@destaworks/ui/empty-state";
 import { getVerifiedUser } from "@destaworks/auth/guards";
-import { auditService, type AuditListInput } from "@destaworks/application/audit.service";
+import type {
+  ActivityListDTO,
+  ActivityActorOptionsDTO,
+} from "@destaworks/contracts/validation/activity";
+import { apiGet, query } from "@/lib/api/server";
 import { ActivityFilters } from "./activity-filters";
 import { ActivityLog } from "./activity-log";
 
@@ -15,7 +19,7 @@ import { ActivityLog } from "./activity-log";
  * Activity Log (RSC, Wave 2.5) — the whole-log, filterable, admin-only audit surface (AL-6). Guards
  * with `getCurrentUser()` + `hasCapability(..,"viewAudit")`: a non-holder gets a clear in-app "no
  * access" state and the log is never rendered (the service ALSO self-gates — server authoritative).
- * A holder gets page 1 SSR-rendered (`auditService.listActivity` — no viewer arg, session-authoritative)
+ * A holder gets page 1 SSR-rendered (`GET /activity`)
  * plus the actor filter options, with the URL `searchParams` seeding the filters so a shared link
  * lands pre-filtered. The client `<ActivityLog>` accumulates further keyset pages (Load more) and owns
  * the per-row changes expander; it is remounted whenever a server filter changes (keyed on the filter
@@ -55,17 +59,18 @@ export default async function ActivityPage({
   const from = parseDay(one(sp.from));
   const to = parseDay(one(sp.to));
 
-  const filters: AuditListInput = {
-    ...(action ? { action } : {}),
-    ...(entity ? { entity } : {}),
-    ...(actor ? { actor } : {}),
-    ...(from ? { from } : {}),
-    ...(to ? { to } : {}),
+  // `from`/`to` are `z.coerce.date()` on the wire, so they travel as ISO strings.
+  const filters = {
+    action,
+    entity,
+    actor,
+    from: from?.toISOString(),
+    to: to?.toISOString(),
   };
 
-  const [list, actorOptions] = await Promise.all([
-    auditService.listActivity(filters, null),
-    auditService.listActorOptions(),
+  const [list, { actors: actorOptions }] = await Promise.all([
+    apiGet<ActivityListDTO>(`/activity${query(filters)}`),
+    apiGet<ActivityActorOptionsDTO>("/activity/actor-options"),
   ]);
 
   // Remount the client log whenever a server filter changes so it re-seeds from page 1.

@@ -1,24 +1,28 @@
 import { discoverSearchQuerySchema } from "@destaworks/contracts/validation/discover";
 import { getVerifiedUser } from "@destaworks/auth/guards";
-import { discoverService } from "@destaworks/application/discover.service";
+import type {
+  GetDiscoverSearchResponse,
+  GetDiscoverCoverageGapsResponse,
+} from "@destaworks/contracts/http/discover";
+import type { LookupOptionsDTO } from "@destaworks/contracts/validation/lookups";
+import { apiGet, query } from "@/lib/api/server";
 import { DiscoverSearchForm } from "./discover-search-form";
 import { DiscoverResultsTable } from "./discover-results-table";
 import { CoverageGaps } from "./coverage-gaps";
-import { cachedClientList } from "@destaworks/integrations/http/request-cache";
 
 /**
  * Discover (RSC, Wave 2.7) — the "find" step of the funnel: search NPPES, dedupe against existing
  * leads/candidates, add new providers straight to Sourcing. Guards with `getCurrentUser()` (open to
  * every operator, matches Sourcing/Pipeline). The search itself is an explicit-submit RSC read off
- * `searchParams` (no client-side fetch) — `discoverService.search()` calls NPPES + the dedupe
- * lookups directly, server-side, same as `sourcing/page.tsx` calls `leadService.list()`.
+ * `searchParams` (no client-side fetch) — `GET /discover/search` calls NPPES + the dedupe
+ * lookups server-side.
  */
 export default async function DiscoverPage({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const user = await getVerifiedUser();
+  await getVerifiedUser();
 
   const sp = await searchParams;
   const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
@@ -31,12 +35,15 @@ export default async function DiscoverPage({
     lastName: one(sp.lastName) || undefined,
   });
 
-  const [result, clientRows, coverageGaps] = await Promise.all([
-    parsed.success ? discoverService.search(parsed.data, user) : Promise.resolve(null),
-    cachedClientList(user),
-    discoverService.coverageGaps(user),
+  const [result, { clients }, coverageGaps] = await Promise.all([
+    // The schema refines that at least one identifying field is present, so an unparsed query is
+    // skipped here rather than sent to be refused with a 422.
+    parsed.success
+      ? apiGet<GetDiscoverSearchResponse>(`/discover/search${query({ ...parsed.data })}`)
+      : Promise.resolve(null),
+    apiGet<LookupOptionsDTO>("/lookups"),
+    apiGet<GetDiscoverCoverageGapsResponse>("/discover/coverage-gaps"),
   ]);
-  const clients = clientRows.map((c) => ({ id: c.id, name: c.name }));
 
   return (
     <div className="flex flex-col gap-5 px-8 py-6">

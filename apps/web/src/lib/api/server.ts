@@ -89,6 +89,41 @@ export async function apiGet<T>(path: string): Promise<T> {
   return (await res.json()) as T;
 }
 
+/**
+ * One POST against `apps/api`, same session forwarding and same failure mapping as `apiGet`.
+ *
+ * For a Server Component or Server Action that must write before it can render — the client
+ * portal's view log is the case that needed it. A browser-initiated mutation belongs on
+ * `./client.ts` instead, which returns a result the component renders rather than throwing.
+ */
+export async function apiPost<T>(path: string, body: unknown): Promise<T> {
+  const url = apiUrl(path, process.env[API_BASE_URL_ENV]);
+  if (url === null) {
+    throw new AppError("INTERNAL", `The API address is not configured (${API_BASE_URL_ENV}).`);
+  }
+
+  const cookie = (await requestContext().headers()).get("cookie");
+
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      cache: "no-store",
+      headers: {
+        accept: "application/json",
+        "content-type": "application/json",
+        ...(cookie !== null && { cookie }),
+      },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw new AppError("UPSTREAM_ERROR", "Couldn't reach the API.", 502);
+  }
+
+  if (!res.ok) return await throwFromResponse(res);
+  return (await res.json()) as T;
+}
+
 /** Build a query string from defined values only, so an absent filter is absent from the URL. */
 export function query(
   params: Record<string, string | number | boolean | undefined | null>,

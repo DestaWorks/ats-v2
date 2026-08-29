@@ -1,9 +1,11 @@
 import "server-only";
 import { notFound } from "next/navigation";
 import { getVerifiedUser } from "@destaworks/auth/guards";
-import { openRoleService } from "@destaworks/application/open-role.service";
+import type { GetRoleResponse } from "@destaworks/contracts/validation/open-role";
+import type { GetRoleMatchesAndDormantResponse } from "@destaworks/contracts/validation/open-role";
+import type { LookupOptionsDTO } from "@destaworks/contracts/validation/lookups";
+import { apiGet } from "@/lib/api/server";
 import { AppError } from "@destaworks/integrations/http/app-error";
-import { cachedClientList } from "@destaworks/integrations/http/request-cache";
 
 /** Shared RSC loader for `/roles/[id]` — one place owns the guard → composite-read → NOT_FOUND mapping. */
 export async function loadRoleDetail(id: string) {
@@ -11,17 +13,18 @@ export async function loadRoleDetail(id: string) {
 
   let role;
   try {
-    role = await openRoleService.detail(id, user);
+    ({ role } = await apiGet<GetRoleResponse>(`/roles/${encodeURIComponent(id)}`));
   } catch (err) {
     if (err instanceof AppError && err.code === "NOT_FOUND") notFound();
     throw err;
   }
 
-  const [{ matches, dormantMatches }, clientRows] = await Promise.all([
-    openRoleService.matchesAndDormant(id, user),
-    cachedClientList(user),
+  const [{ matches, dormantMatches }, { clients }] = await Promise.all([
+    apiGet<GetRoleMatchesAndDormantResponse>(
+      `/roles/${encodeURIComponent(id)}/matches-and-dormant`,
+    ),
+    apiGet<LookupOptionsDTO>("/lookups"),
   ]);
-  const clients = clientRows.map((c) => ({ id: c.id, name: c.name }));
 
   return { role, matches, dormantMatches, clients, user };
 }
