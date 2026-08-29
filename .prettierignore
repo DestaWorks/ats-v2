@@ -3,6 +3,10 @@
 node_modules/
 pnpm-lock.yaml
 
+# Agent worktrees are full checkouts living inside the repo — gitignored, but prettier
+# still walks them, so `--check .` reports another copy of every generated file.
+.claude/
+
 # Legacy app (do not reformat — being strangled, not maintained)
 index.html
 
