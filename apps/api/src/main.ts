@@ -12,6 +12,22 @@ import { AppModule } from "./app.module";
 /** Not 3003 — that port belongs to `pnpm dev`, and the two run side by side during the cutover. */
 const DEFAULT_PORT = 3004;
 
+/**
+ * The browser origins allowed to call this API with credentials.
+ *
+ * An allowlist, never `origin: true` and never `*`: the session travels in a cookie, so
+ * `credentials: true` with a reflected origin lets any site a signed-in user visits read this
+ * API as them. `*` is not even legal with credentials, and reflecting is the same hole with
+ * extra steps. Unset means no cross-origin caller is allowed at all — the server-rendered read
+ * path is server-to-server and needs none of this.
+ */
+function allowedOrigins(): string[] {
+  return (process.env["WEB_ORIGINS"] ?? "")
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+}
+
 function resolvePort(): number {
   const configured = process.env["API_PORT"] ?? process.env["PORT"];
   const parsed = Number.parseInt(configured ?? "", 10);
@@ -41,10 +57,14 @@ async function bootstrap(): Promise<void> {
   const queue = installJobRuntime();
   installNestRequestContext();
   const app = await NestFactory.create(AppModule);
+  const origins = allowedOrigins();
+  if (origins.length > 0) {
+    app.enableCors({ origin: origins, credentials: true });
+  }
   app.use(requestContextMiddleware);
   const port = resolvePort();
   await app.listen(port);
-  logger.info("api.listening", { port });
+  logger.info("api.listening", { port, corsOrigins: origins.length });
 
   installShutdownHandlers(app, queue);
 }
