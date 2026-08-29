@@ -2,12 +2,9 @@ import "reflect-metadata";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
 /**
- * Phase 4.3 contract test for `/saved-views`: for each route, the NestJS controller and the
- * Next.js handler it replaces are driven with the same input against the same mocked service, and
- * their `{ status, body }` compared — success, refusal, and service failure alike.
- *
- * Both transports import the SAME `savedViewService` module, so a mock here reaches both; anything
- * the two do differently is transport, which is exactly what is under test.
+ * Contract test for `/saved-views`: each handler on `SavedViewsController` is driven through its
+ * own declared guards, the handler, and the exception filter — success, refusal, and service
+ * failure alike — and the resulting `{ status, body }` asserted against the wire contract.
  */
 
 const h = vi.hoisted(() => ({
@@ -41,15 +38,8 @@ import {
   type SavedViewDTO,
 } from "@destaworks/contracts/validation/saved-view";
 import { ZodValidationPipe } from "../../common/pipes/zod-validation.pipe";
-import {
-  guardOutcome,
-  handlerOutcome,
-  routeOutcome,
-  routeSurface,
-} from "../../common/testing/route-parity";
+import { guardOutcome, handlerOutcome, routeSurface } from "../../common/testing/route-parity";
 import { SavedViewsController } from "./saved-views.controller";
-import { GET, POST } from "../../../../web/src/app/api/saved-views/route";
-import { DELETE } from "../../../../web/src/app/api/saved-views/[id]/route";
 
 const controller = new SavedViewsController(savedViewService);
 
@@ -61,7 +51,7 @@ const VIEW: SavedViewDTO = {
   createdAt: "2026-08-01T00:00:00.000Z",
 };
 
-const LIST_URL = "http://localhost/api/saved-views?scope=pipeline";
+const SIGN_IN_REQUIRED = { error: { code: "UNAUTHORIZED", message: "Sign in required" } };
 
 function signIn(role = "Screener"): void {
   h.session = { user: { id: "u1", email: "u@desta.works", name: "U", role } };
@@ -84,7 +74,7 @@ beforeEach(() => {
 });
 
 describe("GET /saved-views", () => {
-  it("is registered at the verb, path, status and gate the Next route serves", () => {
+  it("is registered at the verb, path, status and gate the endpoint declares", () => {
     expect(routeSurface(SavedViewsController, "list")).toEqual({
       method: "GET",
       path: "/saved-views",
@@ -94,50 +84,48 @@ describe("GET /saved-views", () => {
     });
   });
 
-  it("answers the same body as the Next route", async () => {
+  it("answers the caller's views for the requested scope", async () => {
     signIn();
-    h.list.mockResolvedValue([VIEW]);
-    const fromRoute = await routeOutcome(await GET(new Request(LIST_URL), undefined));
-
     h.list.mockResolvedValue([VIEW]);
     const user = await authorize("list");
     const fromController = await handlerOutcome(SavedViewsController, "list", () =>
       controller.list({ scope: "pipeline" }, user),
     );
 
-    expect(fromController).toEqual(fromRoute);
+    expect(fromController.status).toBe(200);
     expect(fromController.body).toEqual({ savedViews: [VIEW] });
   });
 
-  it("refuses an unauthenticated caller with the same envelope", async () => {
-    const fromRoute = await routeOutcome(await GET(new Request(LIST_URL), undefined));
+  it("refuses an unauthenticated caller", async () => {
     const fromController = await guardOutcome(SavedViewsController, "list", { headers: {} });
 
-    expect(fromController).toEqual(fromRoute);
-    expect(fromRoute.status).toBe(401);
+    expect(fromController?.status).toBe(401);
+    expect(fromController?.body).toEqual(SIGN_IN_REQUIRED);
     expect(h.list).not.toHaveBeenCalled();
   });
 
-  it("rejects a missing scope with the same 422 envelope", async () => {
+  it("rejects a missing scope with a 422 envelope", async () => {
     signIn();
-    const fromRoute = await routeOutcome(
-      await GET(new Request("http://localhost/api/saved-views"), undefined),
-    );
-
     const user = await authorize("list");
     const pipe = new ZodValidationPipe(savedViewListQuerySchema);
     const fromController = await handlerOutcome(SavedViewsController, "list", () =>
       controller.list(pipe.transform({}), user),
     );
 
-    expect(fromController).toEqual(fromRoute);
-    expect(fromRoute.status).toBe(422);
+    expect(fromController.status).toBe(422);
+    expect(fromController.body).toEqual({
+      error: {
+        code: "BAD_REQUEST",
+        message: "Validation failed",
+        issues: [{ path: "scope", message: expect.any(String) as unknown as string }],
+      },
+    });
     expect(h.list).not.toHaveBeenCalled();
   });
 });
 
 describe("POST /saved-views", () => {
-  it("is registered at the verb, path, status and gate the Next route serves", () => {
+  it("is registered at the verb, path, status and gate the endpoint declares", () => {
     expect(routeSurface(SavedViewsController, "create")).toEqual({
       method: "POST",
       path: "/saved-views",
@@ -147,31 +135,20 @@ describe("POST /saved-views", () => {
     });
   });
 
-  it("answers the same 201 body as the Next route", async () => {
+  it("answers 201 with the created view", async () => {
     signIn();
     const input = { scope: "pipeline", name: "My hot list", query: "status=3" } as const;
-    h.create.mockResolvedValue(VIEW);
-    const fromRoute = await routeOutcome(
-      await POST(
-        new Request("http://localhost/api/saved-views", {
-          method: "POST",
-          body: JSON.stringify(input),
-        }),
-        undefined,
-      ),
-    );
-
     h.create.mockResolvedValue(VIEW);
     const user = await authorize("create");
     const fromController = await handlerOutcome(SavedViewsController, "create", () =>
       controller.create(input, user),
     );
 
-    expect(fromController).toEqual(fromRoute);
     expect(fromController.status).toBe(201);
+    expect(fromController.body).toEqual({ savedView: VIEW });
   });
 
-  it("maps a duplicate-name conflict to the same envelope", async () => {
+  it("maps a duplicate-name conflict to a 409 envelope", async () => {
     signIn();
     const input = { scope: "pipeline", name: "My hot list", query: "status=3" } as const;
     const conflict = (): never => {
@@ -179,28 +156,20 @@ describe("POST /saved-views", () => {
     };
 
     h.create.mockImplementation(conflict);
-    const fromRoute = await routeOutcome(
-      await POST(
-        new Request("http://localhost/api/saved-views", {
-          method: "POST",
-          body: JSON.stringify(input),
-        }),
-        undefined,
-      ),
-    );
-
     const user = await authorize("create");
     const fromController = await handlerOutcome(SavedViewsController, "create", () =>
       controller.create(input, user),
     );
 
-    expect(fromController).toEqual(fromRoute);
-    expect(fromRoute.status).toBe(409);
+    expect(fromController.status).toBe(409);
+    expect(fromController.body).toEqual({
+      error: { code: "CONFLICT", message: "A view by that name already exists" },
+    });
   });
 });
 
 describe("DELETE /saved-views/:id", () => {
-  it("is registered at the verb, path, status and gate the Next route serves", () => {
+  it("is registered at the verb, path, status and gate the endpoint declares", () => {
     expect(routeSurface(SavedViewsController, "remove")).toEqual({
       method: "DELETE",
       path: "/saved-views/:id",
@@ -210,44 +179,33 @@ describe("DELETE /saved-views/:id", () => {
     });
   });
 
-  it("answers the same body as the Next route", async () => {
+  it("answers the deleted view's id", async () => {
     signIn();
-    h.remove.mockResolvedValue({ id: "sv1" });
-    const fromRoute = await routeOutcome(
-      await DELETE(new Request("http://localhost/api/saved-views/sv1", { method: "DELETE" }), {
-        params: Promise.resolve({ id: "sv1" }),
-      }),
-    );
-
     h.remove.mockResolvedValue({ id: "sv1" });
     const user = await authorize("remove");
     const fromController = await handlerOutcome(SavedViewsController, "remove", () =>
       controller.remove("sv1", user),
     );
 
-    expect(fromController).toEqual(fromRoute);
+    expect(fromController.status).toBe(200);
     expect(fromController.body).toEqual({ id: "sv1" });
   });
 
-  it("maps another user's id to the same 404 envelope", async () => {
+  it("maps another user's id to a 404 envelope", async () => {
     signIn();
     const missing = (): never => {
       throw new AppError("NOT_FOUND", "Saved view not found");
     };
 
     h.remove.mockImplementation(missing);
-    const fromRoute = await routeOutcome(
-      await DELETE(new Request("http://localhost/api/saved-views/other", { method: "DELETE" }), {
-        params: Promise.resolve({ id: "other" }),
-      }),
-    );
-
     const user = await authorize("remove");
     const fromController = await handlerOutcome(SavedViewsController, "remove", () =>
       controller.remove("other", user),
     );
 
-    expect(fromController).toEqual(fromRoute);
-    expect(fromRoute.status).toBe(404);
+    expect(fromController.status).toBe(404);
+    expect(fromController.body).toEqual({
+      error: { code: "NOT_FOUND", message: "Saved view not found" },
+    });
   });
 });
