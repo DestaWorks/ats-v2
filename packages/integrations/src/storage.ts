@@ -21,6 +21,147 @@ export const RESUME_BUCKET = "resumes";
 /** PRIVATE, like `resumes` — generated report CSVs hold candidate PII and are never public. */
 export const EXPORT_BUCKET = "exports";
 
+/*
+ * ---------------------------------------------------------------------------------------------
+ * KEY SCOPING (SAAS-RESTRUCTURE-PLAN 6.6)
+ * ---------------------------------------------------------------------------------------------
+ *
+ * WHY A KEY NEEDS A SCOPE IN IT
+ *
+ * A bucket is one flat namespace shared by every tenant. Before this, a resume lived at
+ * `<uuid>-<filename>.pdf` and an export at `candidates/<exportId>.csv` — keys derived from an id
+ * and nothing else. Two consequences, both bad:
+ *
+ *  - Whoever knows or guesses a key can name an object belonging to anyone. The signed-URL layer
+ *    is the only thing between a key and the bytes, and it signs whatever key it is handed.
+ *  - Ids are unique per table, not per bucket, and Phase 7's ETL will mint ids from a different
+ *    generator than the app's `cuid()`. A collision writes one tenant's PDF over another's.
+ *
+ * So a key must name its owner. Two owners exist, matching the two scopes in the data model:
+ *
+ *  `t/<tenantId>/…`  tenant-scoped — resumes, exports, anything hanging off a tenant-scoped row.
+ *  `u/<userId>/…`    user-scoped — avatars. `User` is a GLOBAL model (`@destaworks/db`'s
+ *                    `GLOBAL_MODELS`): one human, one login, many tenants, and therefore one
+ *                    avatar that is not any tenant's property. A tenant prefix here would be a
+ *                    lie, and would duplicate the file per membership.
+ *
+ * The one-letter discriminator is what makes the two spaces disjoint, so a tenant id can never
+ * collide with a user id even though both are `cuid()`s from the same alphabet.
+ *
+ * The scheme is enforced by the type system, not by convention: the upload functions take a
+ * `ScopedStorageKey`, which only the constructors below can produce, so a bare string does not
+ * compile.
+ *
+ * MIGRATION PATH FOR OBJECTS THAT ALREADY EXIST — nothing is broken by this change
+ *
+ *  1. Reads are unaffected. `getSignedDownloadUrl` takes the wider `PersistedStorageKey`, which
+ *     `persistedStorageKey()` mints from whatever string a row already holds. Every existing
+ *     `Document.storageKey` and `ReportExport.storageKey` keeps resolving byte-for-byte.
+ *  2. Writes gain the prefix as soon as their call site can name a tenant — see
+ *     `unscopedStorageKey` below for the two that cannot yet, and why.
+ *  3. Backfill, once 6.2 has given every row a tenant (Phase 7 work, not this phase): for each
+ *     row holding an un-prefixed key, S3 `CopyObject` to `t/<tenantId>/<old key>`, UPDATE the row
+ *     to the new key, then `DeleteObject` on the old one. In that order — a crash between any two
+ *     steps leaves the object readable at one of the two keys, never at neither.
+ *  4. When no row holds an un-prefixed key, `persistedStorageKey` gets a `startsWith` check and
+ *     the legacy shape stops being representable at all.
+ *
+ * Avatars are the one case with no backfill step. Their public URL is persisted on `User.image`
+ * and keeps pointing at the object it always did; the next upload writes `u/<id>/avatar.jpg` and
+ * updates the column. Old objects are orphaned, not broken, and a sweep of `avatars` for keys
+ * without a `u/` prefix can delete them whenever convenient.
+ */
+
+declare const SCOPED_KEY: unique symbol;
+declare const PERSISTED_KEY: unique symbol;
+
+/**
+ * A key that already exists in a bucket, whatever shape it has.
+ *
+ * The read path accepts this: keys written before scoping existed are still perfectly good keys,
+ * and refusing them would break every resume uploaded to date.
+ */
+export type PersistedStorageKey = string & { readonly [PERSISTED_KEY]: true };
+
+/**
+ * A key that names its owner. Only the constructors below produce one, and only these may be
+ * WRITTEN — which is what stops the un-scoped shape from spreading to new objects.
+ */
+export type ScopedStorageKey = PersistedStorageKey & { readonly [SCOPED_KEY]: true };
+
+/** Rejects the ways a path segment can escape its prefix or collapse it. */
+function assertSegment(segment: string): void {
+  if (segment.length === 0 || segment === "." || segment === "..") {
+    throw new AppError("BAD_REQUEST", "Invalid storage key segment");
+  }
+  if (segment.includes("/") || segment.includes("\\") || segment.includes("\0")) {
+    throw new AppError("BAD_REQUEST", "Invalid storage key segment");
+  }
+}
+
+function buildKey(prefix: string, owner: string, segments: readonly string[]): ScopedStorageKey {
+  assertSegment(owner);
+  if (segments.length === 0) throw new AppError("BAD_REQUEST", "Storage key needs a name");
+  for (const segment of segments) assertSegment(segment);
+  // The brand is a compile-time marker with no runtime representation, so constructing a branded
+  // value is necessarily an assertion. It is sound here because this function IS the rule the
+  // brand stands for: every segment has been validated above.
+  return `${prefix}/${owner}/${segments.join("/")}` as ScopedStorageKey;
+}
+
+/** A key owned by one tenant: `t/<tenantId>/<…>`. The shape every tenant-scoped object uses. */
+export function tenantStorageKey(tenantId: string, ...segments: string[]): ScopedStorageKey {
+  return buildKey("t", tenantId, segments);
+}
+
+/** A key owned by one user: `u/<userId>/<…>`. For objects hanging off a GLOBAL model, which today
+ *  means avatars and nothing else. */
+export function userStorageKey(userId: string, ...segments: string[]): ScopedStorageKey {
+  return buildKey("u", userId, segments);
+}
+
+/**
+ * The two write sites that cannot name a tenant yet.
+ *
+ * Resume uploads and report exports are tenant data and belong under `t/<tenantId>/`. Neither call
+ * site can build that today: the tenant is resolved from the session in 6.5, and until that lands
+ * there is no tenant to name. Writing a wrong or invented one would be worse than writing none.
+ *
+ * So this is the same device as `dbUnscoped` in `@destaworks/db` — an explicit, greppable,
+ * COUNTED exception rather than a silent gap. The reason is a literal union, so a third caller
+ * cannot appear without editing this type, and `scripts/check-rls-coverage.mjs` fails the build if
+ * the number of uses grows. Each remaining use is a one-line change once 6.5 supplies a tenant.
+ */
+export type UnscopedKeyReason =
+  "resume-upload-awaiting-6.5-tenant-resolution" | "report-export-awaiting-6.5-tenant-resolution";
+
+/** The same two, at runtime, so the exception cannot be widened by a cast or a stray `as`. */
+const PERMITTED_UNSCOPED_REASONS: ReadonlySet<string> = new Set<UnscopedKeyReason>([
+  "resume-upload-awaiting-6.5-tenant-resolution",
+  "report-export-awaiting-6.5-tenant-resolution",
+]);
+
+export function unscopedStorageKey(key: string, reason: UnscopedKeyReason): ScopedStorageKey {
+  if (!PERMITTED_UNSCOPED_REASONS.has(reason)) {
+    throw new AppError("BAD_REQUEST", "Unrecognised reason for an un-scoped storage key");
+  }
+  // Branding a key with no owner in it, which is exactly what the reason above documents. Deleting
+  // both call sites deletes this function.
+  return key as ScopedStorageKey;
+}
+
+/**
+ * A key read back out of the database, taken at face value.
+ *
+ * Read-only by construction: this returns the wide `PersistedStorageKey`, which the upload
+ * functions do not accept, so a stored legacy key can be downloaded but never re-written in place.
+ */
+export function persistedStorageKey(key: string): PersistedStorageKey {
+  // Branding an existing key, which by definition already satisfies whatever rule was in force
+  // when it was written. The narrowing to a prefix check lands with the Phase 7 backfill.
+  return key as PersistedStorageKey;
+}
+
 const s3Endpoint = process.env.S3_ENDPOINT;
 const s3AccessKeyId = process.env.S3_ACCESS_KEY_ID;
 const s3SecretAccessKey = process.env.S3_SECRET_ACCESS_KEY;
@@ -55,7 +196,7 @@ function getClient(): S3Client {
  *  explicit config (`S3_PUBLIC_URL_BASE`), not derived. */
 export async function uploadPublic(
   bucket: string,
-  key: string,
+  key: ScopedStorageKey,
   bytes: Buffer,
   contentType: string,
 ): Promise<string> {
@@ -78,7 +219,7 @@ export async function uploadPublic(
  *  where the bytes are produced on the server (a job's CSV) rather than by the browser. */
 export async function uploadPrivate(
   bucket: string,
-  key: string,
+  key: ScopedStorageKey,
   bytes: Buffer,
   contentType: string,
 ): Promise<void> {
@@ -100,7 +241,7 @@ export async function uploadPrivate(
  *  whatever it's given). */
 export async function createSignedUploadUrl(
   bucket: string,
-  key: string,
+  key: ScopedStorageKey,
   contentType: string,
 ): Promise<{ signedUrl: string }> {
   const s3 = getClient();
@@ -121,7 +262,7 @@ export async function createSignedUploadUrl(
  *  presigned GET. */
 export async function getSignedDownloadUrl(
   bucket: string,
-  key: string,
+  key: PersistedStorageKey,
   expiresInSeconds: number,
 ): Promise<string> {
   const s3 = getClient();
