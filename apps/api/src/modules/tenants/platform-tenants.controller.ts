@@ -1,11 +1,15 @@
-import { Controller, Get, Inject, Param, UseGuards } from "@nestjs/common";
-import type {
-  GetPlatformTenantResponse,
-  GetPlatformTenantsResponse,
+import { Body, Controller, Get, Inject, Param, Post, UseGuards } from "@nestjs/common";
+import {
+  suspendTenantSchema,
+  type GetPlatformTenantResponse,
+  type GetPlatformTenantsResponse,
+  type PostPlatformTenantRestoreResponse,
+  type PostPlatformTenantSuspendResponse,
 } from "@destaworks/contracts/validation/tenant";
 import type { AuthUser } from "@destaworks/auth/guards";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { SessionAuthGuard } from "../../common/guards/session-auth.guard";
+import { ZodValidationPipe, type ContractOutput } from "../../common/pipes/zod-validation.pipe";
 import type { ServiceOf } from "../service-token";
 import { PLATFORM_ADMIN_SERVICE } from "./tenants.tokens";
 
@@ -45,5 +49,33 @@ export class PlatformTenantsController {
     @CurrentUser() user: AuthUser,
   ): Promise<GetPlatformTenantResponse> {
     return this.platform.readTenant(user, slug);
+  }
+
+  /**
+   * POST /platform/tenants/:slug/suspend — take a workspace offline for everyone in it.
+   *
+   * A sub-path rather than a `PATCH` of the tenant's `status`, because these are two operations
+   * with two different meanings and one of them derives the status it restores. Exposing the
+   * column would invite a caller to set `active` on a suspended trial and quietly change what the
+   * customer is on.
+   */
+  @Post(":slug/suspend")
+  async suspend(
+    @Param("slug") slug: string,
+    @Body(new ZodValidationPipe(suspendTenantSchema))
+    body: ContractOutput<typeof suspendTenantSchema>,
+    @CurrentUser() user: AuthUser,
+  ): Promise<PostPlatformTenantSuspendResponse> {
+    return this.platform.suspendTenant(user, slug, body);
+  }
+
+  /** POST /platform/tenants/:slug/restore — lift a suspension. No body: the service derives the
+   *  status to return to from the tenant's own trial dates. */
+  @Post(":slug/restore")
+  async restore(
+    @Param("slug") slug: string,
+    @CurrentUser() user: AuthUser,
+  ): Promise<PostPlatformTenantRestoreResponse> {
+    return this.platform.restoreTenant(user, slug);
   }
 }
