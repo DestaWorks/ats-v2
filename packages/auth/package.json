@@ -7,6 +7,7 @@
   "exports": {
     "./auth": "./src/auth.ts",
     "./guards": "./src/guards.ts",
+    "./impersonation": "./src/impersonation.ts",
     "./platform-admin": "./src/platform-admin.ts",
     "./portal-guards": "./src/portal-guards.ts",
     "./request-context": "./src/request-context.ts",
