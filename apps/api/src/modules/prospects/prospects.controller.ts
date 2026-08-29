@@ -18,11 +18,13 @@ import {
   addProspectsFromSearchSchema,
   bulkProspectActionSchema,
   prospectListQuerySchema,
+  searchProspectsSchema,
   updateProspectSchema,
   type DeleteProspectContactResponse,
   type DeleteProspectResponse,
   type GetProspectListResponse,
   type GetProspectResponse,
+  type GetProspectSearchResponse,
   type PatchProspectResponse,
   type PostProspectBulkAddResponse,
   type PostProspectBulkResponse,
@@ -38,6 +40,7 @@ import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { RequireCapability } from "../../common/decorators/require-capability.decorator";
 import { CapabilityGuard } from "../../common/guards/capability.guard";
 import { ZodValidationPipe, type ContractOutput } from "../../common/pipes/zod-validation.pipe";
+import { flatQuery } from "../../common/query-params";
 import type { ServiceOf } from "../service-token";
 import { PROSPECT_SERVICE } from "./prospects.tokens";
 
@@ -78,6 +81,23 @@ export class ProspectsController {
   ): Promise<GetProspectListResponse> {
     const { deleted, ...filters } = query;
     return await this.prospects.list(defined({ ...filters, includeDeleted: deleted }), user);
+  }
+
+  /**
+   * GET /prospects/search — the NPPES organisation search `/client-discovery/search` renders.
+   *
+   * Declared before `:id` or Nest would read "search" as a prospect id. The contract refines that
+   * at least one of taxonomy/state/city/zip is present, which is what NPPES itself requires, so a
+   * criteria-less query is a 422 here rather than an upstream error. Rate limiting stays in the
+   * service, where the bucket key already is.
+   */
+  @Get("search")
+  async search(
+    @Query(flatQuery, new ZodValidationPipe(searchProspectsSchema))
+    query: ContractOutput<typeof searchProspectsSchema>,
+    @CurrentUser() user: AuthContext,
+  ): Promise<GetProspectSearchResponse> {
+    return await this.prospects.search(query, user);
   }
 
   /** POST /prospects/bulk — delete · restore · status · assign over <=200 ids. */

@@ -10,6 +10,7 @@
  */
 import { z } from "zod";
 import type { OutreachAttemptDTO } from "./lead";
+import type { LookupOptionDTO } from "./lookups";
 import type { PageMeta } from "@destaworks/domain/pagination";
 import {
   CREDENTIALS,
@@ -192,6 +193,23 @@ export interface CandidateDetailDTO {
     autoDisqualify: string[];
   } | null;
 }
+
+/**
+ * Response body of `GET /candidates/:id/detail` — everything `/candidates/[id]` renders, in ONE
+ * round trip (SAAS-RESTRUCTURE-PLAN 4.0: a composite read becomes a composite endpoint, not N
+ * calls). `clients` and `taggable` are the same `LookupOptionDTO` pairs `GET /lookups` serves;
+ * `storageEnabled` reports whether the API has object storage configured, which is what decides
+ * if the Resume tab may offer an upload.
+ */
+export interface CandidateDetailPageDTO {
+  detail: CandidateDetailDTO;
+  clients: LookupOptionDTO[];
+  taggable: LookupOptionDTO[];
+  storageEnabled: boolean;
+}
+
+/** Response body of `GET /candidates/:id/detail`. */
+export type GetCandidateDetailPageResponse = CandidateDetailPageDTO;
 
 // --- request schemas (server validates; client reuses) ----------------------
 

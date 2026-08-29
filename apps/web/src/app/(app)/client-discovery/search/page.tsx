@@ -1,18 +1,20 @@
 import { hasCapability } from "@destaworks/domain/constants";
 import { searchProspectsSchema } from "@destaworks/contracts/validation/prospect";
 import { getVerifiedUser } from "@destaworks/auth/guards";
-import { prospectService } from "@destaworks/application/prospect.service";
-import { savedIcpService } from "@destaworks/application/saved-icp.service";
+import type { GetProspectSearchResponse } from "@destaworks/contracts/validation/prospect";
+import type { GetSavedIcpsResponse } from "@destaworks/contracts/http/saved-icp";
 import { ErrorState } from "@destaworks/ui/error-state";
+import { apiGet, query } from "@/lib/api/server";
 import { SearchForm } from "./search-form";
 import { SearchResultsTable } from "./search-results-table";
 import { SavedIcpBar } from "./saved-icp-bar";
 
 /**
  * Client Discovery — NPPES search (RSC, mirrors `/discover/page.tsx` exactly): the search is an
- * explicit-submit RSC read off `searchParams` (no client-side fetch) — `prospectService.search()`
- * calls NPPES directly, server-side, same as `/client-discovery`'s list calls
- * `prospectService.list()`. Gated `viewClientDiscovery`, same as the pipeline page.
+ * explicit-submit RSC read off `searchParams` (no client-side fetch) — `GET /prospects/search`
+ * calls NPPES server-side and flags the NPIs already tracked. Gated `viewClientDiscovery`, same as
+ * the pipeline page; the API gates it again, and the check here is what renders the friendly
+ * refusal instead of the error boundary.
  */
 export default async function ClientDiscoverySearchPage({
   searchParams,
@@ -42,9 +44,13 @@ export default async function ClientDiscoverySearchPage({
     zip: one(sp.zip) || undefined,
   });
 
-  const [result, savedIcps] = await Promise.all([
-    parsed.success ? prospectService.search(parsed.data, user) : Promise.resolve(null),
-    savedIcpService.list(user),
+  const [result, { savedIcps }] = await Promise.all([
+    // The schema refines that at least one criterion is present, so an unparsed query is skipped
+    // here rather than sent to be refused with a 422.
+    parsed.success
+      ? apiGet<GetProspectSearchResponse>(`/prospects/search${query({ ...parsed.data })}`)
+      : Promise.resolve(null),
+    apiGet<GetSavedIcpsResponse>("/saved-icps"),
   ]);
 
   return (
