@@ -12,6 +12,7 @@
     "./mentions": "./src/mentions.ts",
     "./money": "./src/money.ts",
     "./pagination": "./src/pagination.ts",
+    "./platform": "./src/platform.ts",
     "./reports/*": "./src/reports/*.ts",
     "./rules": "./src/rules/index.ts",
     "./rules/*": "./src/rules/*.ts",

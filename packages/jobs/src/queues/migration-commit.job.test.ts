@@ -38,6 +38,7 @@ interface StoredRun {
   report: unknown;
   failureCode: string | null;
   startedById: string;
+  tenantId: string | null;
   createdAt: Date;
   updatedAt: Date;
   startedAt: Date | null;
@@ -54,12 +55,22 @@ const store = vi.hoisted(() => ({
 
 const h = vi.hoisted(() => ({
   fakeTx: { __tx: true },
+  /** The one tenant this fixture runs in — the run's, and the actor's membership's. */
+  tenant: "t1",
   actor: {
     id: "u1",
     email: "owner@desta.works",
     name: "Owner",
     role: "Owner" as string,
   } as { id: string; email: string; name: string; role: string } | null,
+  /**
+   * The actor's membership in the run's tenant, which is where `claim` now reads their role.
+   * Held apart from `actor` so a test can revoke the membership without deleting the user.
+   */
+  membership: { tenantId: "t1", role: "Owner" as string } as {
+    tenantId: string;
+    role: string;
+  } | null,
 }));
 
 vi.mock("server-only", () => ({}));
@@ -95,6 +106,24 @@ vi.mock("@destaworks/db/repositories/candidate.repository", () => ({
 vi.mock("@destaworks/db/repositories/user.repository", () => ({
   userRepository: { findActorById: () => Promise.resolve(h.actor) },
 }));
+vi.mock("@destaworks/db/memberships", () => ({
+  membershipReader: {
+    listActiveForUser: (userId: string) =>
+      Promise.resolve(
+        h.membership === null
+          ? []
+          : [
+              {
+                id: `${userId}-m`,
+                tenantId: h.membership.tenantId,
+                tenantSlug: h.membership.tenantId,
+                tenantName: h.membership.tenantId,
+                role: h.membership.role,
+              },
+            ],
+      ),
+  },
+}));
 
 /** The run table, with the one behaviour that matters: the claim is conditional on status. */
 vi.mock("@destaworks/db/repositories/migration-run.repository", () => ({
@@ -118,6 +147,8 @@ vi.mock("@destaworks/db/repositories/migration-run.repository", () => ({
         report: null,
         failureCode: null,
         startedById: String(data.startedById),
+        // The tenant-scope extension supplies this on the real client; the fake stands in for it.
+        tenantId: (data.tenantId as string | null) ?? h.tenant,
         createdAt: now,
         updatedAt: now,
         startedAt: null,
@@ -180,7 +211,12 @@ import {
 } from "@destaworks/application/migration-commit.port";
 import { handleMigrationCommit, migrationCommitJob } from "./migration-commit.job";
 
-const OWNER = { id: "u1", email: "owner@desta.works", name: "Owner", role: "Owner" as const };
+const OWNER = {
+  tenantId: "t1",
+  membershipId: "u1-m",
+  user: { id: "u1", email: "owner@desta.works", name: "Owner" },
+  role: "Owner" as const,
+};
 const NEW = toLegacyStatusLabel("NEW_CANDIDATE");
 
 function csv(count: number): string {
@@ -238,6 +274,7 @@ beforeEach(() => {
   store.upserts = [];
   store.seq = 0;
   h.actor = { id: "u1", email: "owner@desta.works", name: "Owner", role: "Owner" };
+  h.membership = { tenantId: h.tenant, role: "Owner" };
   clearMigrationCommitEnqueuer();
 });
 
@@ -378,9 +415,19 @@ describe("failure", () => {
 
   it("refuses a run whose actor no longer holds bulkImport", async () => {
     const runId = await stage(2);
-    h.actor = { id: "u1", email: "owner@desta.works", name: "Owner", role: "Associate" };
+    // Demoted in the tenant the run belongs to. The user row is untouched, which is the point:
+    // `claim` reads the membership, so a demotion there is what stops the resumed import.
+    h.membership = { tenantId: h.tenant, role: "Associate" };
 
     await expect(handleMigrationCommit(fakeCtx(runId, 1).ctx)).rejects.toThrow(/permission/i);
+    expect(store.candidates.size).toBe(0);
+  });
+
+  it("refuses a run whose actor was removed from its tenant", async () => {
+    const runId = await stage(2);
+    h.membership = null;
+
+    await expect(handleMigrationCommit(fakeCtx(runId, 1).ctx)).rejects.toThrow(/no longer run it/i);
     expect(store.candidates.size).toBe(0);
   });
 });

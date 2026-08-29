@@ -31,8 +31,11 @@
     "app:test": "vitest run",
     "app:test-contract": "vitest run packages/contracts/src/route-contract.test.ts",
     "app:test-logs": "vitest run packages/config/src/logger/no-pii-in-logs.test.ts",
+    "app:test-isolation": "node scripts/isolation-db.mjs",
+    "app:rls-check": "node scripts/check-rls-coverage.mjs",
     "app:deps-check": "node scripts/check-dependency-drift.mjs",
     "app:arch-check": "node scripts/check-architecture.mjs",
+    "app:raw-index-check": "node scripts/check-raw-sql-indexes.mjs",
     "test:watch": "vitest",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
@@ -47,7 +50,13 @@
     "setup:storage": "tsx scripts/setup-storage.ts",
     "build:api": "pnpm --filter @destaworks/api build",
     "app:auth-check": "node scripts/check-auth-surface.mjs",
-    "auth:check": "turbo run //#app:auth-check"
+    "auth:check": "turbo run //#app:auth-check",
+    "app:tenant-check": "node scripts/check-tenant-scope.mjs",
+    "raw-index:check": "turbo run //#app:raw-index-check",
+    "tenant:check": "turbo run //#app:tenant-check",
+    "tenant:reconcile": "NODE_OPTIONS=--conditions=react-server tsx scripts/check-tenant-reconciliation.ts",
+    "rls:check": "turbo run //#app:rls-check",
+    "test:isolation": "turbo run //#app:test-isolation"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.7",

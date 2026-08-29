@@ -29,6 +29,7 @@ import { RolesModule } from "./modules/roles/roles.module";
 import { SavedViewsModule } from "./modules/saved-views/saved-views.module";
 import { ScreeningModule } from "./modules/screening/screening.module";
 import { TemplatesModule } from "./modules/templates/templates.module";
+import { TenantsModule } from "./modules/tenants/tenants.module";
 
 /**
  * The composition root: the domain areas, plus the cross-cutting concerns that must apply to
@@ -93,6 +94,7 @@ export const REQUEST_PIPELINE_PROVIDERS: Provider[] = [
     SavedViewsModule,
     ScreeningModule,
     TemplatesModule,
+    TenantsModule,
   ],
 })
 export class AppModule {}

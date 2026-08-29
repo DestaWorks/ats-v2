@@ -96,6 +96,22 @@ jobs:
       - name: Architecture checks
         run: pnpm arch:check
 
+      # Four indexes exist only in hand-written migration SQL, because Prisma's DSL cannot express
+      # them. `prisma migrate dev` reads them as drift and proposes dropping them — which has
+      # already happened three times to the trigram indexes. The fourth, the partial unique on
+      # lower(email), is the ONLY guard against importing the same lead twice and has no restore
+      # migration behind it. This replays every migration in order and fails if one is missing,
+      # moved, or no longer tenant-leading.
+      - name: Raw-SQL index survival
+        run: pnpm raw-index:check
+
+      # Phase 6.6/6.7, the half that needs no database: every tenant-scoped model in the schema is
+      # in the canonical list, has ENABLE + FORCE + a policy in the RLS migration, and no global
+      # model has quietly acquired a tenant. Runs here rather than in the isolation job so a
+      # forgotten table is reported in seconds, by name, before a container is even started.
+      - name: RLS coverage
+        run: pnpm rls:check
+
       # The cross-cutting half of the Phase 4.3 auth review. Per-route tests assert 401/403 for one
       # endpoint at a time; this asserts, over all of them at once, that no capability was widened,
       # dropped or swapped between a Next route and the controller replacing it, and that every
@@ -103,6 +119,14 @@ jobs:
       # fails loudly instead of reporting a clean surface it never inspected.
       - name: Auth-surface parity
         run: pnpm auth:check
+
+      # Phase 6.3's done-when, made enforceable: no repository method may query without a
+      # TenantContext, the allowlist of repositories that legitimately do is checked against the
+      # seam's own GLOBAL_MODELS rather than trusted, and the escape hatches that let un-threaded
+      # callers through are ratcheted so they can only shrink. Carries scale floors, so a parser
+      # that stops matching fails instead of reporting a layer it never inspected.
+      - name: Tenant-scope enforcement
+        run: pnpm tenant:check
 
   test:
     name: Tests
@@ -126,6 +150,49 @@ jobs:
 
       - name: Log check — no PII/PHI field name in a log call
         run: pnpm exec turbo run //#app:test-logs ${{ env.TURBO_AFFECTED }}
+
+  # Phase 6.7 — proof of isolation, on every PR.
+  #
+  # This job exists because "isolation is enforced" is a claim about a database, and a suite that
+  # mocked one would prove nothing about the database we run. So it gets a real Postgres: a
+  # throwaway service container, created for this run and destroyed with it, never a shared or
+  # hosted database. The schema is built by replaying the migration SQL (scripts/apply-migrations.mjs,
+  # which refuses any host that is not loopback) rather than by the Prisma CLI, so there is no
+  # configuration under which this job could point at production.
+  #
+  # It is deliberately NOT `--affected`. Isolation is a property of the whole schema; a change
+  # anywhere in the graph can undo it, and "we did not think that package was involved" is exactly
+  # how a cross-tenant leak ships.
+  isolation:
+    name: Tenant isolation
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: destaworks_isolation
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup
+
+      # The suite connects as an unprivileged role that the bootstrap creates and hands the tables
+      # to — policies do not apply to a superuser, and the suite asserts its own role is neither
+      # superuser nor BYPASSRLS before trusting a single result.
+      - name: Seed two tenants and prove A cannot read B, per table
+        env:
+          ISOLATION_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/destaworks_isolation
+        run: pnpm app:test-isolation
 
   build:
     name: Build

@@ -7,8 +7,12 @@
   "exports": {
     "./auth": "./src/auth.ts",
     "./guards": "./src/guards.ts",
+    "./platform-admin": "./src/platform-admin.ts",
     "./portal-guards": "./src/portal-guards.ts",
-    "./request-context": "./src/request-context.ts"
+    "./request-context": "./src/request-context.ts",
+    "./tenant-claim": "./src/tenant-claim.ts",
+    "./tenant-context": "./src/tenant-context.ts",
+    "./testing/*": "./src/testing/*.ts"
   },
   "dependencies": {
     "@destaworks/config": "workspace:*",

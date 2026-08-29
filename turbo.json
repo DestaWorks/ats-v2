@@ -110,12 +110,45 @@
         "scripts/architecture-baseline.json"
       ]
     },
+    "//#app:rls-check": {
+      "inputs": [
+        "packages/db/prisma/schema.prisma",
+        "packages/db/prisma/migrations/**",
+        "packages/db/src/tenant-models.ts",
+        "packages/*/src/**",
+        "apps/*/src/**",
+        "scripts/check-rls-coverage.mjs"
+      ]
+    },
+    "//#app:test-isolation": {
+      "cache": false,
+      "inputs": [
+        "packages/db/prisma/migrations/**",
+        "packages/db/isolation/**",
+        "packages/db/src/tenant-models.ts",
+        "scripts/apply-migrations.mjs",
+        "scripts/isolation-db.mjs",
+        "scripts/isolation-role.mjs",
+        "vitest.isolation.config.ts"
+      ]
+    },
     "//#app:auth-check": {
       "inputs": [
         "apps/api/src/modules/**",
         "apps/api/src/common/guards/**",
         "apps/web/src/app/api/**",
         "scripts/check-auth-surface.mjs"
+      ]
+    },
+    "//#app:raw-index-check": {
+      "inputs": ["packages/db/prisma/migrations/**", "scripts/check-raw-sql-indexes.mjs"]
+    },
+    "//#app:tenant-check": {
+      "inputs": [
+        "apps/*/src/**",
+        "packages/*/src/**",
+        "scripts/check-tenant-scope.mjs",
+        "scripts/tenant-scope-baseline.json"
       ]
     }
   }

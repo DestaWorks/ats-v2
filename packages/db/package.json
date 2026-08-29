@@ -8,9 +8,16 @@
     "./field-crypto": "./src/field-crypto.ts",
     "./generated/*": "./src/generated/*.ts",
     "./lifecycle": "./src/lifecycle.ts",
+    "./memberships": "./src/memberships.ts",
     "./prisma": "./src/prisma.ts",
     "./repositories/*": "./src/repositories/*.ts",
+    "./tenancy/*": "./src/tenancy/*.ts",
+    "./tenant-connection": "./src/tenant-connection.ts",
+    "./tenant-models": "./src/tenant-models.ts",
+    "./tenant-reconciliation": "./src/tenant-reconciliation.ts",
     "./tenant-scope": "./src/tenant-scope.ts",
+    "./tenant-tables": "./src/tenant-tables.ts",
+    "./tenant-transaction": "./src/tenant-transaction.ts",
     "./with-transaction": "./src/with-transaction.ts"
   },
   "dependencies": {

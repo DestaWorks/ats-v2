@@ -960,20 +960,48 @@ Every tenant-scoped model gains:
   @@index([tenantId])
 ```
 
-**The seven uniqueness rules to re-key:**
+**The thirteen uniqueness rules to re-key** — this table said seven until 6.2 read every `@unique`
+on a tenant-scoped model. The six marked ⚠ were missed, and each is a defect a second tenant would
+hit on its first day:
 
-| Today | Becomes |
-|---|---|
-| `Candidate.legacyId @unique` | `@@unique([tenantId, legacyId])` |
-| `Client.legacyId @unique` | `@@unique([tenantId, legacyId])` |
-| `Document.legacyId @unique` | `@@unique([tenantId, legacyId])` |
-| `OutreachAttempt.legacyId @unique` | `@@unique([tenantId, legacyId])` |
-| `Prospect.npi @unique` | `@@unique([tenantId, npi])` |
-| `SourceLead.promotedCandidateId @unique` | `@@unique([tenantId, promotedCandidateId])` |
-| `source_leads_email_lower_unique_idx` *(raw SQL)* | add `tenantId` to the index |
+| Today | Becomes | |
+|---|---|---|
+| `Candidate.legacyId @unique` | `@@unique([tenantId, legacyId])` | |
+| `Client.legacyId @unique` | `@@unique([tenantId, legacyId])` | |
+| `Document.legacyId @unique` | `@@unique([tenantId, legacyId])` | |
+| `OutreachAttempt.legacyId @unique` | `@@unique([tenantId, legacyId])` | |
+| `Prospect.npi @unique` | `@@unique([tenantId, npi])` | |
+| `SourceLead.promotedCandidateId @unique` | `@@unique([tenantId, promotedCandidateId])` | see note |
+| `source_leads_email_lower_unique_idx` *(raw SQL)* | add `tenantId` to the index | |
+| `CandidateNote.legacyId @unique` | `@@unique([tenantId, legacyId])` | ⚠ |
+| `SourceLead.legacyId @unique` | `@@unique([tenantId, legacyId])` | ⚠ |
+| `OpenRole.legacyId @unique` | `@@unique([tenantId, legacyId])` | ⚠ |
+| `SourceLead.npi @unique` | `@@unique([tenantId, npi])` | ⚠ |
+| `DailyBrief.date @unique` | `@@unique([tenantId, date])` | ⚠ |
+| `WeeklyBrief.weekStart @unique` | `@@unique([tenantId, weekStart])` | ⚠ |
+
+The three extra `legacyId`s are the same ETL-idempotency key as the four already listed: left
+global, the second tenant to import a legacy Sheet collides with the first tenant's row ids.
+`SourceLead.npi` is worse than the `Prospect.npi` already in the table — an NPI identifies a
+clinician, not one agency's relationship with them, so leaving it global means tenant B can never
+source a lead tenant A already holds and the failure reads as a duplicate. `DailyBrief.date` and
+`WeeklyBrief.weekStart` are one brief per calendar day/week **for the whole installation**: the
+second tenant's Monday brief fails to save because the first tenant already saved one.
+
+**Note on `SourceLead.promotedCandidateId`:** the composite is added, but the field-level `@unique`
+**stays**. Prisma will not accept a one-to-one relation whose defining field is unique only inside a
+composite, and dropping it would demote `Candidate.promotedFromLead` from 0/1 to a list in every
+consumer's types. It costs nothing to keep — the column holds a Candidate cuid, already globally
+unique, so unlike `legacyId` or `npi` it cannot collide across tenants at all.
+
+Deliberately left global: `ClientPortalToken.tokenHash` — a token is a credential and must be
+unique installation-wide, or a collision authenticates the wrong contact.
 
 Already safe — they hang off `userId`, and users are reachable only through a membership:
 `@@unique([userId, date])` on targets/actuals/logs, `SavedView`, `SavedIcp`, `ClientRules.clientId`.
+**Open question for 6.5:** they are safe against a cross-tenant *read*, but they also mean one human
+in two tenants shares one row of targets, saved views and saved ICPs. Tenant switching has to decide
+whether that is the intent before the second tenant exists.
 
 `User.email` stays **globally unique**: one human, one login, membership in many tenants. Relaxing
 that later is easy; tightening it later is a data migration.
@@ -1014,12 +1042,36 @@ findById(ctx: TenantContext, id: string, tx?: Prisma.TransactionClient) {
 **The RLS backstop** (6.6), applied per tenant-scoped table:
 
 ```sql
-ALTER TABLE candidates ENABLE ROW LEVEL SECURITY;
-CREATE POLICY tenant_isolation ON candidates
-  USING (tenant_id = current_setting('app.tenant_id')::text);
+ALTER TABLE "candidates" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "candidates" FORCE  ROW LEVEL SECURITY;
+CREATE POLICY "tenant_isolation" ON "candidates"
+  USING      ("tenantId" = current_setting('app.tenant_id', true))
+  WITH CHECK ("tenantId" = current_setting('app.tenant_id', true));
 ```
 
-with `SET LOCAL app.tenant_id = $1` at transaction start.
+Four corrections to the sketch this replaces, each of which made it a no-op or a fail-open:
+
+- **`FORCE`.** `ENABLE` alone does not apply to the table's OWNER, and on Supabase the application
+  connects as the role that owns these tables. Without `FORCE` every policy below is skipped for
+  exactly the connection it exists to constrain. Its cost: a later cross-tenant data migration must
+  run as a role with `BYPASSRLS`, or loop per tenant, or drop `FORCE` inside a maintenance window.
+- **`missing_ok`** (`current_setting(…, true)`). Without it, a connection that never set the GUC
+  raises `42704`; with it, the comparison is NULL and the row is filtered. RLS must fail **closed** —
+  no setting means no rows, never all rows.
+- **`WITH CHECK`.** `USING` filters reads; without `WITH CHECK` a connection scoped to tenant A can
+  still INSERT a row labelled tenant B.
+- **Column and table names are quoted camelCase** — `"tenantId"`, not `tenant_id`. Prisma maps
+  tables via `@@map` but leaves column names alone. Unquoted `tenant_id` does not exist.
+
+**`SET LOCAL` under the transaction pooler — the constraint this phase turns on.** `SET LOCAL`
+reverts at COMMIT and is a no-op outside a transaction block; plain `SET` persists on a pooled
+connection that Supabase's transaction pooler hands to the *next* client, which is a cross-tenant
+read manufactured by the control itself. There is no third option and nothing to configure: **every
+tenant-scoped query must run inside an explicit transaction whose first statement sets
+`app.tenant_id`.** `packages/db/src/tenant-connection.ts` carries the full argument;
+`withTenantTransaction(ctx, fn)` is how a request pays for one transaction instead of one per query.
+The setting is written with `set_config(name, value, true)`, not `SET LOCAL`, because `SET LOCAL` is
+utility syntax that cannot take a bind parameter and would mean pasting a tenant id into SQL text.
 
 **The context every guard resolves:**
 
@@ -1032,57 +1084,165 @@ export interface TenantContext {
 }
 ```
 
+> **All three migrations below are authored and committed but DELIBERATELY UNAPPLIED**, under the
+> same owner decision recorded at Phase 5: schema changes land at the end of the restructure. Nothing
+> in Phase 6 has been run against any database.
+
 ### 6.1 Schema — expand
-- [ ] Add `Tenant` and `Membership` models
-- [ ] Create tenant #1 for the current operator
-- [ ] Add `tenantId` **nullable** to the 37 tenant-scoped models (all except `User`, `Session`, `Account`, `Verification`)
-- **Done-when:** migration applied to staging with the app running unchanged
+- [x] Add `Tenant` and `Membership` models
+- [x] Create tenant #1 for the current operator *(in 6.2's backfill migration, which is where the
+      row can actually be inserted)*
+- [x] Add `tenantId` **nullable** to the **39** tenant-scoped models — not 37: Phase 5 added
+      `migration_runs`, `schedule_runs` and `report_exports` after the count was written, and
+      `ScheduleRun` is deliberately global. Global models are `User`, `Session`, `Account`,
+      `Verification`, `ScheduleRun`, `Tenant`, `Membership`
+- [x] **Migration SQL** — `20260829111500_tenants_expand`. Commit 4331163 changed `schema.prisma`
+      without writing the migration, so the SQL history had no `tenants` table for 6.2 to reference;
+      this fills that gap. Every column nullable, every index additive
+- **Done-when:** ~~migration applied to staging~~ — superseded by the deferral decision above. The
+  migration is written to be applied with the app running unchanged; applying it is a cutover task
 
 ### 6.2 Schema — backfill and contract
-- [ ] Backfill every row to tenant #1
-- [ ] Create a membership per existing user carrying their current `User.role`
-- [ ] Flip `tenantId` to `NOT NULL`; add composite indexes
-- [ ] Re-key the 7 uniqueness rules per tenant: `Candidate.legacyId`, `Client.legacyId`, `Document.legacyId`, `OutreachAttempt.legacyId`, `Prospect.npi`, `SourceLead.promotedCandidateId`, and the raw-SQL `source_leads_email_lower_unique_idx`
-- [ ] Add a CI check that the raw-SQL index survives `prisma migrate` — it is the only guard against duplicate leads
-- [ ] Drop `User.role`
-- **Done-when:** reconciliation proves every row belongs to exactly one tenant
+- [x] Backfill every row to tenant #1 — `20260829112000_tenants_backfill`, idempotent
+      (`WHERE tenantId IS NULL`), tenant id is the fixed literal `tnt_destaworks`
+- [x] Create a membership per existing user carrying their current `User.role` — same migration,
+      role copied verbatim so permissions cannot change
+- [x] Flip `tenantId` to `NOT NULL`; add composite indexes — `20260829112500_tenants_contract`.
+      "Composite indexes" is read as the seven **list/keyset** indexes that scan a whole table in
+      time order and are now always filtered by tenant: they are re-led by `tenantId` rather than
+      supplemented, because an index that does not lead with `tenantId` can no longer serve the
+      ordering. The single-column `@@index([tenantId])` per model stays as 6.0 specifies
+- [x] Re-key the uniqueness rules per tenant — **thirteen**, not seven; see the corrected table in
+      6.0 for the six the plan missed and why each one breaks the second tenant
+- [x] Add a CI check that the raw-SQL index survives `prisma migrate` — `scripts/check-raw-sql-indexes.mjs`,
+      `pnpm raw-index:check`, wired into CI. Replays every migration in filename order and asserts
+      all four raw-SQL indexes (three trigram + the partial unique on `lower(email)`) are live on the
+      right table with the right columns **in the right order**. Proven to fail twice: once by
+      deleting the CREATE, once by dropping `tenantId` from the index's leading position
+- [ ] **Drop `User.role`** — NOT DONE, and deliberately. `User.role` is not our column: it is Better
+      Auth's admin-plugin column (`adminRoles`, `defaultRole`, `roles`, `auth.api.setRole`) and it is
+      cached in the session cookie that `getCurrentUser` reads. Dropping it is an auth rewrite, not a
+      schema edit — every role read, the admin user-management surface and the session cache move to
+      `Membership` at once. That is 6.4's "`getCurrentUser` returns `TenantContext`, role read from
+      the membership" plus 6.5's membership management. **Moved to 6.4**; the backfill has already
+      copied every role onto a membership, so the data is ready and waiting
+- [x] Reconciliation — `packages/db/src/tenant-reconciliation.ts` (pure, 10 unit tests over
+      fixtures) with `pnpm tenant:reconcile` as the read-only runner. Checks all three parts of
+      "exactly one": no NULL `tenantId`, no reference to a tenant that does not exist, and — until a
+      second tenant exists — nothing assigned anywhere but tenant #1. The table list it iterates is
+      pinned to `schema.prisma` by `tenant-tables.test.ts`, so a model added later cannot pass by
+      being invisible to it
+- **Done-when:** reconciliation proves every row belongs to exactly one tenant — the reconciliation
+  exists and is tested; **running it needs the migrations applied**, so this closes at cutover
+
+> **Ordering correction — the `schema.prisma` half of 6.2 ships with 6.3.** The migrations above are
+> complete, but `schema.prisma` still declares `tenantId String?` and the field-level `@unique`s.
+> That is not oversight, it is a dependency the plan did not anticipate: **both edits change Prisma's
+> GENERATED TYPES, and only 6.3 can satisfy them.**
+>
+> - `tenantId String` makes `tenantId` a required key of every create input — 65 call sites across
+>   `application` and `db` build those inputs and none can name a tenant until `TenantContext` is
+>   threaded.
+> - `@@unique([tenantId, legacyId])` changes the generated WHERE from `{ legacyId }` to
+>   `{ tenantId_legacyId: { tenantId, legacyId } }`, which every `findUnique`/`upsert` on those keys
+>   must then supply — the same missing value.
+>
+> Doing them now means either a tree that does not compile or 6.3's entire diff folded into 6.2. So
+> the SQL lands first (it is what actually runs, and 6.1 already put `schema.prisma` ahead of the
+> migrations in the other direction) and the two one-line schema edits land with the threading, in a
+> commit that can compile. The index re-leading DID land in `schema.prisma` — an index carries no
+> type. The pending state is recorded on the `Tenant` model itself so it cannot be lost.
 
 ### 6.3 The enforcement seam
-- [ ] Extend `db(tx)` to `db(ctx, tx)` with a Prisma client extension that injects `tenantId` into every `where` and `data`
-- [ ] Allowlist the four global models
-- [ ] Thread `TenantContext` through the 243 repository methods — one argument, no new logic
-- [ ] CI check: no repository method without a `TenantContext` first argument, except the allowlist
-- **Done-when:** a repository call cannot omit tenant scoping and still compile
+- [x] Extend `db(tx)` to `db(ctx, tx)` with a Prisma client extension that injects `tenantId` into every `where` and `data` *(landed early, in 4331163, so the workstreams after it bind to one shape)*
+- [x] Allowlist the **seven** global models — the four Better Auth tables plus `ScheduleRun`, `Tenant`
+      and `Membership`. The sketch above says four; a `Membership` query filtered by the active tenant
+      could never answer "which tenants may this user switch to", which is the read tenant switching
+      is built on. `packages/db/src/tenant-scope.ts` holds the list and is authoritative
+- [x] Thread `TenantContext` through the **246** repository methods (35 of the 38 repositories; the
+      other three serve global models only) — one argument, no new logic
+- [x] CI check: no repository method without a `TenantContext` first argument, except the allowlist —
+      `scripts/check-tenant-scope.mjs`, wired as `pnpm tenant:check`. It also checks the allowlist
+      itself against the seam's `GLOBAL_MODELS`, and ratchets the escape hatches 6.4 must remove
+- [ ] **Land 6.2's two `schema.prisma` edits** — `tenantId String?` → `String`, and the field-level
+      `@unique`s → `@@unique([tenantId, …])`. Both are blocked on the value this sub-phase supplies,
+      and the migrations that make them true are already written (`20260829112500_tenants_contract`).
+      Expect ~65 create sites and ~10 `findUnique`/`upsert` sites to need the context
+- [ ] **Fix `AiSettings`** — found while writing 6.2. It is a singleton keyed by the literal primary
+      key `id = "singleton"` (the app-wide AI kill switch), and 6.1 made it tenant-scoped. A literal
+      PK admits exactly one row for the whole installation, so tenant #2's settings row cannot exist
+      and `findUnique({ id: "singleton" })` through the seam returns nothing for it. Either key it
+      `@@id([tenantId, id])`, or move it back to the global allowlist and accept the kill switch is
+      platform-wide — but decide, because today it is neither
+- **Done-when:** a repository call cannot omit tenant scoping and still compile ✅, **and**
+  `schema.prisma` agrees with the contract migration
+
+> The `db()` sketch above does not compile as written: `Prisma.TransactionClient` has no `$extends`,
+> so the extension goes on the base client and a transaction started from it inherits the scoping.
+> See the NOTE on `ScopedTx` in `packages/db/src/tenant-scope.ts`.
 
 ### 6.4 Services and routes
 - [ ] Thread context through the 171 methods in `@destaworks/application`
 - [ ] `getCurrentUser` returns `TenantContext` — `{ tenantId, membershipId, user, role }`, role read from the membership
+- [ ] **Drop `User.role`, moved here from 6.2.** It is Better Auth's admin-plugin column and is cached in the session cookie, so it cannot be dropped before the role read moves to `Membership` — which is the bullet above. Everything it needs is already in place: the backfill copied every user's role onto a membership. The work is `auth.ts` (`user.additionalFields.role`, `adminPlugin({ adminRoles, defaultRole, roles })`), `guards.ts` (`session.user.role` → membership), `admin-user.service.ts` (`auth.api.setRole`) and `user.repository.ts` (`listByRole`, `findActor`)
 - [ ] Resolve the tenant in a Nest guard and pass it down; controllers stay thin
 - [ ] Verify the migrated controllers; most need no change, since no role names are hardcoded
 - **Done-when:** every endpoint resolves a tenant before touching data
 
 ### 6.5 Tenant resolution and membership
-- [ ] Resolve the active tenant from session plus subdomain, path segment or cookie
-- [ ] Tenant switching for users with multiple memberships
-- [ ] Invitation flow — invite, accept, remove
-- [ ] Keep `User.email` globally unique: one human, one login, many memberships
+- [x] Resolve the active tenant from session plus subdomain, path segment or cookie
+      — one path: `readTenantClaim` (precedence path > subdomain > cookie, most explicit wins)
+      then `resolveTenantContext`, which is the only producer of a `TenantContext`
+- [x] Tenant switching for users with multiple memberships — server-authoritative; the cookie
+      carries the slug the SERVER resolved and is re-verified as a claim on every request
+- [x] Invitation flow — invite, accept, remove (`invited` grants nothing, `removed` revokes on the
+      next request; account creation deliberately keeps its single existing path)
+- [x] Keep `User.email` globally unique: one human, one login, many memberships
 - **Done-when:** a user in two tenants sees only the active tenant's data and can switch
 
 ### 6.6 Defence in depth
-- [ ] Enable Row-Level Security on the 37 tenant-scoped tables
-- [ ] `SET LOCAL app.tenant_id` at transaction start; verify behaviour under connection pooling
-- [ ] Per-tenant object-storage key prefixes
+- [x] Enable + **FORCE** Row-Level Security on the **39** tenant-scoped tables
+      (`20260830120000_enable_tenant_row_level_security`, authored; applies after 6.2's backfill and
+      refuses to run while any `tenantId` is still NULL)
+- [x] `app.tenant_id` set transaction-locally; behaviour under connection pooling worked out and
+      **enforced in code** rather than assumed — `tenant-connection.ts` + `tenant-transaction.ts`,
+      and `tenant-scope.ts` routes every scoped operation through a transaction so a caller cannot
+      get it wrong. Cost: an unbatched scoped query becomes BEGIN / `set_config` / query / COMMIT.
+- [x] Per-tenant object-storage key prefixes — `t/<tenantId>/…` and `u/<userId>/…`, enforced by a
+      branded key type; existing objects keep resolving, migration path in `storage.ts`
+- [ ] Wire the last two un-scoped storage keys (resume upload, report export) once 6.5 resolves a
+      tenant — ratcheted by `scripts/check-rls-coverage.mjs`
+- [ ] Deploy step, not a code change: `DATABASE_URL`'s role must be neither `SUPERUSER` nor
+      `BYPASSRLS`, or none of the above applies to it
 - **Done-when:** a query that bypasses the extension returns zero rows rather than another tenant's data
 
 ### 6.7 Proof of isolation
-- [ ] Isolation suite: for each of the 37 models, seed two tenants and assert A cannot read B
-- [ ] Run it on every PR as a required check
-- [ ] Add tenant context to the 213 existing test files
+- [x] Isolation suite: for each of the **39** models, seed two tenants and assert A cannot read B —
+      `packages/db/isolation/`, 209 assertions against a real Postgres, no mocks. `rls.test.ts` uses
+      raw SQL, so it genuinely bypasses the seam; `seam.test.ts` drives the real Prisma client
+      through the real policies, which is what caught the seam adding a `where` to `create`
+- [x] Run it on every PR as a required check — `isolation` job in `ci.yml`, on a throwaway
+      `postgres:16` service container; plus the database-free `rls:check` in the static job
+- [ ] Add tenant context to the existing test files (they mock at the repository boundary, so none
+      needed changing for 6.6 — this lands with 6.3/6.4's context threading)
 - **Done-when:** isolation is proven per table on every change, not asserted in a document
 
+**Count correction:** the schema has **39** tenant-scoped models, not 37 — `ReportExport` and
+`MigrationRun` post-date the plan's count. `Membership` names a tenant but stays global and
+un-policied: it *is* the boundary, and scoping it would make "which tenants may this user switch
+to" unanswerable. All three facts are asserted by `scripts/check-rls-coverage.mjs`.
+
+**Two uniqueness rules the list of seven misses**, found by seeding two tenants: `DailyBrief.date`
+and `WeeklyBrief.weekStart` are `@unique` across the whole database, so two tenants cannot both have
+a brief for the same day. They belong in 6.2's re-keying as `@@unique([tenantId, date])` and
+`@@unique([tenantId, weekStart])`.
+
 ### 6.8 Platform-admin plane
-- [ ] Platform-admin capability on a **different axis** from a tenant's Owner
-- [ ] Every cross-tenant action audited
+- [x] Platform-admin capability on a **different axis** from a tenant's Owner — `PlatformContext`
+      carries no `tenantId` and no `Role`, and is minted only from `PLATFORM_ADMIN_USER_IDS`
+      (user ids, not emails, so a tenant Admin's `manageUsers` is not an escalation path)
+- [x] Every cross-tenant action audited — into the tenant it touched, ids only, in the same
+      transaction, so an unaudited crossing cannot succeed
 - **Done-when:** no tenant role value, including Owner, can reach another tenant's data
 
 **Phase 6 done-when:** two tenants coexist on staging with isolation proven by the suite and by RLS
