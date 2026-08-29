@@ -11,6 +11,7 @@
     "@destaworks/contracts": "workspace:*",
     "@destaworks/domain": "workspace:*",
     "@destaworks/integrations": "workspace:*",
+    "@destaworks/jobs": "workspace:*",
     "@nestjs/common": "^12.0.1",
     "@nestjs/core": "^12.0.1",
     "@nestjs/platform-express": "^12.0.1",
@@ -27,6 +28,7 @@
   },
   "scripts": {
     "build": "node build.mjs",
-    "start": "node dist/main.js"
+    "start": "node dist/main.js",
+    "start:worker": "node dist/worker.js"
   }
 }

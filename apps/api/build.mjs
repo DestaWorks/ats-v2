@@ -19,8 +19,11 @@ import { fileURLToPath } from "node:url";
  */
 await build({
   absWorkingDir: dirname(fileURLToPath(import.meta.url)),
-  entryPoints: ["src/main.ts"],
-  outfile: "dist/main.js",
+  // Two entry points, one bundle each: the API server and the job worker are separate processes
+  // (see src/worker.ts) built from the same source graph, so they cannot drift in the version of a
+  // service they share.
+  entryPoints: ["src/main.ts", "src/worker.ts"],
+  outdir: "dist",
   bundle: true,
   platform: "node",
   target: "node22",

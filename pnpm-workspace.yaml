@@ -16,6 +16,9 @@ catalog:
   esbuild: ^0.28.1
   "@types/react": ^19.0.0
   "@types/react-dom": ^19.0.0
+  # MIT (as are its three dependencies: pg, cron-parser, serialize-error), so it clears the
+  # permissive-licence-only constraint in docs/PROJECT-CONTEXT.md.
+  pg-boss: ^12.28.0
   react: ^19.0.0
   react-dom: ^19.0.0
   typescript: ^5.7.2

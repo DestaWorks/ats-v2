@@ -14,6 +14,7 @@
     "@destaworks/db": "workspace:*",
     "@destaworks/domain": "workspace:*",
     "@destaworks/integrations": "workspace:*",
+    "pg-boss": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {
