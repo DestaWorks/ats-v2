@@ -50,6 +50,19 @@ const ALLOWED_DEPENDENCIES = {
   // `db` is ABSENT ON PURPOSE and must stay absent: a controller is transport, and the moment it
   // can reach a repository the "one path to the data" decision of Phase 4.0 is gone.
   api: ["application", "auth", "config", "contracts", "domain", "integrations", "jobs"],
+  // Phase 8. The platform-admin console, and the reason the row is SHORTER than web's: `db` and
+  // `application` are absent, so admin's read path is HTTP to `apps/api` and nothing else.
+  //
+  // web carries both only as Phase 4.0 debt, held by the `web-read-path-is-http-only` RATCHET
+  // below (167 production files at the time of writing, which 4.3's traffic switch drives to
+  // zero). A new app has no such history, so it does not get the ratchet: admin -> db and
+  // admin -> application fail HERE, on dependency-direction, which has no test exemption and no
+  // baseline — the stricter of the two rules, and the right one for a unit starting clean.
+  //
+  // `auth` is present and `contracts` is the wire vocabulary: the console verifies a
+  // `PlatformContext` itself (packages/auth/src/platform-admin.ts, minted from the
+  // PLATFORM_ADMIN_USER_IDS allowlist) and then asks apps/api for data over HTTP.
+  admin: ["auth", "config", "contracts", "domain", "integrations", "ui"],
 };
 
 const PRISMA_VENDOR = /^(@prisma\/|prisma$)/;
@@ -67,7 +80,15 @@ const SERVER_ONLY_ALLOWED = new Set(["web"]);
  *  transport-only. `api` is the last of those: it runs on a server and could technically hold the
  *  `Prisma` namespace, but a controller has no legitimate use for it, so it is classified here
  *  rather than in SERVER_SIDE_PACKAGES and the namespace exemption does not reach it. */
-const PRISMA_FREE_PACKAGES = new Set(["domain", "contracts", "config", "ui", "web", "api"]);
+const PRISMA_FREE_PACKAGES = new Set([
+  "domain",
+  "contracts",
+  "config",
+  "ui",
+  "web",
+  "api",
+  "admin",
+]);
 
 /* -------------------------------------------------------------- deliberate exemptions ---- */
 

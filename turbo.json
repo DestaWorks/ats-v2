@@ -45,6 +45,22 @@
       ],
       "env": ["ANALYZE", "NEXT_PUBLIC_*", "SENTRY_*", "VERCEL_*"]
     },
+    "//#admin:build": {
+      "dependsOn": ["^build"],
+      "outputs": ["apps/admin/.next/**", "!apps/admin/.next/cache/**"],
+      "inputs": [
+        "apps/admin/src/**",
+        "apps/admin/public/**",
+        "apps/admin/next.config.ts",
+        "apps/admin/postcss.config.mjs",
+        "apps/admin/tsconfig.json",
+        "apps/admin/package.json",
+        "packages/*/src/**",
+        "tsconfig.json",
+        "package.json"
+      ],
+      "env": ["ANALYZE", "NEXT_PUBLIC_*", "VERCEL_*"]
+    },
     "//#api:build": {
       "dependsOn": ["^topo", "^build"],
       "inputs": [
