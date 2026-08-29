@@ -135,7 +135,16 @@ for (const [key, hit] of nest) {
   const hasSession = /SessionAuthGuard/.test(g);
   const hasPortal = /PortalAuthGuard/.test(g);
   const hasCapGuard = /CapabilityGuard/.test(g);
+  // The platform axis (6.8): authenticates an identity WITHOUT resolving a tenant, because a
+  // platform admin may belong to none. Authorization is `requirePlatformCapability` inside the
+  // service, in the same call that writes the audit row — never a tenant capability, which is
+  // why a `/platform/*` route carrying one is an error rather than an omission.
+  const isPlatform = / \/platform\//.test(key) || key.endsWith(" /platform");
+  const hasPlatformGuard = /PlatformAuthGuard/.test(g);
 
+  if (isPlatform && hasPlatformGuard && hit.caps.length)
+    note(`${key}: platform route declares a tenant capability [${hit.caps}]`);
+  if (!isPlatform && hasPlatformGuard) note(`${key}: non-platform route carries PlatformAuthGuard`);
   if (isPortal && hasSession) note(`${key}: portal route carries SessionAuthGuard`);
   if (isPortal && !hasPortal) note(`${key}: portal route missing PortalAuthGuard`);
   if (!isPortal && hasPortal) note(`${key}: non-portal route carries PortalAuthGuard`);
@@ -146,7 +155,8 @@ for (const [key, hit] of nest) {
 
   // CapabilityGuard delegates to requireCapability(), which authenticates AND authorizes in one
   // step, so it is itself an auth guard whenever a capability is attached.
-  const authenticated = hasSession || hasPortal || (hasCapGuard && hit.caps.length > 0);
+  const authenticated =
+    hasSession || hasPortal || hasPlatformGuard || (hasCapGuard && hit.caps.length > 0);
   const isPublicHealth = key.startsWith("GET /health");
   if (!isPublicHealth && !authenticated) note(`${key}: no auth guard (${hit.file})`);
   if (authenticated || isPublicHealth) classified++;

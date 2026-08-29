@@ -1,4 +1,5 @@
 import { readTenantClaim } from "@destaworks/auth/tenant-claim";
+import { tenantIsUsable } from "@destaworks/auth/tenant-context";
 import { tenantRepository } from "@destaworks/db/tenancy/membership.repository";
 import type { TenantContext } from "@destaworks/domain/tenant";
 import { systemContextFor } from "@destaworks/domain/system-context";
@@ -14,6 +15,7 @@ export const publicTenantService = {
     const claim = readTenantClaim({ host, cookie: undefined });
     if (!claim) return null;
     const tenant = await tenantRepository.findBySlug(claim.slug);
-    return tenant ? systemContextFor(tenant.id) : null;
+    if (!tenant || !tenantIsUsable(tenant)) return null;
+    return systemContextFor(tenant.id);
   },
 };

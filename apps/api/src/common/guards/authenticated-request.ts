@@ -1,4 +1,4 @@
-import type { AuthContext } from "@destaworks/auth/guards";
+import type { AuthContext, AuthUser } from "@destaworks/auth/guards";
 import type { PortalContext } from "@destaworks/auth/portal-guards";
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { HttpRequestLike } from "../request-context/nest-request-context";
@@ -15,6 +15,11 @@ import type { HttpRequestLike } from "../request-context/nest-request-context";
 /** A request the `SessionAuthGuard` has authenticated and resolved a tenant for. */
 export interface AuthenticatedRequest extends HttpRequestLike {
   user?: AuthContext;
+}
+
+/** A request the `PlatformAuthGuard` has authenticated, with no tenant resolved. */
+export interface PlatformRequest extends HttpRequestLike {
+  identity?: AuthUser;
 }
 
 /** A request the `PortalAuthGuard` has authenticated. */

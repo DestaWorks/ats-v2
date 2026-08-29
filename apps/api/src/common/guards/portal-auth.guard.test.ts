@@ -29,7 +29,10 @@ let mockToken: TokenRow | null = null;
 const touchLastUsed = vi.fn();
 
 vi.mock("@destaworks/db/tenancy/membership.repository", () => ({
-  tenantRepository: { findBySlug: async (slug: string) => (slug === "acme" ? { id: "t1" } : null) },
+  tenantRepository: {
+    findBySlug: async (slug: string) =>
+      slug === "acme" ? { id: "t1", status: "active", deletedAt: null } : null,
+  },
 }));
 
 vi.mock("@destaworks/db/repositories/client-portal-token.repository", () => ({

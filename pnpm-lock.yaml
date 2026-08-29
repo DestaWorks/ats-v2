@@ -232,6 +232,58 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.0)(lightningcss@1.32.0)(terser@5.50.0)
 
+  apps/admin:
+    dependencies:
+      '@destaworks/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
+      '@destaworks/config':
+        specifier: workspace:*
+        version: link:../../packages/config
+      '@destaworks/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@destaworks/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
+      '@destaworks/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+      next:
+        specifier: ^15.5.23
+        version: 15.5.23(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      react:
+        specifier: 'catalog:'
+        version: 19.2.7
+      react-dom:
+        specifier: 'catalog:'
+        version: 19.2.7(react@19.2.7)
+    devDependencies:
+      '@destaworks/tsconfig':
+        specifier: workspace:*
+        version: link:../../tooling/typescript
+      '@tailwindcss/postcss':
+        specifier: ^4.0.0
+        version: 4.3.2
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.20.1
+      '@types/react':
+        specifier: 'catalog:'
+        version: 19.2.17
+      '@types/react-dom':
+        specifier: 'catalog:'
+        version: 19.2.3(@types/react@19.2.17)
+      tailwindcss:
+        specifier: ^4.0.0
+        version: 4.3.2
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.1)(lightningcss@1.32.0)(terser@5.50.0)
+
   apps/api:
     dependencies:
       '@destaworks/application':

@@ -1,0 +1,51 @@
+{
+  "name": "@destaworks/admin",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "//": [
+    "WHY THIS MANIFEST EXISTS, when apps/web has none.",
+    "",
+    "apps/web is built by the ROOT package (`app:build`: `next build apps/web`) and inherits the",
+    "root manifest. That is migration residue, not a pattern: web WAS the root application until",
+    "Phase 2.9 moved its files under apps/, and the manifest stayed where it was.",
+    "",
+    "Two checks in scripts/check-architecture.mjs are gated on `hasOwnManifest` and are skipped",
+    "entirely for a unit without one: `imports <workspace package> but the manifest does not",
+    "declare it`, and `imports external <package> undeclared in its manifest`. Inheriting the root",
+    "manifest would opt admin out of both on its first day, and would silently hand it every",
+    "dependency the root app declares -- including @destaworks/db, @destaworks/application and",
+    "@prisma/client, which are exactly what admin must never reach. The manifest is where",
+    "`admin is HTTP-only` stops being a comment and becomes a fact a tool reads.",
+    "",
+    "The cost is real and accepted: every external and every workspace package admin imports has",
+    "to be declared here, and adding one is a visible diff rather than an inherited accident."
+  ],
+  "//scripts": [
+    "Deliberately none. The console is built by the ROOT package (`admin:build`:",
+    "`next build apps/admin`), like apps/web, because the working directory decides what Tailwind",
+    "v4 scans: from apps/admin it would root there and never see the classes inside",
+    "@destaworks/ui. One build path, run from the repo root, is the whole reason."
+  ],
+  "dependencies": {
+    "@destaworks/auth": "workspace:*",
+    "@destaworks/config": "workspace:*",
+    "@destaworks/contracts": "workspace:*",
+    "@destaworks/domain": "workspace:*",
+    "@destaworks/ui": "workspace:*",
+    "next": "^15.5.23",
+    "react": "catalog:",
+    "react-dom": "catalog:"
+  },
+  "devDependencies": {
+    "@destaworks/tsconfig": "workspace:*",
+    "@tailwindcss/postcss": "^4.0.0",
+    "@types/node": "^22.10.0",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "tailwindcss": "^4.0.0",
+    "typescript": "catalog:",
+    "vitest": "^2.1.8"
+  }
+}

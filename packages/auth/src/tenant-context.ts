@@ -81,9 +81,19 @@ function roleOf(row: MembershipRow): Role {
   return isRole(row.role) ? row.role : "Associate";
 }
 
-/** A tenant that can be acted in at all: it exists, it is not deleted, it is not suspended. */
+/**
+ * A tenant that can be acted in at all: it exists, it is not deleted, it is not suspended.
+ *
+ * Exported because suspension has to bite on every way INTO a workspace, not just the membership
+ * path — the client portal and the public request-access forms resolve a tenant by slug without
+ * ever seeing a membership, and each one is its own door.
+ */
+export function tenantIsUsable(tenant: { status: string; deletedAt: Date | null }): boolean {
+  return tenant.deletedAt === null && tenant.status !== "suspended";
+}
+
 function tenantIsLive(row: MembershipRow): boolean {
-  return row.tenant.deletedAt === null && row.tenant.status !== "suspended";
+  return tenantIsUsable(row.tenant);
 }
 
 /** `active` membership in a live tenant — the only combination that grants anything. */
