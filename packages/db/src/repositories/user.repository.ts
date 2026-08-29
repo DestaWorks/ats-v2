@@ -56,6 +56,21 @@ export const userRepository = {
     });
   },
 
+  /**
+   * The identity fields a BACKGROUND job needs to re-establish who it is acting as. A job runs
+   * long after the request that queued it, so it cannot carry a session; it carries an actor id
+   * and reads the current record here. Reading the role fresh rather than freezing it at enqueue
+   * time is the point — a user who lost the capability in between must not have a job still
+   * running with the old one. `role` is returned raw; the caller validates it against the `Role`
+   * union, because that vocabulary lives in `domain`, not here.
+   */
+  findActorById(id: string, tx?: Prisma.TransactionClient) {
+    return db(tx).user.findUnique({
+      where: { id },
+      select: { id: true, email: true, name: true, role: true },
+    });
+  },
+
   /** Batch-resolve a set of user ids to their emails in ONE query — mirrors `namesByIds`. Used
    *  ONLY server-side (e.g. mention notification emails); `list()` deliberately never selects
    *  email since its result feeds the client-side @mention picker. */

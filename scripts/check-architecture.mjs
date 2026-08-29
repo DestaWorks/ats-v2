@@ -38,6 +38,9 @@ const ALLOWED_DEPENDENCIES = {
   // able to enqueue itself through a cycle the graph could no longer see.
   jobs: ["application", "auth", "config", "contracts", "db", "domain", "integrations"],
   ui: ["domain"],
+  // Phase 5 adds `jobs` for the same reason `api` has it: a route that used to do slow work inline
+  // now enqueues it, and both stacks serve until the traffic switch, so both need the edge. It
+  // points the same way as everywhere else — web may enqueue, `jobs` may never import an app.
   web: ["application", "auth", "config", "contracts", "db", "domain", "integrations", "ui"],
   // Phase 4.1. The plan's graph draws api -> {application, auth, contracts}; `config` (the Logger)
   // and `domain` (the capability + status vocabularies a guard decides on) are added for the same

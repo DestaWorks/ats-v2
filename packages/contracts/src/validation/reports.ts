@@ -216,3 +216,38 @@ export interface TrendsDTO {
   anomalies: TrendsAnomalyDTO[];
   funnel: TrendsFunnelStageDTO[];
 }
+
+// --- Asynchronous CSV export (Phase 5) -------------------------------------
+
+/**
+ * The job payload for a CSV export. `filters` is the same universal filter bar every report
+ * takes, so the exported cohort is the one that was on screen; it is re-parsed with
+ * `reportFiltersSchema` when the job is dequeued, because the job can outlive the deploy that
+ * enqueued it.
+ */
+export const reportExportPayloadSchema = z.object({
+  exportId: z.string().min(1),
+  filters: reportFiltersSchema,
+});
+export type ReportExportPayload = z.infer<typeof reportExportPayloadSchema>;
+
+export type ReportExportStatusValue = "pending" | "ready" | "failed";
+
+/**
+ * The state of one requested export, as the browser polls it.
+ *
+ * `downloadUrl` is present only while `status === "ready"`, and is a freshly minted, short-lived
+ * credential rather than a stored address — see `expiresInSeconds`. It is never cached and never
+ * logged: it grants read access to a file of candidate PII.
+ */
+export interface ReportExportDTO {
+  id: string;
+  status: ReportExportStatusValue;
+  requestedAt: string;
+  readyAt: string | null;
+  byteSize: number | null;
+  /** The `AppError` code of the final failure — a code, never a message. */
+  errorCode: string | null;
+  downloadUrl?: string;
+  expiresInSeconds?: number;
+}

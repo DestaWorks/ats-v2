@@ -183,6 +183,50 @@ model AiSettings {
   @@map("ai_settings")
 }
 
+// One asynchronous run of the legacy Sheet -> Postgres ETL commit (Phase 5). The row is three
+// things at once, and each one is why it exists rather than living in the queue's own payload:
+//
+//  1. The staged input. The upload is up to 10 MB of CSV plus resume text; carrying that through a
+//     queue payload would put a multi-megabyte blob in every retry and every dead-letter record.
+//     The job payload is `{ runId }` and reads the input from here.
+//  2. The progress marker. `processedRows` is the resume point: an attempt aborted at a row
+//     boundary restarts from it instead of redoing minutes of work (and, when `extractWithAi` is
+//     on, re-paying for LLM calls). Correctness does not depend on it — `legacy_id` upsert makes a
+//     redone row a no-op — so a lost update costs time, never data.
+//  3. The operator's answer to "did it finish, and if not where did it stop".
+//
+// `content`/`resumes` hold candidate PII and are CLEARED the moment the run reaches a terminal
+// state, so the staging copy does not outlive the import it existed for.
+model MigrationRun {
+  id     String  @id @default(cuid())
+  jobId  String?
+  status String  @default("queued") // queued | running | interrupted | succeeded | failed
+
+  attempt       Int    @default(0)
+  processedRows Int    @default(0)
+  totalRows     Int    @default(0)
+  checksum      String
+
+  format        String
+  filename      String?
+  extractWithAi Boolean @default(false)
+  content       String?
+  resumes       Json?
+
+  report      Json?
+  failureCode String?
+
+  startedById String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  startedAt   DateTime?
+  finishedAt  DateTime?
+
+  @@index([status, createdAt])
+  @@index([startedById, createdAt])
+  @@map("migration_runs")
+}
+
 // --- Recruiting pipeline (Wave 1.1) ---
 // Candidate + Client + StageHistory. Vocabulary enums (credential, status, track, source,
 // population, setting, tags, licenseStatus) are stored as String/String[] and validated in
@@ -1054,6 +1098,13 @@ model DailyBrief {
   shiftB           String?
   watchItems       String?
 
+  /// Phase 5: the AI draft the generate JOB produced, waiting to be reviewed and saved.
+  /// Kept in its OWN columns rather than written over the fields above, because generation is no
+  /// longer part of the request that saves: a job finishing must never overwrite a brief a human
+  /// already edited and saved for the same day.
+  draft   Json?
+  draftAt DateTime?
+
   savedById String?
   savedAt   DateTime?
   createdAt DateTime  @default(now())
@@ -1080,6 +1131,10 @@ model WeeklyBrief {
   nextWeekPriorities String?
 
   statsSnapshot Json? // raw stats the brief was generated from — audit trail, not redisplayed
+
+  /// Phase 5 — see `DailyBrief.draft` for why the job's output has its own columns.
+  draft   Json?
+  draftAt DateTime?
 
   savedById String?
   savedAt   DateTime?
@@ -1176,4 +1231,49 @@ model SavedIcp {
   @@unique([userId, name])
   @@index([userId])
   @@map("saved_icps")
+}
+
+// --- Background jobs (Phase 5) ---
+
+/// One occurrence of one schedule, claimed by exactly one worker.
+///
+/// This row IS the single-fire guarantee. Every worker derives the same occurrence instant from
+/// the same schedule definition, so they all race to insert the same `(schedule, occurrenceAt)`
+/// pair and the unique index lets exactly one of them win; the losers see a P2002 and stand down.
+/// Deliberately not delegated to the queue driver's own "singleton" support: that only collapses
+/// jobs still pending, so a fast job that finishes between two workers' ticks would run twice.
+model ScheduleRun {
+  id           String   @id @default(cuid())
+  schedule     String
+  occurrenceAt DateTime
+  claimedAt    DateTime @default(now())
+
+  @@unique([schedule, occurrenceAt])
+  @@map("schedule_runs")
+}
+
+/// A CSV export a user asked for, and where the finished file went.
+///
+/// The bytes live in object storage (D8 — no file bytes in the database); this row holds only the
+/// storage key, so a download URL is minted fresh and short-lived per request and no URL that
+/// reaches PII is ever persisted. `requestedById` is the only account allowed to read it back.
+model ReportExport {
+  id            String @id @default(cuid())
+  requestedById String
+
+  /// The `ReportFilters` the cohort is built from — re-validated, never trusted, on dequeue.
+  filters Json
+
+  /// pending | ready | failed
+  status     String  @default("pending")
+  storageKey String?
+  byteSize   Int?
+  /// The `AppError` code of the final failure. A code — never a message, never row data.
+  errorCode  String?
+
+  createdAt DateTime  @default(now())
+  readyAt   DateTime?
+
+  @@index([requestedById, createdAt(sort: Desc)])
+  @@map("report_exports")
 }

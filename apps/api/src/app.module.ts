@@ -16,6 +16,7 @@ import { DailyModule } from "./modules/daily/daily.module";
 import { DiscoverModule } from "./modules/discover/discover.module";
 import { HealthModule } from "./modules/health/health.module";
 import { InboundModule } from "./modules/inbound/inbound.module";
+import { JobsModule } from "./modules/jobs/jobs.module";
 import { LeadsModule } from "./modules/leads/leads.module";
 import { MentionsModule } from "./modules/mentions/mentions.module";
 import { MigrationModule } from "./modules/migration/migration.module";
@@ -79,6 +80,7 @@ export const REQUEST_PIPELINE_PROVIDERS: Provider[] = [
     DiscoverModule,
     HealthModule,
     InboundModule,
+    JobsModule,
     LeadsModule,
     MentionsModule,
     MigrationModule,

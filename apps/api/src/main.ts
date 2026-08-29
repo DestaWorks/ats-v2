@@ -6,6 +6,7 @@ import { installNodeLogger } from "@destaworks/config/logger/install";
 import { shutdownApplication } from "@destaworks/application/lifecycle";
 import { installNestRequestContext } from "./common/request-context/nest-request-context";
 import { requestContextMiddleware } from "./common/request-context/request-context.middleware";
+import { installJobRuntime } from "./jobs-runtime";
 import { AppModule } from "./app.module";
 
 /** Not 3003 — that port belongs to `pnpm dev`, and the two run side by side during the cutover. */
@@ -33,6 +34,11 @@ function resolvePort(): number {
  */
 async function bootstrap(): Promise<void> {
   installNodeLogger();
+
+  // The composition root is the only place that names a driver. Everything else — controllers via
+  // `JOB_QUEUE`, Next routes via the application-layer port — holds the lazy handle, which is what
+  // keeps the pg-boss decision out of every module that merely wants to enqueue.
+  const queue = installJobRuntime();
   installNestRequestContext();
   const app = await NestFactory.create(AppModule);
   app.use(requestContextMiddleware);
@@ -40,7 +46,7 @@ async function bootstrap(): Promise<void> {
   await app.listen(port);
   logger.info("api.listening", { port });
 
-  installShutdownHandlers(app);
+  installShutdownHandlers(app, queue);
 }
 
 /**
@@ -51,7 +57,12 @@ async function bootstrap(): Promise<void> {
  * Guarded against a second signal: an impatient orchestrator sends SIGTERM twice, and re-entering
  * this would close the pool underneath requests that are still draining.
  */
-function installShutdownHandlers(app: INestApplication): void {
+/** Only what shutdown needs from the driver — not the driver's type, which this file should not name twice. */
+interface StoppableQueue {
+  stop(): Promise<void>;
+}
+
+function installShutdownHandlers(app: INestApplication, queue: StoppableQueue): void {
   let stopping = false;
 
   for (const signal of ["SIGTERM", "SIGINT"] as const) {
@@ -62,6 +73,10 @@ function installShutdownHandlers(app: INestApplication): void {
 
       void app
         .close()
+        // The queue's pool before the database's, and both only once requests have drained: a
+        // request still in flight may enqueue, and an enqueue that travels with its caller's
+        // transaction runs on the database connection that transaction holds.
+        .then(() => queue.stop())
         .then(() => shutdownApplication())
         .then(() => {
           logger.info("api.stopped", { signal });

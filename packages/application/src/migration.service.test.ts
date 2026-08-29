@@ -522,3 +522,69 @@ describe("migrationService.commit — AI resume extraction (Wave 1.3 backlog, In
     expect(h.parseResume).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * The three hooks Phase 5's job runner drives the commit through. They are all optional, and the
+ * request-path callers above pass none of them — that is what keeps this the SAME ETL rather than
+ * a second one grown for the queue.
+ */
+describe("migrationService.commit — driven by a job runner", () => {
+  const threeRows = () =>
+    csv([
+      { ID: "L-1", Name: "One", Status: NEW },
+      { ID: "L-2", Name: "Two", Status: NEW },
+      { ID: "L-3", Name: "Three", Status: NEW },
+    ]);
+
+  it("reports progress per row, over the writable rows only", async () => {
+    const seen: [number, number][] = [];
+    const content = csv([
+      { ID: "L-1", Name: "One", Status: NEW },
+      { ID: "", Name: "No Id", Status: NEW }, // errors in transform — never written, never counted
+      { ID: "L-3", Name: "Three", Status: NEW },
+    ]);
+    await migrationService.commit({ format: "csv", content }, owner, {
+      onProgress: async (done, total) => {
+        seen.push([done, total]);
+      },
+    });
+    expect(seen).toEqual([
+      [1, 2],
+      [2, 2],
+    ]);
+  });
+
+  it("stops at the next row boundary when the signal aborts, leaving no partial row", async () => {
+    const controller = new AbortController();
+    await expect(
+      migrationService.commit({ format: "csv", content: threeRows() }, owner, {
+        signal: controller.signal,
+        onProgress: async (done) => {
+          if (done === 1) controller.abort();
+        },
+      }),
+    ).rejects.toMatchObject({ name: "CommitAbortedError", processedRows: 1 });
+
+    // Exactly one row was upserted — the abort was honoured between transactions, not inside one.
+    expect(h.candidateRepo.upsertByLegacyId).toHaveBeenCalledTimes(1);
+  });
+
+  it("skips the rows a previous attempt already committed, and says so in the report", async () => {
+    const report = await migrationService.commit({ format: "csv", content: threeRows() }, owner, {
+      resumeFromRow: 2,
+    });
+    expect(h.candidateRepo.upsertByLegacyId).toHaveBeenCalledTimes(1);
+    expect(h.candidateRepo.upsertByLegacyId).toHaveBeenCalledWith(
+      "L-3",
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+    );
+    expect(report.warnings).toContain("resumed-from-row:2");
+  });
+
+  it("behaves exactly as before when given no options", async () => {
+    await migrationService.commit({ format: "csv", content: threeRows() }, owner);
+    expect(h.candidateRepo.upsertByLegacyId).toHaveBeenCalledTimes(3);
+  });
+});

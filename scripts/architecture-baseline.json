@@ -119,6 +119,7 @@
     "apps/web/src/app/api/mentions/route.ts",
     "apps/web/src/app/api/migration/commit/route.ts",
     "apps/web/src/app/api/migration/prepare/route.ts",
+    "apps/web/src/app/api/migration/runs/[runId]/route.ts",
     "apps/web/src/app/api/pipeline/health/route.ts",
     "apps/web/src/app/api/portal/roles/route.ts",
     "apps/web/src/app/api/prospects/[id]/contacts/[contactId]/route.ts",
