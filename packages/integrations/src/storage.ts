@@ -18,6 +18,8 @@ import { AppError } from "./http/app-error";
 
 export const AVATAR_BUCKET = "avatars";
 export const RESUME_BUCKET = "resumes";
+/** PRIVATE, like `resumes` — generated report CSVs hold candidate PII and are never public. */
+export const EXPORT_BUCKET = "exports";
 
 const s3Endpoint = process.env.S3_ENDPOINT;
 const s3AccessKeyId = process.env.S3_ACCESS_KEY_ID;
@@ -68,6 +70,26 @@ export async function uploadPublic(
   const base = process.env.S3_PUBLIC_URL_BASE;
   if (!base) throw new AppError("UPSTREAM_ERROR", "No public URL base configured for storage");
   return `${base.replace(/\/$/, "")}/${bucket}/${key}`;
+}
+
+/** Upload bytes to a PRIVATE bucket and return nothing — deliberately no URL, because a private
+ *  object has no durable address: the only way to read it back is `getSignedDownloadUrl`, minted
+ *  per request and short-lived. Server-side counterpart to `createSignedUploadUrl` for the case
+ *  where the bytes are produced on the server (a job's CSV) rather than by the browser. */
+export async function uploadPrivate(
+  bucket: string,
+  key: string,
+  bytes: Buffer,
+  contentType: string,
+): Promise<void> {
+  const s3 = getClient();
+  try {
+    await s3.send(
+      new PutObjectCommand({ Bucket: bucket, Key: key, Body: bytes, ContentType: contentType }),
+    );
+  } catch {
+    throw new AppError("UPSTREAM_ERROR", "Could not upload the file");
+  }
 }
 
 /** A short-lived URL the browser can PUT raw bytes to directly (resumes never pass through our

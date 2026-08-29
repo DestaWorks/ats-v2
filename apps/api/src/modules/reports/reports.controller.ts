@@ -1,7 +1,8 @@
-import { Controller, Get, Header, Inject, Query, UseGuards } from "@nestjs/common";
+import { Controller, Get, Header, Inject, Param, Post, Query, UseGuards } from "@nestjs/common";
 import {
   reportFiltersSchema,
   type ClientCapacityDTO,
+  type ReportExportDTO,
   type ClientFunnelDTO,
   type ClientPortfolioDTO,
   type ComplianceDTO,
@@ -14,15 +15,21 @@ import {
   type TimeAnalysisDTO,
   type TrendsDTO,
 } from "@destaworks/contracts/validation/reports";
+import type { AuthUser } from "@destaworks/auth/guards";
+import { logger } from "@destaworks/config/logger";
+import { reportExportJob } from "@destaworks/jobs/definitions/report-export.job";
+import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { RequireCapability } from "../../common/decorators/require-capability.decorator";
 import { CapabilityGuard } from "../../common/guards/capability.guard";
 import { ZodValidationPipe } from "../../common/pipes/zod-validation.pipe";
+import { JOB_QUEUE } from "../jobs/jobs.tokens";
 import type { ServiceOf } from "../service-token";
 import {
   CLIENT_REPORTS_SERVICE,
   EXPORT_SERVICE,
   MASS_JOURNEY_REPORT,
   PIPELINE_REPORTS_SERVICE,
+  REPORT_EXPORT_SERVICE,
   TEAM_REPORTS_SERVICE,
   TIME_REPORTS_SERVICE,
   TRENDS_REPORT,
@@ -69,6 +76,9 @@ export class ReportsController {
     private readonly massJourney: ServiceOf<typeof MASS_JOURNEY_REPORT>,
     @Inject(TRENDS_REPORT) private readonly trendsReport: ServiceOf<typeof TRENDS_REPORT>,
     @Inject(EXPORT_SERVICE) private readonly exports: ServiceOf<typeof EXPORT_SERVICE>,
+    @Inject(REPORT_EXPORT_SERVICE)
+    private readonly exportJobs: ServiceOf<typeof REPORT_EXPORT_SERVICE>,
+    @Inject(JOB_QUEUE) private readonly queue: ServiceOf<typeof JOB_QUEUE>,
   ) {}
 
   /** GET /reports/executive — Executive Summary. */
@@ -152,5 +162,50 @@ export class ReportsController {
   @Header("Content-Disposition", 'attachment; filename="candidates-report.csv"')
   exportCsv(@Filters() filters: ReportFilters): Promise<string> {
     return this.exports.candidatesCsv(filters);
+  }
+
+  /**
+   * POST /reports/export/jobs — ask for the same CSV, built off the request path.
+   *
+   * The route above is bounded only by how big the filtered cohort happens to be; this one
+   * answers in a database round trip and an enqueue, and the file is fetched later through
+   * `GET /reports/export/jobs/:id`.
+   *
+   * The row and the job are written in that order rather than in one transaction: the queue port
+   * accepts a `tx` for exactly this pairing, but the driver behind it is installed at runtime and
+   * may not be Postgres-backed, so the controller cannot assume the two share a transaction. A
+   * failed enqueue therefore marks the export failed itself — the alternative is a row that sits
+   * on `pending` for a job that was never queued.
+   */
+  @Post("export/jobs")
+  async requestExport(
+    @CurrentUser() user: AuthUser,
+    @Filters() filters: ReportFilters,
+  ): Promise<ReportExportDTO> {
+    const row = await this.exportJobs.request(user.id, filters);
+    try {
+      await this.queue.enqueue(reportExportJob, { exportId: row.id, filters });
+    } catch (err) {
+      await this.exportJobs.fail(row.id, "INTERNAL");
+      logger.error("reports.export.enqueue_failed", {
+        exportId: row.id,
+        errorType: err instanceof Error ? err.name : "UnknownError",
+      });
+      throw err;
+    }
+    return this.exportJobs.get(row.id, user.id);
+  }
+
+  /**
+   * GET /reports/export/jobs/:id — poll one export, and collect it once it is ready.
+   *
+   * Answers a small JSON envelope, never the file: the download is a signed URL minted here and
+   * valid for minutes, so the CSV of candidate PII is never served from a cacheable app response
+   * and never sits behind a permanent address. `viewReports` gates the endpoint; the service
+   * additionally refuses an export the caller did not request.
+   */
+  @Get("export/jobs/:id")
+  getExport(@CurrentUser() user: AuthUser, @Param("id") id: string): Promise<ReportExportDTO> {
+    return this.exportJobs.get(id, user.id);
   }
 }

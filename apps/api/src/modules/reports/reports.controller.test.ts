@@ -28,6 +28,10 @@ const h = vi.hoisted(() => ({
   massJourney: vi.fn(),
   trends: vi.fn(),
   candidatesCsv: vi.fn(),
+  requestExport: vi.fn(),
+  getExport: vi.fn(),
+  failExport: vi.fn(),
+  enqueue: vi.fn(),
 }));
 
 vi.mock("@destaworks/auth/auth", () => ({ auth: { api: { getSession: async () => h.session } } }));
@@ -40,10 +44,12 @@ import {
   EXPORT_SERVICE,
   MASS_JOURNEY_REPORT,
   PIPELINE_REPORTS_SERVICE,
+  REPORT_EXPORT_SERVICE,
   TEAM_REPORTS_SERVICE,
   TIME_REPORTS_SERVICE,
   TRENDS_REPORT,
 } from "./reports.tokens";
+import { JOB_QUEUE } from "../jobs/jobs.tokens";
 
 interface Envelope {
   error: { code: string; message: string; issues?: { path: string; message: string }[] };
@@ -79,6 +85,12 @@ beforeAll(async () => {
       provideFakeService(MASS_JOURNEY_REPORT, { massJourney: h.massJourney }),
       provideFakeService(TRENDS_REPORT, { trends: h.trends }),
       provideFakeService(EXPORT_SERVICE, { candidatesCsv: h.candidatesCsv }),
+      provideFakeService(REPORT_EXPORT_SERVICE, {
+        request: h.requestExport,
+        get: h.getExport,
+        fail: h.failExport,
+      }),
+      provideFakeService(JOB_QUEUE, { enqueue: h.enqueue }),
     ],
   });
 });
@@ -196,5 +208,66 @@ describe("GET /reports/export", () => {
     const res = await api.fetch("/reports/export");
     expect(res.headers.get("content-type")).toContain("application/json");
     expect(((await res.json()) as Envelope).error.code).toBe("FORBIDDEN");
+  });
+});
+
+/**
+ * The asynchronous export (Phase 5): the same cohort, built off the request path. These assert
+ * the two things the flow depends on — that the enqueued payload names the row that was just
+ * created, and that a failed enqueue does not leave that row waiting for a job nobody queued.
+ */
+describe("POST /reports/export/jobs", () => {
+  it("401 when signed out, and never enqueues", async () => {
+    const res = await api.fetch("/reports/export/jobs", { method: "POST" });
+    expect(res.status).toBe(401);
+    expect(h.enqueue).not.toHaveBeenCalled();
+  });
+
+  it("403 for a role without viewReports, and never enqueues", async () => {
+    h.session = ASSOCIATE;
+    const res = await api.fetch("/reports/export/jobs", { method: "POST" });
+    expect(res.status).toBe(403);
+    expect(h.enqueue).not.toHaveBeenCalled();
+  });
+
+  it("records the request against the caller and enqueues that export's id", async () => {
+    h.session = OWNER;
+    h.requestExport.mockResolvedValue({ id: "exp1" });
+    h.getExport.mockResolvedValue({ id: "exp1", status: "pending" });
+    const res = await api.fetch("/reports/export/jobs?clientId=c1", { method: "POST" });
+    expect(res.status).toBe(201);
+    expect(await res.json()).toEqual({ id: "exp1", status: "pending" });
+    expect(h.requestExport).toHaveBeenCalledWith("u1", { clientId: "c1" });
+    expect(h.enqueue).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "reports.export.candidates" }),
+      { exportId: "exp1", filters: { clientId: "c1" } },
+    );
+  });
+
+  it("marks the export failed when the enqueue itself fails", async () => {
+    h.session = OWNER;
+    h.requestExport.mockResolvedValue({ id: "exp2" });
+    h.enqueue.mockRejectedValue(new Error("queue down"));
+    const res = await api.fetch("/reports/export/jobs", { method: "POST" });
+    expect(res.status).toBe(500);
+    expect(h.failExport).toHaveBeenCalledWith("exp2", "INTERNAL");
+    expect(h.getExport).not.toHaveBeenCalled();
+  });
+});
+
+describe("GET /reports/export/jobs/:id", () => {
+  it("401 when signed out, and never reads the export", async () => {
+    const res = await api.fetch("/reports/export/jobs/exp1");
+    expect(res.status).toBe(401);
+    expect(h.getExport).not.toHaveBeenCalled();
+  });
+
+  it("reads the export as the caller, so ownership can be enforced below", async () => {
+    h.session = OWNER;
+    h.getExport.mockResolvedValue({ id: "exp1", status: "ready", downloadUrl: "https://s/x" });
+    const res = await api.fetch("/reports/export/jobs/exp1");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ id: "exp1", status: "ready", downloadUrl: "https://s/x" });
+    expect(h.getExport).toHaveBeenCalledWith("exp1", "u1");
   });
 });

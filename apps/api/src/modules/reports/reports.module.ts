@@ -5,6 +5,7 @@ import { teamReportsService } from "@destaworks/application/reports/team-reports
 import { timeReportsService } from "@destaworks/application/reports/time-reports.service";
 import { reportFilterOptionsService } from "@destaworks/application/reports/filter-options.service";
 import { exportService } from "@destaworks/application/reports/export.service";
+import { reportExportService } from "@destaworks/application/reports/report-export.service";
 import { massJourneyReport } from "@destaworks/application/reports/mass-journey.report";
 import { trendsReport } from "@destaworks/application/reports/trends.report";
 import { provideService } from "../service-token";
@@ -14,6 +15,7 @@ import {
   EXPORT_SERVICE,
   MASS_JOURNEY_REPORT,
   PIPELINE_REPORTS_SERVICE,
+  REPORT_EXPORT_SERVICE,
   REPORT_FILTER_OPTIONS_SERVICE,
   TEAM_REPORTS_SERVICE,
   TIME_REPORTS_SERVICE,
@@ -37,6 +39,7 @@ import {
     provideService(TIME_REPORTS_SERVICE, timeReportsService),
     provideService(REPORT_FILTER_OPTIONS_SERVICE, reportFilterOptionsService),
     provideService(EXPORT_SERVICE, exportService),
+    provideService(REPORT_EXPORT_SERVICE, reportExportService),
     provideService(MASS_JOURNEY_REPORT, massJourneyReport),
     provideService(TRENDS_REPORT, trendsReport),
   ],
@@ -47,6 +50,7 @@ import {
     TIME_REPORTS_SERVICE,
     REPORT_FILTER_OPTIONS_SERVICE,
     EXPORT_SERVICE,
+    REPORT_EXPORT_SERVICE,
     MASS_JOURNEY_REPORT,
     TRENDS_REPORT,
   ],

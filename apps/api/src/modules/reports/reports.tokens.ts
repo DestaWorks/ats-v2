@@ -4,6 +4,7 @@ import { teamReportsService } from "@destaworks/application/reports/team-reports
 import { timeReportsService } from "@destaworks/application/reports/time-reports.service";
 import { reportFilterOptionsService } from "@destaworks/application/reports/filter-options.service";
 import { exportService } from "@destaworks/application/reports/export.service";
+import { reportExportService } from "@destaworks/application/reports/report-export.service";
 import { massJourneyReport } from "@destaworks/application/reports/mass-journey.report";
 import { trendsReport } from "@destaworks/application/reports/trends.report";
 import { serviceToken } from "../service-token";
@@ -27,5 +28,7 @@ export const REPORT_FILTER_OPTIONS_SERVICE = serviceToken<typeof reportFilterOpt
   "REPORT_FILTER_OPTIONS_SERVICE",
 );
 export const EXPORT_SERVICE = serviceToken<typeof exportService>("EXPORT_SERVICE");
+export const REPORT_EXPORT_SERVICE =
+  serviceToken<typeof reportExportService>("REPORT_EXPORT_SERVICE");
 export const MASS_JOURNEY_REPORT = serviceToken<typeof massJourneyReport>("MASS_JOURNEY_REPORT");
 export const TRENDS_REPORT = serviceToken<typeof trendsReport>("TRENDS_REPORT");

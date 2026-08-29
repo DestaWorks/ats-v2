@@ -7,7 +7,7 @@ import {
 } from "@aws-sdk/client-s3";
 
 /**
- * One-off setup for object storage (Wave 6, D8) — creates the two buckets `server/integrations/
+ * One-off setup for object storage (Wave 6, D8) — creates the buckets `packages/integrations/src/
  * storage.ts` uploads to, via the standard S3 protocol (works against Supabase Storage's
  * S3-compatible endpoint today, or any other S3-compatible provider later). Run once per
  * environment (`pnpm setup:storage`) after setting the `S3_*` env vars. Idempotent — re-running
@@ -22,11 +22,14 @@ import {
  * fail to save on the first attempt in the Supabase dashboard — the badge looked right until a
  * hard refresh proved it hadn't actually persisted, for BOTH buckets, in both directions. This
  * script closes that gap itself: after creation it uploads a real object to each bucket and
- * probes S3_PUBLIC_URL_BASE to confirm `avatars` is actually publicly readable and `resumes` is
- * actually blocked — never just trust the dashboard's badge.
+ * probes S3_PUBLIC_URL_BASE to confirm `avatars` is actually publicly readable and every
+ * `PRIVATE_BUCKETS` entry is actually blocked — never just trust the dashboard's badge.
  */
 
-const BUCKETS = ["avatars", "resumes"] as const;
+const BUCKETS = ["avatars", "resumes", "exports"] as const;
+
+/** Buckets whose contents are PII and must fail an anonymous read. Verified, never assumed. */
+const PRIVATE_BUCKETS = ["resumes", "exports"] as const;
 
 async function main() {
   const endpoint = process.env.S3_ENDPOINT;
@@ -60,7 +63,7 @@ async function main() {
   }
 
   console.log(
-    "\nBuckets ready — now go mark 'avatars' PUBLIC and confirm 'resumes' stays PRIVATE via " +
+    `\nBuckets ready — now go mark 'avatars' PUBLIC and confirm ${PRIVATE_BUCKETS.join("/")} stay PRIVATE via ` +
       "the provider's dashboard (Storage → bucket → Edit bucket). Come back and press Enter to " +
       "verify it actually took effect (don't trust the dashboard badge alone — it can lag).",
   );
@@ -86,23 +89,28 @@ async function main() {
       }),
     );
   }
-  const [avatarsRes, resumesRes] = await Promise.all([
-    fetch(`${publicUrlBase.replace(/\/$/, "")}/avatars/${key}`),
-    fetch(`${publicUrlBase.replace(/\/$/, "")}/resumes/${key}`),
+  const base = publicUrlBase.replace(/\/$/, "");
+  const [avatarsRes, ...privateRes] = await Promise.all([
+    fetch(`${base}/avatars/${key}`),
+    ...PRIVATE_BUCKETS.map((bucket) => fetch(`${base}/${bucket}/${key}`)),
   ]);
   await Promise.all(
     BUCKETS.map((bucket) => s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }))),
   );
 
   const avatarsOk = avatarsRes.status === 200;
-  const resumesBlocked = resumesRes.status !== 200;
   console.log(
     `avatars publicly readable: ${avatarsOk ? "✓ yes" : `✗ NO (status ${avatarsRes.status}) — fix in the dashboard and re-run`}`,
   );
-  console.log(
-    `resumes correctly private: ${resumesBlocked ? "✓ yes" : "⚠ NO — IT IS PUBLIC, fix this before storing any real resume"}`,
-  );
-  if (!avatarsOk || !resumesBlocked) process.exit(1);
+  let allPrivate = true;
+  PRIVATE_BUCKETS.forEach((bucket, i) => {
+    const blocked = (privateRes[i]?.status ?? 0) !== 200;
+    if (!blocked) allPrivate = false;
+    console.log(
+      `${bucket} correctly private: ${blocked ? "✓ yes" : "⚠ NO — IT IS PUBLIC, fix this before storing any real data"}`,
+    );
+  });
+  if (!avatarsOk || !allPrivate) process.exit(1);
   console.log("\n✓ Verified live — object storage is correctly configured.");
 }
 
