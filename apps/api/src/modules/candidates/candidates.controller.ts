@@ -32,12 +32,16 @@ import { toIso } from "@destaworks/domain/utils/iso";
 import { AppError } from "@destaworks/integrations/http/app-error";
 import { toCandidateDTO, toDocumentSummaryDTO } from "@destaworks/application/candidate.dto";
 import type { AuthContext } from "@destaworks/auth/guards";
-import type { CandidateListDTO } from "@destaworks/contracts/validation/candidate";
+import type {
+  CandidateListDTO,
+  CandidateTrashDTO,
+} from "@destaworks/contracts/validation/candidate";
 import type { JourneyDTO } from "@destaworks/contracts/validation/journey";
 import type {
   BoardResponse,
   BulkMoveResponse,
   ColumnPageDTO,
+  DashboardStatsDTO,
 } from "@destaworks/contracts/validation/pipeline";
 import type {
   CandidateAckEnvelope,
@@ -158,6 +162,28 @@ export class CandidatesController {
     @CurrentUser() user: AuthContext,
   ): Promise<BulkMoveResponse> {
     return this.candidates.bulkMove(body.ids, body.toStatus, user);
+  }
+
+  /**
+   * GET /candidates/trash — the `/trash` payload, soft-deleted candidates newest-deleted first.
+   * Declared before `:id` so the literal segment wins the match; Nest resolves in declaration order.
+   *
+   * Open to any signed-in operator, matching the page it serves: soft-delete and restore are
+   * reversible, and the rows are PII-gated by `toCandidateDTO` inside the service — a trash row
+   * never carries `licenseNumber`. Purging is the gated action, and it lives on its own endpoint.
+   */
+  @Get("trash")
+  async trash(@CurrentUser() user: AuthContext): Promise<CandidateTrashDTO> {
+    return this.candidates.listTrash(user);
+  }
+
+  /**
+   * GET /candidates/dashboard-stats — headline counts, the active-stage funnel and the small
+   * "needs attention" list. Declared before `:id` for the same reason as `trash`.
+   */
+  @Get("dashboard-stats")
+  async dashboardStats(@CurrentUser() user: AuthContext): Promise<DashboardStatsDTO> {
+    return this.candidates.dashboardStats(user);
   }
 
   /**
