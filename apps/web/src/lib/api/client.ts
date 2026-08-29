@@ -10,6 +10,37 @@ import type { ApiErrorBody, ApiFailure, FieldIssue } from "@destaworks/contracts
 
 export type { ApiErrorBody, ApiFailure, FieldIssue };
 
+/**
+ * Where the browser sends a call, and whether that call has to carry the cookie explicitly.
+ *
+ * Callers pass `/api/...` because that is where `apps/web`'s route handlers live. `apps/api` sets
+ * no global prefix, so its routes are `/candidates`, `/crm/clients`, … — the same paths the SERVER
+ * half (`./server.ts`) already passes. The `/api` segment is therefore an `apps/web` routing
+ * detail, and stripping it here is what makes both halves address one API, without editing the 72
+ * call sites that spell it.
+ *
+ * With `NEXT_PUBLIC_API_URL` unset this returns the caller's URL untouched, so nothing changes
+ * until the API is hosted and the variable is set.
+ */
+function resolveTarget(url: string): { url: string; crossOrigin: boolean } {
+  const relative = { url, crossOrigin: false };
+  const base = process.env.NEXT_PUBLIC_API_URL?.trim();
+  if (base === undefined || base === "") return relative;
+  if (url !== "/api" && !url.startsWith("/api/")) return relative;
+
+  const path = url.slice("/api".length);
+  // Better Auth is mounted INSIDE apps/web at app/api/auth/[...all] and owns its own transport;
+  // sending it to apps/api would break sign-in, so it stays relative whatever the base is.
+  if (/^\/auth(?:[/?#]|$)/.test(path)) return relative;
+
+  try {
+    const joined = new URL(path.replace(/^\//, ""), base.endsWith("/") ? base : `${base}/`);
+    return { url: joined.toString(), crossOrigin: true };
+  } catch {
+    return relative;
+  }
+}
+
 /** Discriminated result of a mutation: the parsed body on success, a failure envelope otherwise. */
 export type ApiResult<T> = { ok: true; data: T } | { ok: false; failure: ApiFailure };
 
@@ -40,8 +71,15 @@ export function messageForFailure(failure: ApiFailure): string {
  *  have to catch. A deliberate `AbortController.abort()` still rejects with `AbortError`, which
  *  is the contract effect cleanups rely on to tell "cancelled" apart from "failed". */
 async function request<T>(url: string, init: RequestInit): Promise<ApiResult<T>> {
+  const target = resolveTarget(url);
   try {
-    const res = await fetch(url, init);
+    // `credentials` only when the call left this origin: the default `same-origin` drops the
+    // session cookie cross-origin, and setting `include` on a same-origin call changes nothing
+    // except widening what a future misconfiguration would send.
+    const res = await fetch(
+      target.url,
+      target.crossOrigin ? { ...init, credentials: "include" } : init,
+    );
     if (!res.ok) return { ok: false, failure: await readFailure(res) };
     const data = (await res.json()) as T;
     return { ok: true, data };
