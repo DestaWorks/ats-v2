@@ -1,5 +1,6 @@
+import type { TenantContext } from "@destaworks/domain/tenant";
 import type { Prisma } from "../generated/prisma/client";
-import { db } from "../prisma";
+import { bridgeUnscopedCallers, db, type ScopedTx } from "../tenant-scope";
 
 /** A mention row joined with the context the alerts panel renders (author, type, candidate). */
 export type MentionRow = Prisma.MentionGetPayload<{ include: typeof MENTION_INCLUDE }>;
@@ -21,14 +22,15 @@ const MENTION_INCLUDE = {
  * server-side alongside the note (same `tx`); the read side powers the bell badge + alerts
  * panel (`recipientId + readAt` is the indexed pair).
  */
-export const mentionRepository = {
+export const mentionRepository = bridgeUnscopedCallers({
   /** Insert one row per recipient (already resolved + deduped by the service). */
   async createMany(
+    ctx: TenantContext,
     data: { noteId: string; candidateId: string; recipientIds: string[] },
-    tx?: Prisma.TransactionClient,
+    tx?: ScopedTx,
   ): Promise<number> {
     if (data.recipientIds.length === 0) return 0;
-    const res = await db(tx).mention.createMany({
+    const res = await db(ctx, tx).mention.createMany({
       data: data.recipientIds.map((recipientId) => ({
         noteId: data.noteId,
         candidateId: data.candidateId,
@@ -39,8 +41,8 @@ export const mentionRepository = {
   },
 
   /** The viewer's mentions, newest first (unread + recent read; the service slices for display). */
-  listForRecipient(recipientId: string, take: number, tx?: Prisma.TransactionClient) {
-    return db(tx).mention.findMany({
+  listForRecipient(ctx: TenantContext, recipientId: string, take: number, tx?: ScopedTx) {
+    return db(ctx, tx).mention.findMany({
       where: { recipientId, note: { deletedAt: null } },
       include: MENTION_INCLUDE,
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
@@ -49,8 +51,8 @@ export const mentionRepository = {
   },
 
   /** Unread count for the bell badge. */
-  countUnread(recipientId: string, tx?: Prisma.TransactionClient) {
-    return db(tx).mention.count({
+  countUnread(ctx: TenantContext, recipientId: string, tx?: ScopedTx) {
+    return db(ctx, tx).mention.count({
       where: { recipientId, readAt: null, note: { deletedAt: null } },
     });
   },
@@ -58,11 +60,12 @@ export const mentionRepository = {
   /** Whether a mention id belongs to this recipient at all — unbounded, not the recency-capped
    *  `listForRecipient` page. */
   async existsForRecipient(
+    ctx: TenantContext,
     id: string,
     recipientId: string,
-    tx?: Prisma.TransactionClient,
+    tx?: ScopedTx,
   ): Promise<boolean> {
-    const count = await db(tx).mention.count({ where: { id, recipientId } });
+    const count = await db(ctx, tx).mention.count({ where: { id, recipientId } });
     return count > 0;
   },
 
@@ -70,8 +73,13 @@ export const mentionRepository = {
    * Mark ONE mention read. Scoped to the recipient (`updateMany`, not `update`) so a caller can
    * never mark someone else's mention; returns the affected count (0 → not yours / not found).
    */
-  async markRead(id: string, recipientId: string, tx?: Prisma.TransactionClient): Promise<number> {
-    const res = await db(tx).mention.updateMany({
+  async markRead(
+    ctx: TenantContext,
+    id: string,
+    recipientId: string,
+    tx?: ScopedTx,
+  ): Promise<number> {
+    const res = await db(ctx, tx).mention.updateMany({
       where: { id, recipientId, readAt: null },
       data: { readAt: new Date() },
     });
@@ -79,11 +87,11 @@ export const mentionRepository = {
   },
 
   /** Mark ALL of the recipient's unread mentions read; returns the affected count. */
-  async markAllRead(recipientId: string, tx?: Prisma.TransactionClient): Promise<number> {
-    const res = await db(tx).mention.updateMany({
+  async markAllRead(ctx: TenantContext, recipientId: string, tx?: ScopedTx): Promise<number> {
+    const res = await db(ctx, tx).mention.updateMany({
       where: { recipientId, readAt: null },
       data: { readAt: new Date() },
     });
     return res.count;
   },
-};
+});

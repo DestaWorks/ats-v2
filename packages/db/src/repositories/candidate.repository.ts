@@ -1,3 +1,4 @@
+import type { TenantContext } from "@destaworks/domain/tenant";
 import type { Candidate, Prisma } from "../generated/prisma/client";
 import {
   ACTIVE_STATUS_CODES,
@@ -8,7 +9,7 @@ import {
   type Track,
 } from "@destaworks/domain/constants";
 import type { ListOrderBy, PageCursor } from "@destaworks/contracts/validation/cursor";
-import { db } from "../prisma";
+import { bridgeUnscopedCallers, db, type ScopedTx } from "../tenant-scope";
 import { decryptField, encryptField } from "../field-crypto";
 
 /** A raw candidate row (Prisma model). Services/DTOs map this to API shapes. */
@@ -195,14 +196,19 @@ function decryptRow<T extends Candidate | null>(row: T): T {
  * accident. (Done here rather than as a global Prisma extension so the Better Auth models are
  * unaffected.) Every method accepts an optional `tx` so services can compose atomic writes.
  */
-export const candidateRepository = {
-  async create(data: Prisma.CandidateUncheckedCreateInput, tx?: Prisma.TransactionClient) {
-    return decryptRow(await db(tx).candidate.create({ data: encryptLicense(data) }));
+export const candidateRepository = bridgeUnscopedCallers({
+  async create(ctx: TenantContext, data: Prisma.CandidateUncheckedCreateInput, tx?: ScopedTx) {
+    return decryptRow(await db(ctx, tx).candidate.create({ data: encryptLicense(data) }));
   },
 
-  async findById(id: string, opts?: { includeDeleted?: boolean }, tx?: Prisma.TransactionClient) {
+  async findById(
+    ctx: TenantContext,
+    id: string,
+    opts?: { includeDeleted?: boolean },
+    tx?: ScopedTx,
+  ) {
     return decryptRow(
-      await db(tx).candidate.findFirst({
+      await db(ctx, tx).candidate.findFirst({
         where: { id, ...(opts?.includeDeleted ? {} : { deletedAt: null }) },
       }),
     );
@@ -216,13 +222,14 @@ export const candidateRepository = {
    * lets the caller suppress the link). `name` is not an encrypted column — no `decryptRow` needed.
    */
   async namesByIds(
+    ctx: TenantContext,
     ids: string[],
     opts?: { includeDeleted?: boolean },
-    tx?: Prisma.TransactionClient,
+    tx?: ScopedTx,
   ): Promise<Map<string, { id: string; name: string; deletedAt: Date | null }>> {
     const unique = [...new Set(ids)];
     if (unique.length === 0) return new Map();
-    const rows = await db(tx).candidate.findMany({
+    const rows = await db(ctx, tx).candidate.findMany({
       where: { id: { in: unique }, ...(opts?.includeDeleted ? {} : { deletedAt: null }) },
       select: { id: true, name: true, deletedAt: true },
     });
@@ -234,11 +241,12 @@ export const candidateRepository = {
    * dedupe check (Wave 2.8). `email` is not an encrypted column — no `decryptRow` needed.
    */
   async findManyByEmails(
+    ctx: TenantContext,
     emails: string[],
-    tx?: Prisma.TransactionClient,
+    tx?: ScopedTx,
   ): Promise<Array<{ id: string; name: string; email: string | null }>> {
     if (emails.length === 0) return [];
-    return db(tx).candidate.findMany({
+    return db(ctx, tx).candidate.findMany({
       where: { email: { in: emails, mode: "insensitive" }, deletedAt: null },
       select: { id: true, name: true, email: true },
     });
@@ -247,11 +255,12 @@ export const candidateRepository = {
   /** Existing LIVE candidates matching any of these names (case-insensitive) — the Discover
    *  (NPPES) cross-system dedupe check (Wave 2.7). */
   async findManyByNames(
+    ctx: TenantContext,
     names: string[],
-    tx?: Prisma.TransactionClient,
+    tx?: ScopedTx,
   ): Promise<Array<{ id: string; name: string; status: string }>> {
     if (names.length === 0) return [];
-    return db(tx).candidate.findMany({
+    return db(ctx, tx).candidate.findMany({
       where: { name: { in: names, mode: "insensitive" }, deletedAt: null },
       select: { id: true, name: true, status: true },
     });
@@ -262,19 +271,20 @@ export const candidateRepository = {
    * migration re-upserts an existing (even trashed) record instead of creating a duplicate.
    * UI/read paths must NOT use this — they go through `findById`/`list` (which exclude deleted).
    */
-  async findByLegacyId(legacyId: string, tx?: Prisma.TransactionClient) {
-    return decryptRow(await db(tx).candidate.findUnique({ where: { legacyId } }));
+  async findByLegacyId(ctx: TenantContext, legacyId: string, tx?: ScopedTx) {
+    return decryptRow(await db(ctx, tx).candidate.findUnique({ where: { legacyId } }));
   },
 
   /** ETL upsert keyed on the legacy Sheet id — idempotent re-runs; delete-agnostic (see above). */
   async upsertByLegacyId(
+    ctx: TenantContext,
     legacyId: string,
     create: Prisma.CandidateUncheckedCreateInput,
     update: Prisma.CandidateUncheckedUpdateInput,
-    tx?: Prisma.TransactionClient,
+    tx?: ScopedTx,
   ) {
     return decryptRow(
-      await db(tx).candidate.upsert({
+      await db(ctx, tx).candidate.upsert({
         where: { legacyId },
         create: { ...encryptLicense(create), legacyId },
         update: encryptLicense(update),
@@ -288,12 +298,12 @@ export const candidateRepository = {
    * `pageSize + 1` so the service can detect `hasMore` + derive `nextCursor`). Returns decrypted
    * rows (unchanged crypto path). Sort defaults to `createdAt_desc` (Newest first).
    */
-  async list(filters: CandidateListFilters = {}, tx?: Prisma.TransactionClient) {
+  async list(ctx: TenantContext, filters: CandidateListFilters = {}, tx?: ScopedTx) {
     const now = filters.now ?? new Date();
     const orderBy = filters.orderBy ?? "createdAt_desc";
     let where = buildCandidateWhere(filters, now);
     if (filters.cursor) where = andMerge(where, keysetWhere(filters.cursor, orderBy));
-    const rows = await db(tx).candidate.findMany({
+    const rows = await db(ctx, tx).candidate.findMany({
       where,
       orderBy: orderByClause(orderBy),
       ...(filters.skip !== undefined ? { skip: filters.skip } : {}),
@@ -309,12 +319,12 @@ export const candidateRepository = {
    * 2026-08-15). `omit` narrows both the SQL (never fetched from Postgres) and the returned type,
    * so there's nothing for `decryptRow` to do here — skip it.
    */
-  async listCards(filters: CandidateListFilters = {}, tx?: Prisma.TransactionClient) {
+  async listCards(ctx: TenantContext, filters: CandidateListFilters = {}, tx?: ScopedTx) {
     const now = filters.now ?? new Date();
     const orderBy = filters.orderBy ?? "createdAt_desc";
     let where = buildCandidateWhere(filters, now);
     if (filters.cursor) where = andMerge(where, keysetWhere(filters.cursor, orderBy));
-    return db(tx).candidate.findMany({
+    return db(ctx, tx).candidate.findMany({
       where,
       orderBy: orderByClause(orderBy),
       omit: { licenseNumber: true },
@@ -330,8 +340,8 @@ export const candidateRepository = {
    * matching. `select` (not `omit`) so neither `licenseNumber` nor any other unused column is ever
    * fetched from Postgres — no `decryptRow` needed, this shape never carries the encrypted field.
    */
-  listForMatch(includeDeleted = false, tx?: Prisma.TransactionClient) {
-    return db(tx).candidate.findMany({
+  listForMatch(ctx: TenantContext, includeDeleted = false, tx?: ScopedTx) {
+    return db(ctx, tx).candidate.findMany({
       where: includeDeleted ? {} : { deletedAt: null },
       select: { id: true, name: true, email: true },
     });
@@ -343,8 +353,8 @@ export const candidateRepository = {
    * perf audit 2026-08-16: was pulling every scalar column (decrypting `licenseNumber` per row) of
    * the ENTIRE candidate table (`includeDeleted: true`, no cap) on every prepare/commit call.
    */
-  listForDedupe(includeDeleted = false, tx?: Prisma.TransactionClient) {
-    return db(tx).candidate.findMany({
+  listForDedupe(ctx: TenantContext, includeDeleted = false, tx?: ScopedTx) {
+    return db(ctx, tx).candidate.findMany({
       where: includeDeleted ? {} : { deletedAt: null },
       select: { id: true, legacyId: true, email: true, updatedAt: true, createdAt: true },
     });
@@ -354,17 +364,17 @@ export const candidateRepository = {
    * True filtered total for the same `where` as `list` (minus cursor/orderBy/take) — the list's
    * `total` denominator and the board's per-status count fallback. No PII columns → no crypto.
    */
-  count(filters: CandidateListFilters = {}, tx?: Prisma.TransactionClient) {
+  count(ctx: TenantContext, filters: CandidateListFilters = {}, tx?: ScopedTx) {
     const now = filters.now ?? new Date();
-    return db(tx).candidate.count({ where: buildCandidateWhere(filters, now) });
+    return db(ctx, tx).candidate.count({ where: buildCandidateWhere(filters, now) });
   },
 
   /**
    * Per-status counts (`groupBy`) for the dashboard funnel — avoids loading the whole table just to
    * count. Soft-deleted rows are excluded. No PII columns are touched, so no crypto is involved.
    */
-  groupByStatus(tx?: Prisma.TransactionClient) {
-    return db(tx).candidate.groupBy({
+  groupByStatus(ctx: TenantContext, tx?: ScopedTx) {
+    return db(ctx, tx).candidate.groupBy({
       by: ["status"],
       where: { deletedAt: null },
       _count: { _all: true },
@@ -376,8 +386,8 @@ export const candidateRepository = {
    * coverage-gap widget's "pipeline" count (Wave 5.5 backlog, legacy Drop 68). Rows with either
    * field null are excluded.
    */
-  groupActiveByCredentialState(tx?: Prisma.TransactionClient) {
-    return db(tx).candidate.groupBy({
+  groupActiveByCredentialState(ctx: TenantContext, tx?: ScopedTx) {
+    return db(ctx, tx).candidate.groupBy({
       by: ["credential", "state"],
       where: {
         deletedAt: null,
@@ -394,12 +404,12 @@ export const candidateRepository = {
    * per-column totals in ONE query. `status` is intentionally dropped (the board groups ACROSS
    * statuses); every other filter (track/client/search/tags/licenseStatus/mine/overdue/stuck) counts.
    */
-  groupByStatusFiltered(filters: CandidateListFilters = {}, tx?: Prisma.TransactionClient) {
+  groupByStatusFiltered(ctx: TenantContext, filters: CandidateListFilters = {}, tx?: ScopedTx) {
     const now = filters.now ?? new Date();
     // Drop `status` — the board groups ACROSS statuses; every other filter still counts.
     const acrossStatuses = { ...filters };
     delete acrossStatuses.status;
-    return db(tx).candidate.groupBy({
+    return db(ctx, tx).candidate.groupBy({
       by: ["status"],
       where: buildCandidateWhere(acrossStatuses, now),
       _count: { _all: true },
@@ -412,9 +422,9 @@ export const candidateRepository = {
    * audit 2026-08-03: was one `count()` per client run via `Promise.all`; this does the same
    * aggregation in ONE query.
    */
-  countStartedByClient(clientIds: string[], tx?: Prisma.TransactionClient) {
+  countStartedByClient(ctx: TenantContext, clientIds: string[], tx?: ScopedTx) {
     if (clientIds.length === 0) return Promise.resolve([]);
-    return db(tx).candidate.groupBy({
+    return db(ctx, tx).candidate.groupBy({
       by: ["clientId"],
       where: { deletedAt: null, clientId: { in: clientIds }, status: "STARTED_DAY1" },
       _count: { _all: true },
@@ -427,9 +437,9 @@ export const candidateRepository = {
    * `Promise.all`; this does the same aggregation in ONE query, same shape as
    * `countStartedByClient` above.
    */
-  groupByStatusForClients(clientIds: string[], tx?: Prisma.TransactionClient) {
+  groupByStatusForClients(ctx: TenantContext, clientIds: string[], tx?: ScopedTx) {
     if (clientIds.length === 0) return Promise.resolve([]);
-    return db(tx).candidate.groupBy({
+    return db(ctx, tx).candidate.groupBy({
       by: ["status", "clientId"],
       where: { deletedAt: null, clientId: { in: clientIds } },
       _count: { _all: true },
@@ -441,9 +451,9 @@ export const candidateRepository = {
    * brief's "top clients by active candidates" figure. Perf audit 2026-08-16: was one `count()`
    * per client run via `Promise.all`; same shape as `countStartedByClient` above.
    */
-  countActiveByClient(clientIds: string[], tx?: Prisma.TransactionClient) {
+  countActiveByClient(ctx: TenantContext, clientIds: string[], tx?: ScopedTx) {
     if (clientIds.length === 0) return Promise.resolve([]);
-    return db(tx).candidate.groupBy({
+    return db(ctx, tx).candidate.groupBy({
       by: ["clientId"],
       where: {
         deletedAt: null,
@@ -459,9 +469,9 @@ export const candidateRepository = {
    * brief's per-associate "assigned candidates" figure. Perf audit 2026-08-16: was one `count()`
    * per user run via `Promise.all`.
    */
-  countActiveByCreatedBy(createdByIds: string[], tx?: Prisma.TransactionClient) {
+  countActiveByCreatedBy(ctx: TenantContext, createdByIds: string[], tx?: ScopedTx) {
     if (createdByIds.length === 0) return Promise.resolve([]);
-    return db(tx).candidate.groupBy({
+    return db(ctx, tx).candidate.groupBy({
       by: ["createdById"],
       where: {
         deletedAt: null,
@@ -477,9 +487,9 @@ export const candidateRepository = {
    * per-associate "stuck" figure. Perf audit 2026-08-16: was one `count()` per user run via
    * `Promise.all`, same shape as `countActiveByCreatedBy` above.
    */
-  countStuckByCreatedBy(createdByIds: string[], now: Date, tx?: Prisma.TransactionClient) {
+  countStuckByCreatedBy(ctx: TenantContext, createdByIds: string[], now: Date, tx?: ScopedTx) {
     if (createdByIds.length === 0) return Promise.resolve([]);
-    return db(tx).candidate.groupBy({
+    return db(ctx, tx).candidate.groupBy({
       by: ["createdById"],
       where: { deletedAt: null, createdById: { in: createdByIds }, ...stuckWhere(now) },
       _count: { _all: true },
@@ -493,8 +503,8 @@ export const candidateRepository = {
    */
   /** Feeds the dashboard's "needs attention" list, rendered through the same card DTO as
    *  `listCards` — same reasoning: `licenseNumber` is never surfaced, so omit it. */
-  listStaleActive(limit: number, tx?: Prisma.TransactionClient) {
-    return db(tx).candidate.findMany({
+  listStaleActive(ctx: TenantContext, limit: number, tx?: ScopedTx) {
+    return db(ctx, tx).candidate.findMany({
       where: { deletedAt: null, stageOrder: { lt: 9 } },
       orderBy: { stageEnteredAt: "asc" },
       omit: { licenseNumber: true },
@@ -508,8 +518,8 @@ export const candidateRepository = {
    * `listBoard`'s `meta.overdue` and `alertBuckets`'s per-owner bucket already use. Only
    * non-PII columns are selected → no crypto.
    */
-  async topOverdue(limit: number, now: Date, tx?: Prisma.TransactionClient) {
-    return db(tx).candidate.findMany({
+  async topOverdue(ctx: TenantContext, limit: number, now: Date, tx?: ScopedTx) {
+    return db(ctx, tx).candidate.findMany({
       where: { deletedAt: null, AND: [overdueWhere(now)] },
       select: { id: true, name: true, status: true, clientId: true, stageEnteredAt: true },
       orderBy: { stageEnteredAt: "asc" },
@@ -525,7 +535,7 @@ export const candidateRepository = {
    * (non-null column, default covers the legacy empty case) excluding Future Pipeline. Only
    * non-PII columns are selected → no crypto.
    */
-  async alertBuckets(ownerId: string, take: number, now: Date, tx?: Prisma.TransactionClient) {
+  async alertBuckets(ctx: TenantContext, ownerId: string, take: number, now: Date, tx?: ScopedTx) {
     const select = {
       id: true,
       name: true,
@@ -540,8 +550,8 @@ export const candidateRepository = {
     ) => {
       const scoped = { deletedAt: null, createdById: ownerId, ...where };
       const [count, items] = await Promise.all([
-        db(tx).candidate.count({ where: scoped }),
-        db(tx).candidate.findMany({ where: scoped, select, orderBy, take }),
+        db(ctx, tx).candidate.count({ where: scoped }),
+        db(ctx, tx).candidate.findMany({ where: scoped, select, orderBy, take }),
       ]);
       return { count, items };
     };
@@ -561,25 +571,28 @@ export const candidateRepository = {
   },
 
   async update(
+    ctx: TenantContext,
     id: string,
     data: Prisma.CandidateUncheckedUpdateInput,
-    tx?: Prisma.TransactionClient,
+    tx?: ScopedTx,
   ) {
-    return decryptRow(await db(tx).candidate.update({ where: { id }, data: encryptLicense(data) }));
+    return decryptRow(
+      await db(ctx, tx).candidate.update({ where: { id }, data: encryptLicense(data) }),
+    );
   },
 
-  async softDelete(id: string, actorId: string, tx?: Prisma.TransactionClient) {
+  async softDelete(ctx: TenantContext, id: string, actorId: string, tx?: ScopedTx) {
     return decryptRow(
-      await db(tx).candidate.update({
+      await db(ctx, tx).candidate.update({
         where: { id },
         data: { deletedAt: new Date(), deletedById: actorId },
       }),
     );
   },
 
-  async restore(id: string, tx?: Prisma.TransactionClient) {
+  async restore(ctx: TenantContext, id: string, tx?: ScopedTx) {
     return decryptRow(
-      await db(tx).candidate.update({
+      await db(ctx, tx).candidate.update({
         where: { id },
         data: { deletedAt: null, deletedById: null },
       }),
@@ -587,8 +600,8 @@ export const candidateRepository = {
   },
 
   /** Bump the denormalized outreach counter (candidate_log_outreach writes ride the same tx). */
-  incrementOutreach(id: string, tx?: Prisma.TransactionClient) {
-    return db(tx).candidate.update({
+  incrementOutreach(ctx: TenantContext, id: string, tx?: ScopedTx) {
+    return db(ctx, tx).candidate.update({
       where: { id },
       data: { outreachAttempts: { increment: 1 } },
       select: { id: true, outreachAttempts: true }, // no PII columns → no crypto round-trip
@@ -601,8 +614,8 @@ export const candidateRepository = {
    * crypto (the row is being destroyed, not read). The `activity_log` has no FK to `Candidate`, so
    * a purge audit row written in the same transaction survives the cascade.
    */
-  async purge(id: string, tx?: Prisma.TransactionClient) {
-    return db(tx).candidate.delete({ where: { id } });
+  async purge(ctx: TenantContext, id: string, tx?: ScopedTx) {
+    return db(ctx, tx).candidate.delete({ where: { id } });
   },
 
   /**
@@ -611,12 +624,12 @@ export const candidateRepository = {
    * the keyset createdAt/name machinery) and the set is small, so there is no cursor pagination in
    * v1. `take` caps a runaway trash. Returns decrypted rows (services then PII-gate via `toCandidateDTO`).
    */
-  async listDeleted(take?: number, tx?: Prisma.TransactionClient) {
-    const rows = await db(tx).candidate.findMany({
+  async listDeleted(ctx: TenantContext, take?: number, tx?: ScopedTx) {
+    const rows = await db(ctx, tx).candidate.findMany({
       where: { deletedAt: { not: null } },
       orderBy: { deletedAt: "desc" },
       ...(take !== undefined ? { take } : {}),
     });
     return rows.map(decryptRow);
   },
-};
+});

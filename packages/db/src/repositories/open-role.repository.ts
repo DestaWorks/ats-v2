@@ -1,5 +1,6 @@
+import type { TenantContext } from "@destaworks/domain/tenant";
 import type { OpenRole, Prisma } from "../generated/prisma/client";
-import { db } from "../prisma";
+import { bridgeUnscopedCallers, db, type ScopedTx } from "../tenant-scope";
 
 /** A raw open-role row (Prisma model). Services/DTOs map this to API shapes. */
 export type OpenRoleRow = OpenRole;
@@ -28,30 +29,31 @@ function buildWhere(filters: OpenRoleFilters): Prisma.OpenRoleWhereInput {
  * here, unlike candidates/leads. Every method accepts an optional `tx` so the service can compose
  * the write + `writeAudit` atomically.
  */
-export const openRoleRepository = {
-  create(data: Prisma.OpenRoleUncheckedCreateInput, tx?: Prisma.TransactionClient) {
-    return db(tx).openRole.create({ data });
+export const openRoleRepository = bridgeUnscopedCallers({
+  create(ctx: TenantContext, data: Prisma.OpenRoleUncheckedCreateInput, tx?: ScopedTx) {
+    return db(ctx, tx).openRole.create({ data });
   },
 
-  findById(id: string, tx?: Prisma.TransactionClient) {
-    return db(tx).openRole.findUnique({ where: { id } });
+  findById(ctx: TenantContext, id: string, tx?: ScopedTx) {
+    return db(ctx, tx).openRole.findUnique({ where: { id } });
   },
 
   /** Batch-fetch by ids (unordered) — for building `roleId → row` maps in the triage/matches reads. */
-  findManyByIds(ids: string[], tx?: Prisma.TransactionClient) {
+  findManyByIds(ctx: TenantContext, ids: string[], tx?: ScopedTx) {
     if (ids.length === 0) return Promise.resolve([]);
-    return db(tx).openRole.findMany({ where: { id: { in: [...new Set(ids)] } } });
+    return db(ctx, tx).openRole.findMany({ where: { id: { in: [...new Set(ids)] } } });
   },
 
-  count(filters: OpenRoleFilters = {}, tx?: Prisma.TransactionClient) {
-    return db(tx).openRole.count({ where: buildWhere(filters) });
+  count(ctx: TenantContext, filters: OpenRoleFilters = {}, tx?: ScopedTx) {
+    return db(ctx, tx).openRole.count({ where: buildWhere(filters) });
   },
 
   list(
+    ctx: TenantContext,
     filters: OpenRoleFilters & { skip?: number; take?: number } = {},
-    tx?: Prisma.TransactionClient,
+    tx?: ScopedTx,
   ) {
-    return db(tx).openRole.findMany({
+    return db(ctx, tx).openRole.findMany({
       where: buildWhere(filters),
       orderBy: { createdAt: "desc" },
       ...(filters.skip !== undefined && { skip: filters.skip }),
@@ -60,8 +62,8 @@ export const openRoleRepository = {
   },
 
   /** All non-terminal (Open/On Hold) roles — the triage strip's candidate pool. */
-  listActive(tx?: Prisma.TransactionClient) {
-    return db(tx).openRole.findMany({
+  listActive(ctx: TenantContext, tx?: ScopedTx) {
+    return db(ctx, tx).openRole.findMany({
       where: { status: { notIn: ["Filled", "Closed"] } },
       orderBy: { openedAt: "asc" },
     });
@@ -71,8 +73,8 @@ export const openRoleRepository = {
    * Open (non-terminal) roles grouped by (credential, state) — Discover's coverage-gap widget
    * (Wave 5.5 backlog, legacy Drop 68). Rows with either field null are excluded (no combo key).
    */
-  groupOpenByCredentialState(tx?: Prisma.TransactionClient) {
-    return db(tx).openRole.groupBy({
+  groupOpenByCredentialState(ctx: TenantContext, tx?: ScopedTx) {
+    return db(ctx, tx).openRole.groupBy({
       by: ["credential", "state"],
       where: {
         status: { notIn: ["Filled", "Closed"] },
@@ -89,27 +91,28 @@ export const openRoleRepository = {
    * was one `count()` per client run via `Promise.all`; this does the same aggregation in ONE
    * query.
    */
-  countOpenByClient(clientIds: string[], tx?: Prisma.TransactionClient) {
+  countOpenByClient(ctx: TenantContext, clientIds: string[], tx?: ScopedTx) {
     if (clientIds.length === 0) return Promise.resolve([]);
-    return db(tx).openRole.groupBy({
+    return db(ctx, tx).openRole.groupBy({
       by: ["clientId"],
       where: { clientId: { in: clientIds }, status: "Open" },
       _count: { _all: true },
     });
   },
 
-  update(id: string, data: Prisma.OpenRoleUncheckedUpdateInput, tx?: Prisma.TransactionClient) {
-    return db(tx).openRole.update({ where: { id }, data });
+  update(ctx: TenantContext, id: string, data: Prisma.OpenRoleUncheckedUpdateInput, tx?: ScopedTx) {
+    return db(ctx, tx).openRole.update({ where: { id }, data });
   },
 
   /** Hard delete (legacy parity — no soft-delete/undo for roles). */
-  delete(id: string, tx?: Prisma.TransactionClient) {
-    return db(tx).openRole.delete({ where: { id } });
+  delete(ctx: TenantContext, id: string, tx?: ScopedTx) {
+    return db(ctx, tx).openRole.delete({ where: { id } });
   },
 
   // --- role notes ---
 
   createNote(
+    ctx: TenantContext,
     data: {
       roleId: string;
       authorId: string;
@@ -117,22 +120,22 @@ export const openRoleRepository = {
       body: string;
       category: string;
     },
-    tx?: Prisma.TransactionClient,
+    tx?: ScopedTx,
   ) {
-    return db(tx).roleNote.create({ data });
+    return db(ctx, tx).roleNote.create({ data });
   },
 
-  listNotes(roleId: string, tx?: Prisma.TransactionClient) {
-    return db(tx).roleNote.findMany({
+  listNotes(ctx: TenantContext, roleId: string, tx?: ScopedTx) {
+    return db(ctx, tx).roleNote.findMany({
       where: { roleId, deletedAt: null },
       orderBy: { createdAt: "desc" },
     });
   },
 
-  softDeleteNote(id: string, roleId: string, actorId: string, tx?: Prisma.TransactionClient) {
-    return db(tx).roleNote.updateMany({
+  softDeleteNote(ctx: TenantContext, id: string, roleId: string, actorId: string, tx?: ScopedTx) {
+    return db(ctx, tx).roleNote.updateMany({
       where: { id, roleId, deletedAt: null },
       data: { deletedAt: new Date(), deletedById: actorId },
     });
   },
-};
+});

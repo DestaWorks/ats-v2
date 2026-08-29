@@ -1,5 +1,6 @@
+import type { TenantContext } from "@destaworks/domain/tenant";
 import type { Prisma } from "../generated/prisma/client";
-import { prisma } from "../prisma";
+import { bridgeUnscopedCallers, db } from "../tenant-scope";
 import type { AuditAction, AuditEntity } from "@destaworks/domain/constants";
 import type { PageCursor } from "@destaworks/contracts/validation/cursor";
 
@@ -47,9 +48,9 @@ function filterWhere(filters: AuditListFilters): Prisma.ActivityLogWhereInput {
  *  history in one query. 200 comfortably covers any real per-entity trail while staying bounded. */
 const ENTITY_TRAIL_CAP = 200;
 
-export const auditRepository = {
-  listForEntity(entity: string, entityId: string) {
-    return prisma.activityLog.findMany({
+export const auditRepository = bridgeUnscopedCallers({
+  listForEntity(ctx: TenantContext, entity: string, entityId: string) {
+    return db(ctx).activityLog.findMany({
       where: { entity, entityId },
       orderBy: { at: "desc" },
       take: ENTITY_TRAIL_CAP,
@@ -62,7 +63,7 @@ export const auditRepository = {
    * `pageSize + 1` to probe `hasMore`). SELECTS `before`/`after` ONLY so the service can compute
    * `hasChanges` — the raw blobs are dropped before the DTO (AL-3), never shipped to the client.
    */
-  list(filters: AuditListFilters, cursor: PageCursor | null, take: number) {
+  list(ctx: TenantContext, filters: AuditListFilters, cursor: PageCursor | null, take: number) {
     const where: Prisma.ActivityLogWhereInput = {
       ...filterWhere(filters),
       ...(cursor
@@ -74,7 +75,7 @@ export const auditRepository = {
           }
         : {}),
     };
-    return prisma.activityLog.findMany({
+    return db(ctx).activityLog.findMany({
       where,
       orderBy: [{ at: "desc" }, { id: "desc" }],
       take,
@@ -93,12 +94,14 @@ export const auditRepository = {
   },
 
   /** The ONE row with its snapshots — the on-demand detail read (AL-3). Includes `before`/`after`. */
-  findById(id: string) {
-    return prisma.activityLog.findUnique({ where: { id } });
+  findById(ctx: TenantContext, id: string) {
+    return db(ctx).activityLog.findUnique({ where: { id } });
   },
 
   /** The distinct actor ids that appear in the log (for the actor filter picker). */
-  distinctActors(): Promise<string[]> {
-    return prisma.activityLog.groupBy({ by: ["actor"] }).then((rows) => rows.map((r) => r.actor));
+  distinctActors(ctx: TenantContext): Promise<string[]> {
+    return db(ctx)
+      .activityLog.groupBy({ by: ["actor"] })
+      .then((rows) => rows.map((r) => r.actor));
   },
-};
+});

@@ -1,5 +1,6 @@
+import type { TenantContext } from "@destaworks/domain/tenant";
 import type { ClientMeeting, Prisma } from "../generated/prisma/client";
-import { db } from "../prisma";
+import { bridgeUnscopedCallers, db, type ScopedTx } from "../tenant-scope";
 
 /** A raw client-meeting row (Prisma model). Services/DTOs map this to API shapes. */
 export type ClientMeetingRow = ClientMeeting;
@@ -9,13 +10,13 @@ export type ClientMeetingRow = ClientMeeting;
  * `client_meetings`. No `update` method — meetings are genuinely append-only in legacy (no edit
  * anywhere) and stay that way here; correction is soft-delete only, matching `CandidateNote`.
  */
-export const clientMeetingRepository = {
-  create(data: Prisma.ClientMeetingUncheckedCreateInput, tx?: Prisma.TransactionClient) {
-    return db(tx).clientMeeting.create({ data });
+export const clientMeetingRepository = bridgeUnscopedCallers({
+  create(ctx: TenantContext, data: Prisma.ClientMeetingUncheckedCreateInput, tx?: ScopedTx) {
+    return db(ctx, tx).clientMeeting.create({ data });
   },
 
-  listForClient(clientId: string, tx?: Prisma.TransactionClient) {
-    return db(tx).clientMeeting.findMany({
+  listForClient(ctx: TenantContext, clientId: string, tx?: ScopedTx) {
+    return db(ctx, tx).clientMeeting.findMany({
       where: { clientId, deletedAt: null },
       orderBy: { createdAt: "desc" },
     });
@@ -23,17 +24,23 @@ export const clientMeetingRepository = {
 
   /** Same as `listForClient`, batched across many clients in one query — feeds `/crm/compare`,
    *  which previously ran one `listForClient` per client (perf audit 2026-08-15). */
-  listForClients(clientIds: string[], tx?: Prisma.TransactionClient) {
-    return db(tx).clientMeeting.findMany({
+  listForClients(ctx: TenantContext, clientIds: string[], tx?: ScopedTx) {
+    return db(ctx, tx).clientMeeting.findMany({
       where: { clientId: { in: clientIds }, deletedAt: null },
     });
   },
 
-  async softDelete(clientId: string, id: string, actorId: string, tx?: Prisma.TransactionClient) {
-    const { count } = await db(tx).clientMeeting.updateMany({
+  async softDelete(
+    ctx: TenantContext,
+    clientId: string,
+    id: string,
+    actorId: string,
+    tx?: ScopedTx,
+  ) {
+    const { count } = await db(ctx, tx).clientMeeting.updateMany({
       where: { id, clientId },
       data: { deletedAt: new Date(), deletedById: actorId },
     });
     return count;
   },
-};
+});

@@ -1,6 +1,6 @@
-import type { Prisma } from "../generated/prisma/client";
+import type { TenantContext } from "@destaworks/domain/tenant";
 import { UNVERIFIED_LICENSE_STATUSES } from "@destaworks/domain/constants";
-import { db } from "../prisma";
+import { bridgeUnscopedCallers, db, type ScopedTx } from "../tenant-scope";
 import { FIRST_TERMINAL_ORDER } from "./candidate.repository";
 
 /**
@@ -10,7 +10,7 @@ import { FIRST_TERMINAL_ORDER } from "./candidate.repository";
  * Both reads use a narrow Prisma `select` (matches `candidateRepository.alertBuckets`) — no PII
  * columns, so no `decryptRow` step is needed.
  */
-export const licenseVerifyRepository = {
+export const licenseVerifyRepository = bridgeUnscopedCallers({
   /**
    * Candidates needing license verification — the Verification Queue
    * (`legacy/index.html:3001-3016`). Scoped to ACTIVE stages (`stageOrder < FIRST_TERMINAL_ORDER`,
@@ -20,8 +20,8 @@ export const licenseVerifyRepository = {
    * them behind newer ones; over-fetches by one row so the caller can detect `hasMore` (mirrors
    * the `pageSize + 1` convention documented on `candidateRepository.list`).
    */
-  async verificationQueue(limit: number, tx?: Prisma.TransactionClient) {
-    const rows = await db(tx).candidate.findMany({
+  async verificationQueue(ctx: TenantContext, limit: number, tx?: ScopedTx) {
+    const rows = await db(ctx, tx).candidate.findMany({
       where: {
         deletedAt: null,
         licenseStatus: { in: [...UNVERIFIED_LICENSE_STATUSES] },
@@ -49,8 +49,8 @@ export const licenseVerifyRepository = {
    * `licenseExpiry` sort isn't part of the generic `ListOrderBy` union and this read never
    * paginates.
    */
-  async expiryTimeline(limit: number, tx?: Prisma.TransactionClient) {
-    return db(tx).candidate.findMany({
+  async expiryTimeline(ctx: TenantContext, limit: number, tx?: ScopedTx) {
+    return db(ctx, tx).candidate.findMany({
       where: {
         deletedAt: null,
         licenseStatus: "Active",
@@ -68,4 +68,4 @@ export const licenseVerifyRepository = {
       take: limit,
     });
   },
-};
+});

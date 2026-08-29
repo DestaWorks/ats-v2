@@ -1,31 +1,35 @@
-import { prisma } from "../prisma";
+import type { TenantContext } from "@destaworks/domain/tenant";
+import { bridgeUnscopedCallers, db } from "../tenant-scope";
 
 /**
  * Access-request data access. Repositories are the ONLY layer that touches Prisma.
  */
-export const accessRequestRepository = {
-  create(data: { name: string; email: string; organization?: string; message?: string }) {
-    return prisma.accessRequest.create({ data });
+export const accessRequestRepository = bridgeUnscopedCallers({
+  create(
+    ctx: TenantContext,
+    data: { name: string; email: string; organization?: string; message?: string },
+  ) {
+    return db(ctx).accessRequest.create({ data });
   },
 
   /** Case-insensitive — mirrors `userRepository.findByEmail`. Used to reject a resubmission
    *  while an earlier request from the same email is still pending, rather than piling up
    *  duplicate rows. */
-  findPendingByEmail(email: string) {
-    return prisma.accessRequest.findFirst({
+  findPendingByEmail(ctx: TenantContext, email: string) {
+    return db(ctx).accessRequest.findFirst({
       where: { email: { equals: email, mode: "insensitive" }, status: "pending" },
     });
   },
 
-  list() {
-    return prisma.accessRequest.findMany({ orderBy: { createdAt: "desc" } });
+  list(ctx: TenantContext) {
+    return db(ctx).accessRequest.findMany({ orderBy: { createdAt: "desc" } });
   },
 
-  findById(id: string) {
-    return prisma.accessRequest.findUnique({ where: { id } });
+  findById(ctx: TenantContext, id: string) {
+    return db(ctx).accessRequest.findUnique({ where: { id } });
   },
 
-  updateStatus(id: string, status: "approved" | "declined") {
-    return prisma.accessRequest.update({ where: { id }, data: { status } });
+  updateStatus(ctx: TenantContext, id: string, status: "approved" | "declined") {
+    return db(ctx).accessRequest.update({ where: { id }, data: { status } });
   },
-};
+});

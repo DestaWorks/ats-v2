@@ -1,5 +1,6 @@
+import type { TenantContext } from "@destaworks/domain/tenant";
 import type { Client, Prisma } from "../generated/prisma/client";
-import { db } from "../prisma";
+import { bridgeUnscopedCallers, db, type ScopedTx } from "../tenant-scope";
 
 /** A raw client row (Prisma model). */
 export type ClientRow = Client;
@@ -10,9 +11,9 @@ export type ClientRow = Client;
  * `id → name` map rather than joining per candidate row (see `candidateService.listBoard`).
  * Soft-deleted rows are excluded by default (mirrors the candidate repository contract).
  */
-export const clientRepository = {
-  list(opts?: { includeDeleted?: boolean }, tx?: Prisma.TransactionClient) {
-    return db(tx).client.findMany({
+export const clientRepository = bridgeUnscopedCallers({
+  list(ctx: TenantContext, opts?: { includeDeleted?: boolean }, tx?: ScopedTx) {
+    return db(ctx, tx).client.findMany({
       where: opts?.includeDeleted ? {} : { deletedAt: null },
       orderBy: { name: "asc" },
     });
@@ -24,37 +25,38 @@ export const clientRepository = {
    * services. Same `includeDeleted`/`tx` passthrough as `list()`.
    */
   async nameMap(
+    ctx: TenantContext,
     opts?: { includeDeleted?: boolean },
-    tx?: Prisma.TransactionClient,
+    tx?: ScopedTx,
   ): Promise<Map<string, string>> {
-    const clients = await clientRepository.list(opts, tx);
+    const clients = await clientRepository.list(ctx, opts, tx);
     return new Map(clients.map((c) => [c.id, c.name]));
   },
 
   // --- Wave 4.2 (CRM) ---------------------------------------------------
 
-  findById(id: string, tx?: Prisma.TransactionClient) {
-    return db(tx).client.findUnique({ where: { id } });
+  findById(ctx: TenantContext, id: string, tx?: ScopedTx) {
+    return db(ctx, tx).client.findUnique({ where: { id } });
   },
 
-  create(data: Prisma.ClientUncheckedCreateInput, tx?: Prisma.TransactionClient) {
-    return db(tx).client.create({ data });
+  create(ctx: TenantContext, data: Prisma.ClientUncheckedCreateInput, tx?: ScopedTx) {
+    return db(ctx, tx).client.create({ data });
   },
 
-  update(id: string, data: Prisma.ClientUncheckedUpdateInput, tx?: Prisma.TransactionClient) {
-    return db(tx).client.update({ where: { id }, data });
+  update(ctx: TenantContext, id: string, data: Prisma.ClientUncheckedUpdateInput, tx?: ScopedTx) {
+    return db(ctx, tx).client.update({ where: { id }, data });
   },
 
   /**
    * Active-contact counts per client, in ONE `groupBy` — feeds the `/crm` list's "N contacts"
    * column without an N+1 count-per-client query.
    */
-  async contactCounts(tx?: Prisma.TransactionClient): Promise<Map<string, number>> {
-    const rows = await db(tx).clientContact.groupBy({
+  async contactCounts(ctx: TenantContext, tx?: ScopedTx): Promise<Map<string, number>> {
+    const rows = await db(ctx, tx).clientContact.groupBy({
       by: ["clientId"],
       where: { deletedAt: null },
       _count: { _all: true },
     });
     return new Map(rows.map((r) => [r.clientId, r._count._all]));
   },
-};
+});

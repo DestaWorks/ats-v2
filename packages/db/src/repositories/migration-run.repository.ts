@@ -1,5 +1,6 @@
+import type { TenantContext } from "@destaworks/domain/tenant";
 import type { Prisma } from "../generated/prisma/client";
-import { db } from "../prisma";
+import { bridgeUnscopedCallers, db, type ScopedTx } from "../tenant-scope";
 
 /**
  * The `migration_runs` table (Phase 5) — the durable record of one asynchronous ETL commit.
@@ -24,19 +25,19 @@ export interface MigrationRunCreateInput {
  *  readers never branch on "absent" vs "none". */
 const NO_RESUMES: Prisma.InputJsonValue = [];
 
-export const migrationRunRepository = {
-  create(data: MigrationRunCreateInput, tx?: Prisma.TransactionClient) {
+export const migrationRunRepository = bridgeUnscopedCallers({
+  create(ctx: TenantContext, data: MigrationRunCreateInput, tx?: ScopedTx) {
     // `as`: see `finish` below — the same JSON conversion at the same boundary.
     const resumes = (data.resumes ?? NO_RESUMES) as Prisma.InputJsonValue;
-    return db(tx).migrationRun.create({ data: { ...data, resumes } });
+    return db(ctx, tx).migrationRun.create({ data: { ...data, resumes } });
   },
 
-  findById(id: string, tx?: Prisma.TransactionClient) {
-    return db(tx).migrationRun.findUnique({ where: { id } });
+  findById(ctx: TenantContext, id: string, tx?: ScopedTx) {
+    return db(ctx, tx).migrationRun.findUnique({ where: { id } });
   },
 
-  setJobId(id: string, jobId: string, tx?: Prisma.TransactionClient) {
-    return db(tx).migrationRun.update({ where: { id }, data: { jobId } });
+  setJobId(ctx: TenantContext, id: string, jobId: string, tx?: ScopedTx) {
+    return db(ctx, tx).migrationRun.update({ where: { id }, data: { jobId } });
   },
 
   /**
@@ -50,8 +51,8 @@ export const migrationRunRepository = {
    * in the predicate — because the queue's attempt bound, not this row, is what stops a genuinely
    * stuck job from cycling forever.
    */
-  async claimForAttempt(id: string, attempt: number, now: Date, tx?: Prisma.TransactionClient) {
-    const client = db(tx);
+  async claimForAttempt(ctx: TenantContext, id: string, attempt: number, now: Date, tx?: ScopedTx) {
+    const client = db(ctx, tx);
     const { count } = await client.migrationRun.updateMany({
       where: { id, status: { in: ["queued", "running", "interrupted"] } },
       data: { status: "running", attempt, startedAt: now },
@@ -61,12 +62,13 @@ export const migrationRunRepository = {
   },
 
   recordProgress(
+    ctx: TenantContext,
     id: string,
     processedRows: number,
     totalRows: number,
-    tx?: Prisma.TransactionClient,
+    tx?: ScopedTx,
   ) {
-    return db(tx).migrationRun.update({
+    return db(ctx, tx).migrationRun.update({
       where: { id },
       data: { processedRows, totalRows },
     });
@@ -78,16 +80,17 @@ export const migrationRunRepository = {
    * with no reader.
    */
   finish(
+    ctx: TenantContext,
     id: string,
     data: { status: "succeeded" | "failed"; report?: unknown; failureCode?: string },
     now: Date,
-    tx?: Prisma.TransactionClient,
+    tx?: ScopedTx,
   ) {
     // `as`: the caller's report is a plain JSON-serializable object, but TypeScript cannot prove an
     // arbitrary interface satisfies `InputJsonValue`'s recursive shape. Same conversion, and same
     // reason, as `writeAudit`'s before/after — the db layer is where it belongs.
     const report = data.report as Prisma.InputJsonValue | undefined;
-    return db(tx).migrationRun.update({
+    return db(ctx, tx).migrationRun.update({
       where: { id },
       data: {
         status: data.status,
@@ -105,10 +108,10 @@ export const migrationRunRepository = {
    * is omitted when the attempt failed before it knew how far it had got — the marker already on
    * the row is then the best answer, and overwriting it with 0 would make the retry redo work.
    */
-  markInterrupted(id: string, processedRows?: number, tx?: Prisma.TransactionClient) {
-    return db(tx).migrationRun.update({
+  markInterrupted(ctx: TenantContext, id: string, processedRows?: number, tx?: ScopedTx) {
+    return db(ctx, tx).migrationRun.update({
       where: { id },
       data: { status: "interrupted", ...(processedRows !== undefined && { processedRows }) },
     });
   },
-};
+});

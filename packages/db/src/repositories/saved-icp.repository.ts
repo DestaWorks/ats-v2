@@ -1,5 +1,6 @@
+import type { TenantContext } from "@destaworks/domain/tenant";
 import type { Prisma, SavedIcp } from "../generated/prisma/client";
-import { db } from "../prisma";
+import { bridgeUnscopedCallers, db, type ScopedTx } from "../tenant-scope";
 
 /** A raw saved-ICP row (Prisma model). Services/DTOs map this to API shapes. */
 export type SavedIcpRow = SavedIcp;
@@ -10,12 +11,12 @@ export type SavedIcpRow = SavedIcp;
  * trusts a client-supplied owner. Mirrors `savedViewRepository` (hard delete, no soft-delete
  * column — a saved search has nothing worth restoring from trash).
  */
-export const savedIcpRepository = {
+export const savedIcpRepository = bridgeUnscopedCallers({
   /** A user's saved ICPs (own private ones + everyone's shared ones), newest-first — the
    *  service applies the private/shared visibility filter, this just reads by user for the
    *  owned-name-uniqueness check and `listAll` covers the shared feed. */
-  listByUser(userId: string, tx?: Prisma.TransactionClient) {
-    return db(tx).savedIcp.findMany({
+  listByUser(ctx: TenantContext, userId: string, tx?: ScopedTx) {
+    return db(ctx, tx).savedIcp.findMany({
       where: { userId },
       orderBy: { createdAt: "desc" },
     });
@@ -23,21 +24,21 @@ export const savedIcpRepository = {
 
   /** Every ICP visible to the app (private + shared) — the service filters to `!isPrivate ||
    *  own`, matching the reference UI's "team-shared by default, private toggle" behavior. */
-  listAll(tx?: Prisma.TransactionClient) {
-    return db(tx).savedIcp.findMany({ orderBy: { createdAt: "desc" } });
+  listAll(ctx: TenantContext, tx?: ScopedTx) {
+    return db(ctx, tx).savedIcp.findMany({ orderBy: { createdAt: "desc" } });
   },
 
-  findByUserAndName(userId: string, name: string, tx?: Prisma.TransactionClient) {
-    return db(tx).savedIcp.findFirst({ where: { userId, name } });
+  findByUserAndName(ctx: TenantContext, userId: string, name: string, tx?: ScopedTx) {
+    return db(ctx, tx).savedIcp.findFirst({ where: { userId, name } });
   },
 
-  create(data: Prisma.SavedIcpUncheckedCreateInput, tx?: Prisma.TransactionClient) {
-    return db(tx).savedIcp.create({ data });
+  create(ctx: TenantContext, data: Prisma.SavedIcpUncheckedCreateInput, tx?: ScopedTx) {
+    return db(ctx, tx).savedIcp.create({ data });
   },
 
   /** Scoped delete — `id` AND `userId` must both match, so this IS the ownership boundary
    *  (never trust a client-supplied id alone). `count === 0` means "not found or not yours". */
-  deleteOwned(id: string, userId: string, tx?: Prisma.TransactionClient) {
-    return db(tx).savedIcp.deleteMany({ where: { id, userId } });
+  deleteOwned(ctx: TenantContext, id: string, userId: string, tx?: ScopedTx) {
+    return db(ctx, tx).savedIcp.deleteMany({ where: { id, userId } });
   },
-};
+});

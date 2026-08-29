@@ -3,9 +3,16 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 const h = vi.hoisted(() => ({ findUnique: vi.fn(), upsert: vi.fn() }));
 
 vi.mock("server-only", () => ({}));
-vi.mock("../prisma", () => ({
-  db: () => ({ aiSettings: { findUnique: h.findUnique, upsert: h.upsert } }),
-}));
+vi.mock("../prisma", () => {
+  const prisma: Record<string, unknown> = {
+    aiSettings: { findUnique: h.findUnique, upsert: h.upsert },
+  };
+  // The seam builds its client with `prisma.$extends(...)`. Returning the fake unchanged keeps
+  // these assertions about the query the REPOSITORY composes; that the extension then adds the
+  // tenant filter is proven against real Prisma in `tenant-scope.test.ts`.
+  prisma["$extends"] = () => prisma;
+  return { prisma, db: (tx?: unknown) => tx ?? prisma };
+});
 
 import { aiSettingsRepository } from "./ai-settings.repository";
 

@@ -1,4 +1,5 @@
 import type { Prisma } from "./generated/prisma/client";
+import type { ScopedTx } from "./tenant-scope";
 
 /**
  * Parameters for a single audit entry.
@@ -16,6 +17,16 @@ export interface WriteAuditParams {
   action: string;
   before?: unknown;
   after?: unknown;
+  /**
+   * The tenant this row belongs to (SAAS-RESTRUCTURE-PLAN 6.5/6.8).
+   *
+   * Omitted by every in-tenant caller: they write through a transaction started from the scoped
+   * client, which injects the active tenant for them. It is supplied only where the acting
+   * identity's tenant is NOT the row's tenant — a platform admin's cross-tenant action, which must
+   * be recorded in the tenant it touched rather than filed nowhere or, worse, filed under the
+   * admin's own. That is the one write the enforcement seam cannot infer, so it is stated.
+   */
+  tenantId?: string;
 }
 
 /**
@@ -50,9 +61,13 @@ function redactSensitive(value: unknown): unknown {
  * Takes a Prisma transaction client (`tx`) as its first argument so the audit write runs
  * **inside the same transaction as the mutation it records** — the trail is atomic with the
  * change and can never drift from the data. Callers wrap the mutation + `writeAudit` in a
- * single `prisma.$transaction(...)`.
+ * single `withTenantTransaction(...)`.
+ *
+ * `activity_log` is tenant-scoped, so the tenant comes from the client `tx` was opened on rather
+ * than from a context of its own: an audit row can only ever belong to the tenant whose
+ * transaction is writing it.
  */
-export function writeAudit(tx: Prisma.TransactionClient, params: WriteAuditParams) {
+export function writeAudit(tx: ScopedTx, params: WriteAuditParams) {
   const before = redactSensitive(params.before) as Prisma.InputJsonValue | undefined;
   const after = redactSensitive(params.after) as Prisma.InputJsonValue | undefined;
   return tx.activityLog.create({
@@ -63,6 +78,7 @@ export function writeAudit(tx: Prisma.TransactionClient, params: WriteAuditParam
       action: params.action,
       ...(before !== undefined && { before }),
       ...(after !== undefined && { after }),
+      ...(params.tenantId !== undefined && { tenantId: params.tenantId }),
     },
   });
 }

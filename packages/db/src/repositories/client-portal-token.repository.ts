@@ -1,35 +1,36 @@
-import type { Prisma } from "../generated/prisma/client";
-import { db } from "../prisma";
+import type { TenantContext } from "@destaworks/domain/tenant";
+import { bridgeUnscopedCallers, db, type ScopedTx } from "../tenant-scope";
 
 /**
  * Client-portal-token data access (Wave 4.3) — the ONLY layer that touches Prisma for
  * `ClientPortalToken`. Only `tokenHash` is ever persisted (see `client-portal.service.ts`); this
  * repository never sees or returns a raw token.
  */
-export const clientPortalTokenRepository = {
+export const clientPortalTokenRepository = bridgeUnscopedCallers({
   create(
+    ctx: TenantContext,
     data: { contactId: string; tokenHash: string; expiresAt: Date; createdById?: string },
-    tx?: Prisma.TransactionClient,
+    tx?: ScopedTx,
   ) {
-    return db(tx).clientPortalToken.create({ data });
+    return db(ctx, tx).clientPortalToken.create({ data });
   },
 
-  findByHash(tokenHash: string, tx?: Prisma.TransactionClient) {
-    return db(tx).clientPortalToken.findUnique({
+  findByHash(ctx: TenantContext, tokenHash: string, tx?: ScopedTx) {
+    return db(ctx, tx).clientPortalToken.findUnique({
       where: { tokenHash },
       include: { contact: true },
     });
   },
 
-  findById(id: string, tx?: Prisma.TransactionClient) {
-    return db(tx).clientPortalToken.findUnique({
+  findById(ctx: TenantContext, id: string, tx?: ScopedTx) {
+    return db(ctx, tx).clientPortalToken.findUnique({
       where: { id },
       include: { contact: true },
     });
   },
 
-  findActiveForContact(contactId: string, tx?: Prisma.TransactionClient) {
-    return db(tx).clientPortalToken.findFirst({
+  findActiveForContact(ctx: TenantContext, contactId: string, tx?: ScopedTx) {
+    return db(ctx, tx).clientPortalToken.findFirst({
       where: { contactId, revokedAt: null },
       orderBy: { createdAt: "desc" },
     });
@@ -39,15 +40,15 @@ export const clientPortalTokenRepository = {
    *  Client Portal management page was issuing one query per contact. Only one active token per
    *  contact can exist at a time (`revokeAllForContact` enforces it), so this returns at most one
    *  row per `contactId` already; no `orderBy`/dedup needed on the caller's side. */
-  findActiveForContacts(contactIds: string[], tx?: Prisma.TransactionClient) {
+  findActiveForContacts(ctx: TenantContext, contactIds: string[], tx?: ScopedTx) {
     if (contactIds.length === 0) return Promise.resolve([]);
-    return db(tx).clientPortalToken.findMany({
+    return db(ctx, tx).clientPortalToken.findMany({
       where: { contactId: { in: contactIds }, revokedAt: null },
     });
   },
 
-  listForContact(contactId: string, tx?: Prisma.TransactionClient) {
-    return db(tx).clientPortalToken.findMany({
+  listForContact(ctx: TenantContext, contactId: string, tx?: ScopedTx) {
+    return db(ctx, tx).clientPortalToken.findMany({
       where: { contactId },
       orderBy: { createdAt: "desc" },
     });
@@ -55,22 +56,25 @@ export const clientPortalTokenRepository = {
 
   /** Revokes every currently-active token for a contact (used before minting a new one — one live
    *  link per contact at a time). */
-  revokeAllForContact(contactId: string, tx?: Prisma.TransactionClient) {
-    return db(tx).clientPortalToken.updateMany({
+  revokeAllForContact(ctx: TenantContext, contactId: string, tx?: ScopedTx) {
+    return db(ctx, tx).clientPortalToken.updateMany({
       where: { contactId, revokedAt: null },
       data: { revokedAt: new Date() },
     });
   },
 
-  async revoke(id: string, tx?: Prisma.TransactionClient) {
-    const { count } = await db(tx).clientPortalToken.updateMany({
+  async revoke(ctx: TenantContext, id: string, tx?: ScopedTx) {
+    const { count } = await db(ctx, tx).clientPortalToken.updateMany({
       where: { id, revokedAt: null },
       data: { revokedAt: new Date() },
     });
     return count;
   },
 
-  touchLastUsed(id: string, tx?: Prisma.TransactionClient) {
-    return db(tx).clientPortalToken.update({ where: { id }, data: { lastUsedAt: new Date() } });
+  touchLastUsed(ctx: TenantContext, id: string, tx?: ScopedTx) {
+    return db(ctx, tx).clientPortalToken.update({
+      where: { id },
+      data: { lastUsedAt: new Date() },
+    });
   },
-};
+});

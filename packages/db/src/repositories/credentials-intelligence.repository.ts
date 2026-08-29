@@ -1,8 +1,9 @@
+import type { TenantContext } from "@destaworks/domain/tenant";
 import type { Prisma } from "../generated/prisma/client";
 import { COMPACT_STATES, UNVERIFIED_LICENSE_STATUSES } from "@destaworks/domain/constants";
 import { MS_PER_DAY } from "@destaworks/domain/clock";
 import { utcDayStart } from "@destaworks/domain/daily";
-import { db } from "../prisma";
+import { bridgeUnscopedCallers, db, type ScopedTx } from "../tenant-scope";
 import { FIRST_TERMINAL_ORDER } from "./candidate.repository";
 
 /** Credentials eligible for NLC (Nurse Licensure Compact) multi-state practice — matches
@@ -23,26 +24,26 @@ function nlcWhere(): Prisma.CandidateWhereInput {
  * totals (unlike `licenseVerifyRepository`'s capped queue/timeline), so these are fresh `count`/
  * `groupBy` queries, not reuses of the Wave 3.4 reads.
  */
-export const credentialsIntelligenceRepository = {
+export const credentialsIntelligenceRepository = bridgeUnscopedCallers({
   /** The 6 stat-card counts, in one round of parallel queries. */
-  async statCounts(now: Date, tx?: Prisma.TransactionClient) {
+  async statCounts(ctx: TenantContext, now: Date, tx?: ScopedTx) {
     const from = utcDayStart(now);
     const soon = new Date(from.getTime() + 90 * MS_PER_DAY);
     const [total, active, unverified, expired, expiringSoon, nlcCompact] = await Promise.all([
-      db(tx).candidate.count({ where: { deletedAt: null } }),
-      db(tx).candidate.count({ where: { deletedAt: null, licenseStatus: "Active" } }),
-      db(tx).candidate.count({
+      db(ctx, tx).candidate.count({ where: { deletedAt: null } }),
+      db(ctx, tx).candidate.count({ where: { deletedAt: null, licenseStatus: "Active" } }),
+      db(ctx, tx).candidate.count({
         where: { deletedAt: null, licenseStatus: { in: [...UNVERIFIED_LICENSE_STATUSES] } },
       }),
-      db(tx).candidate.count({ where: { deletedAt: null, licenseStatus: "Expired" } }),
-      db(tx).candidate.count({
+      db(ctx, tx).candidate.count({ where: { deletedAt: null, licenseStatus: "Expired" } }),
+      db(ctx, tx).candidate.count({
         where: {
           deletedAt: null,
           licenseStatus: "Active",
           licenseExpiry: { gte: from, lte: soon },
         },
       }),
-      db(tx).candidate.count({ where: nlcWhere() }),
+      db(ctx, tx).candidate.count({ where: nlcWhere() }),
     ]);
     return { total, active, unverified, expired, expiringSoon, nlcCompact };
   },
@@ -53,14 +54,14 @@ export const credentialsIntelligenceRepository = {
    * (not N+1): rows/columns are derived by the SERVICE from whatever combinations actually
    * appear here, not iterated over the full state/credential lists.
    */
-  async matrixCounts(tx?: Prisma.TransactionClient) {
+  async matrixCounts(ctx: TenantContext, tx?: ScopedTx) {
     const [totals, unverified] = await Promise.all([
-      db(tx).candidate.groupBy({
+      db(ctx, tx).candidate.groupBy({
         by: ["credential", "licenseState"],
         where: { deletedAt: null, credential: { not: null }, licenseState: { not: null } },
         _count: { _all: true },
       }),
-      db(tx).candidate.groupBy({
+      db(ctx, tx).candidate.groupBy({
         by: ["credential", "licenseState"],
         where: {
           deletedAt: null,
@@ -81,20 +82,20 @@ export const credentialsIntelligenceRepository = {
    * "in pipeline"). Narrow select, grouped in-memory by the service — every row here already IS
    * "in pipeline" by definition, so the service doesn't need a separate inPipeline filter pass.
    */
-  gapAnalysisCandidates(tx?: Prisma.TransactionClient) {
-    return db(tx).candidate.findMany({
+  gapAnalysisCandidates(ctx: TenantContext, tx?: ScopedTx) {
+    return db(ctx, tx).candidate.findMany({
       where: { deletedAt: null, clientId: { not: null }, stageOrder: { lt: FIRST_TERMINAL_ORDER } },
       select: { clientId: true, credential: true, stageOrder: true, licenseStatus: true },
     });
   },
 
   /** NLC compact-license holders, capped small — the tracker's row list. */
-  nlcCompactHolders(limit: number, tx?: Prisma.TransactionClient) {
-    return db(tx).candidate.findMany({
+  nlcCompactHolders(ctx: TenantContext, limit: number, tx?: ScopedTx) {
+    return db(ctx, tx).candidate.findMany({
       where: nlcWhere(),
       select: { id: true, name: true, credential: true, licenseState: true },
       orderBy: { name: "asc" },
       take: limit,
     });
   },
-};
+});

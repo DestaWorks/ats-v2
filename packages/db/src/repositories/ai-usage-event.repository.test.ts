@@ -3,9 +3,16 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 const h = vi.hoisted(() => ({ create: vi.fn(), findMany: vi.fn(), groupBy: vi.fn() }));
 
 vi.mock("server-only", () => ({}));
-vi.mock("../prisma", () => ({
-  prisma: { aiUsageEvent: { create: h.create, findMany: h.findMany, groupBy: h.groupBy } },
-}));
+vi.mock("../prisma", () => {
+  const prisma: Record<string, unknown> = {
+    aiUsageEvent: { create: h.create, findMany: h.findMany, groupBy: h.groupBy },
+  };
+  // The seam builds its client with `prisma.$extends(...)`. Returning the fake unchanged keeps
+  // these assertions about the query the REPOSITORY composes; that the extension then adds the
+  // tenant filter is proven against real Prisma in `tenant-scope.test.ts`.
+  prisma["$extends"] = () => prisma;
+  return { prisma };
+});
 
 import { aiUsageEventRepository } from "./ai-usage-event.repository";
 

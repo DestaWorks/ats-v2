@@ -1,5 +1,6 @@
+import type { TenantContext } from "@destaworks/domain/tenant";
 import type { OutreachAttempt, Prisma, SourceLead } from "../generated/prisma/client";
-import { db } from "../prisma";
+import { bridgeUnscopedCallers, db, type ScopedTx } from "../tenant-scope";
 
 /** A raw source-lead row (Prisma model). Services/DTOs map this to API shapes. */
 export type LeadRow = SourceLead;
@@ -81,13 +82,13 @@ export function buildLeadWhere(filters: LeadListFilters): Prisma.SourceLeadWhere
  * Every method accepts an optional `tx` so the service can compose atomic writes (attempt + denorm +
  * audit; candidate-create + lead flip). Leads carry no encrypted columns → no field crypto here.
  */
-export const leadRepository = {
-  create(data: Prisma.SourceLeadUncheckedCreateInput, tx?: Prisma.TransactionClient) {
-    return db(tx).sourceLead.create({ data });
+export const leadRepository = bridgeUnscopedCallers({
+  create(ctx: TenantContext, data: Prisma.SourceLeadUncheckedCreateInput, tx?: ScopedTx) {
+    return db(ctx, tx).sourceLead.create({ data });
   },
 
-  findById(id: string, opts?: { includeDeleted?: boolean }, tx?: Prisma.TransactionClient) {
-    return db(tx).sourceLead.findFirst({
+  findById(ctx: TenantContext, id: string, opts?: { includeDeleted?: boolean }, tx?: ScopedTx) {
+    return db(ctx, tx).sourceLead.findFirst({
       where: { id, ...(opts?.includeDeleted ? {} : { deletedAt: null }) },
     });
   },
@@ -97,8 +98,8 @@ export const leadRepository = {
    * tiebreak), and fetches one OFFSET page (`skip`/`take` — the numbered pager, mirroring the
    * candidates list). Newest-first.
    */
-  list(filters: LeadListFilters = {}, tx?: Prisma.TransactionClient) {
-    return db(tx).sourceLead.findMany({
+  list(ctx: TenantContext, filters: LeadListFilters = {}, tx?: ScopedTx) {
+    return db(ctx, tx).sourceLead.findMany({
       where: buildLeadWhere(filters),
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       ...(filters.skip !== undefined ? { skip: filters.skip } : {}),
@@ -107,16 +108,16 @@ export const leadRepository = {
   },
 
   /** True filtered total for the same `where` as `list` (minus skip/take) — the "Showing N of M". */
-  count(filters: LeadListFilters = {}, tx?: Prisma.TransactionClient) {
-    return db(tx).sourceLead.count({ where: buildLeadWhere(filters) });
+  count(ctx: TenantContext, filters: LeadListFilters = {}, tx?: ScopedTx) {
+    return db(ctx, tx).sourceLead.count({ where: buildLeadWhere(filters) });
   },
 
   /**
    * Non-deleted leads grouped by (credential, state) — Discover's coverage-gap widget's "sourcing
    * pool" count (Wave 5.5 backlog, legacy Drop 68). Rows with either field null are excluded.
    */
-  groupByCredentialState(tx?: Prisma.TransactionClient) {
-    return db(tx).sourceLead.groupBy({
+  groupByCredentialState(ctx: TenantContext, tx?: ScopedTx) {
+    return db(ctx, tx).sourceLead.groupBy({
       by: ["credential", "state"],
       where: { deletedAt: null, credential: { not: null }, state: { not: null } },
       _count: { _all: true },
@@ -128,16 +129,21 @@ export const leadRepository = {
    * every non-deleted lead, unbounded (the matchers score the whole active pool, not one page).
    * Skips PII/large columns (email, phone, notes, tags, …) the scorers never touch.
    */
-  listForMatching(tx?: Prisma.TransactionClient): Promise<LeadMatchRow[]> {
-    return db(tx).sourceLead.findMany({
+  listForMatching(ctx: TenantContext, tx?: ScopedTx): Promise<LeadMatchRow[]> {
+    return db(ctx, tx).sourceLead.findMany({
       where: { deletedAt: null },
       select: { id: true, name: true, clientId: true, state: true, credential: true, status: true },
     });
   },
 
   /** Patch a lead — status / respondedAt / promote back-link / denorm columns. */
-  update(id: string, data: Prisma.SourceLeadUncheckedUpdateInput, tx?: Prisma.TransactionClient) {
-    return db(tx).sourceLead.update({ where: { id }, data });
+  update(
+    ctx: TenantContext,
+    id: string,
+    data: Prisma.SourceLeadUncheckedUpdateInput,
+    tx?: ScopedTx,
+  ) {
+    return db(ctx, tx).sourceLead.update({ where: { id }, data });
   },
 
   /**
@@ -145,24 +151,24 @@ export const leadRepository = {
    * the number of rows updated (1 = we won the race, 0 = a concurrent promote beat us). This is the
    * DB-level guard against a TOCTOU double-promote — the `canPromote` check happens outside the tx.
    */
-  async markPromoted(id: string, candidateId: string, tx?: Prisma.TransactionClient) {
-    const { count } = await db(tx).sourceLead.updateMany({
+  async markPromoted(ctx: TenantContext, id: string, candidateId: string, tx?: ScopedTx) {
+    const { count } = await db(ctx, tx).sourceLead.updateMany({
       where: { id, status: { not: "Promoted" }, deletedAt: null },
       data: { status: "Promoted", promotedCandidateId: candidateId },
     });
     return count;
   },
 
-  softDelete(id: string, actorId: string, tx?: Prisma.TransactionClient) {
-    return db(tx).sourceLead.update({
+  softDelete(ctx: TenantContext, id: string, actorId: string, tx?: ScopedTx) {
+    return db(ctx, tx).sourceLead.update({
       where: { id },
       data: { deletedAt: new Date(), deletedById: actorId },
     });
   },
 
   /** Clear the soft-delete markers — the lead returns exactly as it was (status untouched). */
-  restore(id: string, tx?: Prisma.TransactionClient) {
-    return db(tx).sourceLead.update({
+  restore(ctx: TenantContext, id: string, tx?: ScopedTx) {
+    return db(ctx, tx).sourceLead.update({
       where: { id },
       data: { deletedAt: null, deletedById: null },
     });
@@ -174,8 +180,8 @@ export const leadRepository = {
    * `tx`. The `status` is passed IN (computed by the pure `advanceOnOutreach` in the service) — the
    * repo never runs domain rules. Returns both the new attempt and the updated lead.
    */
-  async logOutreach(params: LogOutreachParams, tx?: Prisma.TransactionClient) {
-    const client = db(tx);
+  async logOutreach(ctx: TenantContext, params: LogOutreachParams, tx?: ScopedTx) {
+    const client = db(ctx, tx);
     const attempt = await client.outreachAttempt.create({
       data: {
         leadId: params.leadId,
@@ -199,8 +205,8 @@ export const leadRepository = {
   },
 
   /** A lead's outreach attempts, newest-first (the detail log). */
-  listOutreach(leadId: string, tx?: Prisma.TransactionClient) {
-    return db(tx).outreachAttempt.findMany({
+  listOutreach(ctx: TenantContext, leadId: string, tx?: ScopedTx) {
+    return db(ctx, tx).outreachAttempt.findMany({
       where: { leadId },
       orderBy: { at: "desc" },
     });
@@ -211,8 +217,8 @@ export const leadRepository = {
    * 4.1 — `leadService.respond()` auto-backfills `response`/`respondedAt` onto this row when a
    * lead is marked Hot/Cold).
    */
-  findMostRecentUnresponded(leadId: string, tx?: Prisma.TransactionClient) {
-    return db(tx).outreachAttempt.findFirst({
+  findMostRecentUnresponded(ctx: TenantContext, leadId: string, tx?: ScopedTx) {
+    return db(ctx, tx).outreachAttempt.findFirst({
       where: { leadId, response: null },
       orderBy: { at: "desc" },
     });
@@ -223,6 +229,7 @@ export const leadRepository = {
    * 0-row no-op, never a cross-lead write). Returns the affected count.
    */
   async updateOutreachAttempt(
+    ctx: TenantContext,
     leadId: string,
     attemptId: string,
     data: {
@@ -232,9 +239,9 @@ export const leadRepository = {
       response?: string | null;
       respondedAt?: Date | null;
     },
-    tx?: Prisma.TransactionClient,
+    tx?: ScopedTx,
   ) {
-    const { count } = await db(tx).outreachAttempt.updateMany({
+    const { count } = await db(ctx, tx).outreachAttempt.updateMany({
       where: { id: attemptId, leadId },
       data,
     });
@@ -242,8 +249,13 @@ export const leadRepository = {
   },
 
   /** Delete one attempt, scoped to its lead. Returns the affected count. */
-  async deleteOutreachAttempt(leadId: string, attemptId: string, tx?: Prisma.TransactionClient) {
-    const { count } = await db(tx).outreachAttempt.deleteMany({
+  async deleteOutreachAttempt(
+    ctx: TenantContext,
+    leadId: string,
+    attemptId: string,
+    tx?: ScopedTx,
+  ) {
+    const { count } = await db(ctx, tx).outreachAttempt.deleteMany({
       where: { id: attemptId, leadId },
     });
     return count;
@@ -254,16 +266,16 @@ export const leadRepository = {
    * delete changed the underlying rows). Status is intentionally NOT touched (legacy parity —
    * deleting an attempt never regresses the funnel; that stays a manual status change).
    */
-  async syncOutreachDenorm(leadId: string, tx?: Prisma.TransactionClient) {
+  async syncOutreachDenorm(ctx: TenantContext, leadId: string, tx?: ScopedTx) {
     const [count, latest] = await Promise.all([
-      db(tx).outreachAttempt.count({ where: { leadId } }),
-      db(tx).outreachAttempt.findFirst({
+      db(ctx, tx).outreachAttempt.count({ where: { leadId } }),
+      db(ctx, tx).outreachAttempt.findFirst({
         where: { leadId },
         orderBy: [{ at: "desc" }, { id: "desc" }],
         select: { at: true, channel: true },
       }),
     ]);
-    return db(tx).sourceLead.update({
+    return db(ctx, tx).sourceLead.update({
       where: { id: leadId },
       data: {
         outreachCount: count,
@@ -274,25 +286,30 @@ export const leadRepository = {
   },
 
   /** Non-deleted leads matching any of the given ids (bulk actions resolve their working set here). */
-  findManyByIds(ids: string[], opts?: { includeDeleted?: boolean }, tx?: Prisma.TransactionClient) {
-    return db(tx).sourceLead.findMany({
+  findManyByIds(
+    ctx: TenantContext,
+    ids: string[],
+    opts?: { includeDeleted?: boolean },
+    tx?: ScopedTx,
+  ) {
+    return db(ctx, tx).sourceLead.findMany({
       where: { id: { in: ids }, ...(opts?.includeDeleted ? {} : { deletedAt: null }) },
     });
   },
 
   /** Existing (incl. soft-deleted) leads matching any of these lowercased emails — import dedup. */
-  findManyByEmails(emails: string[], tx?: Prisma.TransactionClient) {
+  findManyByEmails(ctx: TenantContext, emails: string[], tx?: ScopedTx) {
     if (emails.length === 0) return Promise.resolve([]);
-    return db(tx).sourceLead.findMany({
+    return db(ctx, tx).sourceLead.findMany({
       where: { email: { in: emails, mode: "insensitive" } },
       select: { id: true, email: true, name: true, phone: true },
     });
   },
 
   /** Existing leads matching any of these names (import/Discover dedup fallback for email-less rows). */
-  findManyByNames(names: string[], tx?: Prisma.TransactionClient) {
+  findManyByNames(ctx: TenantContext, names: string[], tx?: ScopedTx) {
     if (names.length === 0) return Promise.resolve([]);
-    return db(tx).sourceLead.findMany({
+    return db(ctx, tx).sourceLead.findMany({
       where: { name: { in: names, mode: "insensitive" } },
       select: { id: true, email: true, name: true, phone: true, status: true },
     });
@@ -300,9 +317,9 @@ export const leadRepository = {
 
   /** Existing leads matching any of these NPIs — Discover (NPPES) dedup, delete-agnostic like the
    *  other dedup lookups (a soft-deleted lead still blocks a duplicate add). */
-  findManyByNpis(npis: string[], tx?: Prisma.TransactionClient) {
+  findManyByNpis(ctx: TenantContext, npis: string[], tx?: ScopedTx) {
     if (npis.length === 0) return Promise.resolve([]);
-    return db(tx).sourceLead.findMany({
+    return db(ctx, tx).sourceLead.findMany({
       where: { npi: { in: npis } },
       select: { id: true, npi: true, name: true, status: true },
     });
@@ -311,11 +328,12 @@ export const leadRepository = {
   /** Bulk insert (import / Discover add) — rows are pre-deduped by the service. `skipDuplicates`
    *  defends the `npi` unique constraint against a concurrent add racing the service's own check. */
   createMany(
+    ctx: TenantContext,
     rows: Prisma.SourceLeadCreateManyInput[],
-    tx?: Prisma.TransactionClient,
+    tx?: ScopedTx,
     opts?: { skipDuplicates?: boolean },
   ) {
-    return db(tx).sourceLead.createMany({
+    return db(ctx, tx).sourceLead.createMany({
       data: rows,
       ...(opts?.skipDuplicates !== undefined && { skipDuplicates: opts.skipDuplicates }),
     });
@@ -325,26 +343,27 @@ export const leadRepository = {
    *  `logOutreach`, which also advances the lead's status; import rows already carry their own
    *  explicit status from the CSV and must not have it overridden). */
   createManyOutreachAttempts(
+    ctx: TenantContext,
     rows: Prisma.OutreachAttemptCreateManyInput[],
-    tx?: Prisma.TransactionClient,
+    tx?: ScopedTx,
   ) {
-    return db(tx).outreachAttempt.createMany({ data: rows });
+    return db(ctx, tx).outreachAttempt.createMany({ data: rows });
   },
 
   /**
    * ETL-ONLY, delete-agnostic: returns a soft-deleted row too, so the one-shot migration re-upserts
    * an existing (even trashed) lead instead of duplicating. UI/read paths use `findById`/`list`.
    */
-  findByLegacyId(legacyId: string, tx?: Prisma.TransactionClient) {
-    return db(tx).sourceLead.findUnique({ where: { legacyId } });
+  findByLegacyId(ctx: TenantContext, legacyId: string, tx?: ScopedTx) {
+    return db(ctx, tx).sourceLead.findUnique({ where: { legacyId } });
   },
 
   /**
    * The lead a candidate was promoted FROM (unique back-link), delete-agnostic — the journey
    * still shows the sourcing origin even if the lead row was later trashed.
    */
-  findByPromotedCandidateId(candidateId: string, tx?: Prisma.TransactionClient) {
-    return db(tx).sourceLead.findUnique({ where: { promotedCandidateId: candidateId } });
+  findByPromotedCandidateId(ctx: TenantContext, candidateId: string, tx?: ScopedTx) {
+    return db(ctx, tx).sourceLead.findUnique({ where: { promotedCandidateId: candidateId } });
   },
 
   /**
@@ -352,8 +371,8 @@ export const leadRepository = {
    * (Wave 5.1 Daily Brief alert — legacy's "sourced-stuck" bucket, made date-aware: an EXPIRED
    * snooze no longer suppresses forever, unlike legacy's raw-truthiness check).
    */
-  stuckSourced(now: Date, take: number, tx?: Prisma.TransactionClient) {
-    return db(tx).sourceLead.findMany({
+  stuckSourced(ctx: TenantContext, now: Date, take: number, tx?: ScopedTx) {
+    return db(ctx, tx).sourceLead.findMany({
       where: {
         deletedAt: null,
         status: { not: "Promoted" },
@@ -371,8 +390,8 @@ export const leadRepository = {
    * Leads with outreach sent but no response, past `STUCK_OUTREACH_DAYS` and not currently
    * snoozed (Wave 5.1 Daily Brief alert — legacy's "outreach-stuck" bucket).
    */
-  stuckOutreach(now: Date, take: number, tx?: Prisma.TransactionClient) {
-    return db(tx).sourceLead.findMany({
+  stuckOutreach(ctx: TenantContext, now: Date, take: number, tx?: ScopedTx) {
+    return db(ctx, tx).sourceLead.findMany({
       where: {
         deletedAt: null,
         status: { not: "Promoted" },
@@ -386,4 +405,4 @@ export const leadRepository = {
       take,
     });
   },
-};
+});

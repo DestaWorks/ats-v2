@@ -1,5 +1,6 @@
+import type { TenantContext } from "@destaworks/domain/tenant";
 import type { Prisma } from "../generated/prisma/client";
-import { db } from "../prisma";
+import { bridgeUnscopedCallers, db, type ScopedTx } from "../tenant-scope";
 
 /** A raw outreach-attempt row (Prisma model). Services map this to `OutreachAttemptDTO`. */
 export type OutreachAttemptRow = Prisma.OutreachAttemptGetPayload<Record<string, never>>;
@@ -10,10 +11,10 @@ export type OutreachAttemptRow = Prisma.OutreachAttemptGetPayload<Record<string,
  * attempts logged directly on the candidate with the history of the lead that was PROMOTED into it
  * (`lead.promotedCandidateId`), so a promoted candidate keeps its sourcing trail visible.
  */
-export const outreachRepository = {
+export const outreachRepository = bridgeUnscopedCallers({
   /** All attempts for a candidate — direct + promoted-lead history, newest first. */
-  listForCandidate(candidateId: string, tx?: Prisma.TransactionClient) {
-    return db(tx).outreachAttempt.findMany({
+  listForCandidate(ctx: TenantContext, candidateId: string, tx?: ScopedTx) {
+    return db(ctx, tx).outreachAttempt.findMany({
       where: {
         OR: [{ candidateId }, { lead: { promotedCandidateId: candidateId } }],
       },
@@ -23,11 +24,12 @@ export const outreachRepository = {
 
   /** Insert one candidate-side attempt (`candidate_log_outreach`). Callers pass the session actor. */
   createForCandidate(
+    ctx: TenantContext,
     candidateId: string,
     data: { channel: string; note: string | null; actorId: string; templateId?: string | null },
-    tx?: Prisma.TransactionClient,
+    tx?: ScopedTx,
   ) {
-    return db(tx).outreachAttempt.create({
+    return db(ctx, tx).outreachAttempt.create({
       data: {
         candidateId,
         channel: data.channel,
@@ -37,4 +39,4 @@ export const outreachRepository = {
       },
     });
   },
-};
+});

@@ -1,6 +1,7 @@
+import type { TenantContext } from "@destaworks/domain/tenant";
 import { Prisma } from "../generated/prisma/client";
 import type { Document } from "../generated/prisma/client";
-import { db } from "../prisma";
+import { bridgeUnscopedCallers, db, type ScopedTx } from "../tenant-scope";
 import { decryptField, encryptField, isEncryptionEnabled } from "../field-crypto";
 
 /** A raw document row (Prisma model). Services/DTOs map this to API shapes. */
@@ -76,12 +77,12 @@ function decryptRow<T extends Document | null>(row: T): T {
  * is set, so soft-deleted rows never surface by accident. Every method accepts an optional `tx`
  * so the resume service can compose the candidate write + document write + audit atomically.
  */
-export const documentRepository = {
-  async create(data: DocumentCreateData, tx?: Prisma.TransactionClient) {
+export const documentRepository = bridgeUnscopedCallers({
+  async create(ctx: TenantContext, data: DocumentCreateData, tx?: ScopedTx) {
     const { extractedData, extractedText, ...rest } = data;
     const text = encryptText(extractedText);
     return decryptRow(
-      await db(tx).document.create({
+      await db(ctx, tx).document.create({
         data: {
           ...rest,
           ...(text !== undefined && { extractedText: text }),
@@ -91,9 +92,14 @@ export const documentRepository = {
     );
   },
 
-  async findById(id: string, opts?: { includeDeleted?: boolean }, tx?: Prisma.TransactionClient) {
+  async findById(
+    ctx: TenantContext,
+    id: string,
+    opts?: { includeDeleted?: boolean },
+    tx?: ScopedTx,
+  ) {
     return decryptRow(
-      await db(tx).document.findFirst({
+      await db(ctx, tx).document.findFirst({
         where: { id, ...(opts?.includeDeleted ? {} : { deletedAt: null }) },
       }),
     );
@@ -103,21 +109,22 @@ export const documentRepository = {
    * ETL-ONLY, intentionally delete-agnostic (mirrors the candidate repo): returns a soft-deleted
    * row too so the one-shot migration re-upserts an existing document instead of duplicating it.
    */
-  async findByLegacyId(legacyId: string, tx?: Prisma.TransactionClient) {
-    return decryptRow(await db(tx).document.findUnique({ where: { legacyId } }));
+  async findByLegacyId(ctx: TenantContext, legacyId: string, tx?: ScopedTx) {
+    return decryptRow(await db(ctx, tx).document.findUnique({ where: { legacyId } }));
   },
 
   /** ETL upsert keyed on the legacy Sheet ResumeFileID — idempotent re-runs (Wave 1.3 §5). */
   async upsertByLegacyId(
+    ctx: TenantContext,
     legacyId: string,
     data: DocumentCreateData,
-    tx?: Prisma.TransactionClient,
+    tx?: ScopedTx,
   ) {
     const { extractedData, extractedText, ...rest } = data;
     const text = encryptText(extractedText);
     const json = encryptJson(extractedData);
     return decryptRow(
-      await db(tx).document.upsert({
+      await db(ctx, tx).document.upsert({
         where: { legacyId },
         create: {
           ...rest,
@@ -134,20 +141,20 @@ export const documentRepository = {
     );
   },
 
-  async listByCandidate(candidateId: string, tx?: Prisma.TransactionClient) {
-    const rows = await db(tx).document.findMany({
+  async listByCandidate(ctx: TenantContext, candidateId: string, tx?: ScopedTx) {
+    const rows = await db(ctx, tx).document.findMany({
       where: { candidateId, deletedAt: null },
       orderBy: { createdAt: "desc" },
     });
     return rows.map(decryptRow);
   },
 
-  async softDelete(id: string, actorId: string, tx?: Prisma.TransactionClient) {
+  async softDelete(ctx: TenantContext, id: string, actorId: string, tx?: ScopedTx) {
     return decryptRow(
-      await db(tx).document.update({
+      await db(ctx, tx).document.update({
         where: { id },
         data: { deletedAt: new Date(), deletedById: actorId },
       }),
     );
   },
-};
+});

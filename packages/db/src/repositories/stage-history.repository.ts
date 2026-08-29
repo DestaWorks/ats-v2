@@ -1,5 +1,6 @@
-import type { Prisma, StageHistory } from "../generated/prisma/client";
-import { db } from "../prisma";
+import type { TenantContext } from "@destaworks/domain/tenant";
+import type { StageHistory } from "../generated/prisma/client";
+import { bridgeUnscopedCallers, db, type ScopedTx } from "../tenant-scope";
 import { FIRST_TERMINAL_ORDER } from "./candidate.repository";
 
 /** A raw stage-history row (Prisma model). */
@@ -20,9 +21,9 @@ export interface StageHistoryAddInput {
  * normally called inside the same transaction as the candidate `update` + `writeAudit` (pass
  * the shared `tx`) so the history can't drift from the candidate's current stage.
  */
-export const stageHistoryRepository = {
-  add(input: StageHistoryAddInput, tx?: Prisma.TransactionClient) {
-    return db(tx).stageHistory.create({
+export const stageHistoryRepository = bridgeUnscopedCallers({
+  add(ctx: TenantContext, input: StageHistoryAddInput, tx?: ScopedTx) {
+    return db(ctx, tx).stageHistory.create({
       data: {
         candidateId: input.candidateId,
         fromStatus: input.fromStatus ?? null,
@@ -34,15 +35,15 @@ export const stageHistoryRepository = {
     });
   },
 
-  listByCandidate(candidateId: string, tx?: Prisma.TransactionClient) {
-    return db(tx).stageHistory.findMany({
+  listByCandidate(ctx: TenantContext, candidateId: string, tx?: ScopedTx) {
+    return db(ctx, tx).stageHistory.findMany({
       where: { candidateId },
       orderBy: { enteredAt: "desc" },
     });
   },
 
-  latest(candidateId: string, tx?: Prisma.TransactionClient) {
-    return db(tx).stageHistory.findFirst({
+  latest(ctx: TenantContext, candidateId: string, tx?: ScopedTx) {
+    return db(ctx, tx).stageHistory.findFirst({
       where: { candidateId },
       orderBy: { enteredAt: "desc" },
     });
@@ -50,9 +51,9 @@ export const stageHistoryRepository = {
 
   /** Bulk history for a set of candidates, chronological within each candidate (Wave 5.2 Mass
    *  Journey — ONE query for a whole cohort instead of one `listByCandidate` call per row). */
-  listByCandidateIds(ids: string[], tx?: Prisma.TransactionClient) {
+  listByCandidateIds(ctx: TenantContext, ids: string[], tx?: ScopedTx) {
     if (ids.length === 0) return Promise.resolve([]);
-    return db(tx).stageHistory.findMany({
+    return db(ctx, tx).stageHistory.findMany({
       where: { candidateId: { in: ids } },
       orderBy: [{ candidateId: "asc" }, { enteredAt: "asc" }],
     });
@@ -65,11 +66,12 @@ export const stageHistoryRepository = {
    * legacy's two divergent ones (activity-log Action text vs candidate Tags field).
    */
   async enteredStatusCountsByRange(
+    ctx: TenantContext,
     toStatus: string,
     w: { start: Date; end: Date },
-    tx?: Prisma.TransactionClient,
+    tx?: ScopedTx,
   ): Promise<Map<string, number>> {
-    const rows = await db(tx).stageHistory.findMany({
+    const rows = await db(ctx, tx).stageHistory.findMany({
       where: { toStatus, enteredAt: { gte: w.start, lt: w.end } },
       select: { candidate: { select: { createdById: true } } },
     });
@@ -98,12 +100,16 @@ export const stageHistoryRepository = {
    * Global/unscoped — callers join the returned map against whichever candidate cohort they
    * already loaded (per client/associate/source), so this runs ONCE per report request.
    */
-  async maxStageOrderAsOf(asOf: Date, tx?: Prisma.TransactionClient): Promise<Map<string, number>> {
+  async maxStageOrderAsOf(
+    ctx: TenantContext,
+    asOf: Date,
+    tx?: ScopedTx,
+  ): Promise<Map<string, number>> {
     // Perf audit 2026-08-03: was `findMany` + a manual per-candidate max reduced in JS — pulled
     // EVERY matching row into memory on every call (5 report endpoints call this). MAX(...) GROUP
     // BY candidateId does the exact same aggregation in Postgres instead, covered by the
     // (enteredAt, toStageOrder, candidateId) index below (index-only scan, no heap access).
-    const rows = await db(tx).stageHistory.groupBy({
+    const rows = await db(ctx, tx).stageHistory.groupBy({
       by: ["candidateId"],
       where: { enteredAt: { lte: asOf }, toStageOrder: { lt: FIRST_TERMINAL_ORDER } },
       _max: { toStageOrder: true },
@@ -114,4 +120,4 @@ export const stageHistoryRepository = {
     }
     return max;
   },
-};
+});

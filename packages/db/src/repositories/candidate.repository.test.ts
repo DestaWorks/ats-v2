@@ -16,9 +16,13 @@ const h = vi.hoisted(() => ({
 
 vi.mock("server-only", () => ({}));
 vi.mock("../prisma", () => {
-  const prisma = {
+  const prisma: Record<string, unknown> = {
     candidate: { findMany: h.findMany, count: h.count, groupBy: h.groupBy, delete: h.delete },
   };
+  // The seam builds its client with `prisma.$extends(...)`. Returning the fake unchanged keeps
+  // these assertions about the query the REPOSITORY composes; that the extension then adds the
+  // tenant filter is proven against real Prisma in `tenant-scope.test.ts`.
+  prisma["$extends"] = () => prisma;
   return { prisma, db: (tx?: unknown) => tx ?? prisma };
 });
 // Crypto is a passthrough here — these tests never assert on encrypted columns.

@@ -1,4 +1,5 @@
-import { prisma } from "../prisma";
+import type { TenantContext } from "@destaworks/domain/tenant";
+import { bridgeUnscopedCallers, db } from "../tenant-scope";
 import { logger } from "@destaworks/config/logger";
 
 export interface AiUsageEventInput {
@@ -21,10 +22,10 @@ export interface AiUsageStatusBreakdown {
   latencyMsSum: number;
 }
 
-export const aiUsageEventRepository = {
-  async record(data: AiUsageEventInput): Promise<void> {
+export const aiUsageEventRepository = bridgeUnscopedCallers({
+  async record(ctx: TenantContext, data: AiUsageEventInput): Promise<void> {
     try {
-      await prisma.aiUsageEvent.create({ data });
+      await db(ctx).aiUsageEvent.create({ data });
     } catch (err) {
       logger.error("ai.usage_event.record_failed", {
         errorType: err instanceof Error ? err.name : "UnknownError",
@@ -32,12 +33,12 @@ export const aiUsageEventRepository = {
     }
   },
 
-  listRecent(limit: number) {
-    return prisma.aiUsageEvent.findMany({ orderBy: { createdAt: "desc" }, take: limit });
+  listRecent(ctx: TenantContext, limit: number) {
+    return db(ctx).aiUsageEvent.findMany({ orderBy: { createdAt: "desc" }, take: limit });
   },
 
-  async summarySince(since: Date): Promise<AiUsageStatusBreakdown[]> {
-    const grouped = await prisma.aiUsageEvent.groupBy({
+  async summarySince(ctx: TenantContext, since: Date): Promise<AiUsageStatusBreakdown[]> {
+    const grouped = await db(ctx).aiUsageEvent.groupBy({
       by: ["status"],
       where: { createdAt: { gte: since } },
       _count: { _all: true },
@@ -51,4 +52,4 @@ export const aiUsageEventRepository = {
       latencyMsSum: g._sum.latencyMs ?? 0,
     }));
   },
-};
+});

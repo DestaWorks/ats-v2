@@ -15,11 +15,16 @@ const h = vi.hoisted(() => ({
 }));
 
 vi.mock("server-only", () => ({}));
-vi.mock("../prisma", () => ({
-  prisma: {
+vi.mock("../prisma", () => {
+  const prisma: Record<string, unknown> = {
     activityLog: { findMany: h.findMany, findUnique: h.findUnique, groupBy: h.groupBy },
-  },
-}));
+  };
+  // The seam builds its client with `prisma.$extends(...)`. Returning the fake unchanged keeps
+  // these assertions about the query the REPOSITORY composes; that the extension then adds the
+  // tenant filter is proven against real Prisma in `tenant-scope.test.ts`.
+  prisma["$extends"] = () => prisma;
+  return { prisma };
+});
 
 import { auditRepository } from "./audit.repository";
 import type { PageCursor } from "@destaworks/contracts/validation/cursor";
