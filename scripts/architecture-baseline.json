@@ -1,7 +1,5 @@
 {
   "webReadPath": [
-    "apps/web/src/app/(app)/candidates/[id]/lib/load-detail.ts",
-    "apps/web/src/app/(app)/client-discovery/search/page.tsx",
     "apps/web/src/app/(auth)/request-access/actions.ts",
     "apps/web/src/app/api/activity/[id]/route.ts",
     "apps/web/src/app/api/activity/route.ts",
