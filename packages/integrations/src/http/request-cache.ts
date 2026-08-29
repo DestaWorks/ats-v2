@@ -1,4 +1,6 @@
 import { cache } from "react";
+import { systemContextFor } from "@destaworks/domain/system-context";
+import type { TenantContext } from "@destaworks/domain/tenant";
 import { clientRepository } from "@destaworks/db/repositories/client.repository";
 import { clientRulesRepository } from "@destaworks/db/repositories/client-rules.repository";
 import { userRepository } from "@destaworks/db/repositories/user.repository";
@@ -21,14 +23,27 @@ import { userRepository } from "@destaworks/db/repositories/user.repository";
  * long-running process this module is the single place that changes.
  */
 
-export const cachedClientList = cache(() => clientRepository.list());
+/**
+ * Keyed by tenant ID, not the context object: `cache()` memoizes on argument identity, so a fresh
+ * context per call would miss every time and undo the memo.
+ */
+const clientListFor = cache((tenantId: string) =>
+  clientRepository.list(systemContextFor(tenantId)),
+);
+
+const clientRulesListFor = cache((tenantId: string) =>
+  clientRulesRepository.list(systemContextFor(tenantId)),
+);
+
+export const cachedClientList = (ctx: TenantContext) => clientListFor(ctx.tenantId);
 
 /** `id → name` map built from `cachedClientList()` — not a second query. */
-export const cachedClientNameMap = cache(async (): Promise<Map<string, string>> => {
-  const clients = await cachedClientList();
+export const cachedClientNameMap = async (ctx: TenantContext): Promise<Map<string, string>> => {
+  const clients = await cachedClientList(ctx);
   return new Map(clients.map((c) => [c.id, c.name]));
-});
+};
 
-export const cachedClientRulesList = cache(() => clientRulesRepository.list());
+export const cachedClientRulesList = (ctx: TenantContext) => clientRulesListFor(ctx.tenantId);
 
+/** `User` is a GLOBAL model — one human, many tenants — so this one carries no tenant at all. */
 export const cachedUserList = cache(() => userRepository.list());

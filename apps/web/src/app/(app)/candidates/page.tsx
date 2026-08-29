@@ -93,7 +93,7 @@ export default async function CandidatesPage({
       },
       user,
     ),
-    cachedClientList(),
+    cachedClientList(user),
     cachedUserList(),
     savedViewService.list("candidates", user),
   ]);

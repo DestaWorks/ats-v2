@@ -92,7 +92,7 @@ describe("RateLimitGuard — bucket keying", () => {
     const handler = handlerLimitedTo("guard-portal", 1);
     const portalRequest = (contactId: string): PortalRequest => ({
       headers: {},
-      portal: { contactId, clientId: "client_1", fullName: "Dana", email: null },
+      portal: { contactId, clientId: "client_1", tenantId: "t1", fullName: "Dana", email: null },
     });
 
     const dana = executionContextFor({ request: portalRequest("contact_1"), handler });

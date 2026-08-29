@@ -29,3 +29,16 @@ export function systemContextFor(tenantId: string): TenantContext {
     user: { id: SYSTEM_ACTOR_ID, email: "", name: "system" },
   };
 }
+
+/**
+ * The scope for a client-portal contact — outside the company, holding a token, not a membership.
+ * Authorization is `requirePortalContact`'s job; this only lets their reads be scoped.
+ */
+export function portalScopeFor(tenantId: string, contactId: string): TenantContext {
+  return {
+    tenantId,
+    membershipId: SYSTEM_ACTOR_ID,
+    role: LEAST_PRIVILEGED_ROLE,
+    user: { id: contactId, email: "", name: "portal-contact" },
+  };
+}

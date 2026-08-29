@@ -29,6 +29,7 @@ import {
   openRoleRepository,
   type OpenRoleRow,
 } from "@destaworks/db/repositories/open-role.repository";
+import { portalScopeFor } from "@destaworks/domain/system-context";
 import { AppError } from "@destaworks/integrations/http/app-error";
 
 /** URL-safe, 256-bit generated portal token. */
@@ -189,13 +190,14 @@ export const clientPortalService = {
   // --- public portal surface (acting identity = the resolved PortalContext) ---
 
   async data(ctx: PortalContext): Promise<PortalDataDTO> {
+    const scope = portalScopeFor(ctx.tenantId, ctx.contactId);
     const [client, candidateRows, roleRows] = await Promise.all([
-      clientRepository.findById(ctx.clientId),
-      candidateRepository.listCards({
+      clientRepository.findById(scope, ctx.clientId),
+      candidateRepository.listCards(scope, {
         clientId: ctx.clientId,
         statuses: [...PORTAL_VISIBLE_STATUS_CODES],
       }),
-      openRoleRepository.list({ clientId: ctx.clientId }),
+      openRoleRepository.list(scope, { clientId: ctx.clientId }),
     ]);
     if (!client) throw new AppError("NOT_FOUND", "Client not found");
 

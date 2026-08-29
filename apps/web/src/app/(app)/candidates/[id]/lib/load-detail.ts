@@ -20,7 +20,7 @@ export async function loadCandidateDetail(id: string) {
   // independent queries wait behind the (larger) detail fetch. Each round trip costs real time
   // (cross-region DB), so an avoidable serial wait here was a full extra round trip on every load.
   const detailPromise = candidateService.getCandidateDetail(id, user);
-  const clientsPromise = cachedClientList();
+  const clientsPromise = cachedClientList(user);
   const taggablePromise = cachedUserList(); // @mention targets: id + display name only (no emails client-side)
   // If `detailPromise` throws NOT_FOUND below, these two are never awaited — attach a no-op
   // catch so a rare rejection on that path doesn't surface as an unhandled rejection; the real

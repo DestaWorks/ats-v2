@@ -180,11 +180,24 @@ describe("clientPortalService.data", () => {
       },
     ]);
 
-    const ctx = { contactId: "c1", clientId: "cl1", fullName: "Jane Doe", email: "jane@x.com" };
+    const ctx = {
+      contactId: "c1",
+      clientId: "cl1",
+      tenantId: "t1",
+      fullName: "Jane Doe",
+      email: "jane@x.com",
+    };
     const result = await clientPortalService.data(ctx);
 
-    expect(h.listCandidates).toHaveBeenCalledWith(expect.objectContaining({ clientId: "cl1" }));
-    expect(h.listRoles).toHaveBeenCalledWith(expect.objectContaining({ clientId: "cl1" }));
+    // clientId still comes only from the resolved context — the closed IDOR.
+    expect(h.listCandidates).toHaveBeenCalledWith(
+      expect.objectContaining({ tenantId: "t1" }),
+      expect.objectContaining({ clientId: "cl1" }),
+    );
+    expect(h.listRoles).toHaveBeenCalledWith(
+      expect.objectContaining({ tenantId: "t1" }),
+      expect.objectContaining({ clientId: "cl1" }),
+    );
     expect(result.roles).toHaveLength(1); // Closed role filtered out
     expect(result.candidates[0]).not.toHaveProperty("email");
     expect(result.candidates[0]).not.toHaveProperty("licenseNumber");
@@ -194,7 +207,13 @@ describe("clientPortalService.data", () => {
 describe("clientPortalService.postRole", () => {
   it("server-sets clientId/postedByContactId from the PortalContext, never the input", async () => {
     h.createRole.mockResolvedValue({ id: "newrole" });
-    const ctx = { contactId: "c1", clientId: "cl1", fullName: "Jane Doe", email: null };
+    const ctx = {
+      contactId: "c1",
+      clientId: "cl1",
+      tenantId: "t1",
+      fullName: "Jane Doe",
+      email: null,
+    };
     const result = await clientPortalService.postRole(ctx, { title: "NP", priority: "P2" });
     expect(h.createRole).toHaveBeenCalledWith(
       expect.objectContaining({ clientId: "cl1", postedByContactId: "c1", status: "Open" }),

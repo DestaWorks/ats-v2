@@ -14,7 +14,7 @@ import { cachedClientList } from "@destaworks/integrations/http/request-cache";
 export default async function AddCandidatePage() {
   const user = await getVerifiedUser();
 
-  const clientRows = await cachedClientList();
+  const clientRows = await cachedClientList(user);
   const clients = clientRows.map((c) => ({ id: c.id, name: c.name }));
   const canEditCredential = hasCapability(user.role, "viewCredentials");
 

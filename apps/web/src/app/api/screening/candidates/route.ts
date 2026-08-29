@@ -11,8 +11,8 @@ export type GetScreeningCandidatesResponse = ScreeningCandidateListEnvelope;
  * 3 legacy-eligible stages (Wave 3.3). Open to any signed-in operator, matches `POST /api/leads`.
  */
 export const GET = apiHandler(async (req: Request) => {
-  await requireUser();
+  const user = await requireUser();
   const search = new URL(req.url).searchParams.get("search")?.trim() || undefined;
-  const candidates = await screeningService.listEligibleCandidates(search);
+  const candidates = await screeningService.listEligibleCandidates(user, search);
   return json<GetScreeningCandidatesResponse>({ candidates });
 });

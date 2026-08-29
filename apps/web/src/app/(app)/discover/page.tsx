@@ -33,7 +33,7 @@ export default async function DiscoverPage({
 
   const [result, clientRows, coverageGaps] = await Promise.all([
     parsed.success ? discoverService.search(parsed.data, user) : Promise.resolve(null),
-    cachedClientList(),
+    cachedClientList(user),
     discoverService.coverageGaps(user),
   ]);
   const clients = clientRows.map((c) => ({ id: c.id, name: c.name }));

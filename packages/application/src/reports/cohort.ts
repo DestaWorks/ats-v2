@@ -53,8 +53,8 @@ export async function loadCohort(
         take: REPORT_ROW_CAP,
       }),
     ),
-    cachedClientNameMap(),
-    cachedClientRulesList(),
+    cachedClientNameMap(ctx),
+    cachedClientRulesList(ctx),
   ]);
   const userNames = await userRepository.namesByIds([
     ...new Set(candidates.map((c) => c.createdById).filter((id): id is string => !!id)),

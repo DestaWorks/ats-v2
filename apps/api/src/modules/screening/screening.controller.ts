@@ -42,10 +42,11 @@ export class ScreeningController {
    */
   @Get("candidates")
   async pickerCandidates(
+    @CurrentUser() user: AuthContext,
     @Query(flatQuery) query: FlatQuery,
   ): Promise<ScreeningCandidateListEnvelope> {
     const term = query["search"]?.trim() || undefined;
-    return { candidates: await this.screening.listEligibleCandidates(term) };
+    return { candidates: await this.screening.listEligibleCandidates(user, term) };
   }
 
   /**

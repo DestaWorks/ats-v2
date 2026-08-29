@@ -64,7 +64,7 @@ export default async function AppLayout({
     items.push({ href: "/admin", label: "Admin", icon: "settings" });
   }
 
-  const clientRows = await cachedClientList();
+  const clientRows = await cachedClientList(user);
   const clients = clientRows.map((c) => ({ id: c.id, name: c.name }));
 
   return (

@@ -1,3 +1,4 @@
+import { getVerifiedUser } from "@destaworks/auth/guards";
 import { InboundTriage } from "./inbound-triage";
 import { cachedClientList } from "@destaworks/integrations/http/request-cache";
 
@@ -8,7 +9,8 @@ import { cachedClientList } from "@destaworks/integrations/http/request-cache";
  * so the reviewer can edit before anything is written.
  */
 export default async function InboundTriagePage() {
-  const clientRows = await cachedClientList();
+  const user = await getVerifiedUser();
+  const clientRows = await cachedClientList(user);
   const clients = clientRows.map((c) => ({ id: c.id, name: c.name }));
 
   return (

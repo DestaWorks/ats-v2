@@ -257,8 +257,6 @@ describe("POST /reports/export/jobs", () => {
     );
     expect(h.enqueue).toHaveBeenCalledWith(
       expect.objectContaining({ name: "reports.export.candidates" }),
-      // The tenant rides in the payload: the handler resumes with no session and cannot
-      // look one up without a scoped query, which would need the tenant it is looking for.
       { exportId: "exp1", tenantId: "t1", filters: { clientId: "c1" } },
     );
   });

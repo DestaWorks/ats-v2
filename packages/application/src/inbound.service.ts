@@ -97,12 +97,13 @@ function matchReasons(
  * at least one positive match reason are kept; sorted by fit desc, capped at `MAX_CLIENT_MATCHES`.
  */
 async function matchClients(
+  ctx: TenantContext,
   extracted: InboundExtractedDTO,
   now: Date,
 ): Promise<InboundClientMatchDTO[]> {
   const [clientNames, rulesRows] = await Promise.all([
-    cachedClientNameMap(),
-    cachedClientRulesList(),
+    cachedClientNameMap(ctx),
+    cachedClientRulesList(ctx),
   ]);
   const ruleCandidate: RuleCandidate = {
     status: "NEW_CANDIDATE",
@@ -148,7 +149,7 @@ export const inboundService = {
     const extracted = await extractInbound(input.messageText, input.context ?? null);
     const [existing, clientMatches] = await Promise.all([
       findExisting(ctx, extracted),
-      matchClients(extracted, clock.now()),
+      matchClients(ctx, extracted, clock.now()),
     ]);
     return { extracted, clientMatches, existing };
   },

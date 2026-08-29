@@ -302,14 +302,8 @@ export const dailyService = {
       feedback,
       goals,
     ] = await withTenantTransaction(ctx, async () =>
-      // One transaction for the whole fan-out, not eleven. Every scoped query has to run inside a
-      // transaction that announced its tenant (RLS reads `app.tenant_id` off the connection), so
-      // without this each of these opens its own BEGIN/set_config/COMMIT and takes a connection
-      // from a pool of five — eleven of them, three waves deep, for one page. Inside an ambient
-      // transaction they all reuse it, so this is one connection and one round trip each.
-      //
-      // The repositories need no change: `db(ctx)` re-dispatches onto the ambient transaction on
-      // its own, which is why nothing here threads a `tx` argument.
+      // One transaction for the whole fan-out: unbatched, each read opens its own and takes a
+      // connection from a pool of five. `db(ctx)` joins the ambient one by itself.
       Promise.all([
         dailyRepository.logFor(ctx, ctx.user.id, date),
         dailyRepository.countCandidatesAdded(ctx, ctx.user.id, w),

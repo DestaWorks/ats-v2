@@ -337,7 +337,7 @@ describe("candidateService.dashboardStats", () => {
   });
 
   it("derives total/active/terminal from the groupBy (no full-table load)", async () => {
-    const stats = await candidateService.dashboardStats();
+    const stats = await candidateService.dashboardStats(viewer);
     expect(h.candidateRepo.listCards).not.toHaveBeenCalled();
     expect(stats.total).toBe(10);
     expect(stats.active).toBe(8); // 5 + 3
@@ -345,7 +345,7 @@ describe("candidateService.dashboardStats", () => {
   });
 
   it("builds the 9 active funnel columns from the per-status counts", async () => {
-    const stats = await candidateService.dashboardStats();
+    const stats = await candidateService.dashboardStats(viewer);
     expect(stats.columns).toHaveLength(9);
     expect(stats.columns.find((c) => c.status === "NEW_CANDIDATE")!.count).toBe(5);
     expect(stats.columns.find((c) => c.status === "SUBMITTED_TO_CLIENT")!.count).toBe(3);
@@ -353,8 +353,11 @@ describe("candidateService.dashboardStats", () => {
   });
 
   it("surfaces only overdue/stuck candidates from the targeted stale read", async () => {
-    const stats = await candidateService.dashboardStats();
+    const stats = await candidateService.dashboardStats(viewer);
     expect(stats.attention.map((c) => c.id)).toEqual(["old"]);
-    expect(h.candidateRepo.listStaleActive).toHaveBeenCalledWith(8);
+    expect(h.candidateRepo.listStaleActive).toHaveBeenCalledWith(
+      expect.objectContaining({ tenantId: expect.any(String) }),
+      8,
+    );
   });
 });

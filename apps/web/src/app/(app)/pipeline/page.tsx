@@ -39,7 +39,7 @@ export default async function PipelinePage({
       },
       user,
     ),
-    cachedClientList(),
+    cachedClientList(user),
     cachedUserList(),
     savedViewService.list("pipeline", user),
   ]);

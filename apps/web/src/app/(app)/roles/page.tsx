@@ -49,7 +49,7 @@ export default async function RolesPage({
       user,
     ),
     openRoleService.triage(user),
-    cachedClientList(),
+    cachedClientList(user),
   ]);
   const clients = clientRows.map((c) => ({ id: c.id, name: c.name }));
   const listKey = [clientId, status, priority, search, page].join("|");

@@ -37,8 +37,8 @@ export const credentialsIntelligenceService = {
         credentialsIntelligenceRepository.matrixCounts(ctx),
         credentialsIntelligenceRepository.gapAnalysisCandidates(ctx),
         credentialsIntelligenceRepository.nlcCompactHolders(ctx, NLC_HOLDER_CAP),
-        cachedClientRulesList(),
-        cachedClientNameMap(),
+        cachedClientRulesList(ctx),
+        cachedClientNameMap(ctx),
       ]);
 
     return {

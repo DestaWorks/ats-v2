@@ -575,7 +575,7 @@ export const candidateService = {
    */
   async listTrash(viewer: TenantContext): Promise<CandidateTrashDTO> {
     const rows = await candidateRepository.listDeleted(viewer, TRASH_PAGE);
-    const clientNames = await cachedClientNameMap();
+    const clientNames = await cachedClientNameMap(viewer);
     const actorIds = rows.map((r) => r.deletedById).filter((id): id is string => id !== null);
     const actorNames = await userRepository.namesByIds(actorIds);
     const items = rows.map((row) =>
@@ -618,8 +618,8 @@ export const candidateService = {
         documentRepository.listByCandidate(viewer, id),
         noteRepository.listByCandidate(viewer, id),
         stageHistoryRepository.listByCandidate(viewer, id),
-        cachedClientNameMap(),
-        cachedClientRulesList(),
+        cachedClientNameMap(viewer),
+        cachedClientRulesList(viewer),
         outreachRepository.listForCandidate(viewer, id),
       ]);
     if (!candidate) throw new AppError("NOT_FOUND", "Candidate not found");
@@ -678,7 +678,7 @@ export const candidateService = {
       noteRepository.listByCandidate(viewer, id),
       outreachRepository.listForCandidate(viewer, id),
       leadRepository.findByPromotedCandidateId(viewer, id),
-      cachedClientNameMap(),
+      cachedClientNameMap(viewer),
     ]);
     const actorIds = [
       ...history.map((h) => h.actorId),
@@ -866,7 +866,7 @@ export const candidateService = {
       ...(filters.status !== undefined && { status: filters.status }),
     };
 
-    const namesAndRules = Promise.all([cachedClientNameMap(), cachedClientRulesList()]);
+    const namesAndRules = Promise.all([cachedClientNameMap(viewer), cachedClientRulesList(viewer)]);
 
     // DB path — sort is DB-native and Hot is off, so paginate in SQL. `count`, the page read, and
     // the name/rules lookup are all independent of each other (perf audit 2026-08-05 — these used
@@ -944,12 +944,12 @@ export const candidateService = {
    * filtered to those actually overdue/stuck. AuthZ is the caller's — the card DTO never carries
    * `licenseNumber`, so there's no PII gate here to drive.
    */
-  async dashboardStats(): Promise<DashboardStatsDTO> {
+  async dashboardStats(viewer: TenantContext): Promise<DashboardStatsDTO> {
     const [grouped, staleRows, clientNames, rulesRows] = await Promise.all([
-      candidateRepository.groupByStatus(),
-      candidateRepository.listStaleActive(ATTENTION_LIMIT),
-      cachedClientNameMap(),
-      cachedClientRulesList(),
+      candidateRepository.groupByStatus(viewer),
+      candidateRepository.listStaleActive(viewer, ATTENTION_LIMIT),
+      cachedClientNameMap(viewer),
+      cachedClientRulesList(viewer),
     ]);
 
     const countByStatus = new Map<string, number>();
@@ -1012,8 +1012,8 @@ export const candidateService = {
         candidateRepository.groupByStatusFiltered(viewer, shared),
         candidateRepository.count(viewer, { ...shared, overdue: true }),
         candidateRepository.count(viewer, { ...shared, stuck: true }),
-        cachedClientNameMap(),
-        cachedClientRulesList(),
+        cachedClientNameMap(viewer),
+        cachedClientRulesList(viewer),
         Promise.all(
           ACTIVE_STATUS_CODES.map((status) =>
             !focus || focus === status
@@ -1114,8 +1114,8 @@ export const candidateService = {
         ...(cursor !== undefined && { cursor }),
         take: BOARD_PAGE + 1,
       }),
-      cachedClientNameMap(),
-      cachedClientRulesList(),
+      cachedClientNameMap(viewer),
+      cachedClientRulesList(viewer),
     ]);
     const rulesByClient = buildRulesMap(clientNames, rulesRows);
     const hasMore = rows.length > BOARD_PAGE;

@@ -60,12 +60,18 @@ describe("GET /screening/candidates", () => {
 
   it("forwards a trimmed search term", async () => {
     await api.request("/screening/candidates?search=%20%20jane%20%20");
-    expect(h.screening.listEligibleCandidates).toHaveBeenCalledWith("jane");
+    expect(h.screening.listEligibleCandidates).toHaveBeenCalledWith(
+      expect.objectContaining({ tenantId: expect.any(String) }),
+      "jane",
+    );
   });
 
   it("treats a blank search as no filter, not as a search for the empty string", async () => {
     await api.request("/screening/candidates?search=%20");
-    expect(h.screening.listEligibleCandidates).toHaveBeenCalledWith(undefined);
+    expect(h.screening.listEligibleCandidates).toHaveBeenCalledWith(
+      expect.objectContaining({ tenantId: expect.any(String) }),
+      undefined,
+    );
   });
 
   it("refuses a signed-out caller with 401 and reads nothing", async () => {

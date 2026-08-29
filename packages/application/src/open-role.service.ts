@@ -189,7 +189,7 @@ export const openRoleService = {
     });
     const [total, clientNames] = await Promise.all([
       openRoleRepository.count(ctx, repoFilters),
-      cachedClientNameMap(),
+      cachedClientNameMap(ctx),
     ]);
     const meta = pageMeta(total, filters.page ?? 1, LIST_PAGE);
     const rows = await openRoleRepository.list(ctx, {
@@ -208,7 +208,7 @@ export const openRoleService = {
     const role = await requireRole(ctx, id);
     const [notes, clientNames] = await Promise.all([
       openRoleRepository.listNotes(ctx, id),
-      cachedClientNameMap(),
+      cachedClientNameMap(ctx),
     ]);
     const authorIds = notes.map((n) => n.authorId);
     const assigneeIds = role.assignedToId ? [role.assignedToId] : [];
@@ -381,7 +381,7 @@ export const openRoleService = {
   async triage(ctx: TenantContext): Promise<TriageRoleDTO[]> {
     const [roles, clientNames, candidates, profiles] = await Promise.all([
       openRoleRepository.listActive(ctx),
-      cachedClientNameMap(),
+      cachedClientNameMap(ctx),
       loadMatchCandidates(ctx),
       clientMatchProfileRepository.list(ctx),
     ]);

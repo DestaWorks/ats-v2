@@ -1,3 +1,4 @@
+import { getVerifiedUser } from "@destaworks/auth/guards";
 import { screeningService } from "@destaworks/application/screening.service";
 import { ScreeningView } from "./screening-view";
 
@@ -8,7 +9,8 @@ import { ScreeningView } from "./screening-view";
  * named "Screener"), SSR-renders the initial picker list.
  */
 export default async function ScreeningPage() {
-  const candidates = await screeningService.listEligibleCandidates(undefined);
+  const user = await getVerifiedUser();
+  const candidates = await screeningService.listEligibleCandidates(user, undefined);
 
   return (
     <div className="flex flex-col gap-5 px-8 py-6">

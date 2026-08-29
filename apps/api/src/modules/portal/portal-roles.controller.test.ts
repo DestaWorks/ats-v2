@@ -64,6 +64,7 @@ function controllerWith(methods: Partial<ClientPortalService>): PortalRolesContr
 const CONTACT: PortalContext = {
   contactId: "contact_1",
   clientId: "client_1",
+  tenantId: "t1",
   fullName: "Dana Client",
   email: "dana@client.example",
 };
@@ -82,6 +83,7 @@ function tokenFor(contact: Partial<ContactRow> = {}, token: Partial<TokenRow> = 
     contact: {
       id: "contact_1",
       clientId: "client_1",
+      tenantId: "t1",
       fullName: "Dana Client",
       email: "dana@client.example",
       status: "active",

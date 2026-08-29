@@ -40,7 +40,7 @@ export default async function SourcingPage({
       defined({ status, source, clientId, ownerId, search, includeDeleted: showDeleted, page }),
       user,
     ),
-    cachedClientList(),
+    cachedClientList(user),
     cachedUserList(), // filter + bulk "Assign owner…" options (id + display name only)
   ]);
   const clients = clientRows.map((c) => ({ id: c.id, name: c.name }));

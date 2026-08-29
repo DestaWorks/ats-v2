@@ -16,7 +16,7 @@ export default async function TemplatesPage() {
   const user = await getVerifiedUser();
 
   const [clientRows, preferences] = await Promise.all([
-    cachedClientList(),
+    cachedClientList(user),
     userPreferencesService.getMine(user),
   ]);
   const clients = clientRows.map((c) => ({ id: c.id, name: c.name }));

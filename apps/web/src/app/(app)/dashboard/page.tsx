@@ -31,7 +31,7 @@ export default async function DashboardPage() {
   const initialTz = await viewerTzOffset();
 
   const [stats, initialDailyOverview] = await Promise.all([
-    candidateService.dashboardStats(),
+    candidateService.dashboardStats(user),
     initialTz !== undefined
       ? dailyService.overview(user, dateKeyForOffset(initialTz), initialTz)
       : Promise.resolve(undefined),

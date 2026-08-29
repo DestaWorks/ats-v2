@@ -58,7 +58,7 @@ export const licenseVerifyService = {
     const [queue, timelineRows, clientNames] = await Promise.all([
       licenseVerifyRepository.verificationQueue(ctx, QUEUE_CAP),
       licenseVerifyRepository.expiryTimeline(ctx, TIMELINE_CAP),
-      cachedClientNameMap(),
+      cachedClientNameMap(ctx),
     ]);
     return {
       queue: queue.rows.map((c) => toQueueRowDTO(c, clientNames)),

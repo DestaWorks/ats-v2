@@ -64,15 +64,18 @@ function toScorecardDTO(
  */
 export const screeningService = {
   /** Candidates eligible for screening (the picker) — scoped to the 3 legacy-eligible stages. */
-  async listEligibleCandidates(search: string | undefined): Promise<ScreeningCandidateDTO[]> {
+  async listEligibleCandidates(
+    ctx: TenantContext,
+    search: string | undefined,
+  ): Promise<ScreeningCandidateDTO[]> {
     const [rows, clientNames, rulesRows] = await Promise.all([
       candidateRepository.list({
         statuses: [...SCREENING_ELIGIBLE_STATUSES],
         ...(search !== undefined && { search }),
         take: 20,
       }),
-      cachedClientNameMap(),
-      cachedClientRulesList(),
+      cachedClientNameMap(ctx),
+      cachedClientRulesList(ctx),
     ]);
     const rulesByClient = new Map(rulesRows.map((r) => [r.clientId, r]));
     return rows.map((c) => {
@@ -107,7 +110,7 @@ export const screeningService = {
     const candidate = await candidateRepository.findById(ctx, candidateId);
     if (!candidate) throw new AppError("NOT_FOUND", "Candidate not found");
 
-    const rulesRows = candidate.clientId ? await cachedClientRulesList() : [];
+    const rulesRows = candidate.clientId ? await cachedClientRulesList(ctx) : [];
     const rulesRow = rulesRows.find((r) => r.clientId === candidate.clientId) ?? null;
     const clientRules: ScreeningClientRules | null = rulesRow
       ? { states: rulesRow.states, schedule: rulesRow.schedule }

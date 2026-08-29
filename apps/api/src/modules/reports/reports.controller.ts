@@ -211,8 +211,6 @@ export class ReportsController {
   ): Promise<ReportExportDTO> {
     const row = await this.exportJobs.request(user, user.user.id, filters);
     try {
-      // The tenant enters the payload HERE, at the one point in the export's life where a
-      // membership is present. The handler resumes with no session and cannot look it up.
       await this.queue.enqueue(reportExportJob, {
         exportId: row.id,
         tenantId: user.tenantId,

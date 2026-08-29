@@ -202,7 +202,7 @@ export const leadService = {
     });
     const [total, clientNames] = await Promise.all([
       leadRepository.count(ctx, repoFilters),
-      cachedClientNameMap(),
+      cachedClientNameMap(ctx),
     ]);
     const meta = pageMeta(total, filters.page ?? 1, LIST_PAGE);
     const rows = await leadRepository.list(ctx, {

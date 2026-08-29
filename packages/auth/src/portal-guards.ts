@@ -16,6 +16,8 @@ import { requestContext } from "@destaworks/config/request-context";
 export interface PortalContext {
   contactId: string;
   clientId: string;
+  /** The contact's tenant, derived from their client — a fact about the token, not a decision. */
+  tenantId: string;
   fullName: string;
   email: string | null;
 }
@@ -49,11 +51,14 @@ async function resolveByRawToken(
   // 2026-08-21).
   if (tokenRow.contact.status === "left") return null;
   if (!tokenRow.contact.portalEnabled) return null;
+  // Nullable until 6.2's contract migration. Unscopeable means refused, not served unscoped.
+  if (tokenRow.contact.tenantId === null) return null;
 
   await clientPortalTokenRepository.touchLastUsed(tokenRow.id);
 
   return {
     contact: {
+      tenantId: tokenRow.contact.tenantId,
       contactId: tokenRow.contact.id,
       clientId: tokenRow.contact.clientId,
       fullName: tokenRow.contact.fullName,

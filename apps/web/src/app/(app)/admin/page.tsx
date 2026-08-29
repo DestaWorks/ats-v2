@@ -35,7 +35,7 @@ export default async function AdminPage() {
     adminUserService.list(),
     accessRequestService.list(),
     canConfigurePortal ? portalAccessRequestService.list() : Promise.resolve([]),
-    canConfigurePortal ? cachedClientList() : Promise.resolve([]),
+    canConfigurePortal ? cachedClientList(user) : Promise.resolve([]),
     canManageAi
       ? aiOpsService.getSettings(user)
       : Promise.resolve({ disabled: false, disabledReason: null }),
