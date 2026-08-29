@@ -15,6 +15,22 @@ import { execSync } from "node:child_process";
 
 const METHODS = ["GET", "POST", "PATCH", "PUT", "DELETE"];
 
+// Endpoints that are DELIBERATELY unauthenticated, each with the reason it cannot carry a guard.
+// A named list rather than a looser rule: anything not here and unguarded is still a failure, and
+// an entry that acquires a guard fails too, so the list cannot quietly go stale.
+const PUBLIC_ENDPOINTS = new Map([
+  ["GET /health", "readiness probe — a monitor must reach it before any session exists"],
+  ["GET /health/live", "liveness probe — same"],
+  [
+    "POST /access-requests",
+    "public request-access form — the applicant has no account yet, by definition",
+  ],
+  [
+    "POST /portal/access-requests",
+    "public portal request-access form — the requester holds no portal token yet",
+  ],
+]);
+
 // --- Next side: path from the file location, capability from requireCapability() in each handler.
 const nextFiles = execSync("find apps/web/src/app/api -name route.ts")
   .toString()
@@ -131,7 +147,9 @@ for (const [key, nx] of next) {
 let classified = 0;
 for (const [key, hit] of nest) {
   const g = hit.guards ?? "";
-  const isPortal = key.includes(" /portal");
+  const publicReason = PUBLIC_ENDPOINTS.get(key);
+  const isPublic = publicReason !== undefined;
+  const isPortal = key.includes(" /portal") && !isPublic;
   const hasSession = /SessionAuthGuard/.test(g);
   const hasPortal = /PortalAuthGuard/.test(g);
   const hasCapGuard = /CapabilityGuard/.test(g);
@@ -157,9 +175,13 @@ for (const [key, hit] of nest) {
   // step, so it is itself an auth guard whenever a capability is attached.
   const authenticated =
     hasSession || hasPortal || hasPlatformGuard || (hasCapGuard && hit.caps.length > 0);
-  const isPublicHealth = key.startsWith("GET /health");
-  if (!isPublicHealth && !authenticated) note(`${key}: no auth guard (${hit.file})`);
-  if (authenticated || isPublicHealth) classified++;
+  if (!isPublic && !authenticated) note(`${key}: no auth guard (${hit.file})`);
+  if (isPublic && authenticated)
+    note(`${key}: listed as deliberately public but carries an auth guard — the list is stale`);
+  // A public endpoint's only abuse control is the limiter, so it is required rather than advisory.
+  if (isPublic && !/RateLimitGuard/.test(g) && !key.startsWith("GET /health"))
+    note(`${key}: deliberately public (${publicReason}) but declares no RateLimitGuard`);
+  if (authenticated || isPublic) classified++;
 }
 
 // 3. Nothing authenticated in Next may be unauthenticated in Nest.
@@ -194,5 +216,6 @@ if (failures.length) {
 
 console.log(
   `auth surface: OK — ${nest.size} endpoints, ${matched} matched against their Next route, ` +
-    `${bothCapped} capability-gated on both sides, every endpoint behind a guard.`,
+    `${bothCapped} capability-gated on both sides, every endpoint behind a guard or on the ` +
+    `${PUBLIC_ENDPOINTS.size}-entry public list.`,
 );

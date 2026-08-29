@@ -93,6 +93,11 @@ export const portalAccessRequestSchema = z
   .strict();
 export type PortalAccessRequestInput = z.infer<typeof portalAccessRequestSchema>;
 
+/** Response body of `POST /portal/access-requests` — acceptance only, never the requester's details. */
+export interface PostPortalAccessRequestResponse {
+  ok: true;
+}
+
 export interface PortalAccessRequestDTO {
   id: string;
   name: string;

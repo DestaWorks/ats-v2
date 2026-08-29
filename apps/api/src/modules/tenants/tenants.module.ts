@@ -3,6 +3,7 @@ import { membershipService } from "@destaworks/application/membership.service";
 import { platformAdminService } from "@destaworks/application/platform-admin.service";
 import { platformImpersonationService } from "@destaworks/application/platform-impersonation.service";
 import { platformMetricsService } from "@destaworks/application/platform-metrics.service";
+import { publicTenantService } from "@destaworks/application/public-tenant.service";
 import { provideService } from "../service-token";
 import { PlatformImpersonationController } from "./platform-impersonation.controller";
 import { PlatformMetricsController } from "./platform-metrics.controller";
@@ -13,6 +14,7 @@ import {
   PLATFORM_ADMIN_SERVICE,
   PLATFORM_IMPERSONATION_SERVICE,
   PLATFORM_METRICS_SERVICE,
+  PUBLIC_TENANT_SERVICE,
 } from "./tenants.tokens";
 
 export {
@@ -20,6 +22,7 @@ export {
   PLATFORM_ADMIN_SERVICE,
   PLATFORM_IMPERSONATION_SERVICE,
   PLATFORM_METRICS_SERVICE,
+  PUBLIC_TENANT_SERVICE,
 };
 
 /**
@@ -42,12 +45,14 @@ export {
     provideService(PLATFORM_ADMIN_SERVICE, platformAdminService),
     provideService(PLATFORM_IMPERSONATION_SERVICE, platformImpersonationService),
     provideService(PLATFORM_METRICS_SERVICE, platformMetricsService),
+    provideService(PUBLIC_TENANT_SERVICE, publicTenantService),
   ],
   exports: [
     MEMBERSHIP_SERVICE,
     PLATFORM_ADMIN_SERVICE,
     PLATFORM_IMPERSONATION_SERVICE,
     PLATFORM_METRICS_SERVICE,
+    PUBLIC_TENANT_SERVICE,
   ],
 })
 export class TenantsModule {}
