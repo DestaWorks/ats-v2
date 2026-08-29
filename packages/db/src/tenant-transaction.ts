@@ -31,6 +31,35 @@ export interface TenantTransactionOptions {
  * The callback receives a scoped client, not a raw `Prisma.TransactionClient`, so a repository
  * called inside it still cannot issue an unscoped query.
  */
+/**
+ * Prisma's raw methods, which the tenant extension does NOT intercept.
+ *
+ * The seam extends `query.$allModels.$allOperations` — model operations only. A raw call therefore
+ * bypasses it and, because `fn` is handed the extended CLIENT rather than the transaction, would
+ * execute on a pooled connection OUTSIDE this transaction. That is not merely unscoped: anything
+ * transaction-lifetime silently stops working. `pg_advisory_xact_lock` releases the instant the
+ * implicit transaction ends, which turned the resume importer's duplicate-candidate guard into a
+ * no-op that still looked like it was holding a lock.
+ *
+ * Raw calls are bound to the real transaction client instead. They stay unscoped — a raw query is
+ * the caller's own SQL and the extension could not scope it anyway — but they now run on the
+ * connection that announced the tenant, so RLS applies to them and a transaction-scoped lock is
+ * actually held for the transaction.
+ */
+const RAW_METHODS = new Set(["$executeRaw", "$executeRawUnsafe", "$queryRaw", "$queryRawUnsafe"]);
+
+function bindRawTo(tx: object, scoped: ScopedTx): ScopedTx {
+  return new Proxy(scoped, {
+    get(target, property, receiver) {
+      if (typeof property === "string" && RAW_METHODS.has(property)) {
+        const raw = Reflect.get(tx, property) as unknown;
+        return typeof raw === "function" ? raw.bind(tx) : raw;
+      }
+      return Reflect.get(target, property, receiver) as unknown;
+    },
+  });
+}
+
 export function withTenantTransaction<T>(
   ctx: TenantContext,
   fn: (tx: ScopedTx) => Promise<T>,
@@ -39,7 +68,7 @@ export function withTenantTransaction<T>(
   return prisma.$transaction(
     async (tx) => {
       await setTenantIdOnConnection(tx, ctx.tenantId);
-      return runWithAmbientTenantTransaction(ctx.tenantId, tx, () => fn(db(ctx)));
+      return runWithAmbientTenantTransaction(ctx.tenantId, tx, () => fn(bindRawTo(tx, db(ctx))));
     },
     // `exactOptionalPropertyTypes` is on, so an explicit `undefined` is not the same as an absent
     // key — spreading the caller's options is how "unset means Prisma's default" stays true.
