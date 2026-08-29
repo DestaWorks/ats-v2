@@ -34,6 +34,23 @@ const TENANT_SELECT = {
   deletedAt: true,
 } as const;
 
+/**
+ * What the tenant REGISTRY reads — `TENANT_SELECT` plus the commercial columns.
+ *
+ * Deliberately a second select rather than a wider first one. `TENANT_SELECT` is joined onto every
+ * membership read, which is the hot path that authorizes every request in the application; the
+ * platform plane's health view (6.8) is a handful of calls a day by a handful of operators. Paying
+ * for `plan`, `seatLimit` and `trialEndsAt` on the former to serve the latter is the wrong way
+ * round, and it would put the platform's vocabulary on the row type `auth` resolves contexts from.
+ */
+export const TENANT_REGISTRY_SELECT = {
+  ...TENANT_SELECT,
+  plan: true,
+  seatLimit: true,
+  trialEndsAt: true,
+  createdAt: true,
+} as const;
+
 const MEMBERSHIP_SELECT = {
   id: true,
   tenantId: true,
@@ -53,6 +70,20 @@ export interface MembershipTenantRow {
   name: string;
   status: string;
   deletedAt: Date | null;
+}
+
+/**
+ * One tenant as the registry holds it — a `MembershipTenantRow` plus what it is paying for.
+ *
+ * Only the platform plane (6.8) and the invitation flow read through `tenantRepository`, and only
+ * the former looks at the extra columns. Callers that want just the identity keep working against
+ * the narrower type, which is why this widens rather than replaces.
+ */
+export interface TenantRegistryRow extends MembershipTenantRow {
+  plan: string;
+  seatLimit: number | null;
+  trialEndsAt: Date | null;
+  createdAt: Date;
 }
 
 /** One membership, joined to its tenant. The shape every tenancy read returns. */
@@ -193,18 +224,18 @@ export const membershipRepository = {
 
 export const tenantRepository = {
   /** One tenant by slug, live rows only. Feeds invitation and platform reads, never a data query. */
-  findBySlug(slug: string, tx?: AnyTx): Promise<MembershipTenantRow | null> {
+  findBySlug(slug: string, tx?: AnyTx): Promise<TenantRegistryRow | null> {
     return dbUnscoped(tx).tenant.findFirst({
       where: { slug, deletedAt: null },
-      select: TENANT_SELECT,
+      select: TENANT_REGISTRY_SELECT,
     });
   },
 
   /** One tenant by id, live rows only. */
-  findById(id: string, tx?: AnyTx): Promise<MembershipTenantRow | null> {
+  findById(id: string, tx?: AnyTx): Promise<TenantRegistryRow | null> {
     return dbUnscoped(tx).tenant.findFirst({
       where: { id, deletedAt: null },
-      select: TENANT_SELECT,
+      select: TENANT_REGISTRY_SELECT,
     });
   },
 
@@ -215,10 +246,10 @@ export const tenantRepository = {
    * no candidates, no clients, nothing a tenant would consider its own. It is reachable exclusively
    * from the platform plane, whose guard is `packages/auth/src/platform-admin.ts`.
    */
-  listAll(tx?: AnyTx): Promise<MembershipTenantRow[]> {
+  listAll(tx?: AnyTx): Promise<TenantRegistryRow[]> {
     return dbUnscoped(tx).tenant.findMany({
       where: { deletedAt: null },
-      select: TENANT_SELECT,
+      select: TENANT_REGISTRY_SELECT,
       orderBy: { name: "asc" },
     });
   },
