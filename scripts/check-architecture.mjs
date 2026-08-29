@@ -115,7 +115,11 @@ const PERMITTED = [
       "NODE_OPTIONS=--conditions=react-server prefix on the db:* scripts in package.json is the " +
       "residue of that and can come off once nothing else depends on it. The cap below is now a " +
       "ratchet on apps/web, which must not grow without a deliberate decision.",
-    cap: { web: 2 },
+    // 3, not 2, since Phase 4.3: `apps/web/src/lib/api/server.ts` is the Server-Component half of
+    // the API client. It forwards the caller's session cookie, so it is exactly the module that
+    // must never be pulled into a browser chunk — which is what this pill is for. The cap rises
+    // only for a module whose whole point is a server boundary, never to let one drift in.
+    cap: { web: 3 },
   },
   {
     id: "db-reads-cursor-codec-from-contracts",

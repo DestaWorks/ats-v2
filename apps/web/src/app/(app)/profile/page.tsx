@@ -1,5 +1,6 @@
 import { getVerifiedUser } from "@destaworks/auth/guards";
-import { userPreferencesService } from "@destaworks/application/user-preferences.service";
+import type { UserPreferencesDTO } from "@destaworks/contracts/validation/user-preferences";
+import { apiGet } from "@/lib/api/server";
 import { ProfileView } from "./profile-view";
 
 /**
@@ -9,7 +10,7 @@ import { ProfileView } from "./profile-view";
 export default async function ProfilePage() {
   const user = await getVerifiedUser();
 
-  const preferences = await userPreferencesService.getMine(user);
+  const preferences = await apiGet<UserPreferencesDTO>("/me/preferences");
 
   return (
     <div className="flex flex-col gap-6 px-8 py-6">

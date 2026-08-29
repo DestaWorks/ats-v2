@@ -1,6 +1,7 @@
 import { getVerifiedUser } from "@destaworks/auth/guards";
 import { LEARN_CHAPTERS } from "@destaworks/contracts/validation/learn";
-import { learnService } from "@destaworks/application/learn.service";
+import type { LearnProgressDTO } from "@destaworks/contracts/validation/learn";
+import { apiGet } from "@/lib/api/server";
 import { LearnView } from "./learn-view";
 
 /**
@@ -8,9 +9,9 @@ import { LearnView } from "./learn-view";
  * links, and real per-user progress (`User.learnProgress`, not legacy's unscoped localStorage).
  */
 export default async function LearnPage() {
-  const user = await getVerifiedUser();
+  await getVerifiedUser();
 
-  const progress = await learnService.getMine(user);
+  const progress = await apiGet<LearnProgressDTO>("/me/learn-progress");
 
   return (
     <div className="flex flex-col gap-6 px-8 py-6">

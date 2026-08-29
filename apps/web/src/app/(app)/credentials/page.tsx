@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { hasCapability } from "@destaworks/domain/constants";
 import { getVerifiedUser } from "@destaworks/auth/guards";
-import { credentialsIntelligenceService } from "@destaworks/application/credentials-intelligence.service";
+import type { CredentialsOverviewDTO } from "@destaworks/contracts/validation/credentials";
+import { apiGet } from "@/lib/api/server";
 import { ErrorState } from "@destaworks/ui/error-state";
 import { StatCard } from "../dashboard/stat-card";
 import { PrintButton } from "./print-button";
@@ -33,7 +34,7 @@ export default async function CredentialsPage() {
   }
 
   const { stats, matrix, gapAnalysis, nlcHolders } =
-    await credentialsIntelligenceService.overview(user);
+    await apiGet<CredentialsOverviewDTO>("/credentials/overview");
 
   return (
     <div className="flex flex-col gap-6 px-8 py-6">
