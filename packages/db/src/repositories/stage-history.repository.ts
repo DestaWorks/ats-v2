@@ -1,6 +1,6 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { StageHistory } from "../generated/prisma/client";
-import { db, type ScopedTx } from "../tenant-scope";
+import { db, type ScopedTx, scopedWrite } from "../tenant-scope";
 import { FIRST_TERMINAL_ORDER } from "./candidate.repository";
 
 /** A raw stage-history row (Prisma model). */
@@ -24,14 +24,14 @@ export interface StageHistoryAddInput {
 export const stageHistoryRepository = {
   add(ctx: TenantContext, input: StageHistoryAddInput, tx?: ScopedTx) {
     return db(ctx, tx).stageHistory.create({
-      data: {
+      data: scopedWrite({
         candidateId: input.candidateId,
         fromStatus: input.fromStatus ?? null,
         toStatus: input.toStatus,
         fromStageOrder: input.fromStageOrder ?? null,
         toStageOrder: input.toStageOrder,
         actorId: input.actorId,
-      },
+      }),
     });
   },
 

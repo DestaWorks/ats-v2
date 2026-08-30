@@ -1,6 +1,6 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { Prisma } from "../generated/prisma/client";
-import { db, type ScopedTx } from "../tenant-scope";
+import { db, type ScopedTx, scopedWrite } from "../tenant-scope";
 
 /** A raw outreach-attempt row (Prisma model). Services map this to `OutreachAttemptDTO`. */
 export type OutreachAttemptRow = Prisma.OutreachAttemptGetPayload<Record<string, never>>;
@@ -30,13 +30,13 @@ export const outreachRepository = {
     tx?: ScopedTx,
   ) {
     return db(ctx, tx).outreachAttempt.create({
-      data: {
+      data: scopedWrite({
         candidateId,
         channel: data.channel,
         note: data.note,
         actorId: data.actorId,
         templateId: data.templateId ?? null,
-      },
+      }),
     });
   },
 };

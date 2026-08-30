@@ -1,6 +1,6 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { Prisma } from "../generated/prisma/client";
-import { db, type ScopedTx } from "../tenant-scope";
+import { db, type ScopedTx, scopedWrite } from "../tenant-scope";
 
 /** Lifecycle of one requested export. `ready` is the only state with a `storageKey`. */
 export type ReportExportStatus = "pending" | "ready" | "failed";
@@ -28,7 +28,7 @@ export const reportExportRepository = {
     filters: Prisma.InputJsonValue,
     tx?: ScopedTx,
   ): Promise<ReportExportRow> {
-    return db(ctx, tx).reportExport.create({ data: { requestedById, filters } });
+    return db(ctx, tx).reportExport.create({ data: scopedWrite({ requestedById, filters }) });
   },
 
   async findById(ctx: TenantContext, id: string, tx?: ScopedTx): Promise<ReportExportRow | null> {

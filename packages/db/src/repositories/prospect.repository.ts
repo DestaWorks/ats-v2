@@ -1,6 +1,6 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { Prisma, Prospect } from "../generated/prisma/client";
-import { db, type ScopedTx } from "../tenant-scope";
+import { db, type ScopedTx, type SeamWrite, scopedWrite } from "../tenant-scope";
 
 /** A raw prospect row (Prisma model). Services/DTOs map this to API shapes. */
 export type ProspectRow = Prospect;
@@ -44,8 +44,8 @@ export function buildProspectWhere(filters: ProspectListFilters): Prisma.Prospec
  * can compose atomic writes (bulk-add + audit, status update + audit).
  */
 export const prospectRepository = {
-  create(ctx: TenantContext, data: Prisma.ProspectUncheckedCreateInput, tx?: ScopedTx) {
-    return db(ctx, tx).prospect.create({ data });
+  create(ctx: TenantContext, data: SeamWrite<Prisma.ProspectUncheckedCreateInput>, tx?: ScopedTx) {
+    return db(ctx, tx).prospect.create({ data: scopedWrite(data) });
   },
 
   findById(ctx: TenantContext, id: string, opts?: { includeDeleted?: boolean }, tx?: ScopedTx) {
@@ -115,7 +115,7 @@ export const prospectRepository = {
 
   /** Bulk insert (search-result "add to pipeline") — rows are pre-deduped by the service.
    *  `skipDuplicates` defends the `npi` unique constraint against a concurrent add. */
-  createMany(ctx: TenantContext, rows: Prisma.ProspectCreateManyInput[], tx?: ScopedTx) {
-    return db(ctx, tx).prospect.createMany({ data: rows, skipDuplicates: true });
+  createMany(ctx: TenantContext, rows: SeamWrite<Prisma.ProspectCreateManyInput>[], tx?: ScopedTx) {
+    return db(ctx, tx).prospect.createMany({ data: rows.map(scopedWrite), skipDuplicates: true });
   },
 };

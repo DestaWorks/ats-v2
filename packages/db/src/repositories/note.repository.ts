@@ -1,6 +1,6 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { CandidateNote } from "../generated/prisma/client";
-import { db, type ScopedTx } from "../tenant-scope";
+import { db, type ScopedTx, scopedWrite } from "../tenant-scope";
 
 /** A raw candidate-note row (Prisma model). Services/DTOs map this to API shapes. */
 export type NoteRow = CandidateNote;
@@ -25,14 +25,14 @@ export interface NoteCreateData {
 export const noteRepository = {
   create(ctx: TenantContext, data: NoteCreateData, tx?: ScopedTx) {
     return db(ctx, tx).candidateNote.create({
-      data: {
+      data: scopedWrite({
         candidateId: data.candidateId,
         authorId: data.authorId,
         authorName: data.authorName ?? null,
         body: data.body,
         noteType: data.noteType,
         legacyId: data.legacyId ?? null,
-      },
+      }),
     });
   },
 
@@ -61,8 +61,8 @@ export const noteRepository = {
       legacyId,
     };
     return db(ctx, tx).candidateNote.upsert({
-      where: { legacyId },
-      create,
+      where: { tenantId_legacyId: { tenantId: ctx.tenantId, legacyId } },
+      create: scopedWrite(create),
       update: {
         authorName: data.authorName ?? null,
         body: data.body,

@@ -1,6 +1,6 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { ScreeningScorecard } from "../generated/prisma/client";
-import { db, type ScopedTx } from "../tenant-scope";
+import { db, type ScopedTx, scopedWrite } from "../tenant-scope";
 
 /** A raw screening-scorecard row (Prisma model). Services/DTOs map this to API shapes. */
 export type ScreeningScorecardRow = ScreeningScorecard;
@@ -32,7 +32,7 @@ export interface CreateScorecardData {
  */
 export const screeningRepository = {
   create(ctx: TenantContext, data: CreateScorecardData, tx?: ScopedTx) {
-    return db(ctx, tx).screeningScorecard.create({ data });
+    return db(ctx, tx).screeningScorecard.create({ data: scopedWrite(data) });
   },
 
   /** Newest-first scoring history for one candidate (detail views, later waves). */

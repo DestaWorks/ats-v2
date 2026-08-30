@@ -1,6 +1,6 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { ClientContact, Prisma } from "../generated/prisma/client";
-import { db, type ScopedTx } from "../tenant-scope";
+import { db, type ScopedTx, type SeamWrite, scopedWrite } from "../tenant-scope";
 
 /** A raw client-contact row (Prisma model). Services/DTOs map this to API shapes. */
 export type ClientContactRow = ClientContact;
@@ -12,8 +12,12 @@ export type ClientContactRow = ClientContact;
  * deleted — those are separate concerns, matching legacy parity.
  */
 export const clientContactRepository = {
-  create(ctx: TenantContext, data: Prisma.ClientContactUncheckedCreateInput, tx?: ScopedTx) {
-    return db(ctx, tx).clientContact.create({ data });
+  create(
+    ctx: TenantContext,
+    data: SeamWrite<Prisma.ClientContactUncheckedCreateInput>,
+    tx?: ScopedTx,
+  ) {
+    return db(ctx, tx).clientContact.create({ data: scopedWrite(data) });
   },
 
   findById(ctx: TenantContext, id: string, tx?: ScopedTx) {

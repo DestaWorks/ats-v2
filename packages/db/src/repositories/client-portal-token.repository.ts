@@ -1,5 +1,5 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
-import { db, type ScopedTx } from "../tenant-scope";
+import { db, type ScopedTx, scopedWrite } from "../tenant-scope";
 
 /**
  * Client-portal-token data access (Wave 4.3) — the ONLY layer that touches Prisma for
@@ -12,7 +12,7 @@ export const clientPortalTokenRepository = {
     data: { contactId: string; tokenHash: string; expiresAt: Date; createdById?: string },
     tx?: ScopedTx,
   ) {
-    return db(ctx, tx).clientPortalToken.create({ data });
+    return db(ctx, tx).clientPortalToken.create({ data: scopedWrite(data) });
   },
 
   findByHash(ctx: TenantContext, tokenHash: string, tx?: ScopedTx) {

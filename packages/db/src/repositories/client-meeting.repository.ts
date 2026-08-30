@@ -1,6 +1,6 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { ClientMeeting, Prisma } from "../generated/prisma/client";
-import { db, type ScopedTx } from "../tenant-scope";
+import { db, type ScopedTx, type SeamWrite, scopedWrite } from "../tenant-scope";
 
 /** A raw client-meeting row (Prisma model). Services/DTOs map this to API shapes. */
 export type ClientMeetingRow = ClientMeeting;
@@ -11,8 +11,12 @@ export type ClientMeetingRow = ClientMeeting;
  * anywhere) and stay that way here; correction is soft-delete only, matching `CandidateNote`.
  */
 export const clientMeetingRepository = {
-  create(ctx: TenantContext, data: Prisma.ClientMeetingUncheckedCreateInput, tx?: ScopedTx) {
-    return db(ctx, tx).clientMeeting.create({ data });
+  create(
+    ctx: TenantContext,
+    data: SeamWrite<Prisma.ClientMeetingUncheckedCreateInput>,
+    tx?: ScopedTx,
+  ) {
+    return db(ctx, tx).clientMeeting.create({ data: scopedWrite(data) });
   },
 
   listForClient(ctx: TenantContext, clientId: string, tx?: ScopedTx) {

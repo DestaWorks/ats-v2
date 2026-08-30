@@ -1,6 +1,6 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { Prisma } from "../generated/prisma/client";
-import { db, type ScopedTx } from "../tenant-scope";
+import { db, type ScopedTx, type SeamWrite, scopedWrite } from "../tenant-scope";
 
 /**
  * Client-match-profile data access (Wave 3.5) — the active-matcher weight overrides, one row per
@@ -20,12 +20,12 @@ export const clientMatchProfileRepository = {
   upsert(
     ctx: TenantContext,
     clientId: string,
-    data: Omit<Prisma.ClientMatchProfileUncheckedCreateInput, "clientId">,
+    data: Omit<SeamWrite<Prisma.ClientMatchProfileUncheckedCreateInput>, "clientId">,
     tx?: ScopedTx,
   ) {
     return db(ctx, tx).clientMatchProfile.upsert({
       where: { clientId },
-      create: { clientId, ...data },
+      create: scopedWrite({ clientId, ...data }),
       update: data,
     });
   },

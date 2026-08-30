@@ -1,7 +1,7 @@
 import { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { TenantContext } from "@destaworks/domain/tenant";
-import { db, dbUnscoped } from "../src/tenant-scope";
+import { db, dbUnscoped, scopedWrite } from "../src/tenant-scope";
 import { withTenantTransaction } from "../src/tenant-transaction";
 
 /**
@@ -54,8 +54,12 @@ beforeAll(async () => {
   // Written through the seam, which is itself the first assertion: a create must satisfy the
   // policy's WITH CHECK, and it can only do that if the extension injected the tenant AND the
   // insert ran on a connection that had announced it.
-  const a = await db(context(TENANT_A)).candidate.create({ data: { name: "Tenant A candidate" } });
-  const b = await db(context(TENANT_B)).candidate.create({ data: { name: "Tenant B candidate" } });
+  const a = await db(context(TENANT_A)).candidate.create({
+    data: scopedWrite({ name: "Tenant A candidate" }),
+  });
+  const b = await db(context(TENANT_B)).candidate.create({
+    data: scopedWrite({ name: "Tenant B candidate" }),
+  });
   candidateA = a.id;
   candidateB = b.id;
 }, 120_000);
@@ -108,7 +112,7 @@ describe("the enforcement seam works under RLS", () => {
   it("runs many queries in one transaction when the caller opens one", async () => {
     const ctx = context(TENANT_A);
     const result = await withTenantTransaction(ctx, async (tx) => {
-      const created = await tx.candidate.create({ data: { name: "In transaction" } });
+      const created = await tx.candidate.create({ data: scopedWrite({ name: "In transaction" }) });
       const found = await tx.candidate.findUniqueOrThrow({ where: { id: created.id } });
       const invisible = await tx.candidate.findUnique({ where: { id: candidateB } });
       return { found, invisible };
@@ -122,7 +126,7 @@ describe("the enforcement seam works under RLS", () => {
     const before = await db(ctx).candidate.count({});
     await expect(
       withTenantTransaction(ctx, async (tx) => {
-        await tx.candidate.create({ data: { name: "Doomed" } });
+        await tx.candidate.create({ data: scopedWrite({ name: "Doomed" }) });
         throw new Error("deliberate");
       }),
     ).rejects.toThrow("deliberate");

@@ -9,7 +9,7 @@ import {
   type Track,
 } from "@destaworks/domain/constants";
 import type { ListOrderBy, PageCursor } from "@destaworks/contracts/validation/cursor";
-import { db, type ScopedTx } from "../tenant-scope";
+import { db, type ScopedTx, type SeamWrite, scopedWrite } from "../tenant-scope";
 import { decryptField, encryptField } from "../field-crypto";
 
 /** A raw candidate row (Prisma model). Services/DTOs map this to API shapes. */
@@ -197,8 +197,14 @@ function decryptRow<T extends Candidate | null>(row: T): T {
  * unaffected.) Every method accepts an optional `tx` so services can compose atomic writes.
  */
 export const candidateRepository = {
-  async create(ctx: TenantContext, data: Prisma.CandidateUncheckedCreateInput, tx?: ScopedTx) {
-    return decryptRow(await db(ctx, tx).candidate.create({ data: encryptLicense(data) }));
+  async create(
+    ctx: TenantContext,
+    data: SeamWrite<Prisma.CandidateUncheckedCreateInput>,
+    tx?: ScopedTx,
+  ) {
+    return decryptRow(
+      await db(ctx, tx).candidate.create({ data: scopedWrite(encryptLicense(data)) }),
+    );
   },
 
   async findById(
@@ -272,21 +278,21 @@ export const candidateRepository = {
    * UI/read paths must NOT use this — they go through `findById`/`list` (which exclude deleted).
    */
   async findByLegacyId(ctx: TenantContext, legacyId: string, tx?: ScopedTx) {
-    return decryptRow(await db(ctx, tx).candidate.findUnique({ where: { legacyId } }));
+    return decryptRow(await db(ctx, tx).candidate.findFirst({ where: { legacyId } }));
   },
 
   /** ETL upsert keyed on the legacy Sheet id — idempotent re-runs; delete-agnostic (see above). */
   async upsertByLegacyId(
     ctx: TenantContext,
     legacyId: string,
-    create: Prisma.CandidateUncheckedCreateInput,
+    create: SeamWrite<Prisma.CandidateUncheckedCreateInput>,
     update: Prisma.CandidateUncheckedUpdateInput,
     tx?: ScopedTx,
   ) {
     return decryptRow(
       await db(ctx, tx).candidate.upsert({
-        where: { legacyId },
-        create: { ...encryptLicense(create), legacyId },
+        where: { tenantId_legacyId: { tenantId: ctx.tenantId, legacyId } },
+        create: scopedWrite({ ...encryptLicense(create), legacyId }),
         update: encryptLicense(update),
       }),
     );

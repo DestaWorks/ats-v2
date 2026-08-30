@@ -1,6 +1,6 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { DailyBrief, Prisma, WeeklyBrief } from "../generated/prisma/client";
-import { db, type ScopedTx } from "../tenant-scope";
+import { db, type ScopedTx, type SeamWrite, scopedWrite } from "../tenant-scope";
 
 export type DailyBriefRow = DailyBrief;
 export type WeeklyBriefRow = WeeklyBrief;
@@ -11,11 +11,19 @@ export type WeeklyBriefRow = WeeklyBrief;
  */
 export const briefRepository = {
   findDailyByDate(ctx: TenantContext, date: string, tx?: ScopedTx) {
-    return db(ctx, tx).dailyBrief.findUnique({ where: { date } });
+    return db(ctx, tx).dailyBrief.findFirst({ where: { date } });
   },
-  upsertDaily(ctx: TenantContext, data: Prisma.DailyBriefUncheckedCreateInput, tx?: ScopedTx) {
+  upsertDaily(
+    ctx: TenantContext,
+    data: SeamWrite<Prisma.DailyBriefUncheckedCreateInput>,
+    tx?: ScopedTx,
+  ) {
     const { date, ...rest } = data;
-    return db(ctx, tx).dailyBrief.upsert({ where: { date }, create: data, update: rest });
+    return db(ctx, tx).dailyBrief.upsert({
+      where: { tenantId_date: { tenantId: ctx.tenantId, date } },
+      create: scopedWrite(data),
+      update: rest,
+    });
   },
   listDaily(ctx: TenantContext, take: number, tx?: ScopedTx) {
     return db(ctx, tx).dailyBrief.findMany({ orderBy: { date: "desc" }, take });
@@ -28,18 +36,26 @@ export const briefRepository = {
   upsertDailyDraft(ctx: TenantContext, date: string, draft: Prisma.InputJsonValue, tx?: ScopedTx) {
     const draftAt = new Date();
     return db(ctx, tx).dailyBrief.upsert({
-      where: { date },
-      create: { date, draft, draftAt },
+      where: { tenantId_date: { tenantId: ctx.tenantId, date } },
+      create: scopedWrite({ date, draft, draftAt }),
       update: { draft, draftAt },
     });
   },
 
   findWeeklyByWeekStart(ctx: TenantContext, weekStart: string, tx?: ScopedTx) {
-    return db(ctx, tx).weeklyBrief.findUnique({ where: { weekStart } });
+    return db(ctx, tx).weeklyBrief.findFirst({ where: { weekStart } });
   },
-  upsertWeekly(ctx: TenantContext, data: Prisma.WeeklyBriefUncheckedCreateInput, tx?: ScopedTx) {
+  upsertWeekly(
+    ctx: TenantContext,
+    data: SeamWrite<Prisma.WeeklyBriefUncheckedCreateInput>,
+    tx?: ScopedTx,
+  ) {
     const { weekStart, ...rest } = data;
-    return db(ctx, tx).weeklyBrief.upsert({ where: { weekStart }, create: data, update: rest });
+    return db(ctx, tx).weeklyBrief.upsert({
+      where: { tenantId_weekStart: { tenantId: ctx.tenantId, weekStart } },
+      create: scopedWrite(data),
+      update: rest,
+    });
   },
   listWeekly(ctx: TenantContext, take: number, tx?: ScopedTx) {
     return db(ctx, tx).weeklyBrief.findMany({ orderBy: { weekStart: "desc" }, take });
@@ -53,8 +69,8 @@ export const briefRepository = {
   ) {
     const draftAt = new Date();
     return db(ctx, tx).weeklyBrief.upsert({
-      where: { weekStart },
-      create: { weekStart, draft, draftAt },
+      where: { tenantId_weekStart: { tenantId: ctx.tenantId, weekStart } },
+      create: scopedWrite({ weekStart, draft, draftAt }),
       update: { draft, draftAt },
     });
   },

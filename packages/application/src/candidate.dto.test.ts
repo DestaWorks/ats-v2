@@ -21,7 +21,7 @@ const NOW = fixedClock("2026-08-21T12:00:00Z").now();
 const row: CandidateRow = {
   id: "c1",
   legacyId: null,
-  tenantId: null,
+  tenantId: "t1",
   name: "Jane Prescriber",
   email: "jane@example.com",
   phone: "555-0100",

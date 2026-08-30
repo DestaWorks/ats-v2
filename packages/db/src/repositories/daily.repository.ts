@@ -7,7 +7,7 @@ import type {
   ManagerFeedback,
   Prisma,
 } from "../generated/prisma/client";
-import { db, type ScopedTx } from "../tenant-scope";
+import { db, type ScopedTx, type SeamWrite, scopedWrite } from "../tenant-scope";
 
 export type DailyTargetRow = DailyTarget;
 export type DailyLogRow = DailyLog;
@@ -30,11 +30,15 @@ const CLEANUP_ACTIONS = ["move", "update", "verify_license"];
  */
 export const dailyRepository = {
   // --- targets ---
-  upsertTarget(ctx: TenantContext, data: Prisma.DailyTargetUncheckedCreateInput, tx?: ScopedTx) {
+  upsertTarget(
+    ctx: TenantContext,
+    data: SeamWrite<Prisma.DailyTargetUncheckedCreateInput>,
+    tx?: ScopedTx,
+  ) {
     const { userId, date, ...rest } = data;
     return db(ctx, tx).dailyTarget.upsert({
       where: { userId_date: { userId, date } },
-      create: data,
+      create: scopedWrite(data),
       update: rest,
     });
   },
@@ -52,11 +56,15 @@ export const dailyRepository = {
   },
 
   // --- end-of-shift actuals ---
-  upsertActual(ctx: TenantContext, data: Prisma.DailyActualUncheckedCreateInput, tx?: ScopedTx) {
+  upsertActual(
+    ctx: TenantContext,
+    data: SeamWrite<Prisma.DailyActualUncheckedCreateInput>,
+    tx?: ScopedTx,
+  ) {
     const { userId, date, ...rest } = data;
     return db(ctx, tx).dailyActual.upsert({
       where: { userId_date: { userId, date } },
-      create: data,
+      create: scopedWrite(data),
       update: rest,
     });
   },
@@ -71,8 +79,12 @@ export const dailyRepository = {
   },
 
   // --- daily log (one per user/day; create-only like legacy's submitted state) ---
-  createLog(ctx: TenantContext, data: Prisma.DailyLogUncheckedCreateInput, tx?: ScopedTx) {
-    return db(ctx, tx).dailyLog.create({ data });
+  createLog(
+    ctx: TenantContext,
+    data: SeamWrite<Prisma.DailyLogUncheckedCreateInput>,
+    tx?: ScopedTx,
+  ) {
+    return db(ctx, tx).dailyLog.create({ data: scopedWrite(data) });
   },
   logFor(ctx: TenantContext, userId: string, date: string, tx?: ScopedTx) {
     return db(ctx, tx).dailyLog.findUnique({ where: { userId_date: { userId, date } } });
@@ -91,8 +103,12 @@ export const dailyRepository = {
   },
 
   // --- journal ---
-  createEntry(ctx: TenantContext, data: Prisma.JournalEntryUncheckedCreateInput, tx?: ScopedTx) {
-    return db(ctx, tx).journalEntry.create({ data });
+  createEntry(
+    ctx: TenantContext,
+    data: SeamWrite<Prisma.JournalEntryUncheckedCreateInput>,
+    tx?: ScopedTx,
+  ) {
+    return db(ctx, tx).journalEntry.create({ data: scopedWrite(data) });
   },
   entriesForUser(ctx: TenantContext, userId: string, take: number, tx?: ScopedTx) {
     return db(ctx, tx).journalEntry.findMany({
@@ -101,8 +117,12 @@ export const dailyRepository = {
       take,
     });
   },
-  createGoal(ctx: TenantContext, data: Prisma.JournalGoalUncheckedCreateInput, tx?: ScopedTx) {
-    return db(ctx, tx).journalGoal.create({ data });
+  createGoal(
+    ctx: TenantContext,
+    data: SeamWrite<Prisma.JournalGoalUncheckedCreateInput>,
+    tx?: ScopedTx,
+  ) {
+    return db(ctx, tx).journalGoal.create({ data: scopedWrite(data) });
   },
   goalsForWeek(ctx: TenantContext, userId: string, weekStart: string, tx?: ScopedTx) {
     return db(ctx, tx).journalGoal.findMany({
@@ -122,10 +142,10 @@ export const dailyRepository = {
   // --- manager feedback (Wave 3.1 backlog, legacy `mgr_feedback`) ---
   createFeedback(
     ctx: TenantContext,
-    data: Prisma.ManagerFeedbackUncheckedCreateInput,
+    data: SeamWrite<Prisma.ManagerFeedbackUncheckedCreateInput>,
     tx?: ScopedTx,
   ) {
-    return db(ctx, tx).managerFeedback.create({ data });
+    return db(ctx, tx).managerFeedback.create({ data: scopedWrite(data) });
   },
   /** Own-record only (callers always pass the session user's own id as `targetUserId`). */
   feedbackForUser(ctx: TenantContext, targetUserId: string, take: number, tx?: ScopedTx) {
