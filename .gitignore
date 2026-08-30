@@ -19,6 +19,8 @@ next-env.d.ts
 .env*.local
 .env.development
 .env.staging
+# Local restructure database — loopback only, but it still carries a password.
+.env.restructure
 .env.production
 
 # Editor / OS
