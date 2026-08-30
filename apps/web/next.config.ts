@@ -41,13 +41,23 @@ const STORAGE_S3_ORIGIN = originFromEnvUrl(process.env.S3_ENDPOINT);
  *  env var like the storage ones. Blank DSN → Sentry is dormant → no CSP allowance added, same
  *  posture as every other optional integration. */
 const SENTRY_ORIGIN = originFromEnvUrl(process.env.NEXT_PUBLIC_SENTRY_DSN);
+/**
+ * `apps/api`'s origin (Phase 4.3). Since the route cutover the browser fetches EVERY data call
+ * from another origin, so without this `connect-src` allows only `'self'` and the CSP blocks all
+ * of them before the request is sent — which surfaces as a bare network failure, exactly the trap
+ * the `connect-src` note below describes. Derived from the same env var the client is built
+ * against, so the two cannot disagree.
+ */
+const API_ORIGIN = originFromEnvUrl(process.env.NEXT_PUBLIC_API_URL);
 
 const IMG_SRC = ["'self'", "data:", STORAGE_PUBLIC_ORIGIN].filter(Boolean).join(" ");
 // connect-src: the browser PUTs resume bytes directly to the signed S3 URL (never through our own
 // server), and (when configured) reports errors directly to Sentry's ingest endpoint — without
 // this, fetch()/XHR to either origin is blocked outright, silently, before the request is even
 // sent (indistinguishable from a network error in a bare try/catch).
-const CONNECT_SRC = ["'self'", STORAGE_S3_ORIGIN, SENTRY_ORIGIN].filter(Boolean).join(" ");
+const CONNECT_SRC = ["'self'", API_ORIGIN, STORAGE_S3_ORIGIN, SENTRY_ORIGIN]
+  .filter(Boolean)
+  .join(" ");
 // frame-src: the resume Preview modal embeds the signed GET URL in an <iframe>.
 const FRAME_SRC = ["'self'", STORAGE_S3_ORIGIN].filter(Boolean).join(" ");
 
