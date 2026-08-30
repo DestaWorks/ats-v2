@@ -1,5 +1,5 @@
 import { discoverSearchQuerySchema } from "@destaworks/contracts/validation/discover";
-import { getVerifiedUser } from "@destaworks/auth/guards";
+import { requirePageUser } from "@/lib/page-user";
 import type {
   GetDiscoverSearchResponse,
   GetDiscoverCoverageGapsResponse,
@@ -23,7 +23,7 @@ export default async function DiscoverPage({
 }: {
   searchParams: Promise<RawSearchParams>;
 }) {
-  await getVerifiedUser();
+  await requirePageUser();
 
   const q = readSearchParams(await searchParams);
 

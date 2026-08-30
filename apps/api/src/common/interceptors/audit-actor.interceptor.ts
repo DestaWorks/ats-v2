@@ -51,6 +51,8 @@ export interface AuditActorRequest {
   user?: unknown;
   /** What `PortalAuthGuard` attaches. A separate property because the two never merge. */
   portal?: unknown;
+  /** What `IdentityAuthGuard` attaches: an identity with no tenant resolved. */
+  identity?: unknown;
 }
 
 /**
@@ -115,6 +117,21 @@ function resolvedPortalActorId(portal: unknown): string | null {
 }
 
 /**
+ * The signed-in identity's id, or `null`.
+ *
+ * `IdentityAuthGuard` authenticates a person WITHOUT resolving a tenant — the platform plane, and
+ * the pre-tenant routes where requiring one would be circular. Those requests are attributed to a
+ * real user; the tenant simply is not known yet. `AuthUser` puts the id at the top level, unlike
+ * `AuthContext` which nests it under `user`.
+ */
+function resolvedIdentityActorId(identity: unknown): string | null {
+  if (typeof identity !== "object" || identity === null) return null;
+  if (!("id" in identity)) return null;
+  const id: unknown = identity.id;
+  return typeof id === "string" && id.length > 0 ? id : null;
+}
+
+/**
  * Fails a mutating request closed when no server-resolved actor reached the handler, so that no
  * mutation can be recorded in `activity_log` without an attributable `actor`.
  *
@@ -147,7 +164,10 @@ export class AuditActorInterceptor {
       declaredAllowance(context.getClass?.());
 
     if (MUTATING_METHODS.has(method) && allowance === undefined) {
-      const actor = resolvedActorId(request.user) ?? resolvedPortalActorId(request.portal);
+      const actor =
+        resolvedActorId(request.user) ??
+        resolvedIdentityActorId(request.identity) ??
+        resolvedPortalActorId(request.portal);
       if (actor === null) {
         throw new AppError("UNAUTHORIZED", "Sign in required");
       }

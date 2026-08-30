@@ -1,11 +1,13 @@
 import { redirect } from "next/navigation";
-import { getCurrentUser } from "@destaworks/auth/guards";
+import { getCurrentUser, getSignedInIdentity } from "@destaworks/auth/guards";
 import { hasCapability } from "@destaworks/domain/constants";
 import { StickyNote } from "@/components/sticky-note";
 import { AppHeader } from "./app-header";
 import { AppNav } from "./app-nav";
 import { BASE_NAV_ITEMS, type NavItem } from "./lib/nav";
-import { cachedClientList } from "@destaworks/integrations/http/request-cache";
+import type { LookupOptionsDTO } from "@destaworks/contracts/validation/lookups";
+import type { GetTenantsResponse } from "@destaworks/contracts/validation/tenant";
+import { apiGet } from "@/lib/api/server";
 
 /**
  * App-shell layout for every `(app)` route (server component). Four jobs:
@@ -33,7 +35,14 @@ export default async function AppLayout({
   modal: React.ReactNode;
 }) {
   const user = await getCurrentUser();
-  if (!user) redirect("/sign-in");
+  if (!user) {
+    // A null context means one of two very different things. No session is a sign-in problem;
+    // a session that resolves to no tenant is a CHOICE the person has not made yet — two
+    // memberships and no claim resolve `ambiguous` rather than silently picking one. Sending
+    // that case to /sign-in strands them: the shell never renders, so the switcher inside it
+    // can never be reached.
+    redirect((await getSignedInIdentity()) ? "/choose-workspace" : "/sign-in");
+  }
 
   const items: NavItem[] = [...BASE_NAV_ITEMS];
   if (hasCapability(user.role, "bulkImport")) {
@@ -61,10 +70,14 @@ export default async function AppLayout({
     items.push({ href: "/reports", label: "Reports", group: "Insights", icon: "chart" });
   }
   if (hasCapability(user.role, "manageUsers")) {
+    items.push({ href: "/workspace", label: "Workspace", icon: "users" });
     items.push({ href: "/admin", label: "Admin", icon: "settings" });
   }
 
-  const clientRows = await cachedClientList(user);
+  const [{ clients: clientRows }, { tenants }] = await Promise.all([
+    apiGet<LookupOptionsDTO>("/lookups"),
+    apiGet<GetTenantsResponse>("/tenants"),
+  ]);
   const clients = clientRows.map((c) => ({ id: c.id, name: c.name }));
 
   return (
@@ -81,6 +94,8 @@ export default async function AppLayout({
           userEmail={user.user.email}
           userRole={user.role}
           userImage={user.user.image ?? null}
+          tenants={tenants}
+          activeTenantId={user.tenantId}
         />
         <div className="flex flex-1 flex-col md:flex-row">
           <AppNav

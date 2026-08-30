@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { hasCapability } from "@destaworks/domain/constants";
 import type { ClientHealthTier } from "@destaworks/domain/rules/client-health";
-import { getVerifiedUser } from "@destaworks/auth/guards";
+import { requirePageUser } from "@/lib/page-user";
 import type { GetCrmCompareResponse } from "@destaworks/contracts/http/crm";
 import { apiGet } from "@/lib/api/server";
 import { Badge, type BadgeTone } from "@destaworks/ui/badge";
@@ -22,7 +22,7 @@ const TIER_TONE: Record<ClientHealthTier, BadgeTone> = {
  * health score every client detail page shows, never a cheaper re-approximation.
  */
 export default async function ComparePage() {
-  const user = await getVerifiedUser();
+  const user = await requirePageUser();
 
   if (!hasCapability(user.role, "viewCrm")) {
     return (

@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { TRACKS, type Track } from "@destaworks/domain/constants";
-import { getVerifiedUser } from "@destaworks/auth/guards";
+import { requirePageUser } from "@/lib/page-user";
 import type { BoardResponse } from "@destaworks/contracts/validation/pipeline";
 // import type { GetSavedViewsResponse } from "@destaworks/contracts/http/saved-view";
 import type { LookupOptionsDTO } from "@destaworks/contracts/validation/lookups";
@@ -20,7 +20,7 @@ export default async function PipelinePage({
 }: {
   searchParams: Promise<RawSearchParams>;
 }) {
-  await getVerifiedUser();
+  await requirePageUser();
 
   const q = readSearchParams(await searchParams);
   const track: Track | undefined = q.oneOf("track", TRACKS);

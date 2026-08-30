@@ -17,7 +17,7 @@ export interface AuthenticatedRequest extends HttpRequestLike {
   user?: AuthContext;
 }
 
-/** A request the `PlatformAuthGuard` has authenticated, with no tenant resolved. */
+/** A request the `IdentityAuthGuard` has authenticated, with no tenant resolved. */
 export interface PlatformRequest extends HttpRequestLike {
   identity?: AuthUser;
 }

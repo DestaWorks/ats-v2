@@ -126,7 +126,7 @@ describe("the endpoint is transport, and is not tenant surface", () => {
   it("declares no tenant guard and no tenant capability — this is the platform axis", () => {
     expect(code).not.toMatch(/TenantGuard/);
     expect(code).not.toMatch(/@RequireCapability/);
-    expect(code).toMatch(/@UseGuards\(PlatformAuthGuard\)/);
+    expect(code).toMatch(/@UseGuards\(IdentityAuthGuard\)/);
     expect(code).not.toMatch(/SessionAuthGuard/);
   });
 

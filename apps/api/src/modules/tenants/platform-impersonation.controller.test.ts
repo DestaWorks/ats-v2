@@ -123,11 +123,11 @@ describe("the guards match the axis of each route", () => {
     }
   });
 
-  it("puts the crossing behind PlatformAuthGuard alone", () => {
+  it("puts the crossing behind IdentityAuthGuard alone", () => {
     const match = source.match(/@UseGuards\(([^)]*)\)\s*\n\s*async activity\b/);
 
     // Not SessionAuthGuard: that resolves a tenant and 401s a platform admin who is in none.
-    expect(match?.[1]).toContain("PlatformAuthGuard");
+    expect(match?.[1]).toContain("IdentityAuthGuard");
     expect(match?.[1]).not.toContain("TenantGuard");
     expect(match?.[1]).not.toContain("SessionAuthGuard");
   });

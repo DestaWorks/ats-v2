@@ -1,5 +1,5 @@
 import { hasCapability } from "@destaworks/domain/constants";
-import { getVerifiedUser } from "@destaworks/auth/guards";
+import { requirePageUser } from "@/lib/page-user";
 import type {
   AccessRequestListDTO,
   AdminUserListDTO,
@@ -19,7 +19,7 @@ import { AdminDashboard } from "./admin-dashboard";
  * see `docs/IMPLEMENTATION-PLAN.md` Wave 5.3 notes.
  */
 export default async function AdminPage() {
-  const user = await getVerifiedUser();
+  const user = await requirePageUser();
 
   if (!hasCapability(user.role, "manageUsers")) {
     return (

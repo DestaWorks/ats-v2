@@ -4,7 +4,7 @@ import type { AuthUser } from "@destaworks/auth/guards";
 import type { PlatformRequest } from "../guards/authenticated-request";
 
 /**
- * Inject the identity `PlatformAuthGuard` authenticated — `handler(@CurrentIdentity() user: AuthUser)`.
+ * Inject the identity `IdentityAuthGuard` authenticated — `handler(@CurrentIdentity() user: AuthUser)`.
  *
  * Deliberately not `@CurrentUser()`: that one returns an `AuthContext`, which carries a tenant and
  * a role. An identity carries neither, and keeping them separate types is what stops a platform

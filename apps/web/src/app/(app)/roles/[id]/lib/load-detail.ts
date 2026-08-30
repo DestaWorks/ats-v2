@@ -1,6 +1,6 @@
 import "server-only";
 import { notFound } from "next/navigation";
-import { getVerifiedUser } from "@destaworks/auth/guards";
+import { requirePageUser } from "@/lib/page-user";
 import type { GetRoleResponse } from "@destaworks/contracts/validation/open-role";
 import type { GetRoleMatchesAndDormantResponse } from "@destaworks/contracts/validation/open-role";
 import type { LookupOptionsDTO } from "@destaworks/contracts/validation/lookups";
@@ -9,7 +9,7 @@ import { AppError } from "@destaworks/integrations/http/app-error";
 
 /** Shared RSC loader for `/roles/[id]` — one place owns the guard → composite-read → NOT_FOUND mapping. */
 export async function loadRoleDetail(id: string) {
-  const user = await getVerifiedUser();
+  const user = await requirePageUser();
 
   let role;
   try {

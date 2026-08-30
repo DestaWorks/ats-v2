@@ -1,5 +1,5 @@
 import { hasCapability } from "@destaworks/domain/constants";
-import { getVerifiedUser } from "@destaworks/auth/guards";
+import { requirePageUser } from "@/lib/page-user";
 import type { CandidateTrashDTO } from "@destaworks/contracts/validation/candidate";
 import { apiGet } from "@/lib/api/server";
 import { TrashList } from "./trash-list";
@@ -12,7 +12,7 @@ import { TrashList } from "./trash-list";
  * authoritative: soft-delete/restore are open to any operator, Purge requires `purgeCandidate`.
  */
 export default async function TrashPage() {
-  const user = await getVerifiedUser();
+  const user = await requirePageUser();
 
   const { items } = await apiGet<CandidateTrashDTO>("/candidates/trash");
   const canPurge = hasCapability(user.role, "purgeCandidate");
