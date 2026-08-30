@@ -17,17 +17,26 @@ shipped and live on Vercel with real users. Check `docs/IMPLEMENTATION-PLAN.md` 
 current wave-by-wave status (✅ done / 🟡 partial / not started) before assuming a feature
 doesn't exist yet.
 
-- **The new app lives in `src/`**: Next.js (App Router) + TypeScript + Prisma + PostgreSQL
-  (Supabase) + Better Auth, per `docs/STACK-ARCHITECTURE.md`. Real build (`pnpm build`),
-  real tests (`vitest` — several hundred, growing with every wave), typecheck + lint + format
-  all enforced in CI on every PR. Client feature code is co-located under
-  `app/(app)/<feature>/`; the server is layered `route → service → repository → prisma`
-  (`server/{services,repositories,rules,auth,db,ai,http}`).
-- **The legacy app moved to `legacy/`**: `index.html` (the original ~9,500-line single-file
-  React/babel-standalone app) and `Code.gs` (the Google Apps Script backend, added once it was
-  obtained) now live there for reference/parity-checking only — it is **not maintained** and
-  is being strangled wave by wave, not built on. `docs/API-CONTRACT.md` documents its ~90
-  `event:` operations; `docs/MODULE-BREAKDOWN.md` maps its modules to the new build's waves.
+- **The app is a pnpm/Turborepo monorepo** — `apps/` + `packages/`, per
+  `docs/SAAS-RESTRUCTURE-PLAN.md`. There is no `src/` any more; the Phase 2 extraction moved every
+  file into a package, and Phase 2.10 retired the `@/*` aliases that hid where things lived.
+  - `apps/web` — Next.js (App Router) operator app. Feature UI is co-located under
+    `app/(app)/<feature>/`. It **serves no API**: Phase 4.3 deleted the App Router handlers, and
+    `apps/web` reads data over HTTP from `apps/api` (`lib/api/{client,server}.ts`). The only route
+    left under `app/api` is the Better Auth catch-all, which owns its own transport.
+  - `apps/api` — NestJS, the **only** backend HTTP surface (200 endpoints). Layered
+    `controller → application → repository → prisma`; controllers are thin transport and hold no
+    business rules.
+  - `apps/admin` — the platform-admin console (Phase 8), HTTP-only like `apps/web`.
+  - `packages/` — `domain` (zero runtime deps), `contracts` (every wire shape), `application`
+    (services), `db` (**the only** Prisma importer), `auth`, `integrations`, `jobs`, `ui`, `config`.
+  Real build (`pnpm build`), real tests (`vitest`, ~2.3k), typecheck + lint + format + architecture
+  checks all enforced in CI on every PR.
+- **The legacy app is local-only and NOT in this repo.** `legacy/` is gitignored deliberately
+  (`index.html`, the original ~9,500-line React/babel-standalone monolith, and `Code.gs`, the
+  Google Apps Script backend) — it is a parity reference on the dev machine, **not maintained**,
+  and a fresh clone will not have it. `docs/API-CONTRACT.md` documents its ~90 `event:` operations;
+  `docs/MODULE-BREAKDOWN.md` maps its modules to the new build's waves.
 - **Git history is now normal**: every change is a reviewable PR-sized diff on a branch,
   merged after CI passes (the old "Add files via upload" pattern is over).
 - Some legacy domains (anything not yet ported per `IMPLEMENTATION-PLAN.md`) are still served
@@ -100,8 +109,10 @@ The **live build docs** are `docs/DECISIONS.md` (authoritative decisions), `docs
    ascending file overlap, gate between every merge, and **re-run the boundary invariant checks
    after the last one** — branches that are each green can combine to undo one another, and no test
    will tell you.
-4. **Do not expand the monolith.** New functionality goes into `src/` (the new project
-   structure), never into `legacy/index.html`. We are strangling that file, not growing it.
+4. **Do not expand the monolith.** New functionality goes into the monorepo packages, never into
+   `legacy/index.html`. We are strangling that file, not growing it. A new backend endpoint is a
+   NestJS controller in `apps/api` — **never** a route handler in `apps/web`, which 4.3 removed on
+   purpose so there is one surface to secure instead of two.
 5. **Preserve behavior during migration.** The legacy app and the new app run side by side.
    When porting a view, match existing behavior unless a change is explicitly requested.
 6. **Ask before destructive actions** (data migration, deleting sheet columns, purging
@@ -128,7 +139,8 @@ The **live build docs** are `docs/DECISIONS.md` (authoritative decisions), `docs
 ## How to verify backend assumptions
 
 When a task depends on legacy backend behavior, the source of truth is **`legacy/Code.gs`** (the
-Google Apps Script backend, now in-repo) — read it rather than guessing from client calls alone.
+Google Apps Script backend, gitignored — present on the dev machine, absent from a fresh clone) —
+read it rather than guessing from client calls alone.
 `docs/API-CONTRACT.md` documents the inferred `event:` operations as a starting map, but
 `Code.gs` itself is authoritative when the two disagree. If a behavior genuinely can't be
 determined from `Code.gs` (e.g. it depends on live Sheet data/state), flag the assumption and

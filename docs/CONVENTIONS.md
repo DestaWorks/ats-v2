@@ -101,17 +101,21 @@ When several branches run at once:
 
 ## 2. Languages & tooling
 
-- **TypeScript everywhere.** `strict` and `noUncheckedIndexedAccess` are on; the restructure adds
-  `noUnusedLocals`, `noUnusedParameters`, `exactOptionalPropertyTypes` and `verbatimModuleSyntax`.
+- **TypeScript everywhere.** All six are on in `tooling/typescript/base.json` and none may be turned
+  off to make a diff compile: `strict`, `noUncheckedIndexedAccess`, `noUnusedLocals`,
+  `noUnusedParameters`, `exactOptionalPropertyTypes`, `verbatimModuleSyntax`.
 - **No `any` in application code.** No non-null assertion (`!`) used to silence a nullable — narrow
   it or handle it. An `as` cast requires a comment saying why the compiler cannot know. External
   data is `unknown` until a zod schema proves otherwise.
 - **Formatting**: Prettier (single source of truth — no style debates in review).
 - **Linting**: ESLint (typescript-eslint, react-hooks). CI fails on lint errors. The layer
-  boundaries are lint-enforced, not just documented: client/UI code under `app/**` +
-  `components/**` may not import `server/**` (`import/no-restricted-paths`), and the Prisma
-  client may only be imported from `server/repositories/**`, `server/db/**`, and
-  `server/auth/**` (`no-restricted-imports`).
+  boundaries are **machine-enforced, not just documented** — and the authority is
+  `scripts/check-architecture.mjs` (`pnpm arch:check`), which reads the real import graph rather
+  than a path pattern: every allowed package edge is declared in `ALLOWED_DEPENDENCIES`, Prisma may
+  be imported only inside `@destaworks/db`, `@destaworks/domain` must have zero runtime
+  dependencies, no package may import an app, no cycles, and `apps/web`/`apps/admin` may not import
+  `db` or `application`. Every exemption carries a written reason and, where it is debt, the plan
+  for removing it. `import/no-restricted-paths` in `tooling/eslint` backs this up inside a package.
 - **Package manager**: pnpm, lockfile committed. Under the monorepo, one version of each shared
   dependency via pnpm `catalog:`, and Turborepo for the task graph and caching.
 - **Node**: pin the version (`.nvmrc` / `engines`).
@@ -127,12 +131,13 @@ today's directories each package is assembled from — including that **`src/lib
 unit**, because parts of it carry React, Sonner, Better Auth and Sentry and `domain` must stay
 dependency-free.
 
-**Until Phase 2 lands, the current single-tree layout is `docs/STACK-ARCHITECTURE.md` §2** — client feature code
-co-located under `app/(app)/<feature>/` (§3.6) + `server/{services, repositories, rules, auth,
-db, ai, http}` (layered backend). Do not invent a parallel `features/` + `domain/` + `api/` tree,
-and do not recreate `src/modules/` (an unused, empty placeholder from an earlier plan, now
-deleted — see STACK-ARCHITECTURE §2). This section only adds file-size/complexity conventions
-on top.
+**Phase 2 landed: there is no `src/` tree any more.** Client feature code stays co-located under
+`apps/web/src/app/(app)/<feature>/`; everything that was `server/**` is a package
+(`application`, `db`, `auth`, `integrations`, `config`) and the API layer is `apps/api`. Do not
+invent a parallel `features/` + `domain/` + `api/` tree, do not recreate `src/modules/`, and do not
+reintroduce a `@/*` alias that spans packages — Phase 2.10 retired those, and retiring them is what
+exposed three misfiled modules the mapping had missed. This section only adds file-size/complexity
+conventions on top.
 
 - **One component per file.** No 9,000-line files; flag any file > ~400 lines in review.
 - **No giant components.** If a component has more than a handful of `useState`, extract
@@ -140,8 +145,10 @@ on top.
 
 ## 3a. Repository-layer reuse rules
 
-- **Never redefine `db(tx)`.** Import the shared `db(tx?: Prisma.TransactionClient)` helper from
-  `server/db/prisma` (`db(tx) ?? prisma` under the hood) — do not reimplement it per repository.
+- **Never redefine `db(...)`.** Import the shared seam from `@destaworks/db` — since Phase 6.3 it is
+  `db(ctx, tx?)`, and the `TenantContext` is what injects `tenantId` into every `where` and `data`.
+  Do not reimplement it per repository, and do not add a repository method that omits the context:
+  `pnpm tenant:check` fails on one.
 - **Never rebuild an id→name lookup by hand.** Use `clientRepository.nameMap()` (or the
   equivalent for the entity in question) instead of `new Map(rows.map(r => [r.id, r.name]))` at
   each call site — one query pattern, one place to optimize.
@@ -162,14 +169,15 @@ candidate list disagreed about what "to = 30 June" meant. Each concern has one h
 
 | Concern | Lives in |
 |---|---|
-| Wire shapes | `lib/validation` → `@destaworks/contracts` |
-| Business rules, stage gates, scoring | `lib/rules` → `@destaworks/domain` |
-| Time — "today", day boundaries, expiry | `lib/clock.ts` + `lib/daily.ts` |
-| Money arithmetic | `lib/money.ts` |
-| Database access | `server/repositories` → `@destaworks/db` |
-| Permission decisions | capability checks in `server/auth` |
-| Error mapping | one `apiHandler` / exception filter |
-| Logging | `lib/logger` |
+| Wire shapes | `@destaworks/contracts` |
+| Business rules, stage gates, scoring | `@destaworks/domain` |
+| Time — "today", day boundaries, expiry | `@destaworks/domain` — `clock.ts` + `daily.ts` |
+| Money arithmetic | `@destaworks/domain` — `money.ts` |
+| Database access | `@destaworks/db` |
+| Tenant scoping | the `db(ctx)` seam in `@destaworks/db` |
+| Permission decisions | capability checks in `@destaworks/auth` |
+| Error mapping | one Nest exception filter, over the shared `classifyError`/`errorEnvelope` |
+| Logging | `@destaworks/config` — the `Logger` interface, never Pino directly |
 
 A PR that introduces a second implementation of any of these is rejected.
 
@@ -179,7 +187,7 @@ production, `fixedClock` in tests). A default parameter of `new Date()` IS the a
 hidden in a signature. Day windows are half-open `[start, end)` — adjacent days tile with no gap,
 and an inclusive `23:59:59.999` bound silently drops rows, because Postgres stores microseconds.
 
-**Money is integer minor units with an explicit currency** (`lib/money.ts`). A float amount is
+**Money is integer minor units with an explicit currency** (`@destaworks/domain`'s `money.ts`). A float amount is
 unrepresentable, and the major/minor factor comes from the currency's scale — never a literal 100.
 
 ## 4. Naming
@@ -195,11 +203,14 @@ unrepresentable, and the major/minor factor comes from the currency's scale — 
 
 - **Server state = RSC reads + `lib/api/client.ts`'s typed fetch helpers — not TanStack Query
   or any other client cache library (DECISIONS D7, which now carries explicit revisit criteria).**
-  After Phase 4 the RSC read fetches from `apps/api` over HTTP rather than calling a service
-  in-process (`SAAS-RESTRUCTURE-PLAN.md` 4.0, Option A) — that hop is server-to-server, so it is
-  cached with Next's server `fetch` cache, not a browser cache library. Frontend apps must never
-  import `@destaworks/db` or `@destaworks/application`; there is one path to data and it is the API. The page's `page.tsx` (RSC) calls
-  `server/services/**` directly and passes DTOs down as props; mutations go through
+  Since Phase 4.3 the RSC read fetches from `apps/api` over HTTP rather than calling a service
+  in-process (`SAAS-RESTRUCTURE-PLAN.md` 4.0, Option A). That hop is **not cached**: `apiGet`
+  forwards the caller's session cookie and sets `no-store`, because the response is specific to one
+  session and gated by that caller's capabilities, so caching it would serve one user another's
+  rows. Frontend apps must never import `@destaworks/db` or `@destaworks/application` — there is one
+  path to data, it is the API, and the edge is banned in `ALLOWED_DEPENDENCIES` rather than merely
+  discouraged. The page's `page.tsx` (RSC) guards, reads through `lib/api/server.ts` and passes DTOs
+  down as props; mutations go through
   `getJson`/`postJson`/`patchJson`/`putJson`/`deleteJson`, which return a discriminated
   `ApiResult<T>` (`{ok:true,data}` / `{ok:false,failure}`). **Never call `fetch()` directly in a
   component** — add a one-line wrapper in the feature's `lib/*-fetch.ts` instead, so every
@@ -208,7 +219,7 @@ unrepresentable, and the major/minor factor comes from the currency's scale — 
   else `messageForFailure(failure)` + a Sonner toast. Optimistic UI uses React's `useOptimistic`
   + `useTransition`, not manual snapshot/rollback bookkeeping.
 - **No business logic in components.** Scoring, disqualification, and stage-gate rules live
-  in `server/rules` and are **server-authoritative**; the client may mirror them for UX only.
+  in `@destaworks/domain` and are **server-authoritative**; the client may mirror them for UX only.
 - **No `localStorage` for auth/role.** Session is provider-managed; role comes from the API.
 - **Saved views / filters:** shareable filter and saved-view state lives in a `saved_views`
   table + URL `searchParams` (so a view can be linked and reloaded) — **not** `localStorage`.
@@ -228,12 +239,14 @@ unrepresentable, and the major/minor factor comes from the currency's scale — 
 ## 6. API & validation
 
 **The contract model is contract-first typed REST** (`SAAS-RESTRUCTURE-PLAN.md` — "How the API
-contract works"). Wire shapes live in one place — `lib/validation` today, `@destaworks/contracts`
-after Phase 2 — and both sides import them. Nothing infers a shape from an implementation detail.
+contract works"). Wire shapes live in one place — `@destaworks/contracts` — and both sides import
+them. Nothing infers a shape from an implementation detail.
 
-- **Every route declares its response type**, and the client imports that declaration rather than
-  asserting one. A shape the route never promised is caught today only because both sides compile
-  together; across a process boundary it becomes a silent runtime failure.
+- **Every endpoint declares its response type**, and the client imports that declaration rather than
+  asserting one. This stopped being a compile-time nicety when 4.3 split the API into its own
+  process: `apps/web` and `apps/api` no longer typecheck together at runtime, so a shape the
+  endpoint never promised is now a silent runtime failure, and the shared contract is the only
+  thing standing between the two.
 - **Requests**: one zod schema per endpoint, `.strict()`, so unknown keys are rejected rather than
   ignored. Validated once at the boundary — never re-validated in a service, never trusted from
   the client.
@@ -242,7 +255,7 @@ after Phase 2 — and both sides import them. Nothing infers a shape from an imp
   `Omit<XRow, "secret">` publishes every future column automatically; declare the published,
   capability-gated and withheld field lists explicitly and map field by field.
 - **Errors are always enveloped**: `{ error: { code, message, issues?, ref? } }`, `code` drawn from
-  the fixed union in `server/http/app-error.ts`. An unexpected error never leaks its message — it
+  the fixed union in `@destaworks/integrations/http/app-error`. An unexpected error never leaks its message — it
   becomes `INTERNAL` with a `ref` that ties the response to a PII-free log line.
 - **Pagination — two shapes, chosen by what the UI needs.** Keyset `{ items, nextCursor, hasMore }`
   is the default for feeds and unbounded lists. Offset `{ items } & PageMeta` is correct where the

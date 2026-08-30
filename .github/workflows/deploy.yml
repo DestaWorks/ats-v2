@@ -21,12 +21,12 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # The API is not hosted yet — the target and its cost are an owner decision (SAAS-RESTRUCTURE-PLAN
-  # 4.4), and Vercel is not it: apps/api is a long-lived process, which is the whole reason it left
-  # serverless. The host is Render (`render.yaml`), which builds from the repo itself — so this job
-  # stays the gate rather than the shipper: it proves the pinned revision boots and serves before
-  # `deploy-api` asks Render to roll it out. Render is told WHICH revision by the deploy hook, so
-  # the bytes it runs and the bytes proven here come from the same SHA.
+  # The API's host is Render (`render.yaml`) — not Vercel, because apps/api is a long-lived
+  # process, which is the whole reason it left serverless (SAAS-RESTRUCTURE-PLAN 4.4). Render
+  # builds from the repo itself, so this job is the gate rather than the shipper: it proves the
+  # pinned revision boots and serves before `deploy-api` asks Render to roll it out. Render is
+  # told WHICH revision by the deploy hook, so the bytes it runs and the bytes proven here come
+  # from the same SHA.
   api-artifact:
     name: Build the API from ${{ inputs.ref }}
     runs-on: ubuntu-latest

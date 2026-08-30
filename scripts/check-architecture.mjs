@@ -57,11 +57,9 @@ const ALLOWED_DEPENDENCIES = {
   // Phase 8. The platform-admin console, and the reason the row is SHORTER than web's: `db` and
   // `application` are absent, so admin's read path is HTTP to `apps/api` and nothing else.
   //
-  // web carries both only as Phase 4.0 debt, held by the `web-read-path-is-http-only` RATCHET
-  // below (167 production files at the time of writing, which 4.3's traffic switch drives to
-  // zero). A new app has no such history, so it does not get the ratchet: admin -> db and
-  // admin -> application fail HERE, on dependency-direction, which has no test exemption and no
-  // baseline — the stricter of the two rules, and the right one for a unit starting clean.
+  // web's row is now the same shape, because 4.3 drove its read path to zero and the ratchet
+  // below became a ban. admin never had the debt at all: admin -> db and admin -> application
+  // fail HERE, on dependency-direction, which has no test exemption and no baseline.
   //
   // `auth` is present and `contracts` is the wire vocabulary: the console verifies a
   // `PlatformContext` itself (packages/auth/src/platform-admin.ts, minted from the
@@ -155,32 +153,14 @@ const PERMITTED = [
       "everywhere outside `db`.",
   },
   {
-    id: "contract-tests-may-import-the-route-they-replace",
-    rule: "dependency-direction",
-    applies: (unit, spec, record) =>
-      unit.short === "api" &&
-      record?.isTest === true &&
-      /(^|\/)web\/src\/app\/api\/.*\/route$/.test(spec),
-    reason:
-      "A Phase 4.3 contract test proves a NestJS controller and the Next.js route it replaces " +
-      "answer identically, so it must drive BOTH — there is no way to assert parity against a " +
-      "handler you cannot call. The exemption is as narrow as the claim: only `apps/api`, only a " +
-      "`*.test.ts` / `*.spec.ts`, and only a `route` module under `apps/web/src/app/api`. " +
-      "Production code in `apps/api` importing anything from `apps/web` still FAILS, and so does " +
-      "a test importing a web page, component or helper.",
-    debt:
-      "It retires with the routes. Phase 4.3's done-when is that no handler remains under " +
-      "apps/web/app/api; the last route deleted takes the last of these imports with it, and this " +
-      "entry should be removed in the same PR.",
-  },
-  {
     id: "tests-may-cross-the-web-read-path",
     rule: "web-read-path-is-http-only",
     reason:
-      "Route/unit tests under apps/web import `@destaworks/db` and `@destaworks/application` to " +
-      "build fixtures and assert service behaviour in-process. Phase 4.0 governs the RUNTIME read " +
-      "path, not the test harness, so `*.test.ts` / `*.spec.ts` are exempt. Every one of the 60 " +
-      "apps/web files importing `@destaworks/db` today is a test — production code is already clean.",
+      "A unit test under apps/web may import `@destaworks/db` or `@destaworks/application` to " +
+      "build a fixture or assert service behaviour in-process. Phase 4.0 governs the RUNTIME read " +
+      "path, not the test harness, so `*.test.ts` / `*.spec.ts` are exempt. Since 4.3 deleted the " +
+      "routes NOTHING under apps/web imports either package — test or not — so this is a valve " +
+      "held open for a future fixture, not cover for anything shipping today.",
   },
 ];
 
@@ -759,8 +739,8 @@ for (const [pkg, max] of capBreaches) {
 
 const webBaselineSize = (baseline.webReadPath ?? []).length;
 console.log(
-  `  web read-path ratchet: ${currentReadPath.length} non-test files import db/application ` +
-    `(baseline ${webBaselineSize}) — Phase 4.3 drives this to 0`,
+  `  web read-path: ${currentReadPath.length} non-test files import db/application ` +
+    `(baseline ${webBaselineSize}) — 4.3 drove this to zero and the edge is now banned outright`,
 );
 
 if (failed.length === 0 && capBreaches.length === 0) {

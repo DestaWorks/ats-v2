@@ -65,44 +65,50 @@ authoritative** where anything here conflicts.
 
 ---
 
-## 2. Target architecture (to-be) — summary only
+## 2. Target architecture — largely built
 
-> **The full, authoritative target design lives in `docs/STACK-ARCHITECTURE.md`** (stack, layers,
-> folders, auth/RBAC, conventions) and the locked decisions in `docs/DECISIONS.md`. This section
-> is a **one-glance summary** — do not duplicate detail here; if it conflicts with STACK, STACK
-> wins.
+> **Mostly "is", not "to-be".** The monorepo, the package graph, the NestJS API and the
+> platform-admin console are shipped on the `restructure` branch; multi-tenancy is written and
+> waiting on migrations. `docs/SAAS-RESTRUCTURE-PLAN.md` is the phase-by-phase status and is the
+> base document. The full stack/layer/auth detail lives in `docs/STACK-ARCHITECTURE.md`, the locked
+> decisions in `docs/DECISIONS.md`. This section is a **one-glance summary** — do not duplicate
+> detail here; if it conflicts with STACK, STACK wins.
 
 Goal: a conventional, typed, tested full-stack web app with a real database, real auth, and
 server-enforced authorization — reached **incrementally**, running beside the legacy app.
 
 ```
-┌──────────────── Client (Next.js App Router + React + TS) ────────────────┐
+┌──────────────── apps/web — Next.js App Router + React + TS ──────────────┐
 │  • Next.js, component-per-file, code-split by route                       │
-│  • RSC reads + typed ApiResult<T> fetch helpers; zod-validated at the boundary │
+│  • Serves HTML only. NO API routes — 4.3 deleted them                     │
+│  • RSC reads and browser calls both go over HTTP to apps/api              │
 │  • Auth via Better Auth session; NO role logic trusted client-side        │
 └───────────────┬──────────────────────────────────────────────────────────┘
-                │  HTTPS, JSON, authenticated (Better Auth session)
+                │  HTTPS, JSON, authenticated (Better Auth session cookie,
+                │  forwarded by hand on the server-rendered read)
                 ▼
-┌──────────────── Application API (Next.js Route Handlers) ────────────────┐
-│  • http → services → repositories → Prisma; zod validation, RBAC guards   │
-│  • Domain services: Candidates, Leads, Pipeline, Clients, Briefs, Users   │
+┌──────────────── apps/api — NestJS, the ONLY backend surface ─────────────┐
+│  • controller → application → repository → Prisma                         │
+│  • Guards: session, tenant, capability. Zod pipe bound to contracts       │
+│  • Thin transport: business rules live in application/ and domain/        │
 │  • Secrets in env vars; AI keys server-side only                          │
 └───────────────┬───────────────────────────────────────────────────────────┘
                 ▼
         ┌──────────────────┐     ┌──────────────────────────┐
         │  PostgreSQL      │     │  External integrations    │
-        │  (Prisma + migr.)│     │  • Claude API (server)    │
+        │  (Prisma + migr.)│     │  • LLM via the AI SDK     │
         │  audit log,      │     │  • NPPES, license boards  │
         │  soft-delete     │     │  • Email send (server)    │
         └──────────────────┘     │  • Object storage (resumes)│
                                  └──────────────────────────┘
 ```
 
-**Stack in one line:** Next.js (App Router) + TS · Tailwind v4 + Sonner · Route Handlers →
-services → repositories → Prisma · PostgreSQL (Supabase) · Better Auth (6 fixed roles →
-capability groups) · Zod · RSC + typed fetch helpers (no client cache library) · Claude API
-(server-side) · Vercel.
-→ **Full detail: `docs/STACK-ARCHITECTURE.md`. Locked decisions: `docs/DECISIONS.md`.**
+**Stack in one line:** pnpm/Turborepo monorepo · Next.js (App Router) + TS · Tailwind v4 + Sonner ·
+NestJS controllers → application services → repositories → Prisma · PostgreSQL (Supabase) · Better
+Auth (6 fixed roles → capability groups) · Zod · RSC + typed fetch helpers (no client cache
+library) · provider-agnostic LLM via the Vercel AI SDK · `apps/web` on Vercel, `apps/api` on Render.
+→ **Full detail: `docs/STACK-ARCHITECTURE.md`. The package graph and its CI checks:
+`docs/SAAS-RESTRUCTURE-PLAN.md`. Locked decisions: `docs/DECISIONS.md`.**
 
 **Migration** is a **one-time ETL** (no live Sheet adapter, no dual-read) — see DECISIONS D1 and
 the per-wave ETL tasks in `docs/IMPLEMENTATION-PLAN.md`.

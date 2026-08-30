@@ -14,7 +14,10 @@ services:
     plan: starter
     region: oregon
     buildCommand: pnpm install --frozen-lockfile && pnpm db:generate && pnpm build:api
-    startCommand: pnpm start:api
+    # The BUILT bundle under plain node, never the root `start:api` (tsx). Under tsx the runner
+    # terminates the process on SIGTERM before the shutdown handler has drained, so a rolling
+    # deploy answers in-flight requests with a reset — the defect apps/api/build.mjs exists to fix.
+    startCommand: pnpm --filter @destaworks/api start
     healthCheckPath: /health/live
     envVars:
       - key: NODE_ENV
@@ -40,7 +43,7 @@ services:
     plan: starter
     region: oregon
     buildCommand: pnpm install --frozen-lockfile && pnpm db:generate && pnpm build:api
-    startCommand: pnpm start:worker
+    startCommand: pnpm --filter @destaworks/api start:worker
     envVars:
       - key: NODE_ENV
         value: production
