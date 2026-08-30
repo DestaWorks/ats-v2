@@ -53,11 +53,20 @@ in-browser transpilation, adding types, tests, and code-splitting; single full-s
 **Alternatives considered:** Stay on babel-standalone (rejected — production-forbidden, no
 types/tests). Separate SPA build (rejected — needless churn; Next.js full-stack is the lock).
 
-### 2.3 Backend — Next.js Route Handlers (full-stack)
-**Decision:** **Next.js Route Handlers** as the API layer → `http → services → repositories →
-Prisma` (layered, per STACK-ARCHITECTURE). Single full-stack app; no separate API service.
-**Why:** Same language across the stack, strong typing end-to-end, large ecosystem,
-straightforward Claude API and Postgres integration, and best velocity for a solo build.
+### 2.3 Backend — a separate NestJS API (`apps/api`)
+**Decision (revised — SAAS-RESTRUCTURE-PLAN Phase 4).** Originally: Next.js Route Handlers as the
+API layer, single full-stack app, no separate API service. That shipped and then was replaced.
+The API is now **NestJS in its own process** → `controller → application → repository → Prisma`, and
+the 140 Route Handlers were deleted in 4.3.
+**Why the change:** multi-tenancy. With `apps/web` able to read in-process *and* over HTTP there
+were two paths into the same data, so tenant scoping and capability checks had to be proven correct
+in both — and a missed tenant filter is a reportable breach, not a bug. One surface is one place to
+prove isolation, and the client portal (plus any future mobile client) was always going to use the
+HTTP path anyway. Slow work also needed a long-lived process for the job runner, which serverless
+functions cannot host.
+**What it cost:** one network hop per server render, paid down by turning composite reads into
+composite endpoints; and the two processes no longer typecheck together, which is why every wire
+shape lives in `@destaworks/contracts` and is imported by both sides.
 
 ### 2.4 Database — PostgreSQL + Prisma
 **Decision:** PostgreSQL with Prisma ORM (migrations + type-safe queries).

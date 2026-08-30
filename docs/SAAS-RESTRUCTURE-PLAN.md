@@ -18,9 +18,12 @@ Phases are ordered by dependency, not by calendar. Each phase states its goal, i
 1. **One package per pull request.** Never two.
 2. **Moves are pure moves.** A relocation PR changes zero lines of logic. If a file needs editing,
    that is a separate PR before or after the move — never inside it.
-3. **Aliases keep working throughout.** `@/*` paths resolve to the new locations until the final
-   cleanup, so no PR breaks the rest of the tree.
-4. **The suite is green between every PR.** 1,410 tests today; the number only goes up.
+3. **Aliases keep working throughout — and then go.** `@/*` paths resolved to the new locations so
+   no move PR broke the rest of the tree; Phase 2.10 retired them (2,687 specifiers rewritten,
+   `paths` 26 → 1). Do not reintroduce one that spans packages: an import names its package now.
+4. **The suite is green between every PR.** 2,261 tests today. The number only goes up except when
+   code is deleted: 4.3 removed 140 route handlers and the 100 test files that drove them, which
+   moved coverage onto the controllers rather than shrinking it.
 5. **A rule without an automated check is not a rule.** Every architectural constraint in this plan
    ships with the check that enforces it, in the same PR.
 
@@ -125,7 +128,7 @@ package that reaches PostgreSQL, and the only one permitted to import Prisma.
 handle transport and authentication; **business rules live in `application` and `domain`, never in
 controllers.**
 
-Forbidden, and each one gets a CI check in Phase 3:
+Forbidden, and each one has carried a CI check since Phase 3 (`scripts/check-architecture.mjs`):
 
 ```
 web    ──X──> db          admin  ──X──> db
@@ -161,7 +164,7 @@ ats-v2/
 │   ├── admin/                    # @destaworks/admin — platform-admin console (Phase 8)
 │   │   └── src/app/              # tenants, health, impersonation, platform metrics
 │   │
-│   └── api/                      # @destaworks/api — NestJS backend (Phase 4)
+│   └── api/                      # @destaworks/api — NestJS backend, the ONLY API surface (4.3)
 │       └── src/
 │           ├── main.ts
 │           ├── app.module.ts
@@ -210,7 +213,7 @@ ats-v2/
 │   │   └── src/
 │   │       ├── client.ts         # db(ctx, tx) — the tenant-scoping seam
 │   │       ├── generated/        # ~80k lines, walled off from every browser bundle
-│   │       └── repositories/     # 35 files, 243 methods
+│   │       └── repositories/     # 38 files — the method count and its check live in 6.3
 │   │
 │   ├── auth/                     # @destaworks/auth — sessions, guards, capabilities
 │   │   └── src/
@@ -290,7 +293,7 @@ Everything else:
 | `src/server/logging` | `packages/config` — the Node adapter belongs with the interface |
 | `src/components/ui` | `packages/ui` |
 | `src/app`, remaining `src/components` | `apps/web` |
-| `src/app/api/**/route.ts` | `apps/api` — rewritten as controllers in **Phase 4**, not moved in Phase 2 |
+| `src/app/api/**/route.ts` | `apps/api` — rewritten as controllers in **Phase 4**, not moved in Phase 2, then deleted in 4.3 |
 | `src/modules/` | deleted — done in Phase 0 |
 
 **Phase 2.1 gate:** after extracting `packages/domain`, its `package.json` must declare **no runtime
@@ -319,7 +322,8 @@ shape, which the codebase already converged on:
 { items: T[], nextCursor: string | null, hasMore: boolean }
 ```
 
-**Errors** are always enveloped, and this is already centralized in `apiHandler`:
+**Errors** are always enveloped, and this is centralized in one Nest exception filter built on the
+framework-free `classifyError`/`errorEnvelope` pair in `@destaworks/integrations/http/api-error`:
 
 ```ts
 { error: { code, message, issues?: FieldIssue[], ref?: string } }
@@ -460,11 +464,13 @@ introduces a second implementation of anything above is rejected.
 
 ### Logging
 
-There is **no logger today** — nine raw `console.*` calls in non-test code. Phase 0 introduces one.
+Phase 0.9 introduced one, replacing the nine raw `console.*` calls that were the whole of logging
+before it. What follows is the standard it is built to, not a proposal.
 
-**Library: Pino**, with `nestjs-pino` in `apps/api` and `pino-http` for request logging. Sentry
-(`@sentry/nextjs`, already installed) keeps exception reporting; Pino owns structured logs. They are
-complementary, not alternatives.
+**Library: Pino**, with `nestjs-pino` in `apps/api` and `pino-http` for request logging. Sentry keeps
+exception reporting — `@sentry/nextjs` in `apps/web`, `@sentry/node` in `apps/api`, because the
+Next.js build is the only thing the former's instrumentation understands. Pino owns structured logs.
+They are complementary, not alternatives.
 
 Pino is chosen for one reason above the others: **redaction is a first-class feature.**
 
@@ -503,11 +509,9 @@ Transport: JSON to stdout in production — the host collects it, no transport p
 
 ### Type safety
 
-`strict` and `noUncheckedIndexedAccess` are on. Add, fixing fallout as it appears:
-
-- `noUnusedLocals`, `noUnusedParameters`
-- `exactOptionalPropertyTypes`
-- `verbatimModuleSyntax`
+All of these are on, and none may be turned off to make a diff compile: `strict`,
+`noUncheckedIndexedAccess`, `noUnusedLocals`, `noUnusedParameters`, `verbatimModuleSyntax`
+(0.10) and `exactOptionalPropertyTypes` (2.0, ahead of the moves).
 
 **No `any` in application code.** No non-null assertion (`!`) to silence a nullable — narrow it or
 handle it. `as` casts require a comment justifying why the compiler cannot know. External data is
@@ -706,7 +710,7 @@ move PR contains no logic changes.
 - [x] Architecture check: Prisma imported only inside `@destaworks/db`
 - [x] Architecture check: `@destaworks/domain` has no runtime dependencies
 - [x] Architecture check: packages never import from apps
-- [x] Architecture check: **`apps/web` and `apps/admin` never import `@destaworks/db` or `@destaworks/application`** — the read path is HTTP only (4.0); without this, Option B leaks back in unnoticed
+- [x] Architecture check: **`apps/web` and `apps/admin` never import `@destaworks/db` or `@destaworks/application`** — the read path is HTTP only. The rule, its history as a ratchet and its present form as a ban are 4.0's; this row only records that it is one of the checks CI runs
 - [x] Every PR runs: format · lint · typecheck · dependency-graph validation · architecture checks · unit tests · integration tests · contract tests · build
 - [x] Contract check: every endpoint declares request and response types from `@destaworks/contracts`
 - [x] Contract check: no endpoint returns a raw database row
@@ -755,44 +759,58 @@ be proven correct in both. Under multi-tenancy a missed tenant filter is a repor
 bug. One path is one place to prove isolation, and the portal was always going to use the HTTP path
 anyway — so Option A means one surface to secure instead of two.
 
-**The cost is one network hop per server render**, and it is paid down in this order:
+**The cost is one network hop per server render.** The paydown list was written with caching first;
+building it inverted the order, and the reason is worth keeping so nobody re-adds the cache:
 
-1. **Next's server-side `fetch` cache** on the RSC read. This is the right tool for a
-   server-to-server hop — a browser cache library is not, because nothing about this hop happens in
-   the browser.
+1. **Composite reads become composite endpoints** — the one that actually paid. `load-detail.ts`
+   fired three parallel in-process service calls; `GET /candidates/:id/detail` now answers the
+   candidate composite, the client and @mention option lists and the storage flag in one request,
+   and `/roles/:id/matches-and-dormant` does the same for the two role lists. One hop, not N.
 2. Co-locate `apps/web` and `apps/api` in one region.
-3. **Composite reads must become composite endpoints.** `load-detail.ts` today fires three parallel
-   in-process service calls; a naive port turns that into three HTTP round trips. Port each
-   composite loader to one endpoint returning the composite, not N calls.
+3. **Next's server-side `fetch` cache is NOT used, and that is deliberate.** `apiGet` forwards the
+   caller's session cookie and sets `no-store`: the response is specific to one session and gated
+   by that caller's capabilities, so caching it is how one user gets served another's rows — a
+   PII exposure, and under multi-tenancy a cross-tenant one. Latency is not worth that trade.
 
 - [x] Record the isolation strategy: guards run in `apps/api` only, `db(ctx)` scopes every query,
       RLS backstops it — written up across 6.3 and 6.6 above, and enforced rather than described:
       `pnpm tenant:check` for the seam, `pnpm rls:check` for the backstop
 - [x] **CI check: `apps/web` and `apps/admin` may not depend on `@destaworks/db` or
       `@destaworks/application`.** Without it Option B leaks back in the first time someone imports
-      a service directly, and there are two paths again with nobody having decided so.
-      `web-read-path-is-http-only` in `check-architecture.mjs` enforces it — as a RATCHET, not a
-      ban, because 167 production files still import `application` today. It cannot rise, and 4.3's
-      traffic switch is what drives it to zero. Tests are exempt: 4.0 governs the runtime read path,
-      not the harness
-- [ ] Port composite loaders to composite endpoints as their routes migrate (4.3)
-- **Done-when:** the CI dependency check fails on a deliberate `apps/web` → `application` import
+      a service directly, and there are two paths again with nobody having decided so. It shipped
+      as a RATCHET because 167 production files imported `application` at the time; 4.3 drove that
+      to **zero**, so `application` and `db` are now simply absent from `ALLOWED_DEPENDENCIES.web`
+      and the import fails on dependency-direction. That is the difference between a number
+      somebody has to notice and a build that stops. `web-read-path-is-http-only` in
+      `check-architecture.mjs` stays beside it reading SOURCE imports rather than the manifest,
+      because `apps/web` has no manifest of its own; tests are exempt there, since 4.0 governs the
+      runtime read path and not the harness
+- [x] Port composite loaders to composite endpoints as their routes migrate (4.3) — done for the
+      loader 4.0 named. Residual fan-out is deliberate rather than missed: `/roles/[id]` still
+      makes a second call for `/lookups`, which is installation vocabulary shared by many pages
+      and does not belong folded into one role's composite
+- **Done-when:** the CI dependency check fails on a deliberate `apps/web` → `application` import ✅
 
 ### 4.1 Scaffold
 - [x] Create `apps/api` — NestJS + TypeScript
-- [x] Module per domain area, mirroring the current service boundaries — 24 modules derived from
-      service ownership, so a migrating route has exactly one module it can belong to
+- [x] Module per domain area, mirroring the service boundaries — derived from service ownership, so
+      a migrating route had exactly one module it could belong to. 24 at scaffold, **27 today** —
+      the cutover added modules rather than widening an existing one to hold work it did not own
 - [x] Controllers depend only on `@destaworks/application` and `@destaworks/contracts` — services
       are injected by branded token, never imported as singletons
 - [x] CI check: `apps/api` never imports Prisma or `@destaworks/db` directly — `db` is absent from
       the api row of `ALLOWED_DEPENDENCIES` on purpose
-- **Done-when:** the app boots and serves one trivial endpoint end-to-end
+- **Done-when:** the app boots and serves one trivial endpoint end-to-end ✅ — and the deploy
+  workflow re-proves it on every run, booting the built bundle and requiring `/health` before
+  anything ships
 
 ### 4.2 Cross-cutting concerns — port before any route moves
 - [x] Port `apiHandler` semantics to a Nest exception filter — and SHARED with `apiHandler` rather
-      than reimplemented: both build the envelope from one `classifyError`/`errorEnvelope` pair, so
-      one deliberate break fails both frameworks' suites. Also maps Nest's own `HttpException`, or
-      an unmatched route answers 500 with a Sentry event instead of 404
+      than reimplemented: both built the envelope from one `classifyError`/`errorEnvelope` pair, so
+      one deliberate break failed both frameworks' suites. `apiHandler` went with the routes in 4.3;
+      the pair it shared **stays** in `@destaworks/integrations/http/api-error`, framework-free,
+      which is what keeps the filter from growing its own copy of the code union. Also maps Nest's
+      own `HttpException`, or an unmatched route answers 500 with a Sentry event instead of 404
 - [x] Request-id interceptor: generate, log, and return it as `ref` on 500s
 - [x] Logging interceptor: one structured line per request with method, route, status, durationMs
       and `requestId`, verified in production log mode. `tenantId` arrives with 6.4's context; the
@@ -801,9 +819,10 @@ anyway — so Option A means one surface to secure instead of two.
       DENIES a handler that declares no capability, so a forgotten decorator fails closed
 - [x] Port rate limiting — `RateLimitGuard`, bucket names byte-identical to the hand-built keys
 - [x] Port the Better Auth integration — the Nest guards call the same `requireUser` /
-      `requireCapability` the Next routes call, through the `RequestContext` port, so there is one
-      auth implementation rather than two. The `[...all]` catch-all stays in Next: Better Auth owns
-      its own transport and never answers through `json()`
+      `requireCapability` the Next routes called, through the `RequestContext` port, so there was
+      one auth implementation rather than two. The `[...all]` catch-all **stays in Next
+      permanently**, and is the one route 4.3 did not delete: Better Auth owns its own transport
+      and never answers through the API's envelope
 - [x] Zod validation pipe bound to `@destaworks/contracts` — bound per parameter with the route's
       own schema, throwing the ZodError unformatted so the filter renders it in one place
 - [x] Audit logging on every mutation, matching current behaviour — deliberately NOT an
@@ -811,45 +830,65 @@ anyway — so Option A means one surface to secure instead of two.
       it records; an interceptor runs outside that transaction and would audit rolled-back writes
       and double every row. What was missing was attribution, so `AuditActorInterceptor` fails an
       unattributed mutation closed instead, with opt-outs that require a stated reason
-- **Done-when:** an equivalence test proves a guarded endpoint behaves identically to its Next.js counterpart for authorized, unauthorized and unauthenticated callers
+- **Done-when:** an equivalence test proves a guarded endpoint behaves identically to its Next.js
+  counterpart for authorized, unauthorized and unauthenticated callers ✅ — proved while both
+  stacks served, which is the only window in which it *could* be proved. The controller contract
+  tests that outlived the routes assert the same three outcomes against the controller directly
 
 ### 4.3 Route cutover
-- [x] Migrate the 141 routes in groups, one domain area per PR
+- [x] Migrate the routes in groups, one domain area per PR
 - [x] Each PR: contract test asserting request/response parity with the route it replaces
-- [x] Keep the Next.js route serving until its replacement passes — **the removal half is deliberately not done**
+- [x] Keep the Next.js route serving until its replacement passes, then delete it
 - [x] Security review of the auth surface before the last group cuts over
-- **Done-when:** no route handler remains under `apps/web/app/api`, and contract tests cover every migrated endpoint
+- **Done-when:** no route handler remains under `apps/web/app/api`, and contract tests cover every
+  migrated endpoint ✅
 
-**Status: the controllers exist and are proven; the done-when is NOT met, on purpose.** 167 endpoints
-now serve from `apps/api`, and all 140 Next.js routes still serve too. Removing them is not a
-tidy-up that was skipped — it is the traffic switch, and it cannot happen until the API is hosted
-(4.4) and `apps/web` calls it over HTTP. Deleting them now would take the product down. The
-ratchet in `check-architecture.mjs` is what will drive the read path to zero once a host exists.
+**Status: done.** `apps/api` serves **200 endpoints** and is the only API surface. The 140 App
+Router handlers are deleted, and with them the 100 test files that drove them — the parity those
+tests proved now lives in the controller contract tests, which assert the controllers directly
+rather than against a route that no longer exists. What remains under `apps/web/src/app/api` is the
+Better Auth catch-all, which must stay in Next: Better Auth owns its own transport and never
+answers through the API's envelope.
 
-The auth-surface review is done, and is now enforced rather than recorded. Per-route evidence
-already existed: every guarded endpoint asserts 401 signed out and 403 for a wrong capability, the
-portal asserts all four of its refusals (departed contact, portal disabled, cookie-only, no
-widening), and the candidate PII gate asserts `licenseNumber` is absent for a viewer without
-`viewCredentials` and refused on write. What those cannot see is the cross-cutting question, so
-`scripts/check-auth-surface.mjs` (wired into CI as `pnpm auth:check`) answers it: across all 167
-endpoints at once, **no capability was widened, dropped or swapped** in translation — 166 matched
-against their Next route, 87 capability-gated on both sides, 14 distinct capabilities compared —
-and every endpoint sits behind the right guard (130 session, 1 portal, 34 capability-only, 2 public
-health; nothing unclassified).
+Two consequences worth stating plainly, because they are what makes this irreversible rather than
+tidy. The read path reached **zero** and became a ban rather than a ratchet (4.0). And `apps/web`
+now serves no data at all: `NEXT_PUBLIC_API_URL`, `API_URL` and `WEB_ORIGINS` must be set and
+`apps/api` must be running, or the app does not function — which is why 4.4's host stopped being
+optional.
 
-The check carries floors on endpoints parsed, pairs matched, and pairs capability-gated, because
-the failure this repo keeps rediscovering is not a broken rule but a checker that quietly stops
-checking. It was verified falsifiable: widening `manageRoles` to `manageUsers` on
-`PATCH /admin/users/:id/role`, and removing `PortalAuthGuard` from the portal route, each fail it.
+The auth-surface review is done, and is enforced rather than recorded. Per-route evidence already
+existed: every guarded endpoint asserts 401 signed out and 403 for a wrong capability, the portal
+asserts all four of its refusals (departed contact, portal disabled, cookie-only, no widening), and
+the candidate PII gate asserts `licenseNumber` is absent for a viewer without `viewCredentials` and
+refused on write. What those cannot see is the cross-cutting question, so
+`scripts/check-auth-surface.mjs` (wired into CI as `pnpm auth:check`) answers it across all 200
+endpoints at once: every one sits behind the right guard, or on a 4-entry list of deliberately
+public endpoints — the two health probes, and the two request-access forms, which must each carry
+`RateLimitGuard` because a limiter is a public endpoint's only abuse control.
+
+While both stacks served it also proved **no capability was widened, dropped or swapped** in
+translation — 166 endpoints matched against their Next route, 87 capability-gated on both sides, 14
+distinct capabilities compared. That comparison is now vestigial and **deliberately kept**: it is
+what would catch a re-added Next route disagreeing with the Nest endpoint on the same path. Its
+matched-pair floors are gone because there is nothing left to count, which is the cutover working
+rather than the check weakening; the floors that remain are on the parse itself (180 endpoints) and
+on `apps/web` serving no more than the one auth route. It was verified falsifiable: widening
+`manageRoles` to `manageUsers` on `PATCH /admin/users/:id/role`, and removing `PortalAuthGuard`
+from the portal route, each fail it.
 
 ### 4.4 Deployment
-- [ ] Host `apps/api` — this leaves serverless for a long-running process; record the target and cost
+- [x] Host `apps/api` — the **target** is recorded: Render (`render.yaml`), two services from one
+      repo, `oregon`. Not Vercel, because a long-lived process is the reason this left serverless.
+      **The monthly figure is still owed** — it depends on the instance size and count the owner
+      picks, so it is not estimated here
 - [x] Health checks, graceful shutdown, connection-pool sizing for a persistent process
 - [x] Deploy workflow building from the same immutable revision that passed CI
-- **Done-when:** the API runs in staging with the web app pointed at it
+- **Done-when:** the API runs in staging with the web app pointed at it — **NOT met.** Everything in
+  the repository is in place; what is missing is an owner action, not a change
 
-**Status: everything host-independent is done; the host itself is an owner decision and is the
-only thing blocking the done-when.**
+**Status: the host is chosen and wired; nothing has been rolled out.** 4.3 made this urgent rather
+than optional — `apps/web` serves no data, so until the API is actually running, the deployed app
+does not function.
 
 What exists now. `pnpm build:api` bundles the API to `apps/api/dist/main.js`, and production runs
 plain `node` rather than `tsx` — not a preference: under `tsx` the runner killed the process on
@@ -857,7 +896,11 @@ SIGTERM before the shutdown handler had drained, so a rolling deploy answered in
 with a reset. Under node the handler owns the signal, and SIGTERM now stops the listener, lets
 in-flight requests finish, and only then returns the pooler slots. The deploy workflow builds that
 artefact from the same pinned SHA the web app deploys from, boots it, and fails if it does not
-answer `/health` or does not exit within 20s of SIGTERM.
+answer `/health` or does not exit within 20s of SIGTERM. Render then builds that same SHA — the
+workflow's `deploy-api` job triggers it and blocks until `/health` reports healthy, so a green run
+means "serving", never "the request was accepted" — and `deploy` (Vercel, `apps/web`) runs after
+it, never beside it, because a web deploy on top of an API that is not yet up shows users the
+error boundary.
 
 Pool sizing is now read from the environment (`DB_POOL_MAX`, `DB_POOL_IDLE_TIMEOUT_MS`,
 `DB_POOL_CONNECTION_TIMEOUT_MS`) rather than fixed in code, because the two runtimes need opposite
@@ -868,16 +911,22 @@ is about to reuse. **The defaults reproduce today's serverless numbers exactly, 
 until a deploy sets them** — and raising `DB_POOL_MAX` needs Supabase's own
 max-client-connections headroom confirmed first, which is why it is a deploy-time value.
 
-**The open decision.** Vercel is not a candidate — a long-lived process is the reason this left
-serverless. The realistic shapes are a container host (Fly.io, Railway, Render) or a VM, and the
-choice is mostly about who operates it. Cost depends on the instance size and count the owner
-picks, so it is not estimated here; what the decision needs is the monthly figure for the chosen
-target plus confirmation that Supabase's connection ceiling accommodates a persistent pool
-alongside the existing serverless one. **Once a host is chosen its deploy step slots in after the
-existing smoke test** — nothing else in the pipeline has to change.
+**What the owner still owes.** Three things, none of them code:
+
+- `RENDER_DEPLOY_HOOK_URL` (secret) and `API_HEALTH_URL` (variable). The workflow **fails loudly**
+  when either is unset rather than skipping the step, so a missing secret cannot read as a
+  successful deploy that quietly shipped nothing.
+- **The monthly figure** for the instance size and count actually chosen.
+- **Confirmation that Supabase's max-client-connections ceiling accommodates a persistent pool**
+  alongside the existing serverless one, before `DB_POOL_MAX` is raised above its default.
+
+Two services are described rather than one, deliberately: `main.ts` and `worker.ts` scale on
+different things and fail differently, so sharing a process means an ETL burst starves request
+handling and a rolling API deploy kills jobs mid-flight.
 
 **Phase 4 done-when:** the full suite is green, contract tests cover every endpoint, and the auth
-surface has had a security review.
+surface has had a security review ✅ — all three hold. 4.4's own done-when does not, and it is the
+last thing open in this phase: the API has a host described but has never been rolled out.
 
 ---
 
@@ -893,13 +942,13 @@ surface has had a security review.
 > generation (the draft columns), the scheduler's claim table, and CSV export delivery. Their code,
 > contracts and tests are complete and green — what is missing is only the schema.
 >
-> This is safe today because nothing here is deployed: `main` is what is live, the restructure runs
-> on its own branch, and `apps/api` has no host yet. It stops being safe the moment either is
-> deployed, so:
+> This is safe only because nothing here is deployed: `main` is what is live and the restructure
+> runs on its own branch. It stops being safe the moment that changes — and 4.4 now has a host
+> described and a deploy job wired, so the distance between "safe" and "not" is one workflow run.
 >
 > **Deploy gate — the migrations run BEFORE any deploy that carries Phase 5 code, staging first.**
-> A deploy of the web app alone is enough to matter: the brief-generate routes enqueue and the
-> handler writes `draft`, so shipping the route without the column turns a working button into a
+> A deploy of the web app alone is enough to matter: the brief-generate endpoints enqueue and the
+> handler writes `draft`, so shipping the feature without the column turns a working button into a
 > 500. `docs/DECISIONS.md` D6 (separate staging and production databases) is a prerequisite for
 > rehearsing them anywhere other than production.
 
@@ -928,10 +977,10 @@ surface has had a security review.
 - [x] Move brief generation and CSV export to jobs *(CSV export: `reports.export.candidates`
   + `POST /reports/export/jobs` / `GET /reports/export/jobs/:id` on the API. The finished file goes
   to the PRIVATE `exports` bucket and is collected through a 5-minute signed URL minted per
-  request — a job cannot stream into a response that has already returned. The Next.js
-  `GET /api/reports/export` and its `<a href>` are unchanged and still synchronous: `apps/web` may
-  not import `@destaworks/jobs` (web → api is HTTP), so the link moves to the async flow as part
-  of the 4.3 traffic switch.
+  request — a job cannot stream into a response that has already returned. The `<a href>` that used
+  to navigate to the synchronous Next.js route is gone with 4.3: `export-csv-button.tsx` now POSTs
+  the job and polls it on the same credentialed path as every other browser call, which a browser
+  navigation could never be.
   Brief generation IS done — the note here said otherwise because it was written by the workstream
   that could not see the one doing it. `briefs.daily.generate` / `briefs.weekly.generate` answer
   202 with a job id, and the singleton key is the PERIOD rather than the user: two leads opening
@@ -1248,9 +1297,13 @@ export interface TenantContext {
       changed only a type annotation** and 4 moved an identity read one level in. No guard,
       decorator, capability or route table moved. Zero role names found, and the existing source
       scan now covers the controllers so it stays that way
-- [x] **Delete the compile-time bridge.** `bridgeUnscopedCallers` is removed from `tenant-scope.ts`
-      and from all 35 tenant-scoped repositories, so no wrapper reorders arguments behind a caller's
-      back and no service reaches a repository without passing its context. The ratchet fell from
+- [x] **Delete the compile-time bridge.** `bridgeUnscopedCallers` wraps nothing: it is gone from all
+      35 tenant-scoped repositories, so no wrapper reorders arguments behind a caller's back and no
+      service reaches a repository without passing its context. The **function itself still stands
+      in `tenant-scope.ts`, with its unit test** — unused, ratcheted at 0 uses by
+      `check-tenant-scope.mjs`, and cheap to keep only until 6.4's last bullet (`User.role`) is
+      closed, since that is the one remaining sweep that could plausibly want it. Delete it then;
+      a helper nothing calls is otherwise an invitation. The ratchet fell from
       **100 escape-hatch uses across 45 files to 29 across 10** (`dbUnscoped` 17, `withTransaction`
       8, `UNSCOPED_CONTEXT` 4, `bridgeUnscopedCallers` 0) and the baseline is ratcheted down.
       Removing it exposed two unscoped reads the wrapper had been hiding — see 6.6
@@ -1302,19 +1355,14 @@ export interface TenantContext {
 - [x] Run it on every PR as a required check — `isolation` job in `ci.yml`, on a throwaway
       `postgres:16` service container; plus the database-free `rls:check` in the static job
 - [x] Add tenant context to the existing test files — landed with the bridge deletion. The whole
-      suite (**2464 tests**) now asserts the context-first argument order rather than the bridge's
-      reordered one, so a repository call that drops its context fails a test as well as the compiler
+      suite now asserts the context-first argument order rather than the bridge's reordered one, so
+      a repository call that drops its context fails a test as well as the compiler
 - **Done-when:** isolation is proven per table on every change, not asserted in a document
 
 **Count correction:** the schema has **39** tenant-scoped models, not 37 — `ReportExport` and
 `MigrationRun` post-date the plan's count. `Membership` names a tenant but stays global and
 un-policied: it *is* the boundary, and scoping it would make "which tenants may this user switch
 to" unanswerable. All three facts are asserted by `scripts/check-rls-coverage.mjs`.
-
-**Two uniqueness rules the list of seven misses**, found by seeding two tenants: `DailyBrief.date`
-and `WeeklyBrief.weekStart` are `@unique` across the whole database, so two tenants cannot both have
-a brief for the same day. They belong in 6.2's re-keying as `@@unique([tenantId, date])` and
-`@@unique([tenantId, weekStart])`.
 
 ### 6.8 Platform-admin plane
 - [x] Platform-admin capability on a **different axis** from a tenant's Owner — `PlatformContext`
@@ -1398,8 +1446,8 @@ Two items are owed to someone other than the code:
 
 - [x] `apps/admin` — Next.js, consuming `@destaworks/contracts` and `@destaworks/ui`. **HTTP-only**:
       its allowed imports are `contracts`, `domain`, `auth`, `config`, `integrations`, `ui` — no `db`
-      and no `application`. `apps/web` holds both only as legacy debt under a ratchet 4.3 drives to
-      zero; a new app must not be born with it. It carries its OWN manifest, because two rules in
+      and no `application`, the same row `apps/web` now has since 4.3 closed its debt. It carries
+      its OWN manifest, because two rules in
       `check-architecture.mjs` are gated on `hasOwnManifest` and skip a unit without one — and
       inheriting the root manifest would have handed admin `@destaworks/db` and `@prisma/client` as
       declared dependencies on day one
@@ -1496,17 +1544,26 @@ Tag `restructure` at the end of each phase — `phase-0-complete`, `phase-1-comp
 a fact in the repository rather than a claim in a document. The done-when of each phase is the gate;
 there is no separate consolidation step.
 
+**This has not been done: the repository carries zero tags.** Phases 0, 1, 2 and 8 have met their
+done-whens and none of them is marked, which is precisely the failure the rule was written to
+prevent — the only record of what is finished is this document, and a document is a claim. Tag those
+four retroactively at the commit that closed each one. Phase 3 is not among them: its last item
+(branch protection) is blocked on the owner, so the gate is genuinely still open.
+
 ### Deploy tags
 
-Deploys are manual through the Vercel CLI, and **nothing currently records what is live.** Tag every
-deploy: `deploy/staging-YYYY-MM-DD`. Without this there is no answer to "roll back to what?"
+Deploys stay manual — dispatched with the exact SHA CI passed — but the tagging is no longer a
+habit to remember. `deploy.yml`'s last step tags the deployed revision
+`deploy/<environment>-YYYY-MM-DD-<run>` and pushes it, so "roll back to what?" has an answer in the
+repository rather than in someone's memory. A deploy driven by the Vercel CLI outside the workflow
+skips that step and is exactly the case this was written against.
 
 ### Environments — a prerequisite for Phase 6
 
 `DECISIONS.md` D6 specifies staging and production on **separate Supabase projects**. Today there is
 one shared database.
 
-**Phase 6 performs schema surgery on 37 tables.** With a single database there is no safe rehearsal:
+**Phase 6 performs schema surgery on 39 tables.** With a single database there is no safe rehearsal:
 the backfill and the `NOT NULL` flip get exactly one attempt, against live data.
 
 - [ ] **Separate staging database provisioned before Phase 6 starts** — not required for Phases 0–5
@@ -1523,7 +1580,7 @@ This does not block hardening, the restructure, CI or the job runner. It does bl
 | **Cross-tenant data leak** | Reportable breach | Phase 6.3 seam + 6.6 RLS + 6.7 per-table proof; three independent layers |
 | **800-file move unreviewable** | High | One package per PR; pure moves, zero logic edits; aliases kept; suite green between each |
 | **NestJS migration reopens the auth surface** | High | Phase 4.2 ports cross-cutting concerns before any route moves; equivalence tests per guard; route-by-route cutover with contract parity tests; security review before the final group |
-| **Two read paths into the same data** | High | Phase 4.0 decides this explicitly; Option A (single HTTP path) recommended so a tenant filter can only be missed in one place |
+| **Two read paths into the same data** | ~~High~~ **Closed** | Phase 4.0 decided Option A; 4.3 deleted the second surface and `ALLOWED_DEPENDENCIES.web` now bans the edge outright, so a tenant filter can only be missed in one place |
 | **Scope creep inside the pure-move phase** | High | Phase 2 is moves only. NestJS is Phase 4 and the application layer is a Phase 2 move, not a rewrite — any logic change inside a move PR is rejected |
 | **`pg_trgm` / raw-SQL indexes dropped again** | High | CI check in 0.8 and 5.2; has already happened three times |
 | **Migration data loss** | High | Plan-first, reconciliation invariant, no apply without a reviewed plan |
@@ -1543,7 +1600,7 @@ This does not block hardening, the restructure, CI or the job runner. It does bl
 |---|---|
 | 0 | Revert the PR; changes are independent |
 | 1–3 | Revert; aliases still resolve, so the application is unaffected |
-| 4 | Each route group cuts over independently; revert the group and the Next.js route still serves |
+| 4 | Was: revert a route group and its Next.js route still serves. **That option is spent** — 4.3 deleted the routes, so rollback here is redeploying the previous revision of `apps/api` and `apps/web` together, which is why the deploy workflow pins both to one SHA |
 | 5 | Feature-flag jobs back onto the request path |
 | 6.1–6.2 | Expand/backfill is reversible until the `NOT NULL` flip; that flip is the point of no return and needs a verified backup |
 | 6.3–6.8 | Revert application layers; schema stays — it is additive |

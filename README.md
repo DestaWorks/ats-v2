@@ -10,7 +10,7 @@ contact through sourcing, screening, client submission, interview, offer, and st
 > as a production change. See [Security & compliance](#security--compliance).
 
 The product is **healthcare-specific** (clinical credentials, state licensure, NPI/NPPES
-verification, per-client fit rules), **AI-assisted** (résumé parsing, daily/weekly briefs,
+verification, per-client fit rules), **AI-assisted** (resume parsing, daily/weekly briefs,
 job-description parsing, inbound triage), and built for a small recruiting team with
 role-based responsibilities.
 
@@ -18,17 +18,20 @@ role-based responsibilities.
 
 ## Status
 
-The app is being rebuilt from a legacy single-file application onto a modern stack, and the
-rebuild is **well underway** — Waves 0 through 3.5 are shipped and live on Vercel.
+The app was rebuilt from a legacy single-file application onto a modern stack (Waves 0–3.5, live on
+Vercel), and is now most of the way through a second change: a **restructure into a monorepo with a
+separate API and multi-tenancy**, running on the `restructure` branch.
 
-- **New app** — lives in [`src/`](src): Next.js (App Router) + TypeScript + Prisma +
-  PostgreSQL (Supabase) + Better Auth. Real build, several hundred tests, and
-  typecheck/lint/format all enforced in CI on every PR.
-- **Legacy app** — moved to [`legacy/`](legacy) for reference/parity-checking only. It is
-  **not maintained** and is being strangled wave by wave, not built on.
+- **New app** — the `apps/` + `packages/` tree below. Next.js + NestJS + TypeScript + Prisma +
+  PostgreSQL (Supabase) + Better Auth. Real build, ~2.3k tests, and typecheck/lint/format plus
+  architecture, auth-surface and tenant-scope checks all enforced in CI on every PR.
+- **Legacy app** — kept **local-only and gitignored** (`legacy/`) as a parity reference. It is
+  **not maintained**, was strangled wave by wave rather than built on, and a fresh clone will not
+  have it.
 
-Track the current wave-by-wave status in [`docs/IMPLEMENTATION-PLAN.md`](docs/IMPLEMENTATION-PLAN.md)
-before assuming a feature does or doesn't exist yet.
+[`docs/SAAS-RESTRUCTURE-PLAN.md`](docs/SAAS-RESTRUCTURE-PLAN.md) is the base document — read it
+first for phase-by-phase status. [`docs/IMPLEMENTATION-PLAN.md`](docs/IMPLEMENTATION-PLAN.md)
+carries the earlier wave-by-wave feature status.
 
 ---
 
@@ -46,7 +49,7 @@ before assuming a feature does or doesn't exist yet.
 - **Open roles** — role matcher, triage strip, JD autofill, and promote-to-pipeline.
 - **Inbound triage** — paste a reply, AI extracts the candidate, dedupes, matches to a
   client, and flags hot leads.
-- **AI assistance** — résumé parsing, daily log/brief generation, and job-description
+- **AI assistance** — resume parsing, daily log/brief generation, and job-description
   parsing, all **provider-agnostic** (Anthropic / OpenAI / Google via the Vercel AI SDK).
 - **Role-based access** — a fixed six-role model (Owner, Director, Manager, Screener,
   Associate, Admin) with capability-based guards enforced server-side.
@@ -70,36 +73,50 @@ before assuming a feature does or doesn't exist yet.
 | Drag & drop | dnd-kit (accessible) |
 | UI primitives | shadcn / Radix for a11y-hard primitives; Sonner for toasts |
 | Testing | Vitest |
-| Hosting | Vercel (production `main` · staging `staging` · per-PR previews) |
+| Backend | NestJS — `apps/api`, the only HTTP API surface |
+| Jobs | pg-boss on the existing Postgres — `apps/api`'s worker process |
+| Monorepo | pnpm workspaces + Turborepo |
+| Hosting | `apps/web` on Vercel (production `main` · staging `staging` · per-PR previews) · `apps/api` on Render (`render.yaml`) |
 | Package manager | pnpm |
 
 ---
 
 ## Architecture
 
-The app has two halves:
-
-- **RSC-first client** — feature code is co-located under `app/(app)/<feature>/`. Server
-  Components read data by calling services directly; client components use typed fetch helpers.
-- **Layered server** — `route → service → repository → prisma`, under
-  `server/{services,repositories,rules,auth,db,ai,http}`. Dependencies point **one way only**:
-  a lower layer never imports an upper one.
+A pnpm/Turborepo monorepo with three applications over nine packages. The API is a **separate
+process**: `apps/web` renders HTML and reads everything over HTTP from `apps/api`, so there is one
+path into the data and one place to prove authorization.
 
 ```
-src/
-├── app/
-│   ├── (app)/            # authenticated feature routes (pipeline, candidates,
-│   │                     #   sourcing, discover, roles, dashboard, activity, …)
-│   ├── (auth)/           # sign-in, request-access
-│   └── api/              # route handlers
-├── server/              # services · repositories · rules · auth · db · ai · http
-├── components/           # shared UI (incl. ui/ primitives)
-├── lib/                  # constants · rules · validation · forms · utils · api
-└── generated/prisma/     # generated Prisma client (gitignored)
+apps/
+├── web/                  # Next.js operator app — HTML only, no API routes
+│   └── src/app/
+│       ├── (app)/        # authenticated feature routes (pipeline, candidates,
+│       │                 #   sourcing, discover, roles, dashboard, activity, …)
+│       ├── (auth)/       # sign-in, request-access
+│       ├── portal/       # client portal (external audience)
+│       └── api/auth/     # Better Auth catch-all — the ONLY route left here
+├── api/                  # NestJS — the only backend HTTP surface
+│   └── src/modules/      # one module per domain area; controllers are thin transport
+└── admin/                # platform-admin console
+
+packages/
+├── domain/               # constants · pure rules · clock · money — ZERO runtime dependencies
+├── contracts/            # every request/response shape, zod-validated
+├── application/          # services — business logic, framework-free
+├── db/                   # repositories · Prisma · migrations — the ONLY Prisma importer
+├── auth/                 # sessions · capability guards · tenant context
+├── integrations/         # AI · email · storage · HTTP adapters
+├── jobs/                 # pg-boss queues, workers, schedules
+├── ui/                   # shared React primitives
+└── config/               # env contracts + the Logger
 ```
 
-See [`docs/STACK-ARCHITECTURE.md`](docs/STACK-ARCHITECTURE.md) for the definitive
-architecture and conventions.
+**Dependencies point one way only** — everything may depend on `domain`, nothing may depend on an
+app — and the rule is machine-enforced by `pnpm arch:check`, not just documented.
+
+See [`docs/SAAS-RESTRUCTURE-PLAN.md`](docs/SAAS-RESTRUCTURE-PLAN.md) for the package graph and
+phase status, and [`docs/STACK-ARCHITECTURE.md`](docs/STACK-ARCHITECTURE.md) for the conventions.
 
 ---
 
@@ -131,9 +148,15 @@ pnpm db:seed:clients   # clients
 pnpm db:seed:rules     # client scoring rules
 pnpm db:seed:demo      # demo candidates/data
 
-# 5. Start the dev server
-pnpm dev               # http://localhost:3000
+# 5. Start BOTH processes — the web app serves no data on its own
+pnpm dev:api           # NestJS API  (API_PORT, default 3004)
+pnpm dev               # Next.js web (in a second terminal)
 ```
+
+`apps/web` has no API routes: every read and write goes over HTTP to `apps/api`. Running `pnpm dev`
+alone gives a shell that cannot load a page. `API_URL` (server-side) and `NEXT_PUBLIC_API_URL`
+(browser) must both point at the API, and `WEB_ORIGINS` must list the web origin or the browser's
+credentialed calls are refused by CORS.
 
 ### Environment variables
 
@@ -157,14 +180,21 @@ never commit real secrets (NDA-binding).
 
 | Command | Description |
 |---------|-------------|
-| `pnpm dev` | Start the dev server |
-| `pnpm build` | Production build |
+| `pnpm dev` | Start the web app (needs `pnpm dev:api` running too) |
+| `pnpm dev:api` / `pnpm dev:worker` | Start the API / the job worker |
+| `pnpm dev:admin` | Start the platform-admin console |
+| `pnpm build` / `pnpm build:api` | Production build — web / API bundle |
 | `pnpm start` | Serve the production build |
 | `pnpm test` | Run tests (Vitest) |
 | `pnpm test:watch` | Run tests in watch mode |
-| `pnpm typecheck` | TypeScript type-check (`tsc --noEmit`) |
+| `pnpm typecheck` | TypeScript type-check (web + API) |
 | `pnpm lint` | Lint with ESLint |
 | `pnpm format` / `pnpm format:check` | Format / check formatting with Prettier |
+| `pnpm arch:check` | Enforce the package dependency law |
+| `pnpm auth:check` | Prove every endpoint sits behind the right guard |
+| `pnpm tenant:check` | Prove no repository method can query without a tenant |
+| `pnpm rls:check` / `pnpm raw-index:check` | RLS coverage / raw-SQL indexes survive migrations |
+| `pnpm jobs` | Inspect and retry background jobs |
 | `pnpm db:generate` | Generate the Prisma client |
 | `pnpm db:migrate` | Create/apply a dev migration |
 | `pnpm db:studio` | Open Prisma Studio |
@@ -175,19 +205,30 @@ never commit real secrets (NDA-binding).
 
 ## Testing & CI
 
-Every PR runs the full verification suite in GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)):
-**generate Prisma client → typecheck → lint → test → format check.** Run the same checks
-locally before opening a PR:
+Every PR runs the full verification suite in GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)),
+in four jobs: **Commit messages** · **Static analysis** (format, lint, typecheck, dependency-graph,
+architecture, raw-SQL indexes, RLS coverage, auth-surface parity, tenant scope) · **Tests** (unit,
+contract, and a check that no log call names a PII field) · **Tenant isolation** (two tenants seeded
+against a throwaway Postgres, proving A cannot read B per table). Run the same checks locally
+before opening a PR:
 
 ```bash
 pnpm db:generate && pnpm typecheck && pnpm lint && pnpm test && pnpm format:check
+pnpm arch:check && pnpm auth:check && pnpm tenant:check && pnpm rls:check
 ```
 
 ---
 
 ## Deployment
 
-Hosted on **Vercel** across three isolated environments (see `docs/DECISIONS.md` D6):
+Two hosts, because the API is a long-lived process: **`apps/web` on Vercel**, **`apps/api` and its
+worker on Render** ([`render.yaml`](render.yaml)). Deploys are dispatched manually from
+[`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) with the exact SHA CI passed — it
+refuses a revision whose four required checks are not green, ships the **API first** and waits for
+`/health`, then the web app, then tags the revision `deploy/<env>-YYYY-MM-DD-<run>` so there is an
+answer to "roll back to what?".
+
+Three isolated environments (see `docs/DECISIONS.md` D6):
 
 - **Production** — `main` branch, its own Supabase project.
 - **Staging** — `staging` branch, a separate Supabase project (never touches production PII).

@@ -3,6 +3,19 @@
 The executable build guide, broken into **small tasks**. Read with `STACK-ARCHITECTURE.md`
 (layers/folders), `DATA-MODEL.md` (entity reference), and `ESTIMATE.md` (schedule).
 
+> ### This is a record of what was built, in the paths of the day
+>
+> Waves 0–5 shipped before the restructure, so the paths below (`src/`, `server/**`,
+> `app/api/**/route.ts`) describe where things were when each task closed. They are **not where to
+> put anything now**: Phase 2 moved every file into a package and Phase 4.3 deleted the App Router
+> API. The mapping is in [`SAAS-RESTRUCTURE-PLAN.md`](./SAAS-RESTRUCTURE-PLAN.md) ("Where today's
+> code goes"), which is the base document and wins on conflict. Two patterns named repeatedly below
+> are **superseded** and must not be copied: `apiHandler`-wrapped route handlers (endpoints are
+> NestJS controllers in `apps/api`), and "RSC reads call services directly" (a page reads over HTTP;
+> `apps/web` cannot import `@destaworks/application` at all).
+>
+> Wave status ticks remain accurate — this note is about *where*, not *whether*.
+
 ## How we build (two rules)
 
 1. **Vertical slices, not horizontal layers.** We do NOT define all the database tables or all
@@ -13,9 +26,9 @@ The executable build guide, broken into **small tasks**. Read with `STACK-ARCHIT
    time, each behind its own small PR with tests.
 
 **The per-task rhythm** (applies to every checkbox that touches data):
-`add just this feature's model → migrate → repository method → service (logic + authz + audit) →
-zod schema → this feature's endpoint → port this piece of UI 1:1 → hook → test → retire the legacy
-piece.`
+`add just this feature's model → migrate → repository method (context-first) → service (logic +
+authz + audit) → contract schema → this feature's controller in apps/api → port this piece of UI
+1:1 → hook → test → retire the legacy piece.`
 
 **Done-when (every feature):** works end-to-end on real data Â· authz enforced server-side Â· inputs
 validated Â· changes audited Â· tests green Â· legacy piece retired.
@@ -797,7 +810,7 @@ format (blocks 1.3/1.4). *Trash auto-purge sign-off resolved 2026-07-14 — see 
       **Inbound Triage's "Attach to this lead" trusted a stale, once-computed dedupe match with no
       server-side re-verification** — a reviewer editing the extracted name/email after the match
       ran could attach the reply to the WRONG lead with no guard catching it (the same
-      wrong-person-merge risk the résumé-match flow was deliberately built to prevent); fixed by
+      wrong-person-merge risk the resume-match flow was deliberately built to prevent); fixed by
       having `attach()` re-run the dedupe match against the submitted (possibly-edited) identity
       server-side and refuse (409) unless it independently resolves to the same lead. The Journey
       modal had the identical "stuck on Loading… forever on fetch failure" defect already fixed

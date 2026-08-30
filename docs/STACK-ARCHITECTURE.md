@@ -1,7 +1,36 @@
-# Stack Architecture & Conventions — DestaHealth ATS (Target)
+# Stack Architecture & Conventions — DestaHealth ATS
 
 The definitive architecture and coding conventions for the rebuilt app. This supersedes the
 generic stack notes in `ARCHITECTURE.md`/`EDD.md` and locks the decisions.
+
+> ### Read this before following any path in this document
+>
+> The **responsibilities** below are current and still binding — what a controller may do, where
+> authorization lives, what a repository is allowed to know. The **paths and the process model
+> are not**: this document was written for the single-app `src/` layout, and the restructure moved
+> every file into a package and moved the API out of Next.js entirely.
+> [`SAAS-RESTRUCTURE-PLAN.md`](./SAAS-RESTRUCTURE-PLAN.md) is the base document and wins on
+> conflict; its dependency law is enforced by `scripts/check-architecture.mjs`, which this document
+> is not.
+>
+> | Written here as | Lives today in |
+> |---|---|
+> | `app/api/**/route.ts` (the API layer) | **`apps/api`** — NestJS controllers. The Next.js handlers were **deleted** in Phase 4.3; the only route left under `apps/web/src/app/api` is the Better Auth catch-all |
+> | `server/services/**` | `packages/application` |
+> | `server/repositories/**`, `server/db/**`, `prisma/` | `packages/db` (the only package that may import Prisma) |
+> | `server/rules/**`, `lib/{constants,utils}`, `clock`/`money`/`daily` | `packages/domain` (zero runtime dependencies) |
+> | `lib/validation/**`, the per-endpoint wire types | `packages/contracts` |
+> | `server/auth/**` | `packages/auth` |
+> | `server/{ai,email,http}/**` | `packages/integrations` |
+> | `server/logging`, the `Logger` | `packages/config` |
+> | `components/ui/**` | `packages/ui` |
+> | `src/app`, remaining `src/components` | `apps/web` |
+> | `@/...` aliases | Gone (Phase 2.10). Imports name the package: `@destaworks/<pkg>` |
+>
+> **The one behavioural change to internalise:** a server-rendered page no longer calls a service
+> in-process. `apps/web` reads over HTTP from `apps/api` — one path into the data, so tenant
+> scoping and capability checks are proven in one place (4.0, Option A). §3.6 and §6 below still
+> describe the in-process read; that half is superseded.
 
 ## Locked stack
 
@@ -12,14 +41,14 @@ generic stack notes in `ARCHITECTURE.md`/`EDD.md` and locks the decisions.
 | Toasts/notifications | **Sonner** |
 | ORM / DB | **Prisma** + **PostgreSQL** (managed via **Supabase**) |
 | Auth | **Better Auth** (Prisma adapter, email/password + Google) — on Supabase Postgres¹ |
-| AI | **Claude API (Anthropic)** via serverless endpoints — server-held key |
+| AI | **Provider-agnostic via the Vercel AI SDK** — Anthropic, OpenAI and Google adapters are all installed and selectable; never one vendor hard-wired. Server-held keys, with a fallback model per call |
 | Validation | **Zod** (shared client ↔ server) |
 | Server state | **RSC reads + typed fetch helpers** (see §6) — no client cache library |
 | Forms | **react-hook-form + zodResolver** |
 | Drag & drop | **dnd-kit** (accessible) |
 | UI primitives | **shadcn/Radix** for a11y-hard primitives only (Dialog, DropdownMenu, Combobox, Sonner) |
-| Hosting | **Vercel** — production `zyx.com` (`main`) · staging `staging.zyx.com` (`staging`) · per-PR previews² |
-| Package manager | **pnpm** |
+| Hosting | **`apps/web` on Vercel** — production `zyx.com` (`main`) · staging `staging.zyx.com` (`staging`) · per-PR previews². **`apps/api` on Render** (`render.yaml`, two services: API + worker) — a long-lived process is the reason it left serverless³ |
+| Package manager | **pnpm** workspaces + **Turborepo** |
 
 > ¹ **Decided.** Company direction names "Supabase (PostgreSQL + auth)"; we use **Supabase
 > purely as managed Postgres** (and object storage) with **Better Auth** as the auth/RBAC
@@ -33,42 +62,50 @@ generic stack notes in `ARCHITECTURE.md`/`EDD.md` and locks the decisions.
 > URIs are **per-environment/per-domain**. Migrations and the Sheet→Postgres data migration are
 > dry-run on staging first, then applied to production. Full setup: `IMPLEMENTATION-PLAN.md` 0.1b.
 > (`zyx.com` is a placeholder for the real domain.)
+>
+> ³ **Described, not yet rolled out.** `render.yaml` and the `deploy-api` job exist and the deploy
+> workflow blocks on `/health` before shipping the web app; what is outstanding is an owner action
+> — the deploy hook, the health URL, and the monthly figure. See SAAS-RESTRUCTURE-PLAN 4.4.
 
 ---
 
 ## 1. Architectural model — layered, one-way dependencies
 
 Two halves: an **RSC-first client** (feature code co-located under `app/(app)/<feature>/`) and a
-**layered server** (API → service → repository → db). The hard rule is **dependencies only point
-downward**; a lower layer must never import an upper one.
+**layered server** (controller → application → repository → db). The hard rule is **dependencies
+only point downward**; a lower layer must never import an upper one.
 
 ```
               ┌─────────────────────────────────────────────┐
-   CLIENT     │  app/(app)/<feature>/page.tsx  (RSC — reads,  │
-   (browser   │  calls services directly, no client fetch)   │
+   apps/web   │  app/(app)/<feature>/page.tsx  (RSC — guards, │
+   (browser   │  then reads over HTTP; no service imports)   │
     + RSC)    │        │ renders, passes DTOs as props        │
               │  app/(app)/<feature>/*.tsx  ("use client" —   │
               │  interactive: forms, tables, filters, DnD)    │
               └────────┼─────────────────────────────────────┘
-                       │  fetch /api  (lib/api/client.ts typed helpers)
+                       │  HTTP — lib/api/client.ts (browser)
+                       │         lib/api/server.ts (RSC, forwards the session cookie)
               ┌────────▼─────────────────────────────────────┐
-   SERVER     │  app/api/.../route.ts   = API layer           │  ← controllers: validate(zod)
-              │        │                                       │     + authz + shape response
-              │  server/services/       = business logic       │  ← orchestration, rules, tx
+   apps/api   │  modules/**/*.controller.ts  = transport      │  ← guards: session → tenant →
+   (NestJS)   │        │                                       │     capability, then a zod pipe
+              ├────────┼─────────────────────────────────────┤
+   packages   │  application/  = business logic               │  ← orchestration, rules, tx
               │        │                                       │
-              │  server/repositories/   = data access          │  ← ONLY layer touching Prisma
+              │  db/repositories/ = data access                │  ← ONLY package touching Prisma
               │        │                                       │
-              │  server/db/ (prisma)    = database client      │
+              │  db/prisma.ts     = database client            │
               └──────────────────────────────────────────────┘
-   SHARED     lib/validation (zod) · lib/utils · lib/constants · server/rules (pure)
+   SHARED     contracts (zod wire shapes) · domain (constants, utils, PURE rules) · config (Logger)
 ```
 
-**Downward dependency rule (enforced by lint — §11):**
-- `route handler → service → repository → prisma`. Never the reverse.
-- **Client never imports services/repositories/prisma.** It only calls the HTTP API (or a
-  thin Server Action that itself calls a service).
-- **Only repositories import Prisma.** Services speak in domain types, not Prisma types.
-- `lib/validation` (zod) and `server/rules` (pure functions) are leaf, imported by anyone.
+**Downward dependency rule (enforced by `scripts/check-architecture.mjs`, not only by lint):**
+- `controller → application → repository → prisma`. Never the reverse.
+- **`apps/web` and `apps/admin` never import `@destaworks/db` or `@destaworks/application`** —
+  not from a page, not from a Server Action. The read path is HTTP, and the edge is banned in
+  `ALLOWED_DEPENDENCIES`, so a service import in a page fails the build.
+- **Only `packages/db` imports Prisma.** Services speak in domain types, not Prisma types.
+- `contracts` and `domain` are leaves, imported by anyone; `domain` has **zero runtime
+  dependencies** and CI asserts it.
 
 ### Why this shape
 - **Swappable & testable:** business logic (services) and rules are pure/decoupled — unit
@@ -442,22 +479,27 @@ function onMove(card: CandidateCardDTO, toStatus: CandidateStatus) {
 Drag-and-drop itself uses **dnd-kit** (keyboard- and screen-reader-accessible), not the legacy
 hand-rolled HTML5 DnD.
 
-> **API style decision:** primary write path is **Route Handlers** under `app/api` (explicit,
-> typed, reusable by the client portal and any future consumer), fronted by an `apiHandler()`
-> wrapper that authenticates/authorizes/validates/shapes-errors uniformly (§7) and returns the
-> `ApiResult<T>` envelope. **Server Actions are the exception, not the default** — used only where
-> there's no session to hit a guarded route against (`(auth)/request-access/actions.ts`, pre-auth).
-> They stay thin (validate with the shared zod schema, delegate to a service) and return their own
-> small `{ ok, error }` shape rather than the full envelope. Default to a Route Handler; reach for
-> a Server Action only for a genuinely pre-auth/public form.
+> **API style decision — SUPERSEDED by SAAS-RESTRUCTURE-PLAN 4.3.** This said the primary write
+> path was Route Handlers under `app/api` fronted by `apiHandler()`. There are no Route Handlers
+> any more: all 140 were deleted, `apiHandler` with them, and **every read and write is a NestJS
+> controller in `apps/api`** — explicit, typed, and reusable by the client portal and any future
+> consumer for the same reasons, now with one surface instead of two.
+>
+> The rest of the shape survives the move: a controller authenticates, authorizes by capability,
+> validates with the endpoint's own schema from `@destaworks/contracts`, and shapes errors through
+> one exception filter (§7). **Server Actions remain the exception, not the default** — reach for
+> one only for a genuinely pre-auth/public form. Note that even those may not call a service
+> directly: `apps/web` cannot import `@destaworks/application` at all, so a pre-auth form posts to
+> its public endpoint on the API like everything else.
 
 ---
 
 ## 7. Error handling
 
-- Single `AppError(code, message, status?)` type. `apiHandler` catches it → JSON
+- Single `AppError(code, message, status?)` type. One Nest exception filter catches it → JSON
   `{ error: { code, message } }` with the right HTTP status; zod errors → 422 with field
-  details; anything else → 500 (message hidden, logged).
+  details; anything else → 500 (message hidden, logged, and returned only as a `ref` that ties the
+  response to a PII-free log line and one Sentry event).
 - Services throw `AppError`; never return naked nulls for error states.
 - Client maps `error.message` to a Sonner toast.
 
@@ -575,8 +617,8 @@ These come from the signed Developer NDA and from how the Owner runs security. T
 
 - All LLM calls go through **server-side endpoints** (`server/ai/**`) with a **server-held
   Anthropic key** — never from the client.
-- ATS AI surfaces: résumé extraction, daily/weekly briefs, JD parsing, inbound triage, CRM
-  workspace, and (roadmap) résumé→profile matching and "find providers like this".
+- ATS AI surfaces: resume extraction, daily/weekly briefs, JD parsing, inbound triage, CRM
+  workspace, and (roadmap) resume→profile matching and "find providers like this".
 - **Model tiering:** use the cheapest model that meets the bar per task (e.g. a fast model for
   extraction/conversation, a stronger model for grading/judgement) — mirrors the company's
   LMS pattern. Pick current Claude models at build time; pin the model id in config, not
