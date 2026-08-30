@@ -13,6 +13,7 @@
     "dev:web": "next dev apps/web --port 3007",
     "build": "turbo run //#app:build",
     "start": "next start apps/web",
+    "start:web": "next start apps/web --port 3007",
     "dev:admin": "next dev apps/admin",
     "build:admin": "turbo run //#admin:build",
     "start:admin": "next start apps/admin",
