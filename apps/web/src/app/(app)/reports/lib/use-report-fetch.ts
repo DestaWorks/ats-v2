@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { getJson } from "@/lib/api/client";
+import { getJson, type ApiFailure } from "@/lib/api/client";
 
 export interface ReportFilterState {
   clientId: string;
@@ -48,8 +48,8 @@ export function useReportFetch<T>(
   path: string,
   query: string,
   initialData?: T,
-): T | null | undefined {
-  const [data, setData] = useState<T | null | undefined>(initialData);
+): T | ApiFailure | undefined {
+  const [data, setData] = useState<T | ApiFailure | undefined>(initialData);
   const skipNextFetch = useRef(initialData !== undefined);
 
   useEffect(() => {
@@ -60,7 +60,7 @@ export function useReportFetch<T>(
     let cancelled = false;
     setData(undefined);
     void getJson<T>(`${path}?${query}`).then((res) => {
-      if (!cancelled) setData(res.ok ? res.data : null);
+      if (!cancelled) setData(res.ok ? res.data : res.failure);
     });
     return () => {
       cancelled = true;
