@@ -331,8 +331,3 @@ export async function handlerOutcome(
     return rendered(error, request);
   }
 }
-
-/** The same reduction for the Next.js route being replaced, so the two can be compared directly. */
-export async function routeOutcome(response: Response): Promise<Outcome> {
-  return { status: response.status, body: (await response.json()) as unknown };
-}

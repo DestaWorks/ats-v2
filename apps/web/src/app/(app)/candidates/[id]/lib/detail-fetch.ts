@@ -54,10 +54,7 @@ export async function postVerifyLicense(
   id: string,
   input: VerifyLicenseInput,
 ): Promise<ApiResult<CandidateIdEnvelope["candidate"]>> {
-  const res = await postJson<CandidateIdEnvelope>(
-    `/api/candidates/${id}/verify-license`,
-    input,
-  );
+  const res = await postJson<CandidateIdEnvelope>(`/api/candidates/${id}/verify-license`, input);
   return res.ok ? { ok: true, data: res.data.candidate } : res;
 }
 
