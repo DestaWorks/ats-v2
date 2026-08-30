@@ -1,6 +1,7 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { Prisma } from "../generated/prisma/client";
 import { db, type ScopedTx } from "../tenant-scope";
+import { REFERENCE_ROWS_CAP } from "../query-limits";
 
 /**
  * Client-match-profile data access (Wave 3.5) — the active-matcher weight overrides, one row per
@@ -13,7 +14,7 @@ export const clientMatchProfileRepository = {
   },
 
   list(ctx: TenantContext, tx?: ScopedTx) {
-    return db(ctx, tx).clientMatchProfile.findMany();
+    return db(ctx, tx).clientMatchProfile.findMany({ take: REFERENCE_ROWS_CAP });
   },
 
   /** Upsert-on-save (legacy `cp_save` — one row per client, no separate create/update actions). */

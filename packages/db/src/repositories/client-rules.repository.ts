@@ -2,6 +2,7 @@ import type { TenantContext } from "@destaworks/domain/tenant";
 import type { ClientRules as ClientRulesModel } from "../generated/prisma/client";
 import type { ClientRules } from "@destaworks/domain/rules/types";
 import { db, type ScopedTx } from "../tenant-scope";
+import { REFERENCE_ROWS_CAP } from "../query-limits";
 
 /** A raw client-rules row (Prisma model). Services map this to the pure `ClientRules` (via `toClientRules`). */
 export type ClientRulesRow = ClientRulesModel;
@@ -15,7 +16,7 @@ export type ClientRulesRow = ClientRulesModel;
  */
 export const clientRulesRepository = {
   list(ctx: TenantContext, tx?: ScopedTx) {
-    return db(ctx, tx).clientRules.findMany();
+    return db(ctx, tx).clientRules.findMany({ take: REFERENCE_ROWS_CAP });
   },
 };
 

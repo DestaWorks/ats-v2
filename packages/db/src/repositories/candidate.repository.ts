@@ -11,6 +11,7 @@ import {
 import type { ListOrderBy, PageCursor } from "@destaworks/contracts/validation/cursor";
 import { db, type ScopedTx } from "../tenant-scope";
 import { decryptField, encryptField } from "../field-crypto";
+import { MAX_ROWS_CAP } from "../query-limits";
 
 /** A raw candidate row (Prisma model). Services/DTOs map this to API shapes. */
 export type CandidateRow = Candidate;
@@ -215,6 +216,24 @@ export const candidateRepository = {
   },
 
   /**
+   * The candidate plus the source lead it was PROMOTED FROM, following the unique back-link in ONE
+   * read — the Journey view needs both, and the second query could only ever return the row this
+   * relation points at.
+   *
+   * The nested read is NOT filtered by the tenant extension, which stamps the top-level `where`
+   * only. It is scoped by the foreign key it follows and, independently, by the RLS policy on
+   * `source_leads`, which is evaluated on the connection this query announced its tenant on.
+   */
+  async findByIdWithPromotedFromLead(ctx: TenantContext, id: string, tx?: ScopedTx) {
+    return decryptRow(
+      await db(ctx, tx).candidate.findFirst({
+        where: { id, deletedAt: null },
+        include: { promotedFromLead: true },
+      }),
+    );
+  },
+
+  /**
    * Batch-resolve candidate ids → `{ id, name, deletedAt }` in ONE query (mirrors
    * `userRepository.namesByIds`) — for LABELING an id (e.g. the Activity Log's `entity=candidate`
    * rows) without loading full rows. De-dupes; short-circuits on an empty set. `includeDeleted`
@@ -307,7 +326,7 @@ export const candidateRepository = {
       where,
       orderBy: orderByClause(orderBy),
       ...(filters.skip !== undefined ? { skip: filters.skip } : {}),
-      ...(filters.take !== undefined ? { take: filters.take } : {}),
+      take: filters.take ?? MAX_ROWS_CAP,
     });
     return rows.map(decryptRow);
   },
@@ -329,7 +348,7 @@ export const candidateRepository = {
       orderBy: orderByClause(orderBy),
       omit: { licenseNumber: true },
       ...(filters.skip !== undefined ? { skip: filters.skip } : {}),
-      ...(filters.take !== undefined ? { take: filters.take } : {}),
+      take: filters.take ?? MAX_ROWS_CAP,
     });
   },
 
@@ -628,7 +647,7 @@ export const candidateRepository = {
     const rows = await db(ctx, tx).candidate.findMany({
       where: { deletedAt: { not: null } },
       orderBy: { deletedAt: "desc" },
-      ...(take !== undefined ? { take } : {}),
+      take: take ?? MAX_ROWS_CAP,
     });
     return rows.map(decryptRow);
   },

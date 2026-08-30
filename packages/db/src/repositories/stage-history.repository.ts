@@ -1,6 +1,7 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { StageHistory } from "../generated/prisma/client";
 import { db, type ScopedTx } from "../tenant-scope";
+import { CHILD_ROWS_CAP } from "../query-limits";
 import { FIRST_TERMINAL_ORDER } from "./candidate.repository";
 
 /** A raw stage-history row (Prisma model). */
@@ -39,6 +40,7 @@ export const stageHistoryRepository = {
     return db(ctx, tx).stageHistory.findMany({
       where: { candidateId },
       orderBy: { enteredAt: "desc" },
+      take: CHILD_ROWS_CAP,
     });
   },
 

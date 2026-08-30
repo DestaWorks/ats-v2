@@ -1,6 +1,7 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { SavedView } from "../generated/prisma/client";
 import { db, type ScopedTx } from "../tenant-scope";
+import { CHILD_ROWS_CAP } from "../query-limits";
 
 /** A raw saved-view row (Prisma model). Services/DTOs map this to API shapes. */
 export type SavedViewRow = SavedView;
@@ -17,6 +18,7 @@ export const savedViewRepository = {
     return db(ctx, tx).savedView.findMany({
       where: { userId, scope },
       orderBy: { createdAt: "asc" },
+      take: CHILD_ROWS_CAP,
     });
   },
 

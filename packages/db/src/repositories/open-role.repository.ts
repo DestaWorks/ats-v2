@@ -1,6 +1,7 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { OpenRole, Prisma } from "../generated/prisma/client";
 import { db, type ScopedTx } from "../tenant-scope";
+import { CHILD_ROWS_CAP, MAX_ROWS_CAP, REFERENCE_ROWS_CAP } from "../query-limits";
 
 /** A raw open-role row (Prisma model). Services/DTOs map this to API shapes. */
 export type OpenRoleRow = OpenRole;
@@ -38,6 +39,24 @@ export const openRoleRepository = {
     return db(ctx, tx).openRole.findUnique({ where: { id } });
   },
 
+  /**
+   * The role plus its client's match-profile weights, following the two foreign keys in ONE read.
+   *
+   * The matcher needs both and the profile hangs off `role.clientId`, so fetching them separately
+   * costs two scoped transactions (see `tenant-scope.ts`: each repository call outside an ambient
+   * transaction opens its own BEGIN/set_config/COMMIT) to answer one question.
+   *
+   * The nested read is NOT filtered by the tenant extension, which only stamps the top-level
+   * `where` — it is scoped by the foreign key it follows plus the RLS policy on `client_match_
+   * profiles`, which is evaluated on the same connection this query announced its tenant on.
+   */
+  findByIdWithMatchProfile(ctx: TenantContext, id: string, tx?: ScopedTx) {
+    return db(ctx, tx).openRole.findUnique({
+      where: { id },
+      include: { client: { select: { matchProfile: true } } },
+    });
+  },
+
   /** Batch-fetch by ids (unordered) — for building `roleId → row` maps in the triage/matches reads. */
   findManyByIds(ctx: TenantContext, ids: string[], tx?: ScopedTx) {
     if (ids.length === 0) return Promise.resolve([]);
@@ -57,7 +76,7 @@ export const openRoleRepository = {
       where: buildWhere(filters),
       orderBy: { createdAt: "desc" },
       ...(filters.skip !== undefined && { skip: filters.skip }),
-      ...(filters.take !== undefined && { take: filters.take }),
+      take: filters.take ?? MAX_ROWS_CAP,
     });
   },
 
@@ -66,6 +85,7 @@ export const openRoleRepository = {
     return db(ctx, tx).openRole.findMany({
       where: { status: { notIn: ["Filled", "Closed"] } },
       orderBy: { openedAt: "asc" },
+      take: REFERENCE_ROWS_CAP,
     });
   },
 
@@ -129,6 +149,7 @@ export const openRoleRepository = {
     return db(ctx, tx).roleNote.findMany({
       where: { roleId, deletedAt: null },
       orderBy: { createdAt: "desc" },
+      take: CHILD_ROWS_CAP,
     });
   },
 

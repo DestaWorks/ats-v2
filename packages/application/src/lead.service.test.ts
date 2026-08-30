@@ -38,6 +38,7 @@ const h = vi.hoisted(() => ({
     findManyByNames: vi.fn(),
     createMany: vi.fn(),
     createManyOutreachAttempts: vi.fn(),
+    bulkUpdate: vi.fn(),
   },
   clientRepo: {
     list: vi.fn(),
@@ -49,6 +50,7 @@ const h = vi.hoisted(() => ({
   userRepo: { namesByIds: vi.fn() },
   candidateService: { create: vi.fn() },
   writeAudit: vi.fn(),
+  writeAuditMany: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
@@ -59,7 +61,10 @@ vi.mock("@destaworks/db/repositories/client.repository", () => ({
 }));
 vi.mock("@destaworks/db/repositories/user.repository", () => ({ userRepository: h.userRepo }));
 vi.mock("./candidate.service", () => ({ candidateService: h.candidateService }));
-vi.mock("@destaworks/db/audit", () => ({ writeAudit: h.writeAudit }));
+vi.mock("@destaworks/db/audit", () => ({
+  writeAudit: h.writeAudit,
+  writeAuditMany: h.writeAuditMany,
+}));
 vi.mock("@destaworks/db/with-transaction", () => ({
   withTenantTransaction: (_ctx: unknown, fn: (tx: unknown) => unknown) => fn(h.fakeTx),
 }));
@@ -100,6 +105,7 @@ beforeEach(() => {
   h.userRepo.namesByIds.mockReset();
   h.candidateService.create.mockReset();
   h.writeAudit.mockReset();
+  h.writeAuditMany.mockReset();
   // loadDetail defaults (individual tests override as needed).
   h.leadRepo.listOutreach.mockResolvedValue([]);
   h.leadRepo.findMostRecentUnresponded.mockResolvedValue(null);
@@ -538,17 +544,20 @@ describe("leadService.bulkAction", () => {
     );
 
     expect(out).toEqual({ affected: 1, skipped: 1 }); // duplicate id collapsed; Promoted skipped
-    expect(h.leadRepo.update).toHaveBeenCalledTimes(1);
-    expect(h.leadRepo.update).toHaveBeenCalledWith(
+    // ONE statement for the whole eligible set, not one update per row.
+    expect(h.leadRepo.bulkUpdate).toHaveBeenCalledTimes(1);
+    expect(h.leadRepo.bulkUpdate).toHaveBeenCalledWith(
       h.user,
-      "l1",
+      ["l1"],
       { status: "Outreach 1" },
       h.fakeTx,
     );
-    expect(h.writeAudit.mock.calls[0]![1]).toMatchObject({
-      entityId: "l1",
-      action: "bulk_status",
-    });
+    expect(h.leadRepo.update).not.toHaveBeenCalled();
+    // ...and ONE audit insert carrying a row per affected lead.
+    expect(h.writeAuditMany).toHaveBeenCalledTimes(1);
+    expect(h.writeAuditMany.mock.calls[0]![1]).toMatchObject([
+      { entityId: "l1", action: "bulk_status" },
+    ]);
   });
 
   it("assign validates the user exists ONCE and re-points createdById", async () => {
@@ -560,7 +569,12 @@ describe("leadService.bulkAction", () => {
       { action: "assign", ids: ["l1"], value: "u2" },
       h.user as TenantContext,
     );
-    expect(h.leadRepo.update).toHaveBeenCalledWith(h.user, "l1", { createdById: "u2" }, h.fakeTx);
+    expect(h.leadRepo.bulkUpdate).toHaveBeenCalledWith(
+      h.user,
+      ["l1"],
+      { createdById: "u2" },
+      h.fakeTx,
+    );
 
     h.userRepo.namesByIds.mockResolvedValue(new Map());
     await expect(
@@ -583,7 +597,12 @@ describe("leadService.bulkAction", () => {
       h.user as TenantContext,
     );
     expect(out).toEqual({ affected: 1, skipped: 1 });
-    expect(h.leadRepo.restore).toHaveBeenCalledWith(h.user, "l1", h.fakeTx);
+    expect(h.leadRepo.bulkUpdate).toHaveBeenCalledWith(
+      h.user,
+      ["l1"],
+      { deletedAt: null, deletedById: null },
+      h.fakeTx,
+    );
     // restore must resolve rows INCLUDING deleted ones.
     expect(h.leadRepo.findManyByIds).toHaveBeenCalledWith(h.user, ["l1", "l2"], {
       includeDeleted: true,
@@ -604,6 +623,20 @@ describe("leadService.bulkAction", () => {
 
     const statuses = h.leadRepo.logOutreach.mock.calls.map((c) => c[1].status);
     expect(statuses).toEqual(["Outreach 1", "Outreach 3"]); // advances; caps at O3
+    // Outreach is the one action that cannot collapse to a single patch — but its audit still does.
+    expect(h.leadRepo.bulkUpdate).not.toHaveBeenCalled();
+    expect(h.writeAuditMany).toHaveBeenCalledTimes(1);
+  });
+
+  it("opens no transaction at all when every id was skipped", async () => {
+    h.leadRepo.findManyByIds.mockResolvedValue([lead({ id: "l1", status: "Promoted" })]);
+    const out = await leadService.bulkAction(
+      { action: "status", ids: ["l1"], value: "Outreach 1" },
+      h.user as TenantContext,
+    );
+    expect(out).toEqual({ affected: 0, skipped: 1 });
+    expect(h.leadRepo.bulkUpdate).not.toHaveBeenCalled();
+    expect(h.writeAuditMany).not.toHaveBeenCalled();
   });
 });
 

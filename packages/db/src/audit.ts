@@ -73,17 +73,31 @@ function redactSensitive(value: unknown): unknown {
  * cross-tenant read. Those pass `tenantId` explicitly, which is why it is a parameter at all.
  */
 export function writeAudit(tx: AnyTx, params: WriteAuditParams) {
+  return tx.activityLog.create({ data: auditRow(params) });
+}
+
+/** One `activity_log` row from its parameters — redaction included, shared by both writers. */
+function auditRow(params: WriteAuditParams) {
   const before = redactSensitive(params.before) as Prisma.InputJsonValue | undefined;
   const after = redactSensitive(params.after) as Prisma.InputJsonValue | undefined;
-  return tx.activityLog.create({
-    data: {
-      entity: params.entity,
-      entityId: params.entityId,
-      actor: params.actor,
-      action: params.action,
-      ...(before !== undefined && { before }),
-      ...(after !== undefined && { after }),
-      ...(params.tenantId !== undefined && { tenantId: params.tenantId }),
-    },
-  });
+  return {
+    entity: params.entity,
+    entityId: params.entityId,
+    actor: params.actor,
+    action: params.action,
+    ...(before !== undefined && { before }),
+    ...(after !== undefined && { after }),
+    ...(params.tenantId !== undefined && { tenantId: params.tenantId }),
+  };
+}
+
+/**
+ * Append MANY rows to `activity_log` in ONE statement.
+ *
+ * Same redaction and the same transaction contract as `writeAudit`. It exists because a bulk action
+ * writes one audit row per affected entity, and a loop around `writeAudit` turns a single-statement
+ * mutation into N round trips inside the transaction that has to hold open for all of them.
+ */
+export function writeAuditMany(tx: AnyTx, entries: readonly WriteAuditParams[]) {
+  return tx.activityLog.createMany({ data: entries.map(auditRow) });
 }

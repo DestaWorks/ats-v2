@@ -32,6 +32,7 @@ const h = vi.hoisted(() => ({
     purge: vi.fn(),
     listDeleted: vi.fn(),
     incrementOutreach: vi.fn(),
+    findByIdWithPromotedFromLead: vi.fn(),
   },
   outreachRepo: { listForCandidate: vi.fn(), createForCandidate: vi.fn() },
   leadRepo: { findByPromotedCandidateId: vi.fn() },
@@ -152,6 +153,7 @@ beforeEach(() => {
   h.outreachRepo.listForCandidate.mockReset();
   h.outreachRepo.createForCandidate.mockReset();
   h.outreachRepo.listForCandidate.mockResolvedValue([]);
+  h.candidateRepo.findByIdWithPromotedFromLead.mockReset();
   h.leadRepo.findByPromotedCandidateId.mockReset();
   h.leadRepo.findByPromotedCandidateId.mockResolvedValue(null);
   h.userRepo.namesByIds.mockReset();
@@ -918,15 +920,16 @@ describe("candidateService.verifyLicense", () => {
 
 describe("candidateService.getJourney", () => {
   it("composes sourced → promoted → stage → note → outreach, oldest first, with spanDays", async () => {
-    h.candidateRepo.findById.mockResolvedValue(
-      fullCandidate({ createdAt: new Date("2026-06-25T10:00:00.000Z") }),
-    );
-    h.leadRepo.findByPromotedCandidateId.mockResolvedValue({
-      id: "l1",
-      source: "linkedIn",
-      clientId: "cl1",
-      createdById: "u2",
-      createdAt: new Date("2026-06-20T00:00:00.000Z"),
+    // ONE read: the promoted-from lead rides in on the candidate's back-relation.
+    h.candidateRepo.findByIdWithPromotedFromLead.mockResolvedValue({
+      ...fullCandidate({ createdAt: new Date("2026-06-25T10:00:00.000Z") }),
+      promotedFromLead: {
+        id: "l1",
+        source: "linkedIn",
+        clientId: "cl1",
+        createdById: "u2",
+        createdAt: new Date("2026-06-20T00:00:00.000Z"),
+      },
     });
     h.stageRepo.listByCandidate.mockResolvedValue([
       {
@@ -984,7 +987,10 @@ describe("candidateService.getJourney", () => {
   });
 
   it("applies note VISIBILITY (an Associate never sees non-internal notes in the journey)", async () => {
-    h.candidateRepo.findById.mockResolvedValue(fullCandidate());
+    h.candidateRepo.findByIdWithPromotedFromLead.mockResolvedValue({
+      ...fullCandidate(),
+      promotedFromLead: null,
+    });
     h.noteRepo.listByCandidate.mockResolvedValue([
       {
         id: "n1",
@@ -1011,7 +1017,10 @@ describe("candidateService.getJourney", () => {
   });
 
   it("a candidate with no lead gets a 'created' origin event instead", async () => {
-    h.candidateRepo.findById.mockResolvedValue(fullCandidate());
+    h.candidateRepo.findByIdWithPromotedFromLead.mockResolvedValue({
+      ...fullCandidate(),
+      promotedFromLead: null,
+    });
     const journey = await candidateService.getJourney("c1", h.owner as TenantContext);
     expect(journey.events[0]).toMatchObject({ kind: "created", detail: "Referral" });
     expect(journey.events.some((e) => e.kind === "sourced" || e.kind === "promoted")).toBe(false);

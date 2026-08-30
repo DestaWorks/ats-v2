@@ -1,6 +1,7 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { Prisma, Prospect } from "../generated/prisma/client";
 import { db, type ScopedTx } from "../tenant-scope";
+import { MAX_ROWS_CAP } from "../query-limits";
 
 /** A raw prospect row (Prisma model). Services/DTOs map this to API shapes. */
 export type ProspectRow = Prospect;
@@ -61,13 +62,28 @@ export const prospectRepository = {
       where: buildProspectWhere(filters),
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       ...(filters.skip !== undefined ? { skip: filters.skip } : {}),
-      ...(filters.take !== undefined ? { take: filters.take } : {}),
+      take: filters.take ?? MAX_ROWS_CAP,
     });
   },
 
   /** True filtered total for the same `where` as `list` (minus skip/take). */
   count(ctx: TenantContext, filters: ProspectListFilters = {}, tx?: ScopedTx) {
     return db(ctx, tx).prospect.count({ where: buildProspectWhere(filters) });
+  },
+
+  /**
+   * Patch MANY prospects at once — one statement for a bulk action instead of one per row.
+   * Returns the affected count; ids belonging to no live prospect are simply not matched.
+   */
+  async bulkUpdate(
+    ctx: TenantContext,
+    ids: string[],
+    data: Prisma.ProspectUncheckedUpdateManyInput,
+    tx?: ScopedTx,
+  ) {
+    if (ids.length === 0) return 0;
+    const { count } = await db(ctx, tx).prospect.updateMany({ where: { id: { in: ids } }, data });
+    return count;
   },
 
   /** Patch a prospect — status / owner / notes. */
@@ -90,7 +106,12 @@ export const prospectRepository = {
     });
   },
 
-  /** Non-deleted prospects matching any of the given ids (bulk actions resolve their working set here). */
+  /**
+   * Non-deleted prospects matching any of the given ids — the working set a bulk action resolves
+   * and then decides eligibility from. Three columns, mirroring `leadRepository.findManyByIds`:
+   * the id to act on, the status the eligibility rule keys off, and the delete-state that
+   * separates `delete` from `restore`.
+   */
   findManyByIds(
     ctx: TenantContext,
     ids: string[],
@@ -99,6 +120,7 @@ export const prospectRepository = {
   ) {
     return db(ctx, tx).prospect.findMany({
       where: { id: { in: ids }, ...(opts?.includeDeleted ? {} : { deletedAt: null }) },
+      select: { id: true, status: true, deletedAt: true },
     });
   },
 

@@ -1,6 +1,7 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { ClientMeeting, Prisma } from "../generated/prisma/client";
 import { db, type ScopedTx } from "../tenant-scope";
+import { CHILD_ROWS_CAP } from "../query-limits";
 
 /** A raw client-meeting row (Prisma model). Services/DTOs map this to API shapes. */
 export type ClientMeetingRow = ClientMeeting;
@@ -19,14 +20,18 @@ export const clientMeetingRepository = {
     return db(ctx, tx).clientMeeting.findMany({
       where: { clientId, deletedAt: null },
       orderBy: { createdAt: "desc" },
+      take: CHILD_ROWS_CAP,
     });
   },
 
-  /** Same as `listForClient`, batched across many clients in one query — feeds `/crm/compare`,
-   *  which previously ran one `listForClient` per client (perf audit 2026-08-15). */
+  /** Batched across many clients in one query — feeds `/crm/compare`, which previously ran one
+   *  `listForClient` per client (perf audit 2026-08-15). Two columns only: the health formula
+   *  counts meetings and takes the latest `createdAt`, so `notes`/`actionItems`/`attendees` never
+   *  leave the database for a comparison view. */
   listForClients(ctx: TenantContext, clientIds: string[], tx?: ScopedTx) {
     return db(ctx, tx).clientMeeting.findMany({
       where: { clientId: { in: clientIds }, deletedAt: null },
+      select: { clientId: true, createdAt: true },
     });
   },
 

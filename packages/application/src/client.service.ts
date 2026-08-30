@@ -659,8 +659,7 @@ export const clientService = {
         tx,
       );
       if (count === 0) throw new AppError("NOT_FOUND", "Blocker not found");
-      const rows = await dealBlockerRepository.listForDeal(ctx, dealId, tx);
-      const row = rows.find((r) => r.id === blockerId);
+      const row = await dealBlockerRepository.findInDeal(ctx, dealId, blockerId, tx);
       if (!row) throw new AppError("NOT_FOUND", "Blocker not found");
       await writeAudit(tx, {
         entity: "deal_blocker",

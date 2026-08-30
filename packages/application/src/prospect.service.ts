@@ -18,7 +18,7 @@ import { toIso, isoOrNull } from "@destaworks/domain/utils/iso";
 import { defined } from "@destaworks/domain/utils/defined";
 import { pageMeta } from "@destaworks/domain/pagination";
 import type { TenantContext } from "@destaworks/domain/tenant";
-import { writeAudit } from "@destaworks/db/audit";
+import { writeAudit, writeAuditMany } from "@destaworks/db/audit";
 import { withTenantTransaction } from "@destaworks/db/with-transaction";
 import {
   prospectRepository,
@@ -97,6 +97,23 @@ async function toProspectDetail(ctx: TenantContext, row: ProspectRow): Promise<P
     icpId: row.icpId,
     contacts: contacts.map(toContactDTO),
   };
+}
+
+/**
+ * The single column patch a bulk action applies to every eligible row. Naming it here is what lets
+ * the action run as one `updateMany` instead of a switch inside a per-row loop.
+ */
+function bulkPatch(input: BulkProspectActionInput, actorId: string) {
+  switch (input.action) {
+    case "delete":
+      return { deletedAt: new Date(), deletedById: actorId };
+    case "restore":
+      return { deletedAt: null, deletedById: null };
+    case "status":
+      return { status: input.value };
+    case "assign":
+      return { ownerId: input.value };
+  }
 }
 
 /** Load a live prospect or throw NOT_FOUND (missing OR soft-deleted). */
@@ -506,7 +523,8 @@ export const prospectService = {
   /**
    * Bulk actions (delete/restore/status/assign). Resolves the working set server-side, SKIPS rows
    * the action can't apply to (a converted "Client" for status/assign), applies the rest in ONE
-   * transaction with a per-row audit row, and reports `{ affected, skipped }` honestly.
+   * transaction — one `updateMany` and one audit insert, not a pair per row — and reports
+   * `{ affected, skipped }` honestly.
    */
   async bulkAction(
     input: BulkProspectActionInput,
@@ -532,33 +550,27 @@ export const prospectService = {
       return row.status !== "Client" ? [row] : [];
     });
 
-    await withTenantTransaction(ctx, async (tx) => {
-      for (const row of eligible) {
-        const { id } = row;
-        switch (input.action) {
-          case "delete":
-            await prospectRepository.softDelete(ctx, id, ctx.user.id, tx);
-            break;
-          case "restore":
-            await prospectRepository.restore(ctx, id, tx);
-            break;
-          case "status":
-            await prospectRepository.update(ctx, id, { status: input.value }, tx);
-            break;
-          case "assign":
-            await prospectRepository.update(ctx, id, { ownerId: input.value }, tx);
-            break;
-        }
-        await writeAudit(tx, {
-          entity: "prospect",
-          entityId: id,
-          actor: ctx.user.id,
-          action: `bulk_${input.action}`,
-          before: { status: row.status, deletedAt: row.deletedAt },
-          after: { value: "value" in input ? input.value : null },
-        });
-      }
-    });
+    if (eligible.length > 0) {
+      await withTenantTransaction(ctx, async (tx) => {
+        await prospectRepository.bulkUpdate(
+          ctx,
+          eligible.map((row) => row.id),
+          bulkPatch(input, ctx.user.id),
+          tx,
+        );
+        await writeAuditMany(
+          tx,
+          eligible.map((row) => ({
+            entity: "prospect",
+            entityId: row.id,
+            actor: ctx.user.id,
+            action: `bulk_${input.action}`,
+            before: { status: row.status, deletedAt: row.deletedAt },
+            after: { value: "value" in input ? input.value : null },
+          })),
+        );
+      });
+    }
 
     return { affected: eligible.length, skipped: uniqueIds.length - eligible.length };
   },

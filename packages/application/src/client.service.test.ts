@@ -48,6 +48,7 @@ const h = vi.hoisted(() => ({
   blockerRepo: {
     listForDeal: vi.fn(),
     listForDeals: vi.fn(),
+    findInDeal: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
     delete: vi.fn(),
@@ -804,9 +805,10 @@ describe("clientService.updateBlocker", () => {
     h.clientRepo.findById.mockResolvedValue(clientRow());
     h.dealRepo.findById.mockResolvedValue(dealRow());
     h.blockerRepo.update.mockResolvedValue(1);
-    h.blockerRepo.listForDeal.mockResolvedValue([
+    // Reads back the ONE updated row, not the deal's whole checklist.
+    h.blockerRepo.findInDeal.mockResolvedValue(
       blockerRow({ resolved: true, resolvedAt: new Date() }),
-    ]);
+    );
 
     await clientService.updateBlocker(
       "c1",
@@ -825,9 +827,7 @@ describe("clientService.updateBlocker", () => {
     h.clientRepo.findById.mockResolvedValue(clientRow());
     h.dealRepo.findById.mockResolvedValue(dealRow());
     h.blockerRepo.update.mockResolvedValue(1);
-    h.blockerRepo.listForDeal.mockResolvedValue([
-      blockerRow({ resolved: false, resolvedAt: null }),
-    ]);
+    h.blockerRepo.findInDeal.mockResolvedValue(blockerRow({ resolved: false, resolvedAt: null }));
 
     await clientService.updateBlocker(
       "c1",

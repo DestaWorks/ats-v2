@@ -1,4 +1,5 @@
 import { dbUnscoped, type AnyTx } from "../tenant-scope";
+import { MAX_ROWS_CAP, REFERENCE_ROWS_CAP } from "../query-limits";
 
 /**
  * Data access for `Membership` and `Tenant` — the two GLOBAL models of the tenancy plane
@@ -128,6 +129,7 @@ export const membershipRepository = {
       where: { userId },
       select: MEMBERSHIP_SELECT,
       orderBy: { tenant: { name: "asc" } },
+      take: REFERENCE_ROWS_CAP,
     });
   },
 
@@ -150,6 +152,7 @@ export const membershipRepository = {
       where: { tenantId },
       select: MEMBERSHIP_SELECT,
       orderBy: { createdAt: "asc" },
+      take: REFERENCE_ROWS_CAP,
     });
   },
 
@@ -166,6 +169,10 @@ export const membershipRepository = {
    * One query rather than a count per tenant, because the only caller is the platform plane's
    * tenant list and an N+1 there would grow with the customer base. Tenants with no active member
    * are absent from the map; the caller defaults them to zero.
+   *
+   * Counted in memory over a single indexed column rather than by `groupBy`: `tx` is `AnyTx`, and
+   * the union of the two transaction clients has no callable `groupBy` signature. The ceiling is
+   * what keeps that honest.
    */
   async countActiveByTenantIds(
     tenantIds: readonly string[],
@@ -175,6 +182,7 @@ export const membershipRepository = {
     const rows = await dbUnscoped(tx).membership.findMany({
       where: { tenantId: { in: [...tenantIds] }, status: "active" },
       select: { tenantId: true },
+      take: MAX_ROWS_CAP,
     });
     const counts = new Map<string, number>();
     for (const row of rows) counts.set(row.tenantId, (counts.get(row.tenantId) ?? 0) + 1);
@@ -251,6 +259,7 @@ export const tenantRepository = {
       where: { deletedAt: null },
       select: TENANT_REGISTRY_SELECT,
       orderBy: { name: "asc" },
+      take: REFERENCE_ROWS_CAP,
     });
   },
 };

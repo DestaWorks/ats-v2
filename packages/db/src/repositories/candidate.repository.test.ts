@@ -38,6 +38,7 @@ import {
   stuckWhere,
   STUCK_DAYS,
 } from "./candidate.repository";
+import { MAX_ROWS_CAP } from "../query-limits";
 import { statusSlaDays, ACTIVE_STATUS_CODES } from "@destaworks/domain/constants";
 import { isStuck } from "@destaworks/domain/rules/stage-timing";
 
@@ -66,11 +67,12 @@ describe("purge — permanent hard delete", () => {
 });
 
 describe("listDeleted — the Trash read", () => {
-  it("queries ONLY soft-deleted rows, newest-deleted first", async () => {
+  it("queries ONLY soft-deleted rows, newest-deleted first, bounded when no cap is given", async () => {
     await candidateRepository.listDeleted(ctx);
     expect(h.findMany).toHaveBeenCalledWith({
       where: { deletedAt: { not: null } },
       orderBy: { deletedAt: "desc" },
+      take: MAX_ROWS_CAP,
     });
   });
 

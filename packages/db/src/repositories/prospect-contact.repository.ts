@@ -1,6 +1,7 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { Prisma, ProspectContact } from "../generated/prisma/client";
 import { db, type ScopedTx } from "../tenant-scope";
+import { CHILD_ROWS_CAP } from "../query-limits";
 
 /** A raw prospect-contact row (Prisma model). */
 export type ProspectContactRow = ProspectContact;
@@ -25,6 +26,7 @@ export const prospectContactRepository = {
     return db(ctx, tx).prospectContact.findMany({
       where: { prospectId, deletedAt: null },
       orderBy: { createdAt: "desc" },
+      take: CHILD_ROWS_CAP,
     });
   },
 

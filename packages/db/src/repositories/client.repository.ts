@@ -1,6 +1,7 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { Client, Prisma } from "../generated/prisma/client";
 import { db, type ScopedTx } from "../tenant-scope";
+import { REFERENCE_ROWS_CAP } from "../query-limits";
 
 /** A raw client row (Prisma model). */
 export type ClientRow = Client;
@@ -16,20 +17,30 @@ export const clientRepository = {
     return db(ctx, tx).client.findMany({
       where: opts?.includeDeleted ? {} : { deletedAt: null },
       orderBy: { name: "asc" },
+      take: REFERENCE_ROWS_CAP,
     });
   },
 
   /**
-   * The `id → name` map every list/board/detail read builds from `list()` — pulled out since it
-   * was hand-rolled (`new Map(clients.map((c) => [c.id, c.name]))`) at 14 call sites across 5
-   * services. Same `includeDeleted`/`tx` passthrough as `list()`.
+   * The `id → name` map every list/board/detail read builds — pulled out since it was hand-rolled
+   * (`new Map(clients.map((c) => [c.id, c.name]))`) at 14 call sites across 5 services. Same
+   * `includeDeleted`/`tx` passthrough as `list()`.
+   *
+   * Its own two-column query rather than a reuse of `list()`: this runs on every board, list and
+   * detail read, and `Client` carries the whole CRM profile (contract dates, revenue inputs,
+   * specialties) that nothing here looks at.
    */
   async nameMap(
     ctx: TenantContext,
     opts?: { includeDeleted?: boolean },
     tx?: ScopedTx,
   ): Promise<Map<string, string>> {
-    const clients = await clientRepository.list(ctx, opts, tx);
+    const clients = await db(ctx, tx).client.findMany({
+      where: opts?.includeDeleted ? {} : { deletedAt: null },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+      take: REFERENCE_ROWS_CAP,
+    });
     return new Map(clients.map((c) => [c.id, c.name]));
   },
 

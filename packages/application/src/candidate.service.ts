@@ -55,7 +55,6 @@ import {
   type OutreachAttemptRow,
 } from "@destaworks/db/repositories/outreach.repository";
 import { userRepository } from "@destaworks/db/repositories/user.repository";
-import { leadRepository } from "@destaworks/db/repositories/lead.repository";
 import {
   toClientRules,
   type ClientRulesRow,
@@ -670,14 +669,14 @@ export const candidateService = {
    * in one batched read. `spanDays` = first→last event, for the "N events · spans N days" line.
    */
   async getJourney(id: string, viewer: TenantContext): Promise<JourneyDTO> {
-    const candidate = await candidateRepository.findById(viewer, id);
+    const candidate = await candidateRepository.findByIdWithPromotedFromLead(viewer, id);
     if (!candidate) throw new AppError("NOT_FOUND", "Candidate not found");
+    const lead = candidate.promotedFromLead;
 
-    const [history, notes, outreachRows, lead, clientNames] = await Promise.all([
+    const [history, notes, outreachRows, clientNames] = await Promise.all([
       stageHistoryRepository.listByCandidate(viewer, id),
       noteRepository.listByCandidate(viewer, id),
       outreachRepository.listForCandidate(viewer, id),
-      leadRepository.findByPromotedCandidateId(viewer, id),
       cachedClientNameMap(viewer),
     ]);
     const actorIds = [

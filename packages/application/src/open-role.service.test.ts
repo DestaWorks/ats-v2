@@ -26,6 +26,7 @@ const h = vi.hoisted(() => ({
   roleRepo: {
     create: vi.fn(),
     findById: vi.fn(),
+    findByIdWithMatchProfile: vi.fn(),
     findManyByIds: vi.fn(),
     count: vi.fn(),
     list: vi.fn(),
@@ -181,17 +182,22 @@ describe("openRoleService.update — closedAt stamping", () => {
 
 describe("openRoleService.matches", () => {
   it("uses the client's saved weight profile when one exists", async () => {
-    h.roleRepo.findById.mockResolvedValue(role());
-    h.profileRepo.findByClientId.mockResolvedValue({
-      weightSameClient: 100, // exaggerated so the test can tell it's actually being used
-      weightSameState: 0,
-      weightCredExact: 0,
-      weightCredPartial: 0,
-      weightRespondedHot: 0,
-      weightOutreach: 0,
-      weightSourced: 0,
-      penaltyCold: 0,
-      minScore: 1,
+    // ONE read: the weights ride in on the role's client relation, not a second query.
+    h.roleRepo.findByIdWithMatchProfile.mockResolvedValue({
+      ...role(),
+      client: {
+        matchProfile: {
+          weightSameClient: 100, // exaggerated so the test can tell it's actually being used
+          weightSameState: 0,
+          weightCredExact: 0,
+          weightCredPartial: 0,
+          weightRespondedHot: 0,
+          weightOutreach: 0,
+          weightSourced: 0,
+          penaltyCold: 0,
+          minScore: 1,
+        },
+      },
     });
     h.leadRepo.listForMatching.mockResolvedValue([lead({ status: "Sourced" })]);
     const matches = await openRoleService.matches("r1", associate);
@@ -200,11 +206,19 @@ describe("openRoleService.matches", () => {
   });
 
   it("falls back to DEFAULT_MATCH_WEIGHTS when the client has no saved profile", async () => {
-    h.roleRepo.findById.mockResolvedValue(role());
-    h.profileRepo.findByClientId.mockResolvedValue(null);
+    h.roleRepo.findByIdWithMatchProfile.mockResolvedValue({
+      ...role(),
+      client: { matchProfile: null },
+    });
     h.leadRepo.listForMatching.mockResolvedValue([lead()]); // clientId/state/credential match + Hot
     const matches = await openRoleService.matches("r1", associate);
     expect(matches[0]?.score).toBe(30 + 25 + 25 + 20); // DEFAULT_MATCH_WEIGHTS perfect + hot
+  });
+
+  it("refuses a role that does not exist, without a second query for its weights", async () => {
+    h.roleRepo.findByIdWithMatchProfile.mockResolvedValue(null);
+    await expect(openRoleService.matches("nope", associate)).rejects.toThrow("Role not found");
+    expect(h.profileRepo.findByClientId).not.toHaveBeenCalled();
   });
 });
 

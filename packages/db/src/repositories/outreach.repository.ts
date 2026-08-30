@@ -1,6 +1,7 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { Prisma } from "../generated/prisma/client";
 import { db, type ScopedTx } from "../tenant-scope";
+import { CHILD_ROWS_CAP } from "../query-limits";
 
 /** A raw outreach-attempt row (Prisma model). Services map this to `OutreachAttemptDTO`. */
 export type OutreachAttemptRow = Prisma.OutreachAttemptGetPayload<Record<string, never>>;
@@ -19,6 +20,7 @@ export const outreachRepository = {
         OR: [{ candidateId }, { lead: { promotedCandidateId: candidateId } }],
       },
       orderBy: [{ at: "desc" }, { id: "desc" }],
+      take: CHILD_ROWS_CAP,
     });
   },
 
