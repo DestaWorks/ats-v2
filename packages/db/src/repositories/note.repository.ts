@@ -1,6 +1,7 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { CandidateNote } from "../generated/prisma/client";
 import { db, type ScopedTx, scopedWrite } from "../tenant-scope";
+import { CHILD_ROWS_CAP } from "../query-limits";
 
 /** A raw candidate-note row (Prisma model). Services/DTOs map this to API shapes. */
 export type NoteRow = CandidateNote;
@@ -40,6 +41,7 @@ export const noteRepository = {
     return db(ctx, tx).candidateNote.findMany({
       where: { candidateId, deletedAt: null },
       orderBy: { createdAt: "desc" },
+      take: CHILD_ROWS_CAP,
     });
   },
 

@@ -1,6 +1,7 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { ScreeningScorecard } from "../generated/prisma/client";
 import { db, type ScopedTx, scopedWrite } from "../tenant-scope";
+import { CHILD_ROWS_CAP } from "../query-limits";
 
 /** A raw screening-scorecard row (Prisma model). Services/DTOs map this to API shapes. */
 export type ScreeningScorecardRow = ScreeningScorecard;
@@ -40,6 +41,7 @@ export const screeningRepository = {
     return db(ctx, tx).screeningScorecard.findMany({
       where: { candidateId },
       orderBy: { scoredAt: "desc" },
+      take: CHILD_ROWS_CAP,
     });
   },
 };

@@ -1,11 +1,28 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import { db, type ScopedTx, scopedWrite } from "../tenant-scope";
+import { CHILD_ROWS_CAP } from "../query-limits";
 
 /**
  * Client-portal-token data access (Wave 4.3) — the ONLY layer that touches Prisma for
  * `ClientPortalToken`. Only `tokenHash` is ever persisted (see `client-portal.service.ts`); this
  * repository never sees or returns a raw token.
  */
+/**
+ * The contact columns `portal-guards.ts` decides access from, and nothing else. A portal token is
+ * resolved on every portal request, so this join is hot; `ClientContact` also carries the contact's
+ * phone, LinkedIn and free-text notes, none of which any caller of this repository reads.
+ */
+const GUARD_CONTACT_SELECT = {
+  id: true,
+  clientId: true,
+  tenantId: true,
+  fullName: true,
+  email: true,
+  status: true,
+  portalEnabled: true,
+  deletedAt: true,
+} as const;
+
 export const clientPortalTokenRepository = {
   create(
     ctx: TenantContext,
@@ -18,14 +35,15 @@ export const clientPortalTokenRepository = {
   findByHash(ctx: TenantContext, tokenHash: string, tx?: ScopedTx) {
     return db(ctx, tx).clientPortalToken.findUnique({
       where: { tokenHash },
-      include: { contact: true },
+      include: { contact: { select: GUARD_CONTACT_SELECT } },
     });
   },
 
+  /** The token plus the ONE contact column its caller checks — which client the link belongs to. */
   findById(ctx: TenantContext, id: string, tx?: ScopedTx) {
     return db(ctx, tx).clientPortalToken.findUnique({
       where: { id },
-      include: { contact: true },
+      include: { contact: { select: { clientId: true } } },
     });
   },
 
@@ -51,6 +69,7 @@ export const clientPortalTokenRepository = {
     return db(ctx, tx).clientPortalToken.findMany({
       where: { contactId },
       orderBy: { createdAt: "desc" },
+      take: CHILD_ROWS_CAP,
     });
   },
 

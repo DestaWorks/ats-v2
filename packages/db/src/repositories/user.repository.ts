@@ -1,6 +1,7 @@
 import type { Prisma } from "../generated/prisma/client";
 import type { Role } from "@destaworks/domain/constants";
 import { db } from "../prisma";
+import { REFERENCE_ROWS_CAP } from "../query-limits";
 
 /**
  * Minimal read access to the Better Auth `User` table for resolving actor ids → display names.
@@ -32,6 +33,7 @@ export const userRepository = {
     return db(tx).user.findMany({
       select: { id: true, name: true },
       orderBy: { name: "asc" },
+      take: REFERENCE_ROWS_CAP,
     });
   },
 
@@ -44,6 +46,7 @@ export const userRepository = {
       where: { role },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
+      take: REFERENCE_ROWS_CAP,
     });
   },
 

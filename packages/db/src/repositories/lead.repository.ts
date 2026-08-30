@@ -1,6 +1,7 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { OutreachAttempt, Prisma, SourceLead } from "../generated/prisma/client";
 import { db, type ScopedTx, type SeamWrite, scopedWrite } from "../tenant-scope";
+import { CHILD_ROWS_CAP, MAX_ROWS_CAP } from "../query-limits";
 
 /** A raw source-lead row (Prisma model). Services/DTOs map this to API shapes. */
 export type LeadRow = SourceLead;
@@ -107,7 +108,7 @@ export const leadRepository = {
       where: buildLeadWhere(filters),
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       ...(filters.skip !== undefined ? { skip: filters.skip } : {}),
-      ...(filters.take !== undefined ? { take: filters.take } : {}),
+      take: filters.take ?? MAX_ROWS_CAP,
     });
   },
 
@@ -148,6 +149,21 @@ export const leadRepository = {
     tx?: ScopedTx,
   ) {
     return db(ctx, tx).sourceLead.update({ where: { id }, data });
+  },
+
+  /**
+   * Patch MANY leads at once — one statement for a bulk action instead of one per row. Returns the
+   * affected count; ids belonging to no live lead are simply not matched.
+   */
+  async bulkUpdate(
+    ctx: TenantContext,
+    ids: string[],
+    data: Prisma.SourceLeadUncheckedUpdateManyInput,
+    tx?: ScopedTx,
+  ) {
+    if (ids.length === 0) return 0;
+    const { count } = await db(ctx, tx).sourceLead.updateMany({ where: { id: { in: ids } }, data });
+    return count;
   },
 
   /**
@@ -213,6 +229,7 @@ export const leadRepository = {
     return db(ctx, tx).outreachAttempt.findMany({
       where: { leadId },
       orderBy: { at: "desc" },
+      take: CHILD_ROWS_CAP,
     });
   },
 
@@ -289,7 +306,13 @@ export const leadRepository = {
     });
   },
 
-  /** Non-deleted leads matching any of the given ids (bulk actions resolve their working set here). */
+  /**
+   * Non-deleted leads matching any of the given ids — the working set a bulk action resolves and
+   * then decides eligibility from. Three columns, because that is all the decision reads: the id to
+   * act on, the status the eligibility rule (and `advanceOnOutreach`) keys off, and the
+   * delete-state that separates `delete` from `restore`. No lead PII crosses the wire for a bulk
+   * status change.
+   */
   findManyByIds(
     ctx: TenantContext,
     ids: string[],
@@ -298,6 +321,7 @@ export const leadRepository = {
   ) {
     return db(ctx, tx).sourceLead.findMany({
       where: { id: { in: ids }, ...(opts?.includeDeleted ? {} : { deletedAt: null }) },
+      select: { id: true, status: true, deletedAt: true },
     });
   },
 

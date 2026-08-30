@@ -27,6 +27,7 @@ const h = vi.hoisted(() => ({
     findManyByIds: vi.fn(),
     findManyByNpis: vi.fn(),
     createMany: vi.fn(),
+    bulkUpdate: vi.fn(),
   },
   contactRepo: {
     create: vi.fn(),
@@ -40,6 +41,7 @@ const h = vi.hoisted(() => ({
   findHunterContacts: vi.fn(),
   checkRateLimit: vi.fn(),
   writeAudit: vi.fn(),
+  writeAuditMany: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
@@ -54,7 +56,10 @@ vi.mock("@destaworks/integrations/nppes", () => ({ searchNppes: h.searchNppes })
 vi.mock("@destaworks/integrations/apollo", () => ({ findApolloContacts: h.findApolloContacts }));
 vi.mock("@destaworks/integrations/hunter", () => ({ findHunterContacts: h.findHunterContacts }));
 vi.mock("@destaworks/integrations/http/rate-limit", () => ({ checkRateLimit: h.checkRateLimit }));
-vi.mock("@destaworks/db/audit", () => ({ writeAudit: h.writeAudit }));
+vi.mock("@destaworks/db/audit", () => ({
+  writeAudit: h.writeAudit,
+  writeAuditMany: h.writeAuditMany,
+}));
 vi.mock("@destaworks/db/with-transaction", () => ({
   withTenantTransaction: (_ctx: unknown, fn: (tx: unknown) => unknown) => fn(h.fakeTx),
 }));
@@ -245,20 +250,50 @@ describe("prospectService.bulkAction", () => {
       associate,
     );
     expect(result).toEqual({ affected: 1, skipped: 1 });
-    expect(h.prospectRepo.update).toHaveBeenCalledTimes(1);
-    expect(h.prospectRepo.update).toHaveBeenCalledWith(
+    // ONE statement for the whole eligible set, not one update per row.
+    expect(h.prospectRepo.bulkUpdate).toHaveBeenCalledTimes(1);
+    expect(h.prospectRepo.bulkUpdate).toHaveBeenCalledWith(
       associate,
-      "p1",
+      ["p1"],
       { status: "Contacted" },
       h.fakeTx,
     );
+    expect(h.prospectRepo.update).not.toHaveBeenCalled();
   });
 
   it("delete is never blocked by status (only by already being trashed, excluded upstream)", async () => {
     h.prospectRepo.findManyByIds.mockResolvedValue([prospect({ id: "p1", status: "Client" })]);
     const result = await prospectService.bulkAction({ action: "delete", ids: ["p1"] }, associate);
     expect(result).toEqual({ affected: 1, skipped: 0 });
-    expect(h.prospectRepo.softDelete).toHaveBeenCalledWith(associate, "p1", "u1", h.fakeTx);
+    const [, ids, patch] = h.prospectRepo.bulkUpdate.mock.calls[0]!;
+    expect(ids).toEqual(["p1"]);
+    expect(patch).toMatchObject({ deletedById: "u1" });
+    expect(patch.deletedAt).toBeInstanceOf(Date);
+  });
+
+  it("writes the audit trail in ONE insert, one row per affected prospect", async () => {
+    h.prospectRepo.findManyByIds.mockResolvedValue([
+      prospect({ id: "p1" }),
+      prospect({ id: "p2" }),
+    ]);
+    await prospectService.bulkAction(
+      { action: "status", ids: ["p1", "p2"], value: "Contacted" },
+      associate,
+    );
+    expect(h.writeAuditMany).toHaveBeenCalledTimes(1);
+    const [, entries] = h.writeAuditMany.mock.calls[0]!;
+    expect(entries.map((e: { entityId: string }) => e.entityId)).toEqual(["p1", "p2"]);
+  });
+
+  it("touches nothing at all when every id was skipped", async () => {
+    h.prospectRepo.findManyByIds.mockResolvedValue([prospect({ id: "p1", status: "Client" })]);
+    const result = await prospectService.bulkAction(
+      { action: "status", ids: ["p1"], value: "Contacted" },
+      associate,
+    );
+    expect(result).toEqual({ affected: 0, skipped: 1 });
+    expect(h.prospectRepo.bulkUpdate).not.toHaveBeenCalled();
+    expect(h.writeAuditMany).not.toHaveBeenCalled();
   });
 });
 

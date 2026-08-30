@@ -1,5 +1,6 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import { db, scopedWrite } from "../tenant-scope";
+import { REFERENCE_ROWS_CAP } from "../query-limits";
 
 /**
  * Access-request data access. Repositories are the ONLY layer that touches Prisma.
@@ -22,7 +23,10 @@ export const accessRequestRepository = {
   },
 
   list(ctx: TenantContext) {
-    return db(ctx).accessRequest.findMany({ orderBy: { createdAt: "desc" } });
+    return db(ctx).accessRequest.findMany({
+      orderBy: { createdAt: "desc" },
+      take: REFERENCE_ROWS_CAP,
+    });
   },
 
   findById(ctx: TenantContext, id: string) {

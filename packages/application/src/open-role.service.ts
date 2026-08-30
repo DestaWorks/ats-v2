@@ -107,6 +107,17 @@ async function requireRole(ctx: TenantContext, id: string): Promise<OpenRoleRow>
   return role;
 }
 
+/** `requireRole` plus the client's matcher weights, in one query rather than two round trips. */
+async function requireRoleWithWeights(
+  ctx: TenantContext,
+  id: string,
+): Promise<{ row: OpenRoleRow; weights: ClientMatchWeights }> {
+  const role = await openRoleRepository.findByIdWithMatchProfile(ctx, id);
+  if (!role) throw new AppError("NOT_FOUND", "Role not found");
+  const { client, ...row } = role;
+  return { row, weights: client.matchProfile ?? DEFAULT_MATCH_WEIGHTS };
+}
+
 /** Project a lead row onto the pure matcher's input shape. */
 function toRuleLead(lead: LeadMatchRow): RuleLead {
   return {
@@ -225,13 +236,11 @@ export const openRoleService = {
 
   /** The active matcher's ranked leads for this role (client-tunable weights, top 15). */
   async matches(id: string, ctx: TenantContext): Promise<RoleMatchDTO[]> {
-    const role = await requireRole(ctx, id);
-    const [candidates, profileRow] = await Promise.all([
+    const [role, candidates] = await Promise.all([
+      requireRoleWithWeights(ctx, id),
       loadMatchCandidates(ctx),
-      clientMatchProfileRepository.findByClientId(ctx, role.clientId),
     ]);
-    const weights = profileRow ?? DEFAULT_MATCH_WEIGHTS;
-    return matchesForRole(role, candidates, weights).map(toMatchDTO);
+    return matchesForRole(role.row, candidates, role.weights).map(toMatchDTO);
   },
 
   /** The fixed-weight dormant re-engagement scorer's ranked leads for this role (top 10). */
@@ -249,15 +258,13 @@ export const openRoleService = {
     id: string,
     ctx: TenantContext,
   ): Promise<{ matches: RoleMatchDTO[]; dormantMatches: RoleMatchDTO[] }> {
-    const role = await requireRole(ctx, id);
-    const [candidates, profileRow] = await Promise.all([
+    const [role, candidates] = await Promise.all([
+      requireRoleWithWeights(ctx, id),
       loadMatchCandidates(ctx),
-      clientMatchProfileRepository.findByClientId(ctx, role.clientId),
     ]);
-    const weights = profileRow ?? DEFAULT_MATCH_WEIGHTS;
     return {
-      matches: matchesForRole(role, candidates, weights).map(toMatchDTO),
-      dormantMatches: dormantMatchesForRole(role, candidates).map(toMatchDTO),
+      matches: matchesForRole(role.row, candidates, role.weights).map(toMatchDTO),
+      dormantMatches: dormantMatchesForRole(role.row, candidates).map(toMatchDTO),
     };
   },
 

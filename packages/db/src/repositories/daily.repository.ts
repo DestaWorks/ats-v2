@@ -8,6 +8,7 @@ import type {
   Prisma,
 } from "../generated/prisma/client";
 import { db, type ScopedTx, type SeamWrite, scopedWrite } from "../tenant-scope";
+import { CHILD_ROWS_CAP, REFERENCE_ROWS_CAP } from "../query-limits";
 
 export type DailyTargetRow = DailyTarget;
 export type DailyLogRow = DailyLog;
@@ -46,13 +47,16 @@ export const dailyRepository = {
     return db(ctx, tx).dailyTarget.findUnique({ where: { userId_date: { userId, date } } });
   },
   targetsForDate(ctx: TenantContext, date: string, tx?: ScopedTx) {
-    return db(ctx, tx).dailyTarget.findMany({ where: { date } });
+    return db(ctx, tx).dailyTarget.findMany({ where: { date }, take: REFERENCE_ROWS_CAP });
   },
   /** All targets across a set of date keys (Wave 5.2 Trends' "goal" column — sum of a rolling
    *  7-day window's daily targets, ONE query instead of 7 `targetsForDate` calls). */
   targetsForDateRange(ctx: TenantContext, dates: string[], tx?: ScopedTx) {
     if (dates.length === 0) return Promise.resolve([]);
-    return db(ctx, tx).dailyTarget.findMany({ where: { date: { in: dates } } });
+    return db(ctx, tx).dailyTarget.findMany({
+      where: { date: { in: dates } },
+      take: REFERENCE_ROWS_CAP,
+    });
   },
 
   // --- end-of-shift actuals ---
@@ -75,6 +79,7 @@ export const dailyRepository = {
     return db(ctx, tx).dailyActual.findMany({
       where: { date: { gte: startDate, lte: endDate } },
       orderBy: [{ date: "asc" }],
+      take: REFERENCE_ROWS_CAP,
     });
   },
 
@@ -99,7 +104,10 @@ export const dailyRepository = {
   /** Every self-reported log across ALL users in a date range (inclusive) — the admin team
    *  breakdown's input (Wave 3.1 backlog). Mirrors `actualsForRange`'s shape one level up. */
   logsForDateRange(ctx: TenantContext, startDate: string, endDate: string, tx?: ScopedTx) {
-    return db(ctx, tx).dailyLog.findMany({ where: { date: { gte: startDate, lte: endDate } } });
+    return db(ctx, tx).dailyLog.findMany({
+      where: { date: { gte: startDate, lte: endDate } },
+      take: REFERENCE_ROWS_CAP,
+    });
   },
 
   // --- journal ---
@@ -128,6 +136,7 @@ export const dailyRepository = {
     return db(ctx, tx).journalGoal.findMany({
       where: { userId, weekStart },
       orderBy: { createdAt: "asc" },
+      take: CHILD_ROWS_CAP,
     });
   },
   /** Toggle scoped to the owner (`updateMany` — someone else's goal id is a 0-row no-op). */

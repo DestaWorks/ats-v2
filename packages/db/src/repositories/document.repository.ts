@@ -2,6 +2,7 @@ import type { TenantContext } from "@destaworks/domain/tenant";
 import { Prisma } from "../generated/prisma/client";
 import type { Document } from "../generated/prisma/client";
 import { db, type ScopedTx, scopedWrite } from "../tenant-scope";
+import { CHILD_ROWS_CAP } from "../query-limits";
 import { decryptField, encryptField, isEncryptionEnabled } from "../field-crypto";
 
 /** A raw document row (Prisma model). Services/DTOs map this to API shapes. */
@@ -145,6 +146,7 @@ export const documentRepository = {
     const rows = await db(ctx, tx).document.findMany({
       where: { candidateId, deletedAt: null },
       orderBy: { createdAt: "desc" },
+      take: CHILD_ROWS_CAP,
     });
     return rows.map(decryptRow);
   },

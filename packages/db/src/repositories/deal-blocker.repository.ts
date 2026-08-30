@@ -1,6 +1,7 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { DealBlocker, Prisma } from "../generated/prisma/client";
 import { db, type ScopedTx, type SeamWrite, scopedWrite } from "../tenant-scope";
+import { CHILD_ROWS_CAP } from "../query-limits";
 
 /** A raw deal-blocker row (Prisma model). Services/DTOs map this to API shapes. */
 export type DealBlockerRow = DealBlocker;
@@ -20,7 +21,11 @@ export const dealBlockerRepository = {
   },
 
   listForDeal(ctx: TenantContext, dealId: string, tx?: ScopedTx) {
-    return db(ctx, tx).dealBlocker.findMany({ where: { dealId }, orderBy: { createdAt: "asc" } });
+    return db(ctx, tx).dealBlocker.findMany({
+      where: { dealId },
+      orderBy: { createdAt: "asc" },
+      take: CHILD_ROWS_CAP,
+    });
   },
 
   /** Batched `listForDeal` for a set of deals — perf audit 2026-08-16: the client-detail read was
@@ -31,6 +36,12 @@ export const dealBlockerRepository = {
       where: { dealId: { in: dealIds } },
       orderBy: { createdAt: "asc" },
     });
+  },
+
+  /** One blocker, scoped to its deal — the read-back after an `update`, which needs the single
+   *  updated row and not the deal's whole checklist. */
+  findInDeal(ctx: TenantContext, dealId: string, id: string, tx?: ScopedTx) {
+    return db(ctx, tx).dealBlocker.findFirst({ where: { id, dealId } });
   },
 
   /** Scoped to `dealId` — an id belonging to another deal is a 0-row no-op, never cross-deal. */

@@ -1,6 +1,7 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { ClientTask, Prisma } from "../generated/prisma/client";
 import { db, type ScopedTx, type SeamWrite, scopedWrite } from "../tenant-scope";
+import { CHILD_ROWS_CAP } from "../query-limits";
 
 /** A raw client-task row (Prisma model). Services/DTOs map this to API shapes. */
 export type ClientTaskRow = ClientTask;
@@ -27,14 +28,17 @@ export const clientTaskRepository = {
     return db(ctx, tx).clientTask.findMany({
       where: { clientId, deletedAt: null },
       orderBy: { createdAt: "desc" },
+      take: CHILD_ROWS_CAP,
     });
   },
 
-  /** Same as `listForClient`, batched across many clients in one query — feeds `/crm/compare`,
-   *  which previously ran one `listForClient` per client (perf audit 2026-08-15). */
+  /** Batched across many clients in one query — feeds `/crm/compare`, which previously ran one
+   *  `listForClient` per client (perf audit 2026-08-15). Two columns only: the health formula
+   *  counts tasks and how many are `done`. */
   listForClients(ctx: TenantContext, clientIds: string[], tx?: ScopedTx) {
     return db(ctx, tx).clientTask.findMany({
       where: { clientId: { in: clientIds }, deletedAt: null },
+      select: { clientId: true, status: true },
     });
   },
 

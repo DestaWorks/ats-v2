@@ -9,6 +9,6 @@
     "packages/db/src/memberships.ts": 2,
     "packages/db/src/tenancy/membership.repository.ts": 13,
     "packages/db/src/tenant-scope.test.ts": 4,
-    "packages/db/src/tenant-scope.ts": 2
+    "packages/db/src/tenant-scope.ts": 1
   }
 }

@@ -23,7 +23,7 @@ import { toIso, isoOrNull } from "@destaworks/domain/utils/iso";
 import { defined } from "@destaworks/domain/utils/defined";
 import { pageMeta } from "@destaworks/domain/pagination";
 import type { TenantContext } from "@destaworks/domain/tenant";
-import { writeAudit } from "@destaworks/db/audit";
+import { writeAudit, writeAuditMany } from "@destaworks/db/audit";
 import { withTenantTransaction } from "@destaworks/db/with-transaction";
 import {
   leadRepository,
@@ -130,6 +130,26 @@ async function loadDetail(ctx: TenantContext, lead: LeadRow): Promise<LeadDetail
     ...(lead.createdById ? [lead.createdById] : []),
   ]);
   return toLeadDetail(lead, attempts, clientNames, actorNames);
+}
+
+/**
+ * The single column patch a bulk action applies to every eligible row. Naming it here is what lets
+ * the action run as one `updateMany` instead of a switch inside a per-row loop. `outreach` is
+ * absent deliberately — it is not a uniform patch, and its caller handles it separately.
+ */
+function bulkPatch(input: Exclude<BulkLeadActionInput, { action: "outreach" }>, actorId: string) {
+  switch (input.action) {
+    case "delete":
+      return { deletedAt: new Date(), deletedById: actorId };
+    case "restore":
+      return { deletedAt: null, deletedById: null };
+    case "status":
+      return { status: normalizeLeadStatus(input.value) };
+    case "assign":
+      return { createdById: input.value };
+    case "client":
+      return { clientId: input.value };
+  }
 }
 
 /** Load a live lead or throw NOT_FOUND (missing OR soft-deleted — `findById` excludes trashed rows). */
@@ -535,31 +555,17 @@ export const leadService = {
       return row.status !== "Promoted" ? [row] : [];
     });
 
-    await withTenantTransaction(ctx, async (tx) => {
-      for (const row of eligible) {
-        const { id } = row;
-        switch (input.action) {
-          case "delete":
-            await leadRepository.softDelete(ctx, id, ctx.user.id, tx);
-            break;
-          case "restore":
-            await leadRepository.restore(ctx, id, tx);
-            break;
-          case "status":
-            await leadRepository.update(ctx, id, { status: normalizeLeadStatus(input.value) }, tx);
-            break;
-          case "assign":
-            await leadRepository.update(ctx, id, { createdById: input.value }, tx);
-            break;
-          case "client":
-            await leadRepository.update(ctx, id, { clientId: input.value }, tx);
-            break;
-          case "outreach": {
-            const at = new Date();
+    if (eligible.length > 0) {
+      await withTenantTransaction(ctx, async (tx) => {
+        if (input.action === "outreach") {
+          // The one action that stays per row: each lead advances from ITS OWN status, and the
+          // attempt insert has to carry the lead it belongs to.
+          const at = new Date();
+          for (const row of eligible) {
             await leadRepository.logOutreach(
               ctx,
               {
-                leadId: id,
+                leadId: row.id,
                 channel: input.channel,
                 note: input.note ?? null,
                 at,
@@ -568,22 +574,31 @@ export const leadService = {
               },
               tx,
             );
-            break;
           }
+        } else {
+          await leadRepository.bulkUpdate(
+            ctx,
+            eligible.map((row) => row.id),
+            bulkPatch(input, ctx.user.id),
+            tx,
+          );
         }
-        await writeAudit(tx, {
-          entity: "source_lead",
-          entityId: id,
-          actor: ctx.user.id,
-          action: `bulk_${input.action}`,
-          before: { status: row.status, deletedAt: row.deletedAt },
-          after:
-            input.action === "outreach"
-              ? { channel: input.channel }
-              : { value: "value" in input ? input.value : null },
-        });
-      }
-    });
+        await writeAuditMany(
+          tx,
+          eligible.map((row) => ({
+            entity: "source_lead",
+            entityId: row.id,
+            actor: ctx.user.id,
+            action: `bulk_${input.action}`,
+            before: { status: row.status, deletedAt: row.deletedAt },
+            after:
+              input.action === "outreach"
+                ? { channel: input.channel }
+                : { value: "value" in input ? input.value : null },
+          })),
+        );
+      });
+    }
 
     return { affected: eligible.length, skipped: uniqueIds.length - eligible.length };
   },

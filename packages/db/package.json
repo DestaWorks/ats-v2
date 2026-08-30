@@ -10,6 +10,7 @@
     "./lifecycle": "./src/lifecycle.ts",
     "./memberships": "./src/memberships.ts",
     "./prisma": "./src/prisma.ts",
+    "./query-limits": "./src/query-limits.ts",
     "./repositories/*": "./src/repositories/*.ts",
     "./tenancy/*": "./src/tenancy/*.ts",
     "./tenant-connection": "./src/tenant-connection.ts",

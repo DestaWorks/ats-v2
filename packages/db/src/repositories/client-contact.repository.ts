@@ -1,6 +1,7 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { ClientContact, Prisma } from "../generated/prisma/client";
 import { db, type ScopedTx, type SeamWrite, scopedWrite } from "../tenant-scope";
+import { CHILD_ROWS_CAP } from "../query-limits";
 
 /** A raw client-contact row (Prisma model). Services/DTOs map this to API shapes. */
 export type ClientContactRow = ClientContact;
@@ -28,6 +29,7 @@ export const clientContactRepository = {
     return db(ctx, tx).clientContact.findMany({
       where: { clientId, deletedAt: null },
       orderBy: { fullName: "asc" },
+      take: CHILD_ROWS_CAP,
     });
   },
 

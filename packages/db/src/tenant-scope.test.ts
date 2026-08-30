@@ -157,6 +157,29 @@ beforeEach(() => {
   h.transactionsOpened = 0;
 });
 
+describe("nested reads are the seam's edge, and are documented as such", () => {
+  it("stamps the top-level where and passes an `include` relation through verbatim", async () => {
+    await db(ctx).openRole.findUnique({
+      where: { id: "r1" },
+      include: { client: { select: { matchProfile: true } } },
+    });
+    expect(last().args["where"]).toEqual({ id: "r1", tenantId: "tenant_a" });
+    // NOT stamped, deliberately (see `withTenant`): a relation read is scoped by the foreign key
+    // it follows and, independently, by the RLS policy on the joined table — which is evaluated on
+    // the connection this very query announced its tenant on. Repositories that add an `include`
+    // rely on those two, not on this extension.
+    expect(last().args["include"]).toEqual({ client: { select: { matchProfile: true } } });
+  });
+
+  it("passes a relation filter inside `where` through verbatim as well", async () => {
+    await db(ctx).outreachAttempt.findMany({ where: { lead: { promotedCandidateId: "c1" } } });
+    expect(last().args["where"]).toEqual({
+      lead: { promotedCandidateId: "c1" },
+      tenantId: "tenant_a",
+    });
+  });
+});
+
 describe("reads carry the tenant filter", () => {
   it("adds tenantId to a findMany that had a where", async () => {
     await db(ctx).candidate.findMany({ where: { deletedAt: null } });

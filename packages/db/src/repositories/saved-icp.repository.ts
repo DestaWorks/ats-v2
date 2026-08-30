@@ -1,6 +1,7 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { Prisma, SavedIcp } from "../generated/prisma/client";
 import { db, type ScopedTx, type SeamWrite, scopedWrite } from "../tenant-scope";
+import { CHILD_ROWS_CAP, REFERENCE_ROWS_CAP } from "../query-limits";
 
 /** A raw saved-ICP row (Prisma model). Services/DTOs map this to API shapes. */
 export type SavedIcpRow = SavedIcp;
@@ -19,13 +20,17 @@ export const savedIcpRepository = {
     return db(ctx, tx).savedIcp.findMany({
       where: { userId },
       orderBy: { createdAt: "desc" },
+      take: CHILD_ROWS_CAP,
     });
   },
 
   /** Every ICP visible to the app (private + shared) — the service filters to `!isPrivate ||
    *  own`, matching the reference UI's "team-shared by default, private toggle" behavior. */
   listAll(ctx: TenantContext, tx?: ScopedTx) {
-    return db(ctx, tx).savedIcp.findMany({ orderBy: { createdAt: "desc" } });
+    return db(ctx, tx).savedIcp.findMany({
+      orderBy: { createdAt: "desc" },
+      take: REFERENCE_ROWS_CAP,
+    });
   },
 
   findByUserAndName(ctx: TenantContext, userId: string, name: string, tx?: ScopedTx) {

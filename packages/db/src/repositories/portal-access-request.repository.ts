@@ -1,5 +1,6 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import { db, scopedWrite } from "../tenant-scope";
+import { REFERENCE_ROWS_CAP } from "../query-limits";
 
 /**
  * Portal-access-request data access (Wave 4.3). Mirrors `access-request.repository.ts`'s shape,
@@ -15,7 +16,10 @@ export const portalAccessRequestRepository = {
   },
 
   list(ctx: TenantContext) {
-    return db(ctx).portalAccessRequest.findMany({ orderBy: { createdAt: "desc" } });
+    return db(ctx).portalAccessRequest.findMany({
+      orderBy: { createdAt: "desc" },
+      take: REFERENCE_ROWS_CAP,
+    });
   },
 
   findById(ctx: TenantContext, id: string) {
