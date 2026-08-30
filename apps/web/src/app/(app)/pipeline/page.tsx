@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import { TRACKS, type Track } from "@destaworks/domain/constants";
 import { getVerifiedUser } from "@destaworks/auth/guards";
 import type { BoardResponse } from "@destaworks/contracts/validation/pipeline";
-import type { GetSavedViewsResponse } from "@destaworks/contracts/http/saved-view";
+// import type { GetSavedViewsResponse } from "@destaworks/contracts/http/saved-view";
 import type { LookupOptionsDTO } from "@destaworks/contracts/validation/lookups";
 import { Spinner } from "@destaworks/ui/spinner";
 import { apiGet, query } from "@/lib/api/server";
@@ -29,10 +29,14 @@ export default async function PipelinePage({
   const search = q.str("search");
   const ownerId = q.str("ownerId");
 
-  const [board, { clients, users }, { savedViews }] = await Promise.all([
+  // Saved views are hidden for now — the chip row and its `GET /saved-views` read are commented
+  // out, not deleted. The API, service and table are untouched, so restoring this is uncommenting
+  // these lines. Personal-only views were judged not to earn their place; the shareable version is
+  // the one worth building.
+  const [board, { clients, users }] = await Promise.all([
     apiGet<BoardResponse>(`/candidates${query({ track, clientId, search, ownerId })}`),
     apiGet<LookupOptionsDTO>("/lookups"),
-    apiGet<GetSavedViewsResponse>(`/saved-views${query({ scope: "pipeline" })}`),
+    // apiGet<GetSavedViewsResponse>(`/saved-views${query({ scope: "pipeline" })}`),
   ]);
 
   return (
@@ -51,7 +55,7 @@ export default async function PipelinePage({
           </div>
         }
       >
-        <PipelineBoard initial={board} clients={clients} owners={users} savedViews={savedViews} />
+        <PipelineBoard initial={board} clients={clients} owners={users} />
       </Suspense>
     </div>
   );

@@ -9,12 +9,12 @@ import {
 } from "@destaworks/domain/constants";
 import type { CandidateListDTO } from "@destaworks/contracts/validation/candidate";
 import type { ListSort } from "@destaworks/contracts/validation/pipeline";
-import type { GetSavedViewsResponse } from "@destaworks/contracts/http/saved-view";
+// import type { GetSavedViewsResponse } from "@destaworks/contracts/http/saved-view";
 import type { LookupOptionsDTO } from "@destaworks/contracts/validation/lookups";
 import { getVerifiedUser } from "@destaworks/auth/guards";
 import { apiGet, query } from "@/lib/api/server";
 import { readSearchParams, type RawSearchParams } from "@/lib/search-params";
-import { SavedViewsBar } from "../lib/saved-views-bar";
+// import { SavedViewsBar } from "../lib/saved-views-bar";
 import { AddCandidateButton } from "../add-candidate-modal";
 import { CandidatesList } from "./candidates-list";
 import { ListFilters } from "./list-filters";
@@ -52,7 +52,11 @@ export default async function CandidatesPage({
   const addedFrom = q.date("addedFrom");
   const addedTo = q.date("addedTo");
 
-  const [list, { clients, users }, { savedViews }] = await Promise.all([
+  // Saved views are hidden for now — the chip row and its `GET /saved-views` read are commented
+  // out, not deleted. The API, service and table are untouched, so restoring this is uncommenting
+  // these lines. Personal-only views were judged not to earn their place; the shareable version is
+  // the one worth building.
+  const [list, { clients, users }] = await Promise.all([
     apiGet<CandidateListDTO>(
       `/candidates/list${query({
         track,
@@ -74,7 +78,7 @@ export default async function CandidatesPage({
       })}`,
     ),
     apiGet<LookupOptionsDTO>("/lookups"),
-    apiGet<GetSavedViewsResponse>(`/saved-views${query({ scope: "candidates" })}`),
+    // apiGet<GetSavedViewsResponse>(`/saved-views${query({ scope: "candidates" })}`),
   ]);
   const canEditCredential = hasCapability(user.role, "viewCredentials");
 
@@ -97,7 +101,7 @@ export default async function CandidatesPage({
       </header>
 
       <ListFilters clients={clients} owners={users} />
-      <SavedViewsBar scope="candidates" initial={savedViews} />
+      {/* <SavedViewsBar scope="candidates" initial={savedViews} /> */}
 
       <CandidatesList list={list} searchParams={q.raw} />
     </div>
