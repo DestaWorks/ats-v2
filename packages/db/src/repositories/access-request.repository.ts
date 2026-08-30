@@ -1,5 +1,5 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
-import { db } from "../tenant-scope";
+import { db, scopedWrite } from "../tenant-scope";
 
 /**
  * Access-request data access. Repositories are the ONLY layer that touches Prisma.
@@ -9,7 +9,7 @@ export const accessRequestRepository = {
     ctx: TenantContext,
     data: { name: string; email: string; organization?: string; message?: string },
   ) {
-    return db(ctx).accessRequest.create({ data });
+    return db(ctx).accessRequest.create({ data: scopedWrite(data) });
   },
 
   /** Case-insensitive — mirrors `userRepository.findByEmail`. Used to reject a resubmission

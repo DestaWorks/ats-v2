@@ -1,6 +1,6 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { Prisma } from "../generated/prisma/client";
-import { db, type ScopedTx } from "../tenant-scope";
+import { db, type ScopedTx, scopedWrite } from "../tenant-scope";
 
 /** A mention row joined with the context the alerts panel renders (author, type, candidate). */
 export type MentionRow = Prisma.MentionGetPayload<{ include: typeof MENTION_INCLUDE }>;
@@ -31,11 +31,13 @@ export const mentionRepository = {
   ): Promise<number> {
     if (data.recipientIds.length === 0) return 0;
     const res = await db(ctx, tx).mention.createMany({
-      data: data.recipientIds.map((recipientId) => ({
-        noteId: data.noteId,
-        candidateId: data.candidateId,
-        recipientId,
-      })),
+      data: data.recipientIds.map((recipientId) =>
+        scopedWrite({
+          noteId: data.noteId,
+          candidateId: data.candidateId,
+          recipientId,
+        }),
+      ),
     });
     return res.count;
   },

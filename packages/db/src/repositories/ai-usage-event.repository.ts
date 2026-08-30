@@ -1,4 +1,4 @@
-import { db } from "../tenant-scope";
+import { db, scopedWrite } from "../tenant-scope";
 import type { TenantContext } from "@destaworks/domain/tenant";
 import { logger } from "@destaworks/config/logger";
 
@@ -25,7 +25,7 @@ export interface AiUsageStatusBreakdown {
 export const aiUsageEventRepository = {
   async record(ctx: TenantContext, data: AiUsageEventInput): Promise<void> {
     try {
-      await db(ctx).aiUsageEvent.create({ data });
+      await db(ctx).aiUsageEvent.create({ data: scopedWrite(data) });
     } catch (err) {
       logger.error("ai.usage_event.record_failed", {
         errorType: err instanceof Error ? err.name : "UnknownError",

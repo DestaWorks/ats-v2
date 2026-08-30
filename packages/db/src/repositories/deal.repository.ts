@@ -1,6 +1,6 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { Deal, Prisma } from "../generated/prisma/client";
-import { db, type ScopedTx } from "../tenant-scope";
+import { db, type ScopedTx, type SeamWrite, scopedWrite } from "../tenant-scope";
 
 /** A raw deal row (Prisma model). Services/DTOs map this to API shapes. */
 export type DealRow = Deal;
@@ -10,8 +10,8 @@ export type DealRow = Deal;
  * Soft-deleted rows are excluded from reads by default, matching every other CRM repository.
  */
 export const dealRepository = {
-  create(ctx: TenantContext, data: Prisma.DealUncheckedCreateInput, tx?: ScopedTx) {
-    return db(ctx, tx).deal.create({ data });
+  create(ctx: TenantContext, data: SeamWrite<Prisma.DealUncheckedCreateInput>, tx?: ScopedTx) {
+    return db(ctx, tx).deal.create({ data: scopedWrite(data) });
   },
 
   findById(ctx: TenantContext, id: string, tx?: ScopedTx) {

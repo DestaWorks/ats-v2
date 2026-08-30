@@ -1,6 +1,6 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { Prisma, ProspectContact } from "../generated/prisma/client";
-import { db, type ScopedTx } from "../tenant-scope";
+import { db, type ScopedTx, type SeamWrite, scopedWrite } from "../tenant-scope";
 
 /** A raw prospect-contact row (Prisma model). */
 export type ProspectContactRow = ProspectContact;
@@ -12,12 +12,20 @@ export type ProspectContactRow = ProspectContact;
  * cross-prospect write — mirrors `leadRepository.updateOutreachAttempt`/`deleteOutreachAttempt`.
  */
 export const prospectContactRepository = {
-  create(ctx: TenantContext, data: Prisma.ProspectContactUncheckedCreateInput, tx?: ScopedTx) {
-    return db(ctx, tx).prospectContact.create({ data });
+  create(
+    ctx: TenantContext,
+    data: SeamWrite<Prisma.ProspectContactUncheckedCreateInput>,
+    tx?: ScopedTx,
+  ) {
+    return db(ctx, tx).prospectContact.create({ data: scopedWrite(data) });
   },
 
-  createMany(ctx: TenantContext, rows: Prisma.ProspectContactCreateManyInput[], tx?: ScopedTx) {
-    return db(ctx, tx).prospectContact.createMany({ data: rows });
+  createMany(
+    ctx: TenantContext,
+    rows: SeamWrite<Prisma.ProspectContactCreateManyInput>[],
+    tx?: ScopedTx,
+  ) {
+    return db(ctx, tx).prospectContact.createMany({ data: rows.map(scopedWrite) });
   },
 
   /** A prospect's contacts, newest-first. */

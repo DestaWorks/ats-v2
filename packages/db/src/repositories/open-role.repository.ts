@@ -1,6 +1,6 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { OpenRole, Prisma } from "../generated/prisma/client";
-import { db, type ScopedTx } from "../tenant-scope";
+import { db, type ScopedTx, type SeamWrite, scopedWrite } from "../tenant-scope";
 
 /** A raw open-role row (Prisma model). Services/DTOs map this to API shapes. */
 export type OpenRoleRow = OpenRole;
@@ -30,8 +30,8 @@ function buildWhere(filters: OpenRoleFilters): Prisma.OpenRoleWhereInput {
  * the write + `writeAudit` atomically.
  */
 export const openRoleRepository = {
-  create(ctx: TenantContext, data: Prisma.OpenRoleUncheckedCreateInput, tx?: ScopedTx) {
-    return db(ctx, tx).openRole.create({ data });
+  create(ctx: TenantContext, data: SeamWrite<Prisma.OpenRoleUncheckedCreateInput>, tx?: ScopedTx) {
+    return db(ctx, tx).openRole.create({ data: scopedWrite(data) });
   },
 
   findById(ctx: TenantContext, id: string, tx?: ScopedTx) {
@@ -122,7 +122,7 @@ export const openRoleRepository = {
     },
     tx?: ScopedTx,
   ) {
-    return db(ctx, tx).roleNote.create({ data });
+    return db(ctx, tx).roleNote.create({ data: scopedWrite(data) });
   },
 
   listNotes(ctx: TenantContext, roleId: string, tx?: ScopedTx) {

@@ -1,7 +1,7 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import { Prisma } from "../generated/prisma/client";
 import type { Document } from "../generated/prisma/client";
-import { db, type ScopedTx } from "../tenant-scope";
+import { db, type ScopedTx, scopedWrite } from "../tenant-scope";
 import { decryptField, encryptField, isEncryptionEnabled } from "../field-crypto";
 
 /** A raw document row (Prisma model). Services/DTOs map this to API shapes. */
@@ -83,11 +83,11 @@ export const documentRepository = {
     const text = encryptText(extractedText);
     return decryptRow(
       await db(ctx, tx).document.create({
-        data: {
+        data: scopedWrite({
           ...rest,
           ...(text !== undefined && { extractedText: text }),
           extractedData: encryptJson(extractedData),
-        },
+        }),
       }),
     );
   },
@@ -110,7 +110,7 @@ export const documentRepository = {
    * row too so the one-shot migration re-upserts an existing document instead of duplicating it.
    */
   async findByLegacyId(ctx: TenantContext, legacyId: string, tx?: ScopedTx) {
-    return decryptRow(await db(ctx, tx).document.findUnique({ where: { legacyId } }));
+    return decryptRow(await db(ctx, tx).document.findFirst({ where: { legacyId } }));
   },
 
   /** ETL upsert keyed on the legacy Sheet ResumeFileID — idempotent re-runs (Wave 1.3 §5). */
@@ -125,13 +125,13 @@ export const documentRepository = {
     const json = encryptJson(extractedData);
     return decryptRow(
       await db(ctx, tx).document.upsert({
-        where: { legacyId },
-        create: {
+        where: { tenantId_legacyId: { tenantId: ctx.tenantId, legacyId } },
+        create: scopedWrite({
           ...rest,
           legacyId,
           ...(text !== undefined && { extractedText: text }),
           extractedData: json,
-        },
+        }),
         update: {
           ...rest,
           ...(text !== undefined && { extractedText: text }),

@@ -197,6 +197,33 @@ export type ScopedClient = ReturnType<typeof extendedClient>;
 export type ScopedTx = Omit<ScopedClient, "$connect" | "$disconnect" | "$transaction" | "$extends">;
 
 /**
+ * A tenant-scoped write payload as a CALLER builds it: a generated Prisma create input minus the
+ * one column the seam fills in. Repository parameters name this so a service never has to hold a
+ * tenant just to describe a row.
+ */
+export type SeamWrite<T> = Omit<T, "tenantId">;
+
+/**
+ * Present a write payload as the input Prisma asks for, given that the seam completes it.
+ *
+ * Since `20260829112500_tenants_contract` every `tenantId` is NOT NULL, so `tenantId` is a REQUIRED
+ * key of every generated create input. On a client from `db(ctx, tx)` the caller must NOT supply
+ * one: `scopeArgs` stamps the active tenant onto every `data`/`create`/`update` on its way to
+ * Postgres, and a value written here would be a second, unchecked source for the one field the seam
+ * exists to own. Prisma's input types describe the BARE client, which has no seam — this is the one
+ * place those two facts are reconciled, rather than 66 call sites each restating the tenant.
+ *
+ * The payload's own fields stay fully checked: the intersection only adds `tenantId`, so a
+ * misspelled or wrongly typed column still fails against Prisma's `Exact<>` constraint.
+ *
+ * ONLY SOUND ON A SCOPED CLIENT. `dbUnscoped()` has no seam, so its writes must name a tenant
+ * themselves and must not use this.
+ */
+export function scopedWrite<T extends object>(data: T): T & { tenantId: string } {
+  return data as T & { tenantId: string };
+}
+
+/**
  * One extended client per tenant, not one per query.
  *
  * `db(ctx, tx)` is called at ~250 sites and `$extends` builds a fresh proxy client every time it

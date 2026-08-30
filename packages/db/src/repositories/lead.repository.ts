@@ -1,6 +1,6 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { OutreachAttempt, Prisma, SourceLead } from "../generated/prisma/client";
-import { db, type ScopedTx } from "../tenant-scope";
+import { db, type ScopedTx, type SeamWrite, scopedWrite } from "../tenant-scope";
 
 /** A raw source-lead row (Prisma model). Services/DTOs map this to API shapes. */
 export type LeadRow = SourceLead;
@@ -83,8 +83,12 @@ export function buildLeadWhere(filters: LeadListFilters): Prisma.SourceLeadWhere
  * audit; candidate-create + lead flip). Leads carry no encrypted columns → no field crypto here.
  */
 export const leadRepository = {
-  create(ctx: TenantContext, data: Prisma.SourceLeadUncheckedCreateInput, tx?: ScopedTx) {
-    return db(ctx, tx).sourceLead.create({ data });
+  create(
+    ctx: TenantContext,
+    data: SeamWrite<Prisma.SourceLeadUncheckedCreateInput>,
+    tx?: ScopedTx,
+  ) {
+    return db(ctx, tx).sourceLead.create({ data: scopedWrite(data) });
   },
 
   findById(ctx: TenantContext, id: string, opts?: { includeDeleted?: boolean }, tx?: ScopedTx) {
@@ -183,14 +187,14 @@ export const leadRepository = {
   async logOutreach(ctx: TenantContext, params: LogOutreachParams, tx?: ScopedTx) {
     const client = db(ctx, tx);
     const attempt = await client.outreachAttempt.create({
-      data: {
+      data: scopedWrite({
         leadId: params.leadId,
         channel: params.channel,
         note: params.note ?? null,
         at: params.at,
         actorId: params.actorId,
         templateId: params.templateId ?? null,
-      },
+      }),
     });
     const lead = await client.sourceLead.update({
       where: { id: params.leadId },
@@ -329,12 +333,12 @@ export const leadRepository = {
    *  defends the `npi` unique constraint against a concurrent add racing the service's own check. */
   createMany(
     ctx: TenantContext,
-    rows: Prisma.SourceLeadCreateManyInput[],
+    rows: SeamWrite<Prisma.SourceLeadCreateManyInput>[],
     tx?: ScopedTx,
     opts?: { skipDuplicates?: boolean },
   ) {
     return db(ctx, tx).sourceLead.createMany({
-      data: rows,
+      data: rows.map(scopedWrite),
       ...(opts?.skipDuplicates !== undefined && { skipDuplicates: opts.skipDuplicates }),
     });
   },
@@ -344,10 +348,10 @@ export const leadRepository = {
    *  explicit status from the CSV and must not have it overridden). */
   createManyOutreachAttempts(
     ctx: TenantContext,
-    rows: Prisma.OutreachAttemptCreateManyInput[],
+    rows: SeamWrite<Prisma.OutreachAttemptCreateManyInput>[],
     tx?: ScopedTx,
   ) {
-    return db(ctx, tx).outreachAttempt.createMany({ data: rows });
+    return db(ctx, tx).outreachAttempt.createMany({ data: rows.map(scopedWrite) });
   },
 
   /**
@@ -355,7 +359,7 @@ export const leadRepository = {
    * an existing (even trashed) lead instead of duplicating. UI/read paths use `findById`/`list`.
    */
   findByLegacyId(ctx: TenantContext, legacyId: string, tx?: ScopedTx) {
-    return db(ctx, tx).sourceLead.findUnique({ where: { legacyId } });
+    return db(ctx, tx).sourceLead.findFirst({ where: { legacyId } });
   },
 
   /**

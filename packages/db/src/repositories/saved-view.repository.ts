@@ -1,6 +1,6 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { SavedView } from "../generated/prisma/client";
-import { db, type ScopedTx } from "../tenant-scope";
+import { db, type ScopedTx, scopedWrite } from "../tenant-scope";
 
 /** A raw saved-view row (Prisma model). Services/DTOs map this to API shapes. */
 export type SavedViewRow = SavedView;
@@ -35,7 +35,7 @@ export const savedViewRepository = {
     data: { userId: string; scope: string; name: string; query: string },
     tx?: ScopedTx,
   ) {
-    return db(ctx, tx).savedView.create({ data });
+    return db(ctx, tx).savedView.create({ data: scopedWrite(data) });
   },
 
   /** Scoped delete — `id` AND `userId` must both match, so this IS the ownership boundary

@@ -1,4 +1,4 @@
-import { db, type ScopedTx } from "../tenant-scope";
+import { db, type ScopedTx, scopedWrite } from "../tenant-scope";
 import type { TenantContext } from "@destaworks/domain/tenant";
 import { logger } from "@destaworks/config/logger";
 
@@ -50,7 +50,7 @@ export const aiSettingsRepository = {
       });
     } else {
       await scoped.aiSettings.create({
-        data: { id: ctx.tenantId, disabled, disabledReason, updatedBy },
+        data: scopedWrite({ id: ctx.tenantId, disabled, disabledReason, updatedBy }),
       });
     }
     cached.set(ctx.tenantId, {

@@ -140,7 +140,7 @@ vi.mock("./prisma", async () => {
   };
 });
 
-const { db, scopedClientFor, UNSCOPED_CONTEXT } = await import("./tenant-scope");
+const { db, scopedClientFor, scopedWrite, UNSCOPED_CONTEXT } = await import("./tenant-scope");
 const { withTenantTransaction, withTransaction } = await import("./with-transaction");
 
 const ctx: TenantContext = {
@@ -192,17 +192,19 @@ describe("reads carry the tenant filter", () => {
 
 describe("writes get the tenant injected", () => {
   it("stamps tenantId on a create payload", async () => {
-    await db(ctx).candidate.create({ data: { name: "Ada" } });
+    await db(ctx).candidate.create({ data: scopedWrite({ name: "Ada" }) });
     expect(last().args["data"]).toEqual({ name: "Ada", tenantId: "tenant_a" });
   });
 
   it("adds no `where` to a create — Prisma rejects the argument outright", async () => {
-    await db(ctx).candidate.create({ data: { name: "Ada" } });
+    await db(ctx).candidate.create({ data: scopedWrite({ name: "Ada" }) });
     expect(last().args).not.toHaveProperty("where");
   });
 
   it("stamps every row of a createMany", async () => {
-    await db(ctx).candidate.createMany({ data: [{ name: "Ada" }, { name: "Bea" }] });
+    await db(ctx).candidate.createMany({
+      data: [scopedWrite({ name: "Ada" }), scopedWrite({ name: "Bea" })],
+    });
     expect(last().args["data"]).toEqual([
       { name: "Ada", tenantId: "tenant_a" },
       { name: "Bea", tenantId: "tenant_a" },
@@ -211,11 +213,14 @@ describe("writes get the tenant injected", () => {
 
   it("stamps BOTH halves of an upsert, so the insert branch cannot land untenanted", async () => {
     await db(ctx).dailyBrief.upsert({
-      where: { date: "2026-08-29" },
-      create: { date: "2026-08-29", headline: "x" },
+      where: { tenantId_date: { tenantId: "tenant_a", date: "2026-08-29" } },
+      create: scopedWrite({ date: "2026-08-29", headline: "x" }),
       update: { headline: "x" },
     });
-    expect(last().args["where"]).toEqual({ date: "2026-08-29", tenantId: "tenant_a" });
+    expect(last().args["where"]).toEqual({
+      tenantId_date: { tenantId: "tenant_a", date: "2026-08-29" },
+      tenantId: "tenant_a",
+    });
     expect(last().args["create"]).toEqual({
       date: "2026-08-29",
       headline: "x",
@@ -250,9 +255,9 @@ describe("a transaction opened from a scoped client stays scoped", () => {
   it("scopes every statement inside withTenantTransaction", async () => {
     await withTenantTransaction(ctx, async (tx) => {
       await tx.candidate.findMany({ where: { deletedAt: null } });
-      await tx.candidate.create({ data: { name: "Ada" } });
+      await tx.candidate.create({ data: scopedWrite({ name: "Ada" }) });
       await tx.activityLog.create({
-        data: { entity: "candidate", entityId: "c1", actor: "u1", action: "move" },
+        data: scopedWrite({ entity: "candidate", entityId: "c1", actor: "u1", action: "move" }),
       });
     });
 

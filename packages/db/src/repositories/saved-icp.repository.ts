@@ -1,6 +1,6 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { Prisma, SavedIcp } from "../generated/prisma/client";
-import { db, type ScopedTx } from "../tenant-scope";
+import { db, type ScopedTx, type SeamWrite, scopedWrite } from "../tenant-scope";
 
 /** A raw saved-ICP row (Prisma model). Services/DTOs map this to API shapes. */
 export type SavedIcpRow = SavedIcp;
@@ -32,8 +32,8 @@ export const savedIcpRepository = {
     return db(ctx, tx).savedIcp.findFirst({ where: { userId, name } });
   },
 
-  create(ctx: TenantContext, data: Prisma.SavedIcpUncheckedCreateInput, tx?: ScopedTx) {
-    return db(ctx, tx).savedIcp.create({ data });
+  create(ctx: TenantContext, data: SeamWrite<Prisma.SavedIcpUncheckedCreateInput>, tx?: ScopedTx) {
+    return db(ctx, tx).savedIcp.create({ data: scopedWrite(data) });
   },
 
   /** Scoped delete — `id` AND `userId` must both match, so this IS the ownership boundary

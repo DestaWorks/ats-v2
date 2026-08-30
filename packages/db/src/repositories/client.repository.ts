@@ -1,6 +1,6 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { Client, Prisma } from "../generated/prisma/client";
-import { db, type ScopedTx } from "../tenant-scope";
+import { db, type ScopedTx, type SeamWrite, scopedWrite } from "../tenant-scope";
 
 /** A raw client row (Prisma model). */
 export type ClientRow = Client;
@@ -39,8 +39,8 @@ export const clientRepository = {
     return db(ctx, tx).client.findUnique({ where: { id } });
   },
 
-  create(ctx: TenantContext, data: Prisma.ClientUncheckedCreateInput, tx?: ScopedTx) {
-    return db(ctx, tx).client.create({ data });
+  create(ctx: TenantContext, data: SeamWrite<Prisma.ClientUncheckedCreateInput>, tx?: ScopedTx) {
+    return db(ctx, tx).client.create({ data: scopedWrite(data) });
   },
 
   update(ctx: TenantContext, id: string, data: Prisma.ClientUncheckedUpdateInput, tx?: ScopedTx) {

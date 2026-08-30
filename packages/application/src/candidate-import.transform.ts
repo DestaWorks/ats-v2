@@ -9,6 +9,7 @@
  * service) exposes only the name; nothing here logs.
  */
 import type { Prisma } from "@destaworks/db/generated/prisma/client";
+import type { SeamWrite } from "@destaworks/db/tenant-scope";
 import {
   CREDENTIALS,
   DEFAULT_TRACK,
@@ -49,7 +50,7 @@ export interface ImportRowPlan {
   /** Keep-newest key for the dedupe primary. */
   updatedAt: Date | null;
   createdAt: Date | null;
-  create: Prisma.CandidateUncheckedCreateInput;
+  create: SeamWrite<Prisma.CandidateUncheckedCreateInput>;
   update: Prisma.CandidateUncheckedUpdateInput;
   document?: DocumentUpsertPlan;
   /** Non-blocking, surfaces in the report (unknown-client, email-duplicate). */
@@ -240,7 +241,7 @@ export function transformRow(
   const placedAt = status === "STARTED_DAY1" ? (updatedAt ?? createdAt ?? null) : null;
   const softDeleted = deletedAt !== null;
 
-  const create: Prisma.CandidateUncheckedCreateInput = {
+  const create: SeamWrite<Prisma.CandidateUncheckedCreateInput> = {
     name,
     email: email || null,
     phone: row.Phone.trim() || null,
@@ -321,7 +322,7 @@ export function transformRow(
  * Null/undefined values are dropped (never null-out an edited field).
  */
 function buildUpdate(
-  create: Prisma.CandidateUncheckedCreateInput,
+  create: SeamWrite<Prisma.CandidateUncheckedCreateInput>,
   softDeleted: boolean,
 ): Prisma.CandidateUncheckedUpdateInput {
   const OMIT = new Set([

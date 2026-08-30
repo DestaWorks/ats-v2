@@ -124,11 +124,9 @@ model AccessRequest {
   @@index([status])
   @@map("access_request")
 
-  /// Tenant scope. Nullable in 6.1 so the expand migration is safe against live rows. 6.2 backfills
-  /// it and `20260829112500_tenants_contract` makes the COLUMN NOT NULL; the `?` here outlives that
-  /// migration on purpose and is removed with 6.3 — see the note on `Tenant`.
-  tenantId String?
-  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
 }
@@ -158,11 +156,9 @@ model ActivityLog {
   @@index([tenantId, action, at, id])
   @@map("activity_log")
 
-  /// Tenant scope. Nullable in 6.1 so the expand migration is safe against live rows. 6.2 backfills
-  /// it and `20260829112500_tenants_contract` makes the COLUMN NOT NULL; the `?` here outlives that
-  /// migration on purpose and is removed with 6.3 — see the note on `Tenant`.
-  tenantId String?
-  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
 }
 
@@ -186,11 +182,9 @@ model AiUsageEvent {
   @@index([createdAt])
   @@map("ai_usage_event")
 
-  /// Tenant scope. Nullable in 6.1 so the expand migration is safe against live rows. 6.2 backfills
-  /// it and `20260829112500_tenants_contract` makes the COLUMN NOT NULL; the `?` here outlives that
-  /// migration on purpose and is removed with 6.3 — see the note on `Tenant`.
-  tenantId String?
-  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
 }
@@ -206,11 +200,9 @@ model AiSettings {
 
   @@map("ai_settings")
 
-  /// Tenant scope. Nullable in 6.1 so the expand migration is safe against live rows. 6.2 backfills
-  /// it and `20260829112500_tenants_contract` makes the COLUMN NOT NULL; the `?` here outlives that
-  /// migration on purpose and is removed with 6.3 — see the note on `Tenant`.
-  tenantId String?
-  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
 }
@@ -258,11 +250,9 @@ model MigrationRun {
   @@index([startedById, createdAt])
   @@map("migration_runs")
 
-  /// Tenant scope. Nullable in 6.1 so the expand migration is safe against live rows. 6.2 backfills
-  /// it and `20260829112500_tenants_contract` makes the COLUMN NOT NULL; the `?` here outlives that
-  /// migration on purpose and is removed with 6.3 — see the note on `Tenant`.
-  tenantId String?
-  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
 }
@@ -279,7 +269,7 @@ model MigrationRun {
 
 model Client {
   id       String  @id @default(cuid())
-  legacyId String? @unique
+  legacyId String?
   name     String
   capacity Int?
 
@@ -318,13 +308,12 @@ model Client {
   notes        ClientNote[] // Wave 4.2 (Health Score slice) — manual communication log
 
   @@index([deletedAt])
+  @@unique([tenantId, legacyId])
   @@map("clients")
 
-  /// Tenant scope. Nullable in 6.1 so the expand migration is safe against live rows. 6.2 backfills
-  /// it and `20260829112500_tenants_contract` makes the COLUMN NOT NULL; the `?` here outlives that
-  /// migration on purpose and is removed with 6.3 — see the note on `Tenant`.
-  tenantId String?
-  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
 }
@@ -364,11 +353,9 @@ model ClientContact {
   @@index([clientId])
   @@map("client_contacts")
 
-  /// Tenant scope. Nullable in 6.1 so the expand migration is safe against live rows. 6.2 backfills
-  /// it and `20260829112500_tenants_contract` makes the COLUMN NOT NULL; the `?` here outlives that
-  /// migration on purpose and is removed with 6.3 — see the note on `Tenant`.
-  tenantId String?
-  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
 }
@@ -393,11 +380,9 @@ model ClientPortalToken {
   @@index([contactId])
   @@map("client_portal_tokens")
 
-  /// Tenant scope. Nullable in 6.1 so the expand migration is safe against live rows. 6.2 backfills
-  /// it and `20260829112500_tenants_contract` makes the COLUMN NOT NULL; the `?` here outlives that
-  /// migration on purpose and is removed with 6.3 — see the note on `Tenant`.
-  tenantId String?
-  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
 }
@@ -418,11 +403,9 @@ model PortalAccessRequest {
   @@index([status])
   @@map("portal_access_requests")
 
-  /// Tenant scope. Nullable in 6.1 so the expand migration is safe against live rows. 6.2 backfills
-  /// it and `20260829112500_tenants_contract` makes the COLUMN NOT NULL; the `?` here outlives that
-  /// migration on purpose and is removed with 6.3 — see the note on `Tenant`.
-  tenantId String?
-  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
 }
@@ -450,11 +433,9 @@ model ClientTask {
   @@index([clientId])
   @@map("client_tasks")
 
-  /// Tenant scope. Nullable in 6.1 so the expand migration is safe against live rows. 6.2 backfills
-  /// it and `20260829112500_tenants_contract` makes the COLUMN NOT NULL; the `?` here outlives that
-  /// migration on purpose and is removed with 6.3 — see the note on `Tenant`.
-  tenantId String?
-  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, deletedAt]) // ditto
 }
@@ -479,11 +460,9 @@ model ClientMeeting {
   @@index([clientId])
   @@map("client_meetings")
 
-  /// Tenant scope. Nullable in 6.1 so the expand migration is safe against live rows. 6.2 backfills
-  /// it and `20260829112500_tenants_contract` makes the COLUMN NOT NULL; the `?` here outlives that
-  /// migration on purpose and is removed with 6.3 — see the note on `Tenant`.
-  tenantId String?
-  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
 }
@@ -505,11 +484,9 @@ model ClientNote {
   @@index([clientId])
   @@map("client_notes")
 
-  /// Tenant scope. Nullable in 6.1 so the expand migration is safe against live rows. 6.2 backfills
-  /// it and `20260829112500_tenants_contract` makes the COLUMN NOT NULL; the `?` here outlives that
-  /// migration on purpose and is removed with 6.3 — see the note on `Tenant`.
-  tenantId String?
-  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, deletedAt]) // ditto
 }
@@ -542,11 +519,9 @@ model Deal {
   @@index([clientId])
   @@map("deals")
 
-  /// Tenant scope. Nullable in 6.1 so the expand migration is safe against live rows. 6.2 backfills
-  /// it and `20260829112500_tenants_contract` makes the COLUMN NOT NULL; the `?` here outlives that
-  /// migration on purpose and is removed with 6.3 — see the note on `Tenant`.
-  tenantId String?
-  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
 }
@@ -567,11 +542,9 @@ model DealBlocker {
   @@index([dealId])
   @@map("deal_blockers")
 
-  /// Tenant scope. Nullable in 6.1 so the expand migration is safe against live rows. 6.2 backfills
-  /// it and `20260829112500_tenants_contract` makes the COLUMN NOT NULL; the `?` here outlives that
-  /// migration on purpose and is removed with 6.3 — see the note on `Tenant`.
-  tenantId String?
-  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
 }
@@ -598,18 +571,16 @@ model ClientRules {
   @@index([clientId])
   @@map("client_rules")
 
-  /// Tenant scope. Nullable in 6.1 so the expand migration is safe against live rows. 6.2 backfills
-  /// it and `20260829112500_tenants_contract` makes the COLUMN NOT NULL; the `?` here outlives that
-  /// migration on purpose and is removed with 6.3 — see the note on `Tenant`.
-  tenantId String?
-  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
 }
 
 model Candidate {
   id                  String               @id @default(cuid())
-  legacyId            String?              @unique
+  legacyId            String?
   // identity / contact (PII)
   name                String
   email               String?
@@ -687,13 +658,12 @@ model Candidate {
   // (pgcrypto, uuid-ossp, …) — turning on the `postgresqlExtensions` preview feature to declare
   // `pg_trgm` in the datasource block makes Prisma try to reconcile ALL of them against migration
   // history, which it can only do via a full schema reset. Not worth that risk for one extension.
+  @@unique([tenantId, legacyId])
   @@map("candidates")
 
-  /// Tenant scope. Nullable in 6.1 so the expand migration is safe against live rows. 6.2 backfills
-  /// it and `20260829112500_tenants_contract` makes the COLUMN NOT NULL; the `?` here outlives that
-  /// migration on purpose and is removed with 6.3 — see the note on `Tenant`.
-  tenantId String?
-  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
 }
 
@@ -702,7 +672,7 @@ model Candidate {
 // deferred to Wave 6 — `storageKey` stays null until the Supabase bucket is wired.
 model Document {
   id       String  @id @default(cuid())
-  legacyId String? @unique // ETL upsert (legacy ResumeFileID)
+  legacyId String? // ETL upsert (legacy ResumeFileID)
 
   // ownership — NULLABLE: a doc can exist pre-match (uploaded, not yet attached).
   // Cascade: a resume is pure candidate PII — a hard purge takes its documents with it.
@@ -734,13 +704,12 @@ model Document {
   @@index([candidateId])
   @@index([deletedAt])
   @@index([type])
+  @@unique([tenantId, legacyId])
   @@map("documents")
 
-  /// Tenant scope. Nullable in 6.1 so the expand migration is safe against live rows. 6.2 backfills
-  /// it and `20260829112500_tenants_contract` makes the COLUMN NOT NULL; the `?` here outlives that
-  /// migration on purpose and is removed with 6.3 — see the note on `Tenant`.
-  tenantId String?
-  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, deletedAt]) // every document list excludes soft-deleted rows
 }
@@ -752,7 +721,7 @@ model Document {
 // so a hard purge takes its notes with it.
 model CandidateNote {
   id          String    @id @default(cuid())
-  legacyId    String?   @unique // deferred ETL backfill (idempotent upsert)
+  legacyId    String?   // deferred ETL backfill (idempotent upsert)
   candidateId String
   candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
 
@@ -771,13 +740,12 @@ model CandidateNote {
   @@index([candidateId])
   @@index([candidateId, createdAt])
   @@index([deletedAt])
+  @@unique([tenantId, legacyId])
   @@map("candidate_notes")
 
-  /// Tenant scope. Nullable in 6.1 so the expand migration is safe against live rows. 6.2 backfills
-  /// it and `20260829112500_tenants_contract` makes the COLUMN NOT NULL; the `?` here outlives that
-  /// migration on purpose and is removed with 6.3 — see the note on `Tenant`.
-  tenantId String?
-  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
 }
@@ -800,11 +768,9 @@ model Mention {
   @@index([recipientId, readAt])
   @@map("mentions")
 
-  /// Tenant scope. Nullable in 6.1 so the expand migration is safe against live rows. 6.2 backfills
-  /// it and `20260829112500_tenants_contract` makes the COLUMN NOT NULL; the `?` here outlives that
-  /// migration on purpose and is removed with 6.3 — see the note on `Tenant`.
-  tenantId String?
-  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
 }
@@ -829,11 +795,9 @@ model StageHistory {
   @@index([enteredAt, toStageOrder, candidateId])
   @@map("stage_history")
 
-  /// Tenant scope. Nullable in 6.1 so the expand migration is safe against live rows. 6.2 backfills
-  /// it and `20260829112500_tenants_contract` makes the COLUMN NOT NULL; the `?` here outlives that
-  /// migration on purpose and is removed with 6.3 — see the note on `Tenant`.
-  tenantId String?
-  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
 }
@@ -874,11 +838,9 @@ model ScreeningScorecard {
   @@index([candidateId, scoredAt])
   @@map("screening_scorecards")
 
-  /// Tenant scope. Nullable in 6.1 so the expand migration is safe against live rows. 6.2 backfills
-  /// it and `20260829112500_tenants_contract` makes the COLUMN NOT NULL; the `?` here outlives that
-  /// migration on purpose and is removed with 6.3 — see the note on `Tenant`.
-  tenantId String?
-  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
 }
@@ -891,14 +853,14 @@ model ScreeningScorecard {
 // Promote creates a Candidate in Postgres (D2) and back-links it (`promotedCandidateId @unique`).
 model SourceLead {
   id       String  @id @default(cuid())
-  legacyId String? @unique // deferred ETL backfill (idempotent upsert)
+  legacyId String? // deferred ETL backfill (idempotent upsert)
 
   // identity / contact (PII)
   name        String
   email       String?
   phone       String?
   linkedinUrl String?
-  npi         String? @unique // National Provider Identifier (NPPES) — Discover sourcing dedupe key
+  npi         String? // National Provider Identifier (NPPES) — Discover sourcing dedupe key
 
   // sourcing context (free text — NOT the candidate strict-vocab enums)
   credential String? // raw job title / credential text
@@ -942,13 +904,14 @@ model SourceLead {
   @@index([clientId])
   @@index([tenantId, deletedAt, createdAt, id]) // keyset list (createdAt_desc, id tiebreak)
   @@index([tenantId, status]) // sourcing pipeline filters on lifecycle status
+  @@unique([tenantId, legacyId])
+  @@unique([tenantId, npi])
+  @@unique([tenantId, promotedCandidateId])
   @@map("source_leads")
 
-  /// Tenant scope. Nullable in 6.1 so the expand migration is safe against live rows. 6.2 backfills
-  /// it and `20260829112500_tenants_contract` makes the COLUMN NOT NULL; the `?` here outlives that
-  /// migration on purpose and is removed with 6.3 — see the note on `Tenant`.
-  tenantId String?
-  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
 }
 
@@ -957,7 +920,7 @@ model SourceLead {
 // child of whichever entity owns it and is destroyed with a hard purge of that parent.
 model OutreachAttempt {
   id       String  @id @default(cuid())
-  legacyId String? @unique // deferred ETL (splits the legacy OutreachAttempts JSON blob into rows)
+  legacyId String? // deferred ETL (splits the legacy OutreachAttempts JSON blob into rows)
 
   leadId String?
   lead   SourceLead? @relation(fields: [leadId], references: [id], onDelete: Cascade)
@@ -991,13 +954,12 @@ model OutreachAttempt {
   @@index([at, actorId])
   @@index([respondedAt, actorId])
   @@index([templateId])
+  @@unique([tenantId, legacyId])
   @@map("outreach_attempts")
 
-  /// Tenant scope. Nullable in 6.1 so the expand migration is safe against live rows. 6.2 backfills
-  /// it and `20260829112500_tenants_contract` makes the COLUMN NOT NULL; the `?` here outlives that
-  /// migration on purpose and is removed with 6.3 — see the note on `Tenant`.
-  tenantId String?
-  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
 }
@@ -1035,11 +997,9 @@ model DailyTarget {
   @@index([date])
   @@map("daily_targets")
 
-  /// Tenant scope. Nullable in 6.1 so the expand migration is safe against live rows. 6.2 backfills
-  /// it and `20260829112500_tenants_contract` makes the COLUMN NOT NULL; the `?` here outlives that
-  /// migration on purpose and is removed with 6.3 — see the note on `Tenant`.
-  tenantId String?
-  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
 }
@@ -1068,11 +1028,9 @@ model DailyActual {
   @@index([date])
   @@map("daily_actuals")
 
-  /// Tenant scope. Nullable in 6.1 so the expand migration is safe against live rows. 6.2 backfills
-  /// it and `20260829112500_tenants_contract` makes the COLUMN NOT NULL; the `?` here outlives that
-  /// migration on purpose and is removed with 6.3 — see the note on `Tenant`.
-  tenantId String?
-  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
 }
@@ -1106,11 +1064,9 @@ model DailyLog {
   @@index([date])
   @@map("daily_logs")
 
-  /// Tenant scope. Nullable in 6.1 so the expand migration is safe against live rows. 6.2 backfills
-  /// it and `20260829112500_tenants_contract` makes the COLUMN NOT NULL; the `?` here outlives that
-  /// migration on purpose and is removed with 6.3 — see the note on `Tenant`.
-  tenantId String?
-  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
 }
@@ -1127,11 +1083,9 @@ model JournalEntry {
   @@index([userId, date])
   @@map("journal_entries")
 
-  /// Tenant scope. Nullable in 6.1 so the expand migration is safe against live rows. 6.2 backfills
-  /// it and `20260829112500_tenants_contract` makes the COLUMN NOT NULL; the `?` here outlives that
-  /// migration on purpose and is removed with 6.3 — see the note on `Tenant`.
-  tenantId String?
-  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
 }
@@ -1150,11 +1104,9 @@ model JournalGoal {
   @@index([userId, weekStart])
   @@map("journal_goals")
 
-  /// Tenant scope. Nullable in 6.1 so the expand migration is safe against live rows. 6.2 backfills
-  /// it and `20260829112500_tenants_contract` makes the COLUMN NOT NULL; the `?` here outlives that
-  /// migration on purpose and is removed with 6.3 — see the note on `Tenant`.
-  tenantId String?
-  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
 }
@@ -1176,11 +1128,9 @@ model ManagerFeedback {
   @@index([targetUserId, createdAt])
   @@map("manager_feedback")
 
-  /// Tenant scope. Nullable in 6.1 so the expand migration is safe against live rows. 6.2 backfills
-  /// it and `20260829112500_tenants_contract` makes the COLUMN NOT NULL; the `?` here outlives that
-  /// migration on purpose and is removed with 6.3 — see the note on `Tenant`.
-  tenantId String?
-  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
 }
@@ -1209,11 +1159,9 @@ model SavedView {
   @@index([userId, scope])
   @@map("saved_views")
 
-  /// Tenant scope. Nullable in 6.1 so the expand migration is safe against live rows. 6.2 backfills
-  /// it and `20260829112500_tenants_contract` makes the COLUMN NOT NULL; the `?` here outlives that
-  /// migration on purpose and is removed with 6.3 — see the note on `Tenant`.
-  tenantId String?
-  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
 }
@@ -1227,7 +1175,7 @@ model SavedView {
 
 model OpenRole {
   id       String  @id @default(cuid())
-  legacyId String? @unique // deferred ETL backfill
+  legacyId String? // deferred ETL backfill
 
   clientId String
   client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
@@ -1266,13 +1214,12 @@ model OpenRole {
   @@index([clientId])
   @@index([status])
   @@index([status, priority])
+  @@unique([tenantId, legacyId])
   @@map("open_roles")
 
-  /// Tenant scope. Nullable in 6.1 so the expand migration is safe against live rows. 6.2 backfills
-  /// it and `20260829112500_tenants_contract` makes the COLUMN NOT NULL; the `?` here outlives that
-  /// migration on purpose and is removed with 6.3 — see the note on `Tenant`.
-  tenantId String?
-  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
   @@index([tenantId, status]) // triage and open-role listings filter on status
@@ -1298,11 +1245,9 @@ model RoleNote {
   @@index([roleId, createdAt])
   @@map("role_notes")
 
-  /// Tenant scope. Nullable in 6.1 so the expand migration is safe against live rows. 6.2 backfills
-  /// it and `20260829112500_tenants_contract` makes the COLUMN NOT NULL; the `?` here outlives that
-  /// migration on purpose and is removed with 6.3 — see the note on `Tenant`.
-  tenantId String?
-  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
 }
@@ -1331,11 +1276,9 @@ model ClientMatchProfile {
 
   @@map("client_match_profiles")
 
-  /// Tenant scope. Nullable in 6.1 so the expand migration is safe against live rows. 6.2 backfills
-  /// it and `20260829112500_tenants_contract` makes the COLUMN NOT NULL; the `?` here outlives that
-  /// migration on purpose and is removed with 6.3 — see the note on `Tenant`.
-  tenantId String?
-  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
 }
@@ -1349,7 +1292,7 @@ model ClientMatchProfile {
 /// Daily Brief (legacy `daily_brief_generate`/`daily_brief_save`).
 model DailyBrief {
   id   String @id @default(cuid())
-  date String @unique // "YYYY-MM-DD"
+  date String // "YYYY-MM-DD"
 
   headline       String?
   exceptions     Json? // string[]
@@ -1375,13 +1318,12 @@ model DailyBrief {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
+  @@unique([tenantId, date])
   @@map("daily_briefs")
 
-  /// Tenant scope. Nullable in 6.1 so the expand migration is safe against live rows. 6.2 backfills
-  /// it and `20260829112500_tenants_contract` makes the COLUMN NOT NULL; the `?` here outlives that
-  /// migration on purpose and is removed with 6.3 — see the note on `Tenant`.
-  tenantId String?
-  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
 }
@@ -1390,7 +1332,7 @@ model DailyBrief {
 /// never persisted (matches legacy — `weekly_brief_patterns` output was never saved either).
 model WeeklyBrief {
   id        String @id @default(cuid())
-  weekStart String @unique // "YYYY-MM-DD", Monday of the ISO week (mondayOf)
+  weekStart String // "YYYY-MM-DD", Monday of the ISO week (mondayOf)
 
   headline      String?
   kpiNarrative  String?
@@ -1414,13 +1356,12 @@ model WeeklyBrief {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
+  @@unique([tenantId, weekStart])
   @@map("weekly_briefs")
 
-  /// Tenant scope. Nullable in 6.1 so the expand migration is safe against live rows. 6.2 backfills
-  /// it and `20260829112500_tenants_contract` makes the COLUMN NOT NULL; the `?` here outlives that
-  /// migration on purpose and is removed with 6.3 — see the note on `Tenant`.
-  tenantId String?
-  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
 }
@@ -1436,7 +1377,7 @@ model Prospect {
   id String @id @default(cuid())
 
   practiceName String
-  npi          String? @unique // org NPI from NPPES — dedupe key
+  npi          String? // org NPI from NPPES — dedupe key
   taxonomy     String?
   city         String?
   state        String?
@@ -1464,13 +1405,12 @@ model Prospect {
   @@index([deletedAt])
   @@index([ownerId])
   @@index([tenantId, deletedAt, createdAt, id]) // keyset list (createdAt_desc, id tiebreak)
+  @@unique([tenantId, npi])
   @@map("prospects")
 
-  /// Tenant scope. Nullable in 6.1 so the expand migration is safe against live rows. 6.2 backfills
-  /// it and `20260829112500_tenants_contract` makes the COLUMN NOT NULL; the `?` here outlives that
-  /// migration on purpose and is removed with 6.3 — see the note on `Tenant`.
-  tenantId String?
-  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
 }
 
@@ -1495,11 +1435,9 @@ model ProspectContact {
   @@index([prospectId])
   @@map("prospect_contacts")
 
-  /// Tenant scope. Nullable in 6.1 so the expand migration is safe against live rows. 6.2 backfills
-  /// it and `20260829112500_tenants_contract` makes the COLUMN NOT NULL; the `?` here outlives that
-  /// migration on purpose and is removed with 6.3 — see the note on `Tenant`.
-  tenantId String?
-  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
 }
@@ -1528,11 +1466,9 @@ model SavedIcp {
   @@index([userId])
   @@map("saved_icps")
 
-  /// Tenant scope. Nullable in 6.1 so the expand migration is safe against live rows. 6.2 backfills
-  /// it and `20260829112500_tenants_contract` makes the COLUMN NOT NULL; the `?` here outlives that
-  /// migration on purpose and is removed with 6.3 — see the note on `Tenant`.
-  tenantId String?
-  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
 }
@@ -1581,11 +1517,9 @@ model ReportExport {
   @@index([requestedById, createdAt(sort: Desc)])
   @@map("report_exports")
 
-  /// Tenant scope. Nullable in 6.1 so the expand migration is safe against live rows. 6.2 backfills
-  /// it and `20260829112500_tenants_contract` makes the COLUMN NOT NULL; the `?` here outlives that
-  /// migration on purpose and is removed with 6.3 — see the note on `Tenant`.
-  tenantId String?
-  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
 }
@@ -1594,22 +1528,13 @@ model ReportExport {
 /// enforcement seam in `db(ctx, tx)` is what makes that true without a repository having to
 /// remember it.
 ///
-/// PENDING, and deliberately so: `20260829112500_tenants_contract` makes `tenantId` NOT NULL and
-/// re-keys thirteen uniqueness rules per tenant, but this file still declares `tenantId String?`
-/// and the field-level `@unique`s. That is not drift left by accident — it is a phase ordering the
-/// plan did not anticipate, recorded in SAAS-RESTRUCTURE-PLAN 6.2/6.3:
+/// `20260829112500_tenants_contract` made every `tenantId` NOT NULL and re-keyed the per-tenant
+/// uniqueness rules; this file describes that shape as of 6.3.
 ///
-///   - `tenantId String` makes `tenantId` a REQUIRED key of every generated create input. 65 call
-///     sites across `application` and `db` build those inputs today, and not one of them can name
-///     a tenant until 6.3 threads `TenantContext` through the repositories.
-///   - Replacing `legacyId @unique` with `@@unique([tenantId, legacyId])` changes the generated
-///     WHERE type from `{ legacyId }` to `{ tenantId_legacyId: { tenantId, legacyId } }`, which
-///     every `findUnique`/`upsert` on those keys must then supply — the same missing value.
-///
-/// Both edits are one line each and both are blocked on the same thing, so they ship WITH 6.3's
-/// threading, in a commit that can compile. The SQL lands first because the SQL is what actually
-/// runs, and because 6.1 already put this file ahead of the migrations in the other direction.
-/// The index changes below DID land here: an index carries no type.
+/// `source_leads.promotedCandidateId` keeps its field-level `@unique` ALONGSIDE the compound one,
+/// matching the migration: Prisma refuses a one-to-one relation whose defining field is unique only
+/// inside a composite, and the column holds a globally unique Candidate cuid so it cannot collide
+/// across tenants.
 model Tenant {
   id          String    @id @default(cuid())
   /// URL / subdomain key.

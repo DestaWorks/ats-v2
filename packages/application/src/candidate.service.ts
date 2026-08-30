@@ -44,7 +44,7 @@ import { requireUser } from "@destaworks/auth/guards";
 import type { TenantContext } from "@destaworks/domain/tenant";
 import { writeAudit } from "@destaworks/db/audit";
 import { withTenantTransaction } from "@destaworks/db/with-transaction";
-import type { ScopedTx } from "@destaworks/db/tenant-scope";
+import type { ScopedTx, SeamWrite } from "@destaworks/db/tenant-scope";
 import {
   candidateRepository,
   type CandidateRow,
@@ -435,7 +435,7 @@ export const candidateService = {
    */
   async create(input: CandidateCreateInput, opts?: { user?: TenantContext; tx?: ScopedTx }) {
     const user = opts?.user ?? (await requireUser());
-    const data: Prisma.CandidateUncheckedCreateInput = {
+    const data: SeamWrite<Prisma.CandidateUncheckedCreateInput> = {
       ...input,
       status: "NEW_CANDIDATE",
       stageOrder: statusOrder("NEW_CANDIDATE"),

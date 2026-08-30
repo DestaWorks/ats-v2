@@ -1,6 +1,6 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { DealBlocker, Prisma } from "../generated/prisma/client";
-import { db, type ScopedTx } from "../tenant-scope";
+import { db, type ScopedTx, type SeamWrite, scopedWrite } from "../tenant-scope";
 
 /** A raw deal-blocker row (Prisma model). Services/DTOs map this to API shapes. */
 export type DealBlockerRow = DealBlocker;
@@ -11,8 +11,12 @@ export type DealBlockerRow = DealBlocker;
  * captures the audit-worthy state).
  */
 export const dealBlockerRepository = {
-  create(ctx: TenantContext, data: Prisma.DealBlockerUncheckedCreateInput, tx?: ScopedTx) {
-    return db(ctx, tx).dealBlocker.create({ data });
+  create(
+    ctx: TenantContext,
+    data: SeamWrite<Prisma.DealBlockerUncheckedCreateInput>,
+    tx?: ScopedTx,
+  ) {
+    return db(ctx, tx).dealBlocker.create({ data: scopedWrite(data) });
   },
 
   listForDeal(ctx: TenantContext, dealId: string, tx?: ScopedTx) {

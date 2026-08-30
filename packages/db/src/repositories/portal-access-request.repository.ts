@@ -1,5 +1,5 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
-import { db } from "../tenant-scope";
+import { db, scopedWrite } from "../tenant-scope";
 
 /**
  * Portal-access-request data access (Wave 4.3). Mirrors `access-request.repository.ts`'s shape,
@@ -11,7 +11,7 @@ export const portalAccessRequestRepository = {
     ctx: TenantContext,
     data: { name: string; email: string; requestedClientName: string; note?: string | null },
   ) {
-    return db(ctx).portalAccessRequest.create({ data });
+    return db(ctx).portalAccessRequest.create({ data: scopedWrite(data) });
   },
 
   list(ctx: TenantContext) {

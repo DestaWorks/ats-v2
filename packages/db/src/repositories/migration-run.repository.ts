@@ -1,6 +1,6 @@
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { Prisma } from "../generated/prisma/client";
-import { db, type ScopedTx } from "../tenant-scope";
+import { db, type ScopedTx, scopedWrite } from "../tenant-scope";
 
 /**
  * The `migration_runs` table (Phase 5) — the durable record of one asynchronous ETL commit.
@@ -29,7 +29,7 @@ export const migrationRunRepository = {
   create(ctx: TenantContext, data: MigrationRunCreateInput, tx?: ScopedTx) {
     // `as`: see `finish` below — the same JSON conversion at the same boundary.
     const resumes = (data.resumes ?? NO_RESUMES) as Prisma.InputJsonValue;
-    return db(ctx, tx).migrationRun.create({ data: { ...data, resumes } });
+    return db(ctx, tx).migrationRun.create({ data: scopedWrite({ ...data, resumes }) });
   },
 
   findById(ctx: TenantContext, id: string, tx?: ScopedTx) {
