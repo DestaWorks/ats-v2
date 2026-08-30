@@ -4,6 +4,7 @@ import type { GetProspectListResponse } from "@destaworks/contracts/validation/p
 import type { LookupOptionsDTO } from "@destaworks/contracts/validation/lookups";
 import { ErrorState } from "@destaworks/ui/error-state";
 import { apiGet, query } from "@/lib/api/server";
+import { filterKey, readSearchParams, type RawSearchParams } from "@/lib/search-params";
 import { ProspectsInventory } from "./prospects-inventory";
 
 /**
@@ -18,7 +19,7 @@ import { ProspectsInventory } from "./prospects-inventory";
 export default async function ClientDiscoveryPage({
   searchParams,
 }: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
+  searchParams: Promise<RawSearchParams>;
 }) {
   const user = await getVerifiedUser();
 
@@ -33,16 +34,13 @@ export default async function ClientDiscoveryPage({
     );
   }
 
-  const sp = await searchParams;
-  const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
+  const q = readSearchParams(await searchParams);
 
-  const rawStatus = one(sp.status);
-  const status = rawStatus && isProspectStatus(rawStatus) ? rawStatus : undefined;
-  const ownerId = one(sp.ownerId)?.trim() || undefined;
-  const search = one(sp.search)?.trim() || undefined;
-  const showDeleted = one(sp.deleted) === "1";
-  const rawPage = Number(one(sp.page));
-  const page = Number.isInteger(rawPage) && rawPage > 0 ? rawPage : 1;
+  const status = q.guarded("status", isProspectStatus);
+  const ownerId = q.text("ownerId");
+  const search = q.text("search");
+  const showDeleted = q.flag("deleted");
+  const page = q.page();
 
   const [list, { users: owners }] = await Promise.all([
     apiGet<GetProspectListResponse>(
@@ -51,7 +49,7 @@ export default async function ClientDiscoveryPage({
     apiGet<LookupOptionsDTO>("/lookups"),
   ]);
 
-  const listKey = [status, ownerId, search, showDeleted, page].join("|");
+  const listKey = filterKey(status, ownerId, search, showDeleted, page);
 
   return (
     <div className="flex flex-col gap-5 px-8 py-6">

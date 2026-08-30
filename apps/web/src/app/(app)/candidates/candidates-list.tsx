@@ -17,6 +17,7 @@ import {
   type Track,
 } from "@destaworks/domain/constants";
 import { postJson, messageForFailure } from "@/lib/api/client";
+import { readSearchParams, toUrlSearchParams, type RawSearchParams } from "@/lib/search-params";
 import { Button } from "@destaworks/ui/button";
 import { EmptyState } from "@destaworks/ui/empty-state";
 import { Pager } from "@destaworks/ui/pager";
@@ -38,17 +39,9 @@ import { STATUS_BG, TRACK_BADGE, licenseDotClass } from "../pipeline/lib/status-
  * Selection is page-local — it prunes itself whenever the visible rows change.
  */
 
-type SearchParams = Record<string, string | string[] | undefined>;
-
-const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
-
 /** Build a `/candidates` href from the current params with a mutation applied. */
-function hrefWith(searchParams: SearchParams, mutate: (p: URLSearchParams) => void): string {
-  const p = new URLSearchParams();
-  for (const [key, value] of Object.entries(searchParams)) {
-    const v = one(value);
-    if (v) p.set(key, v);
-  }
+function hrefWith(searchParams: RawSearchParams, mutate: (p: URLSearchParams) => void): string {
+  const p = toUrlSearchParams(searchParams);
   mutate(p);
   const qs = p.toString();
   return qs ? `/candidates?${qs}` : "/candidates";
@@ -83,7 +76,7 @@ export function CandidatesList({
   searchParams,
 }: {
   list: CandidateListDTO;
-  searchParams: SearchParams;
+  searchParams: RawSearchParams;
 }) {
   const { candidates, total, page, pageSize, totalPages, hasPrev, hasNext } = list;
   const router = useRouter();
@@ -144,7 +137,7 @@ export function CandidatesList({
     });
   }
 
-  const raw = one(searchParams.sort);
+  const raw = readSearchParams(searchParams).str("sort");
   const sort: ListSort = raw === "oldest" ? "oldest" : raw === "fit" ? "fit" : "newest";
 
   const sortHref = (target: ListSort) =>

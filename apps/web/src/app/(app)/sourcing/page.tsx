@@ -3,6 +3,7 @@ import { getVerifiedUser } from "@destaworks/auth/guards";
 import type { LookupOptionsDTO } from "@destaworks/contracts/validation/lookups";
 import type { LeadListDTO } from "@destaworks/contracts/validation/lead";
 import { apiGet, query } from "@/lib/api/server";
+import { filterKey, readSearchParams, type RawSearchParams } from "@/lib/search-params";
 import { LeadFilters } from "./lead-filters";
 import { LeadsInventory } from "./leads-inventory";
 
@@ -18,22 +19,18 @@ import { LeadsInventory } from "./leads-inventory";
 export default async function SourcingPage({
   searchParams,
 }: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
+  searchParams: Promise<RawSearchParams>;
 }) {
   await getVerifiedUser();
-  const sp = await searchParams;
-  const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
+  const q = readSearchParams(await searchParams);
 
-  const rawStatus = one(sp.status);
-  const status: LeadStatus | undefined =
-    rawStatus && isLeadStatus(rawStatus) ? rawStatus : undefined;
-  const source = one(sp.source)?.trim() || undefined;
-  const clientId = one(sp.clientId)?.trim() || undefined;
-  const ownerId = one(sp.ownerId)?.trim() || undefined;
-  const search = one(sp.search)?.trim() || undefined;
-  const showDeleted = one(sp.deleted) === "1";
-  const rawPage = Number(one(sp.page));
-  const page = Number.isInteger(rawPage) && rawPage > 0 ? rawPage : 1;
+  const status: LeadStatus | undefined = q.guarded("status", isLeadStatus);
+  const source = q.text("source");
+  const clientId = q.text("clientId");
+  const ownerId = q.text("ownerId");
+  const search = q.text("search");
+  const showDeleted = q.flag("deleted");
+  const page = q.page();
 
   const [list, { clients, users }] = await Promise.all([
     apiGet<LeadListDTO>(
@@ -44,7 +41,7 @@ export default async function SourcingPage({
   ]);
 
   // Remount the client list whenever the SERVER query changes so it re-seeds cleanly.
-  const listKey = [status, source, clientId, ownerId, search, showDeleted, page].join("|");
+  const listKey = filterKey(status, source, clientId, ownerId, search, showDeleted, page);
 
   return (
     <div className="flex flex-col gap-5 px-8 py-6">

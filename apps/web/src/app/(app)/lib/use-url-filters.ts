@@ -1,12 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { splitCsv } from "@/lib/search-params";
 
 /**
- * Shared URL-param filter mechanics for the browse toolbars (candidates list + pipeline board).
- * Provides typed reads (`get`/`flag`/`tags`), setters that `router.replace` the URL (the RSC/board
- * re-reads), tag toggling, a "clear everything" reset, and a debounced free-text search mirrored into
- * `?search`. `resetPage` also clears `?page` on every change — the offset list wants page 1 on any
- * filter change; the keyset board has no page param, so it opts out (the default).
+ * Shared URL-param filter mechanics for every browse toolbar (candidates, pipeline, sourcing,
+ * roles, activity). Provides typed reads (`get`/`flag`/`tags`), setters that `router.replace` the
+ * URL (the RSC/board re-reads), tag toggling, a "clear everything" reset, and a debounced free-text
+ * search mirrored into `?search`. `resetPage` also clears `?page` on every change — the offset list
+ * wants page 1 on any filter change; the keyset board has no page param, so it opts out (the
+ * default).
+ *
+ * The reading half of the same contract is `@/lib/search-params`, which the RSC uses to coerce
+ * these params back out; `tags` splits through its `splitCsv` so both ends agree on the vocabulary.
  */
 export function useUrlFilters({ resetPage = false }: { resetPage?: boolean } = {}) {
   const router = useRouter();
@@ -15,7 +20,7 @@ export function useUrlFilters({ resetPage = false }: { resetPage?: boolean } = {
 
   const get = (key: string) => searchParams.get(key) ?? "";
   const flag = (key: string) => searchParams.get(key) === "1";
-  const tags = (searchParams.get("tags") ?? "").split(",").filter(Boolean);
+  const tags = splitCsv(searchParams.get("tags") ?? undefined);
 
   const urlSearch = get("search");
   const [search, setSearch] = useState(urlSearch);

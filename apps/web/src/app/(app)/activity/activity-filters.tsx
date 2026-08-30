@@ -1,6 +1,5 @@
 "use client";
 
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   AUDIT_ACTIONS,
   AUDIT_ENTITIES,
@@ -10,34 +9,28 @@ import {
 import type { ActivityActorOption } from "@destaworks/contracts/validation/activity";
 import { Button } from "@destaworks/ui/button";
 import { Field } from "@destaworks/ui/field";
+import { useUrlFilters } from "../lib/use-url-filters";
 
 /**
  * The Activity Log filter bar (AL-5) — action / entity / actor selects + a from/to date range, all
- * reflected in the URL `searchParams` (shareable). Each change `router.replace`s the URL; the RSC
- * re-reads page 1 for the new filters. Every control is labeled via `Field`. A "Clear" resets to the
- * bare `/activity`. Client component — imports no `src/server/**`; the actor options are handed in by
- * the RSC (resolved from the distinct actors that appear in the log).
+ * reflected in the URL `searchParams` (shareable) through the shared `useUrlFilters`. Each change
+ * `router.replace`s the URL; the RSC re-reads page 1 for the new filters. Every control is labeled
+ * via `Field` — a labeled grid rather than the compact `FilterToolbar` the browse lists use, because
+ * this bar has no free-text search and its date range does not fit the toolbar's popover of selects.
+ * A "Clear" resets to the bare `/activity`. Client component — imports no `src/server/**`; the actor
+ * options are handed in by the RSC (resolved from the distinct actors that appear in the log).
  */
 
 const CONTROL_CLASS = "rounded-md border border-black/10 bg-white px-2 py-1.5 text-sm";
 
 export function ActivityFilters({ actors }: { actors: ActivityActorOption[] }) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
+  const f = useUrlFilters();
 
-  const action = searchParams.get("action") ?? "";
-  const entity = searchParams.get("entity") ?? "";
-  const actor = searchParams.get("actor") ?? "";
-  const from = searchParams.get("from") ?? "";
-  const to = searchParams.get("to") ?? "";
-
-  function setParam(key: string, value: string) {
-    const params = new URLSearchParams(searchParams.toString());
-    if (value) params.set(key, value);
-    else params.delete(key);
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
-  }
+  const action = f.get("action");
+  const entity = f.get("entity");
+  const actor = f.get("actor");
+  const from = f.get("from");
+  const to = f.get("to");
 
   const hasFilters = Boolean(action || entity || actor || from || to);
 
@@ -47,7 +40,7 @@ export function ActivityFilters({ actors }: { actors: ActivityActorOption[] }) {
         <select
           id="activity-action"
           value={action}
-          onChange={(e) => setParam("action", e.target.value)}
+          onChange={(e) => f.setParam("action", e.target.value)}
           className={CONTROL_CLASS}
         >
           <option value="">All actions</option>
@@ -63,7 +56,7 @@ export function ActivityFilters({ actors }: { actors: ActivityActorOption[] }) {
         <select
           id="activity-entity"
           value={entity}
-          onChange={(e) => setParam("entity", e.target.value)}
+          onChange={(e) => f.setParam("entity", e.target.value)}
           className={CONTROL_CLASS}
         >
           <option value="">All entities</option>
@@ -79,7 +72,7 @@ export function ActivityFilters({ actors }: { actors: ActivityActorOption[] }) {
         <select
           id="activity-actor"
           value={actor}
-          onChange={(e) => setParam("actor", e.target.value)}
+          onChange={(e) => f.setParam("actor", e.target.value)}
           className={CONTROL_CLASS}
         >
           <option value="">All actors</option>
@@ -97,7 +90,7 @@ export function ActivityFilters({ actors }: { actors: ActivityActorOption[] }) {
           type="date"
           value={from}
           max={to || undefined}
-          onChange={(e) => setParam("from", e.target.value)}
+          onChange={(e) => f.setParam("from", e.target.value)}
           className={CONTROL_CLASS}
         />
       </Field>
@@ -108,18 +101,13 @@ export function ActivityFilters({ actors }: { actors: ActivityActorOption[] }) {
           type="date"
           value={to}
           min={from || undefined}
-          onChange={(e) => setParam("to", e.target.value)}
+          onChange={(e) => f.setParam("to", e.target.value)}
           className={CONTROL_CLASS}
         />
       </Field>
 
       {hasFilters ? (
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          onClick={() => router.replace(pathname, { scroll: false })}
-        >
+        <Button type="button" variant="secondary" size="sm" onClick={f.clearAll}>
           Clear
         </Button>
       ) : null}

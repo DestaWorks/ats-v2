@@ -13,6 +13,7 @@ import type { GetSavedViewsResponse } from "@destaworks/contracts/http/saved-vie
 import type { LookupOptionsDTO } from "@destaworks/contracts/validation/lookups";
 import { getVerifiedUser } from "@destaworks/auth/guards";
 import { apiGet, query } from "@/lib/api/server";
+import { readSearchParams, type RawSearchParams } from "@/lib/search-params";
 import { SavedViewsBar } from "../lib/saved-views-bar";
 import { AddCandidateButton } from "../add-candidate-modal";
 import { CandidatesList } from "./candidates-list";
@@ -29,48 +30,27 @@ import { ListFilters } from "./list-filters";
 export default async function CandidatesPage({
   searchParams,
 }: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
+  searchParams: Promise<RawSearchParams>;
 }) {
   const user = await getVerifiedUser();
 
-  const sp = await searchParams;
-  const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
-  const flag = (v: string | string[] | undefined) => one(v) === "1" || one(v) === "true";
+  const q = readSearchParams(await searchParams);
 
-  const rawTrack = one(sp.track);
-  const track = TRACKS.includes(rawTrack as Track) ? (rawTrack as Track) : undefined;
-  const rawStatus = one(sp.status);
-  const status: CandidateStatus | undefined =
-    rawStatus && isCandidateStatus(rawStatus) ? rawStatus : undefined;
-  const rawLicense = one(sp.licenseStatus);
-  const licenseStatus = LICENSE_STATUSES.includes(rawLicense as LicenseStatus)
-    ? (rawLicense as LicenseStatus)
-    : undefined;
-  const tagsRaw = one(sp.tags);
-  const tags = tagsRaw
-    ? tagsRaw
-        .split(",")
-        .map((t) => t.trim())
-        .filter(Boolean)
-    : undefined;
-  const rawSort = one(sp.sort);
+  const track: Track | undefined = q.oneOf("track", TRACKS);
+  const status: CandidateStatus | undefined = q.guarded("status", isCandidateStatus);
+  const licenseStatus: LicenseStatus | undefined = q.oneOf("licenseStatus", LICENSE_STATUSES);
+  const tags = q.csv("tags");
+  const rawSort = q.str("sort");
   const sort: ListSort = rawSort === "oldest" ? "oldest" : rawSort === "fit" ? "fit" : "newest";
-  const hot = flag(sp.hot);
-  const page = Math.max(1, Number.parseInt(one(sp.page) ?? "", 10) || 1);
-  // Added-date range — invalid dates fall back to "no bound" (same tolerance as the other params).
-  const date = (v: string | string[] | undefined) => {
-    const raw = one(v);
-    if (!raw) return undefined;
-    const d = new Date(raw);
-    return Number.isNaN(d.getTime()) ? undefined : d;
-  };
+  const hot = q.flagLoose("hot");
+  const page = q.page();
 
-  const clientId = one(sp.clientId);
-  const search = one(sp.search);
-  const source = one(sp.source);
-  const ownerId = one(sp.ownerId);
-  const addedFrom = date(sp.addedFrom);
-  const addedTo = date(sp.addedTo);
+  const clientId = q.str("clientId");
+  const search = q.str("search");
+  const source = q.str("source");
+  const ownerId = q.str("ownerId");
+  const addedFrom = q.date("addedFrom");
+  const addedTo = q.date("addedTo");
 
   const [list, { clients, users }, { savedViews }] = await Promise.all([
     apiGet<CandidateListDTO>(
@@ -85,9 +65,9 @@ export default async function CandidatesPage({
         ownerId,
         addedFrom: addedFrom?.toISOString(),
         addedTo: addedTo?.toISOString(),
-        mine: flag(sp.mine),
-        overdue: flag(sp.overdue),
-        stuck: flag(sp.stuck),
+        mine: q.flagLoose("mine"),
+        overdue: q.flagLoose("overdue"),
+        stuck: q.flagLoose("stuck"),
         hot,
         sort,
         page,
@@ -119,7 +99,7 @@ export default async function CandidatesPage({
       <ListFilters clients={clients} owners={users} />
       <SavedViewsBar scope="candidates" initial={savedViews} />
 
-      <CandidatesList list={list} searchParams={sp} />
+      <CandidatesList list={list} searchParams={q.raw} />
     </div>
   );
 }

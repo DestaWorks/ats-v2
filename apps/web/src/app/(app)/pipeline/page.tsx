@@ -6,6 +6,7 @@ import type { GetSavedViewsResponse } from "@destaworks/contracts/http/saved-vie
 import type { LookupOptionsDTO } from "@destaworks/contracts/validation/lookups";
 import { Spinner } from "@destaworks/ui/spinner";
 import { apiGet, query } from "@/lib/api/server";
+import { readSearchParams, type RawSearchParams } from "@/lib/search-params";
 import { PipelineBoard } from "./pipeline-board";
 
 /**
@@ -17,18 +18,16 @@ import { PipelineBoard } from "./pipeline-board";
 export default async function PipelinePage({
   searchParams,
 }: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
+  searchParams: Promise<RawSearchParams>;
 }) {
   await getVerifiedUser();
 
-  const sp = await searchParams;
-  const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
-  const rawTrack = one(sp.track);
-  const track = TRACKS.includes(rawTrack as Track) ? (rawTrack as Track) : undefined;
+  const q = readSearchParams(await searchParams);
+  const track: Track | undefined = q.oneOf("track", TRACKS);
 
-  const clientId = one(sp.clientId);
-  const search = one(sp.search);
-  const ownerId = one(sp.ownerId);
+  const clientId = q.str("clientId");
+  const search = q.str("search");
+  const ownerId = q.str("ownerId");
 
   const [board, { clients, users }, { savedViews }] = await Promise.all([
     apiGet<BoardResponse>(`/candidates${query({ track, clientId, search, ownerId })}`),

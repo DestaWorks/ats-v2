@@ -11,6 +11,7 @@ import type {
 } from "@destaworks/contracts/validation/open-role";
 import type { LookupOptionsDTO } from "@destaworks/contracts/validation/lookups";
 import { apiGet, query } from "@/lib/api/server";
+import { filterKey, readSearchParams, type RawSearchParams } from "@/lib/search-params";
 import { AddRoleButton } from "./add-role-modal";
 import { RoleFilters } from "./role-filters";
 import { RolesInventory } from "./roles-inventory";
@@ -26,19 +27,15 @@ import { TriageStrip } from "./triage-strip";
 export default async function RolesPage({
   searchParams,
 }: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
+  searchParams: Promise<RawSearchParams>;
 }) {
-  const sp = await searchParams;
-  const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
+  const q = readSearchParams(await searchParams);
 
-  const rawStatus = one(sp.status);
-  const status = rawStatus && isRoleStatus(rawStatus) ? rawStatus : undefined;
-  const rawPriority = one(sp.priority);
-  const priority = rawPriority && isRolePriority(rawPriority) ? rawPriority : undefined;
-  const clientId = one(sp.clientId)?.trim() || undefined;
-  const search = one(sp.search)?.trim() || undefined;
-  const rawPage = Number(one(sp.page));
-  const page = Number.isInteger(rawPage) && rawPage > 0 ? rawPage : 1;
+  const status = q.guarded("status", isRoleStatus);
+  const priority = q.guarded("priority", isRolePriority);
+  const clientId = q.text("clientId");
+  const search = q.text("search");
+  const page = q.page();
 
   await getVerifiedUser();
   const [list, { roles: triage }, { clients }] = await Promise.all([
@@ -46,7 +43,7 @@ export default async function RolesPage({
     apiGet<GetRoleTriageResponse>("/roles/triage"),
     apiGet<LookupOptionsDTO>("/lookups"),
   ]);
-  const listKey = [clientId, status, priority, search, page].join("|");
+  const listKey = filterKey(clientId, status, priority, search, page);
 
   return (
     <div className="flex flex-col gap-5 px-8 py-6">

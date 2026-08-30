@@ -12,6 +12,7 @@ import type {
   ActivityActorOptionsDTO,
 } from "@destaworks/contracts/validation/activity";
 import { apiGet, query } from "@/lib/api/server";
+import { filterKey, readSearchParams, type RawSearchParams } from "@/lib/search-params";
 import { ActivityFilters } from "./activity-filters";
 import { ActivityLog } from "./activity-log";
 
@@ -28,7 +29,7 @@ import { ActivityLog } from "./activity-log";
 export default async function ActivityPage({
   searchParams,
 }: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
+  searchParams: Promise<RawSearchParams>;
 }) {
   const user = await getVerifiedUser();
 
@@ -46,18 +47,13 @@ export default async function ActivityPage({
     );
   }
 
-  const sp = await searchParams;
-  const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
+  const q = readSearchParams(await searchParams);
 
-  const rawAction = one(sp.action);
-  const action: AuditAction | undefined =
-    rawAction && isAuditAction(rawAction) ? rawAction : undefined;
-  const rawEntity = one(sp.entity);
-  const entity: AuditEntity | undefined =
-    rawEntity && isAuditEntity(rawEntity) ? rawEntity : undefined;
-  const actor = one(sp.actor) || undefined;
-  const from = parseDay(one(sp.from));
-  const to = parseDay(one(sp.to));
+  const action: AuditAction | undefined = q.guarded("action", isAuditAction);
+  const entity: AuditEntity | undefined = q.guarded("entity", isAuditEntity);
+  const actor = q.str("actor") || undefined;
+  const from = q.date("from");
+  const to = q.date("to");
 
   // `from`/`to` are `z.coerce.date()` on the wire, so they travel as ISO strings.
   const filters = {
@@ -74,7 +70,7 @@ export default async function ActivityPage({
   ]);
 
   // Remount the client log whenever a server filter changes so it re-seeds from page 1.
-  const listKey = [action, entity, actor, one(sp.from), one(sp.to)].join("|");
+  const listKey = filterKey(action, entity, actor, q.str("from"), q.str("to"));
 
   return (
     <div className="flex flex-col gap-6 px-8 py-6">
@@ -88,11 +84,4 @@ export default async function ActivityPage({
       <ActivityLog key={listKey} initial={list} />
     </div>
   );
-}
-
-/** Parse a `YYYY-MM-DD` day param to a Date; invalid/absent → undefined (the service widens bounds). */
-function parseDay(value: string | undefined): Date | undefined {
-  if (!value) return undefined;
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? undefined : d;
 }

@@ -5,6 +5,7 @@ import type { GetProspectSearchResponse } from "@destaworks/contracts/validation
 import type { GetSavedIcpsResponse } from "@destaworks/contracts/http/saved-icp";
 import { ErrorState } from "@destaworks/ui/error-state";
 import { apiGet, query } from "@/lib/api/server";
+import { readSearchParams, type RawSearchParams } from "@/lib/search-params";
 import { SearchForm } from "./search-form";
 import { SearchResultsTable } from "./search-results-table";
 import { SavedIcpBar } from "./saved-icp-bar";
@@ -19,7 +20,7 @@ import { SavedIcpBar } from "./saved-icp-bar";
 export default async function ClientDiscoverySearchPage({
   searchParams,
 }: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
+  searchParams: Promise<RawSearchParams>;
 }) {
   const user = await getVerifiedUser();
 
@@ -34,14 +35,13 @@ export default async function ClientDiscoverySearchPage({
     );
   }
 
-  const sp = await searchParams;
-  const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
+  const q = readSearchParams(await searchParams);
 
   const parsed = searchProspectsSchema.safeParse({
-    taxonomy: one(sp.taxonomy) || undefined,
-    state: one(sp.state) || undefined,
-    city: one(sp.city) || undefined,
-    zip: one(sp.zip) || undefined,
+    taxonomy: q.str("taxonomy") || undefined,
+    state: q.str("state") || undefined,
+    city: q.str("city") || undefined,
+    zip: q.str("zip") || undefined,
   });
 
   const [result, { savedIcps }] = await Promise.all([

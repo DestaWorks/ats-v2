@@ -6,6 +6,7 @@ import type {
 } from "@destaworks/contracts/http/discover";
 import type { LookupOptionsDTO } from "@destaworks/contracts/validation/lookups";
 import { apiGet, query } from "@/lib/api/server";
+import { readSearchParams, type RawSearchParams } from "@/lib/search-params";
 import { DiscoverSearchForm } from "./discover-search-form";
 import { DiscoverResultsTable } from "./discover-results-table";
 import { CoverageGaps } from "./coverage-gaps";
@@ -20,19 +21,18 @@ import { CoverageGaps } from "./coverage-gaps";
 export default async function DiscoverPage({
   searchParams,
 }: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
+  searchParams: Promise<RawSearchParams>;
 }) {
   await getVerifiedUser();
 
-  const sp = await searchParams;
-  const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
+  const q = readSearchParams(await searchParams);
 
   const parsed = discoverSearchQuerySchema.safeParse({
-    taxonomy: one(sp.taxonomy) || undefined,
-    state: one(sp.state) || undefined,
-    city: one(sp.city) || undefined,
-    firstName: one(sp.firstName) || undefined,
-    lastName: one(sp.lastName) || undefined,
+    taxonomy: q.str("taxonomy") || undefined,
+    state: q.str("state") || undefined,
+    city: q.str("city") || undefined,
+    firstName: q.str("firstName") || undefined,
+    lastName: q.str("lastName") || undefined,
   });
 
   const [result, { clients }, coverageGaps] = await Promise.all([
