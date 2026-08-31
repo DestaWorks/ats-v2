@@ -1,8 +1,22 @@
 # Which App Do I Use? — Migration Cheat-Sheet (for recruiters)
 
-During the rebuild, the **old app** and the **new app** run **side by side**. As each piece is
-rebuilt, you switch that task to the new app; everything else stays on the old app until its turn.
-This page tells you, **month by month, which app to use for what** — so nothing falls through the
+> ## Status: this describes the plan, and the plan has run its course
+>
+> **All three months below have happened.** Every task in every table is built in the new app —
+> pipeline, sourcing, CRM, briefs, reports, admin, the lot. There is no "still the old app" column
+> left to honour, and the month-by-month schedule is now a record of the order things moved in
+> rather than an instruction for this week.
+>
+> **The one thing that has not happened is your data.** The historical records still live in the
+> Google Sheet; the one-shot import into the new app is the last step and has not run yet
+> (`SAAS-RESTRUCTURE-PLAN.md` Phase 7). So the new app is complete but not yet full.
+>
+> **What to do today:** ask before assuming a task has flipped. The switch-over date is set by the
+> data import, not by the tables below.
+
+During the rebuild, the **old app** and the **new app** ran **side by side**. As each piece was
+rebuilt, that task switched to the new app; everything else stayed on the old app until its turn.
+This page told you, **month by month, which app to use for what** — so nothing fell through the
 cracks.
 
 > **The golden rule:** if a task has moved to the new app, do it **only** there — don't also do it
@@ -11,8 +25,8 @@ cracks.
 
 ---
 
-## 📅 Right now (before Month 1 ships) — everything on the OLD app
-Keep working exactly as you do today. Nothing has moved yet.
+## 📅 Month 0 (before Month 1 shipped) — everything on the OLD app
+Keep working exactly as you do today. Nothing has moved yet. *(Historical — this stage is past.)*
 
 ---
 
@@ -79,8 +93,9 @@ moves, it moves for everyone.
 for anything that's flipped over. The old version of that task will be switched off so you can't
 by mistake.
 
-**Where's my data?** All your existing candidates and history are copied into the new app before
-anything flips over, and checked to make sure nothing's missing.
+**Where's my data?** All your existing candidates and history get copied into the new app before
+the final flip, and checked to make sure nothing's missing. **This step has not run yet** — it is
+the last one left, so until you're told otherwise the Sheet is still where the history lives.
 
 **Something looks wrong / missing after a switch.** Say so immediately (that's the plan — flag it
 early). Each flip is signed off with the team before it goes live, and there's a way to roll back

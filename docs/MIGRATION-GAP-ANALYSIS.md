@@ -192,7 +192,7 @@ production:
    unreferenced — a worse version of the known "purge leaves the storage object" gap.
 3. **Wave 6 retires the Sheet and Apps Script.** If the Drive folder goes with them, all 12 files
    die; if it stays, it is exactly the external dependency this migration exists to remove.
-4. **The upload path rejects 5 of the 12.** `src/lib/validation/resume.ts:179` is
+4. **The upload path rejects 5 of the 12.** `packages/contracts/src/validation/resume.ts` is
    `z.enum(["application/pdf", "text/plain"])`. This answers **OQ-6**: the resumes are *not* all
    PDFs, and the signed-upload route cannot currently accept a Word document.
 
@@ -211,7 +211,7 @@ Run alongside the candidate import:
 
 Then `getDownloadUrl` works, the capability gate governs the file, and purge can reach it.
 
-**Ordering caveat:** `src/server/integrations/storage.ts` still has **no delete function**. Putting
+**Ordering caveat:** `packages/integrations/src/storage.ts` still has **no delete function**. Putting
 real resumes in the bucket before adding one turns the known orphan-on-purge gap from hypothetical
 into actual. Add `deleteObject` in the same pass.
 

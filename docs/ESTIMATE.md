@@ -1,5 +1,16 @@
 # Estimate & 3-Month Delivery Plan (Locked)
 
+> ### Delivered — read as a record, not a schedule
+>
+> This was the committed schedule for the Wave 0–6 rebuild, and that rebuild shipped. The waves
+> below are done; `IMPLEMENTATION-PLAN.md` carries the per-task ticks. Work since then is the SaaS
+> restructure, which is planned by phase and not by calendar — see
+> [`SAAS-RESTRUCTURE-PLAN.md`](./SAAS-RESTRUCTURE-PLAN.md), the base document.
+>
+> One correction to the T+0 conditions below: the **AI key is not vendor-specific**. The app is
+> provider-agnostic via the Vercel AI SDK and runs on an Anthropic, OpenAI or Google key selected
+> by `AI_MODEL`; any one of the three satisfies the condition.
+
 The committed plan: **secure core + full recruiting funnel in 3 months**, with the remaining
 tail (CRM analytics + heaviest reports) landing inside 3 months if velocity holds and otherwise
 in a **short fast-follow**. Solo (Leliso) working AI-assisted, **5 days/week × 8 h = 40 h/week**.
@@ -52,7 +63,7 @@ Each wave is **independently shippable and demoable**, and depends only on the w
 | — | **FE baseline** (react-hook-form + zod, Skeleton/EmptyState/ErrorState, print stylesheet, responsive/mobile pass) | 16 | 2 | 0 |
 | 1 | Auth & Access (+ RBAC) | 16 | 2 | 0 |
 | 20 | Bulk Import / Migration | 24 | 3 | 1 |
-| — | **Multi-entity ETL** (leads, notes, clients/contacts/deals, historical activity — `legacy_id`, email-primary dedupe, merge policy, résumé→profile confidence match) | 12 | 1.5 | 1 |
+| — | **Multi-entity ETL** (leads, notes, clients/contacts/deals, historical activity — `legacy_id`, email-primary dedupe, merge policy, resume→profile confidence match) | 12 | 1.5 | 1 |
 | 8 | Parse Resume | 18 | 2 | 1 |
 | 3 | Pipeline | 26 | 3 | 2 |
 | 4 | Candidate Detail | 22 | 3 | 2 |
@@ -186,7 +197,7 @@ The rebuild is judged against numbers, not vibes:
 - **Concurrent users:** **≥ 25–50** simultaneous internal users with no queuing/timeouts (vs the
   Google-Sheet ceiling of a few dozen that degrades under a team pilot).
 - **Migration accuracy:** **100%** of in-scope records migrated with **zero PII loss**, verified
-  against migration golden-files; résumé→profile matches above the confidence threshold, the rest
+  against migration golden-files; resume→profile matches above the confidence threshold, the rest
   routed to manual confirm.
 - **Pipeline responsive at scale:** kanban + candidate lists stay responsive at **≥ 50k
   candidate records** (the Sheet-era cliff).

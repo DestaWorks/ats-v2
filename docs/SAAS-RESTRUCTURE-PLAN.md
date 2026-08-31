@@ -53,7 +53,7 @@ job runner, multi-tenancy, legacy data migration, platform-admin console, billin
 | Backend | NestJS + TypeScript; controllers → application → domain → repositories; contract-first typed REST |
 | Database | PostgreSQL + Prisma; repository pattern; Row-Level Security |
 | Validation | Zod at every boundary |
-| Testing | Vitest; Playwright for critical end-to-end flows |
+| Testing | Vitest; Playwright for critical end-to-end flows — **Playwright is a target, not yet adopted**: it is in no manifest and there are no e2e specs, so nothing exercises a real browser today |
 | CI/CD | GitHub Actions; affected builds and tests; architecture checks |
 
 A new general-purpose language requires a documented architectural reason and must be isolated to a
