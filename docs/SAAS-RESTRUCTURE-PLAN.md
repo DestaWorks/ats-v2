@@ -21,7 +21,7 @@ Phases are ordered by dependency, not by calendar. Each phase states its goal, i
 3. **Aliases keep working throughout — and then go.** `@/*` paths resolved to the new locations so
    no move PR broke the rest of the tree; Phase 2.10 retired them (2,687 specifiers rewritten,
    `paths` 26 → 1). Do not reintroduce one that spans packages: an import names its package now.
-4. **The suite is green between every PR.** 2,261 tests today. The number only goes up except when
+4. **The suite is green between every PR.** 2,299 tests across 214 files today. The number only goes up except when
    code is deleted: 4.3 removed 140 route handlers and the 100 test files that drove them, which
    moved coverage onto the controllers rather than shrinking it.
 5. **A rule without an automated check is not a rule.** Every architectural constraint in this plan
@@ -153,8 +153,9 @@ ats-v2/
 │   ├── web/                      # @destaworks/web — Next.js operator application
 │   │   ├── src/
 │   │   │   ├── app/              # App Router — routes, layouts, pages
-│   │   │   │   ├── (app)/        # authenticated shell; feature UI co-located per route
-│   │   │   │   ├── (auth)/       # sign-in, reset, request-access
+│   │   │   │   ├── (app)/        # signed in, acting in a workspace; feature UI co-located per route
+│   │   │   │   ├── (auth)/       # NOT signed in — sign-in, forgot/reset, request-access
+│   │   │   │   ├── (gate)/       # signed in, NO workspace chosen — /choose-workspace
 │   │   │   │   └── portal/       # client portal (external audience)
 │   │   │   ├── components/       # app-specific components (shared ones live in ui)
 │   │   │   ├── hooks/
@@ -211,16 +212,20 @@ ats-v2/
 │   │   │   ├── schema.prisma
 │   │   │   └── migrations/
 │   │   └── src/
-│   │       ├── client.ts         # db(ctx, tx) — the tenant-scoping seam
+│   │       ├── tenant-scope.ts   # db(ctx, tx) — the tenant-scoping seam (NOT `client.ts`)
+│   │       ├── tenant-connection.ts / tenant-transaction.ts  # the SET LOCAL / pooler machinery
 │   │       ├── generated/        # ~80k lines, walled off from every browser bundle
 │   │       └── repositories/     # 38 files — the method count and its check live in 6.3
 │   │
-│   ├── auth/                     # @destaworks/auth — sessions, guards, capabilities
+│   ├── auth/                     # @destaworks/auth — sessions, guards, tenant resolution
 │   │   └── src/
-│   │       ├── capabilities.ts   # hasCapability — never a role-name check
-│   │       ├── guards.ts
+│   │       ├── guards.ts         # getCurrentUser / getSignedInIdentity
 │   │       ├── tenant-context.ts # TenantContext resolution (Phase 6)
-│   │       └── request-context.ts# framework-free adapter (Phase 0.3)
+│   │       ├── tenant-claim.ts   # readTenantClaim — path > subdomain > cookie
+│   │       └── platform-admin.ts # PlatformContext (Phase 6.8)
+│   │   # `capabilities.ts` was never created: `hasCapability` lives in
+│   │   # domain/src/constants/roles.ts, beside the role and capability vocabulary it reads.
+│   │   # `request-context.ts` moved to `config` in Phase 2.10 (auth <-> integrations cycle).
 │   │
 │   ├── integrations/             # @destaworks/integrations — external adapters
 │   │   └── src/{ai,email,storage,http}/
@@ -241,15 +246,17 @@ ats-v2/
 │   ├── eslint/                   # flat config base + architecture rules
 │   ├── prettier/
 │   ├── typescript/               # tsconfig bases
-│   ├── vitest/
-│   └── generators/               # scaffold a package or feature consistently
+│   └── vitest/
+│   # `generators/` NOT BUILT — no package has been scaffolded from a template; every one was
+│   # extracted by hand in Phase 2. Open, low priority.
 │
-├── infrastructure/
-│   ├── docker/                   # api and worker images, local compose
-│   └── environments/             # per-environment configuration
+│   # `infrastructure/` NOT BUILT — no Dockerfile, no compose file, no per-environment directory.
+│   # Phase 4.4 chose Render instead, configured by `render.yaml` at the repository root, so the
+│   # docker/ half of this row has no consumer. Correct the plan here, not the tree.
 │
+├── render.yaml                   # Phase 4.4 — api + worker services, `oregon`
 ├── scripts/
-│   └── migrate/                  # legacy Sheet ETL (Phase 7)
+│   # `migrate/` NOT BUILT — Phase 7 has not started; the importers are still outside the repo.
 │
 ├── docs/
 ├── .github/workflows/            # CI: PR validation, affected builds, deploys
@@ -312,7 +319,7 @@ the **check** that enforces it — a standard without a check is a suggestion.
 clients import from it. Nothing infers a shape from an implementation detail.
 
 **Requests.** Zod schema per endpoint, `.strict()` so unknown keys are rejected rather than ignored
-(84 schemas already do this). Validation happens once, at the boundary — never re-validated in a
+(95 `.strict()` schemas across 26 files already do this). Validation happens once, at the boundary — never re-validated in a
 service, never trusted from the client.
 
 **Responses.** Resources are returned bare; there is no `{ data: ... }` wrapper. Collections use one
@@ -1232,23 +1239,20 @@ export interface TenantContext {
 - **Done-when:** reconciliation proves every row belongs to exactly one tenant — the reconciliation
   exists and is tested; **running it needs the migrations applied**, so this closes at cutover
 
-> **Ordering correction — the `schema.prisma` half of 6.2 ships with 6.3.** The migrations above are
-> complete, but `schema.prisma` still declares `tenantId String?` and the field-level `@unique`s.
-> That is not oversight, it is a dependency the plan did not anticipate: **both edits change Prisma's
-> GENERATED TYPES, and only 6.3 can satisfy them.**
+> **Ordering correction — the `schema.prisma` half of 6.2 shipped with 6.3, and is now DONE.** Both
+> edits changed Prisma's GENERATED TYPES, so only 6.3 could satisfy them: `tenantId String` makes
+> `tenantId` a required key of every create input, and `@@unique([tenantId, legacyId])` changes the
+> generated WHERE from `{ legacyId }` to `{ tenantId_legacyId: { … } }` — neither can be named until
+> `TenantContext` is threaded. So the SQL landed first and the schema edits landed with the
+> threading, in a commit that could compile.
 >
-> - `tenantId String` makes `tenantId` a required key of every create input — 65 call sites across
->   `application` and `db` build those inputs and none can name a tenant until `TenantContext` is
->   threaded.
-> - `@@unique([tenantId, legacyId])` changes the generated WHERE from `{ legacyId }` to
->   `{ tenantId_legacyId: { tenantId, legacyId } }`, which every `findUnique`/`upsert` on those keys
->   must then supply — the same missing value.
->
-> Doing them now means either a tree that does not compile or 6.3's entire diff folded into 6.2. So
-> the SQL lands first (it is what actually runs, and 6.1 already put `schema.prisma` ahead of the
-> migrations in the other direction) and the two one-line schema edits land with the threading, in a
-> commit that can compile. The index re-leading DID land in `schema.prisma` — an index carries no
-> type. The pending state is recorded on the `Tenant` model itself so it cannot be lost.
+> **Verified in the schema as of 2026-08-31:** zero `tenantId String?` remain (40 models declare
+> `tenantId String`), and 13 `@@unique([tenantId, …])` are present — one per row of 6.0's corrected
+> table. The seven field-level `@unique`s left are exactly the ones 6.0 keeps on purpose:
+> `User.email`, `Session.token`, `ClientPortalToken.tokenHash`, `Tenant.slug`,
+> `SourceLead.promotedCandidateId` (the one-to-one relation Prisma will not accept otherwise) and
+> the two `clientId` one-to-ones (`ClientRules`, `ClientMatchProfile`) — each of which hangs off a
+> `Client` that is itself tenant-scoped, so the uniqueness cannot collide across tenants.
 
 ### 6.3 The enforcement seam
 - [x] Extend `db(tx)` to `db(ctx, tx)` with a Prisma client extension that injects `tenantId` into every `where` and `data` *(landed early, in 4331163, so the workstreams after it bind to one shape)*
@@ -1256,15 +1260,18 @@ export interface TenantContext {
       and `Membership`. The sketch above says four; a `Membership` query filtered by the active tenant
       could never answer "which tenants may this user switch to", which is the read tenant switching
       is built on. `packages/db/src/tenant-scope.ts` holds the list and is authoritative
-- [x] Thread `TenantContext` through the **246** repository methods (35 of the 38 repositories; the
-      other three serve global models only) — one argument, no new logic
+- [x] Thread `TenantContext` through the **251** repository methods (35 of the 38 repositories; the
+      other three — `user`, `schedule-run`, `health` — serve global models only) — one argument, no
+      new logic. 251, not the 246 written when this was drafted; `pnpm tenant:check` prints the
+      live count, so read it there rather than from this line
 - [x] CI check: no repository method without a `TenantContext` first argument, except the allowlist —
       `scripts/check-tenant-scope.mjs`, wired as `pnpm tenant:check`. It also checks the allowlist
       itself against the seam's `GLOBAL_MODELS`, and ratchets the escape hatches 6.4 must remove
-- [ ] **Land 6.2's two `schema.prisma` edits** — `tenantId String?` → `String`, and the field-level
-      `@unique`s → `@@unique([tenantId, …])`. Both are blocked on the value this sub-phase supplies,
-      and the migrations that make them true are already written (`20260829112500_tenants_contract`).
-      Expect ~65 create sites and ~10 `findUnique`/`upsert` sites to need the context
+- [x] **Land 6.2's two `schema.prisma` edits** — DONE. `tenantId String?` → `String` on all 40
+      declaring models (zero `String?` remain) and the field-level `@unique`s → 13
+      `@@unique([tenantId, …])`, matching `20260829112500_tenants_contract` row for row. The create
+      sites and `findUnique`/`upsert` sites this blocked on all name a context now, which is why the
+      tree compiles: `npx tsc --noEmit` is clean and `pnpm tenant:check` passes
 - [x] **Fix `AiSettings`** — found while writing 6.2, decided and fixed with the bridge deletion:
       **the kill switch is per tenant**, not platform-wide. A workspace that turns AI off must not
       turn it off for every other workspace, and the usage ledger behind it is per-tenant spend.
@@ -1275,15 +1282,17 @@ export interface TenantContext {
       the wrong workspace. Both tables already carried an RLS policy, so leaving them global would
       have returned zero rows at cutover — a silent, installation-wide AI outage
 - **Done-when:** a repository call cannot omit tenant scoping and still compile ✅, **and**
-  `schema.prisma` agrees with the contract migration
+  `schema.prisma` agrees with the contract migration ✅ — **6.3 is closed.**
 
 > The `db()` sketch above does not compile as written: `Prisma.TransactionClient` has no `$extends`,
 > so the extension goes on the base client and a transaction started from it inherits the scoping.
 > See the NOTE on `ScopedTx` in `packages/db/src/tenant-scope.ts`.
 
 ### 6.4 Services and routes
-- [x] Thread context through `@destaworks/application` — all 27 service modules, every public
-      method. They hold the context but do NOT yet pass it to the repositories: that call-site
+- [x] Thread context through `@destaworks/application` — every public method of every service. The
+      "27 service modules" written here counted the state at the time; the package holds **48**
+      `*.service.ts` files today (41 at the top level plus 7 under `reports/`), and the sweep covers
+      all of them. They hold the context but do NOT yet pass it to the repositories: that call-site
       sweep is the escape-hatch ratchet below, and doing it here would have rewritten the same
       files twice
 - [x] `getCurrentUser` returns `AuthContext` (a `TenantContext` carrying the full identity) —
@@ -1297,16 +1306,18 @@ export interface TenantContext {
       changed only a type annotation** and 4 moved an identity read one level in. No guard,
       decorator, capability or route table moved. Zero role names found, and the existing source
       scan now covers the controllers so it stays that way
-- [x] **Delete the compile-time bridge.** `bridgeUnscopedCallers` wraps nothing: it is gone from all
-      35 tenant-scoped repositories, so no wrapper reorders arguments behind a caller's back and no
-      service reaches a repository without passing its context. The **function itself still stands
-      in `tenant-scope.ts`, with its unit test** — unused, ratcheted at 0 uses by
-      `check-tenant-scope.mjs`, and cheap to keep only until 6.4's last bullet (`User.role`) is
-      closed, since that is the one remaining sweep that could plausibly want it. Delete it then;
-      a helper nothing calls is otherwise an invitation. The ratchet fell from
-      **100 escape-hatch uses across 45 files to 29 across 10** (`dbUnscoped` 17, `withTransaction`
-      8, `UNSCOPED_CONTEXT` 4, `bridgeUnscopedCallers` 0) and the baseline is ratcheted down.
-      Removing it exposed two unscoped reads the wrapper had been hiding — see 6.6
+- [x] **Delete the compile-time bridge.** `bridgeUnscopedCallers` is gone from all 35 tenant-scoped
+      repositories, so no wrapper reorders arguments behind a caller's back and no service reaches a
+      repository without passing its context. **Correction: the function itself is gone too.** This
+      line used to say it "still stands in `tenant-scope.ts`, with its unit test", kept until
+      `User.role` closed — it does not. `packages/db/src/tenant-scope.ts` retains only a section
+      heading naming it, and `tenant-scope.test.ts`'s `describe("the 6.3 -> 6.4 bridge")` block now
+      exercises `UNSCOPED_CONTEXT` and `withTransaction` instead. The identifier survives only in
+      `check-tenant-scope.mjs`'s `ESCAPE_HATCHES` list, where its 0 count is now trivially true.
+      The ratchet fell from **100 escape-hatch uses across 45 files to 28 across 10**
+      (`dbUnscoped` 17, `withTransaction` 8, `UNSCOPED_CONTEXT` 3, `bridgeUnscopedCallers` 0),
+      matching `scripts/tenant-scope-baseline.json`. Removing the bridge exposed two unscoped reads
+      it had been hiding — see 6.6
 - **Done-when:** every endpoint resolves a tenant before touching data ✅ — both halves. Resolution
   is the `TenantGuard`/`getCurrentUser` work above; the data half is the bridge deletion, after
   which a repository call without a context is a compile error rather than a silent full-table read
@@ -1320,7 +1331,23 @@ export interface TenantContext {
 - [x] Invitation flow — invite, accept, remove (`invited` grants nothing, `removed` revokes on the
       next request; account creation deliberately keeps its single existing path)
 - [x] Keep `User.email` globally unique: one human, one login, many memberships
-- **Done-when:** a user in two tenants sees only the active tenant's data and can switch
+- [x] **The user interface for all of the above.** Endpoints without screens are not a feature, and
+      this was API-only until it was found and fixed: `apps/web/src/app/(app)/workspace-switcher.tsx`
+      (header switcher), `(app)/workspace/{page,members-view}.tsx` (member list, invite, remove) and
+      `(gate)/choose-workspace/` (the picker for a session that resolves no tenant). All five
+      `/tenants*` endpoints have a caller
+- **Done-when:** a user in two tenants sees only the active tenant's data and can switch ✅ in code;
+  unprovable on a database until the migrations run
+
+> **`/choose-workspace` is `(gate)`, not `(auth)`.** The app draws a three-state line — `(auth)` not
+> signed in, `(gate)` signed in with no workspace chosen, `(app)` signed in and acting in one — and
+> the same line already exists in `getSignedInIdentity()` vs `getCurrentUser()`, in
+> `IdentityAuthGuard` vs `SessionAuthGuard`, and in `resolveTenantContext` answering `ambiguous`
+> rather than guessing. `middleware.ts` agrees: every real `(auth)` route is on its exclusion list
+> and `/choose-workspace` is not, because it requires a session. The picker shares `(auth)`'s brand
+> surface (`AuthChrome`) but not its shell — `AuthShell`'s tab row offers "Sign In" and "Request
+> Access", both wrong for someone already holding a session. The URL is unchanged; a route group
+> does not appear in the path.
 
 ### 6.6 Defence in depth
 - [x] Enable + **FORCE** Row-Level Security on the **39** tenant-scoped tables
@@ -1376,7 +1403,7 @@ to" unanswerable. All three facts are asserted by `scripts/check-rls-coverage.mj
 independently. **NOT met — but only one thing stands in the way now: the migrations have not run.**
 The code half is done and enforced; what remains is applying it to a database.
 
-**Enforced, not just written — 222 → 29 escape hatches.** Every repository call site passes a
+**Enforced, not just written — 222 → 28 escape hatches.** Every repository call site passes a
 context, every transaction announces its tenant, and the compile-time bridge is deleted. The four
 structural blockers that stood behind the last 111 were each solved rather than worked around:
 
@@ -1451,13 +1478,28 @@ Two items are owed to someone other than the code:
       `check-architecture.mjs` are gated on `hasOwnManifest` and skip a unit without one — and
       inheriting the root manifest would have handed admin `@destaworks/db` and `@prisma/client` as
       declared dependencies on day one
-- [x] Tenant list, health, suspend and restore. Health is DERIVED, never stored — two queries
+- [ ] Tenant list, health, suspend and restore — **API done, CONSOLE PARTLY UNBUILT.**
+      `GET /platform/tenants` and `GET /platform/tenants/:slug` are wired to real pages
+      (`apps/admin/src/app/(console)/tenants/page.tsx` and `tenants/[slug]/page.tsx`, through
+      `listPlatformTenants` / `readPlatformTenant`, the only two functions
+      `apps/admin/src/lib/platform-api.ts` exposes). `POST /platform/tenants/:slug/suspend` and
+      `/restore` have **no caller**: the tenant detail page ends in
+      `<NotBuiltYet what="Suspend and restore" />`, and the standalone
+      `apps/admin/src/app/(console)/health/page.tsx` is a placeholder too. Health is DERIVED, never stored — two queries
       regardless of tenant count. Suspension reason is a closed enum, not free text: it lands in the
       suspended tenant's own `activity_log`, which their auditors read, and free text there is an
       open channel for a third party's PII. Restore derives its target status from `trialEndsAt`
       rather than defaulting to `active`, so a support action cannot silently promote a suspended
       trial into a paying-looking workspace
-- [x] Support impersonation — time-boxed, audited, consented. **The tenant consents, never the
+- [ ] Support impersonation — **API and design done, NO USER INTERFACE ON EITHER SIDE.**
+      `GET/POST/DELETE /platform/impersonation/consent` sits behind `TenantGuard`, so it is granted
+      and withdrawn from INSIDE a workspace — and `apps/web` has no screen for it: grepping
+      `apps/web/src` for `impersonation` or `consent` returns nothing, so the tenant cannot open,
+      inspect or revoke a support window at all. On the other side
+      `apps/admin/src/app/(console)/impersonation/page.tsx` is `<NotBuiltYet>`, so
+      `GET /platform/impersonation/:slug/activity` has no caller either. The design below is
+      built and tested; what is missing is both halves of the interface. It is time-boxed,
+      audited, consented. **The tenant consents, never the
       platform**: a member with `manageUsers` opens a bounded window, any member can read whether
       one is open, and consent lapses on its own rather than persisting until someone remembers.
       The window IS the session — no second admin-controlled clock, whose only advantage would be
@@ -1470,13 +1512,16 @@ Two items are owed to someone other than the code:
       consent was granted; ledger rows can only be superseded, which is the standard a consent
       record must meet under HIPAA and Proclamation 1321/2024. That design would stand even without
       the migration freeze
-- [x] Platform metrics separate from any tenant's reports. Six of eight are built from GLOBAL models
+- [ ] Platform metrics separate from any tenant's reports — **API done, NO USER INTERFACE.**
+      `GET /platform/metrics` serves them; `apps/admin/src/app/(console)/metrics/page.tsx` is still
+      `<NotBuiltYet>` and its copy ("renders once a platform metrics endpoint exists") is stale —
+      the endpoint shipped and the console was not updated. Six of eight are built from GLOBAL models
       (`Tenant`, `Membership`, `Session`, `ScheduleRun`), which carry no RLS policy; the two that
       read tenant-scoped tables (`AiUsageEvent`, `Document`) use a bounded per-tenant walk inside
       `withTenantTransaction(systemContextFor(id), …)`. Both controls are load-bearing and live at
       different times: today only the seam's injection stops each iteration reading every tenant and
       multiplying the totals; after the migration only the announcement stops each returning
-      nothing. No `BYPASSRLS`, no weakened policy, ratchet unchanged at 29
+      nothing. No `BYPASSRLS`, no weakened policy, ratchet unchanged at 28
 - [x] **Two defects integration surfaced that no single branch could see.** `/platform/*` was 401
       for exactly the operator it exists for — `SessionAuthGuard` resolves a tenant, and a platform
       admin belongs to none. `PlatformAuthGuard` + `@CurrentIdentity()` authenticate an identity
@@ -1484,9 +1529,15 @@ Two items are owed to someone other than the code:
       client portal: `tenantIsLive` covers members, but the portal and the public request-access
       forms resolve a tenant by slug and never see a membership, so a suspended workspace locked out
       its staff while its external contacts kept working off a 30-day cookie
-- **Done-when:** tenants are supportable without database access ✅ — list, health, suspend, restore,
-  installation metrics and a consented read of a tenant's activity trail, all behind the platform
-  axis. **Not yet provable on staging:** like Phase 6, RLS is inert until the migrations run, so the
+- **Done-when:** tenants are supportable without database access — **NOT MET, and the reason is not
+  the migration freeze.** The platform API, services, guards, audit trail and contracts are complete
+  and tested; the CONSOLE is not. Four of `apps/admin`'s five pages exist, but three of them
+  (`metrics`, `health`, `impersonation`) and the mutation half of `tenants/[slug]` render
+  `<NotBuiltYet>`, so an operator can list and read tenants and nothing else. Suspending a workspace,
+  restoring it, reading installation metrics and opening or auditing a support window are all
+  reachable only by calling `apps/api` by hand — which is the opposite of this done-when.
+  **The gap is UI wiring against endpoints that already exist**, not new backend work.
+  **Separately not yet provable on staging:** like Phase 6, RLS is inert until the migrations run, so the
   per-tenant walk in the metrics reader is exercised against CI Postgres rather than a live policy
 
 **Owner decisions this phase surfaced, none of them code:**
@@ -1544,11 +1595,15 @@ Tag `restructure` at the end of each phase — `phase-0-complete`, `phase-1-comp
 a fact in the repository rather than a claim in a document. The done-when of each phase is the gate;
 there is no separate consolidation step.
 
-**This has not been done: the repository carries zero tags.** Phases 0, 1, 2 and 8 have met their
-done-whens and none of them is marked, which is precisely the failure the rule was written to
-prevent — the only record of what is finished is this document, and a document is a claim. Tag those
-four retroactively at the commit that closed each one. Phase 3 is not among them: its last item
-(branch protection) is blocked on the owner, so the gate is genuinely still open.
+**This has not been done: the repository carries zero tags** (`git tag` is empty). Phases 0, 1 and 2
+have met their done-whens and none of them is marked, which is precisely the failure the rule was
+written to prevent — the only record of what is finished is this document, and a document is a
+claim. Tag those three retroactively at the commit that closed each one.
+
+Two phases previously listed here as complete are not. **Phase 3**'s last item (branch protection)
+is blocked on the owner. **Phase 8** was listed as done on the strength of its API; its console is
+three placeholder pages, so its done-when fails on the interface, not on the freeze. Neither gate
+may be tagged.
 
 ### Deploy tags
 
@@ -1570,6 +1625,42 @@ the backfill and the `NOT NULL` flip get exactly one attempt, against live data.
 - [ ] Phase 6 and Phase 7 migrations run staging-first, then production, never authored against production
 
 This does not block hardening, the restructure, CI or the job runner. It does block tenancy.
+
+---
+
+## What is not yet functional
+
+Audited against the code on 2026-08-31, not against this document. **Excludes** the legacy data
+migration (Phase 7) and anything whose only blocker is a deployment, a hosted database or a GitHub
+setting — those are listed separately below so they are not confused with engineering work.
+
+**Blocked only by the migration freeze** (code complete, tested, inert until the SQL runs):
+tenant isolation end to end (`tenantId` is nullable in the database, the 13 per-tenant uniqueness
+rules are still global, RLS is authored but not enabled), the ETL commit job, brief generation's
+`draft` columns, the scheduler's `schedule_runs` claim table, and CSV export delivery. No job has
+ever run end to end for the same reason.
+
+**Not blocked by anything but unfinished work:**
+
+| Gap | Evidence | Size |
+|---|---|---|
+| **Platform console has no mutations or metrics.** Suspend, restore, installation metrics, tenant health and the support-window activity read all have working endpoints and no caller — `metrics`, `health`, `impersonation` and the bottom of `tenants/[slug]` are `<NotBuiltYet>` placeholders | `apps/admin/src/app/(console)/**`; `apps/admin/src/lib/platform-api.ts` exposes only 2 of the 8 platform endpoints | Phase 8, UI only |
+| **Impersonation consent has no interface in `apps/web`.** The tenant is the party that consents, and there is no screen to grant, view or revoke a support window | `GET/POST/DELETE /platform/impersonation/consent` exist; `apps/web/src` contains no match for `impersonation` or `consent` | Phase 8, UI only |
+| **`User.role` is still the source of role truth for Better Auth.** The membership role is threaded everywhere else, but the column, `adminPlugin({ adminRoles, defaultRole, roles })` and the session-cookie cache still exist | `packages/db/prisma/schema.prisma` `model User { role String }`; 6.4's last bullet | Auth surface change |
+| **Report export writes an un-scoped storage key.** The last one; every other key is `t/<tenantId>/…` | `packages/application/src/reports/report-export.service.ts:70` `unscopedStorageKey(`; `pnpm rls:check` reports 1/2 remaining | One call site |
+| **Saved views are shipped but switched off.** The chip row and its read are commented out on both pages that had them, so `GET /saved-views` has no caller while POST and DELETE stay live | `apps/web/src/app/(app)/{candidates,pipeline}/page.tsx` — "Saved views are hidden for now" | Uncomment + verify |
+| **No tenant can be created by the product.** There is no create-tenant endpoint anywhere; tenant #1 exists only because a backfill migration inserts it | no `POST /platform/tenants` and no `POST /tenants`; Phase 9 is entirely unstarted | Phase 9 |
+| **Nothing in Phase 9 exists**: signup, provisioning, subdomain routing, billing, seat limits, usage metering, trial/dunning states, tenant export/offboarding | no billing, Stripe, signup or provisioning code in `packages/application` or `apps/api` | Phase 9 |
+| **No environment schema.** `packages/config/src/env.ts` is in the target structure and was never written, so every env var is read as a raw `process.env` string with no validation | `packages/config/src` holds only `logger/` and `request-context.ts` | Small |
+| **`tooling/generators/` and `infrastructure/` were never built** | absent from the tree | Low priority |
+| `DELETE /client-match-profiles/:clientId` has no caller — no "reset match weights" affordance | `apps/web/src/app/(app)/roles/[id]/role-detail.tsx` calls GET and PUT only | Trivial |
+| `GET /reports/export` (the synchronous export) has no caller since the job replaced it — dead surface still served | `apps/web/src/app/(app)/reports/export-csv-button.tsx` posts the job instead | Delete it |
+
+**Owner actions, not engineering** (listed so they are not counted as gaps): branch protection on
+`main` (3); the API host rollout, `RENDER_DEPLOY_HOOK_URL`, `API_HEALTH_URL`, the monthly figure and
+the Supabase connection-ceiling confirmation (4.4); a separate staging database (D6); confirming
+`DATABASE_URL`'s role is neither `SUPERUSER` nor `BYPASSRLS` (6.6); how `apps/admin` obtains a
+session, AI spend in currency, and a platform-scoped audit sink (8); and tagging the phase gates.
 
 ---
 

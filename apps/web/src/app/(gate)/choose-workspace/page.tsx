@@ -7,6 +7,11 @@ import { ChooseWorkspace } from "./choose-workspace";
 /**
  * Which workspace am I working in? (Phase 6.5)
  *
+ * The whole of the `(gate)` group: signed in, no workspace chosen. That is a third state, not a
+ * variant of signed-out — `getSignedInIdentity()` answers here where `getCurrentUser()` cannot,
+ * which is the same line `IdentityAuthGuard`/`SessionAuthGuard` draw on the API and the same one
+ * `resolveTenantContext` draws when it answers `ambiguous`.
+ *
  * Reached when a session exists but no tenant resolves — a person in two workspaces whose request
  * carries no claim. `resolveTenantContext` answers `ambiguous` rather than picking one, because
  * picking one silently would let the same request carry Owner authority in A and Associate

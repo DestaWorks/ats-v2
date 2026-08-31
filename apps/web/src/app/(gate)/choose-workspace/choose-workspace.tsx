@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { TenantChoiceDTO } from "@destaworks/contracts/validation/tenant";
 import { acceptInvitation, messageForFailure, switchTenant } from "../../(app)/lib/tenant-fetch";
-import { AuthShell } from "../auth-shell";
+import { GateShell } from "../gate-shell";
 
 /** The picker itself. An `invited` workspace is accepted first; an `active` one is entered. */
 export function ChooseWorkspace({ tenants, name }: { tenants: TenantChoiceDTO[]; name: string }) {
@@ -27,15 +27,10 @@ export function ChooseWorkspace({ tenants, name }: { tenants: TenantChoiceDTO[];
   }
 
   return (
-    <AuthShell activeTab={null}>
-      <header>
-        <h1 className="font-serif text-xl text-ivory">Choose a workspace</h1>
-        <p className="mt-1 text-[13px] text-ivory/50">
-          {name}, you belong to more than one. Pick the one you want to work in — you can switch any
-          time from the header.
-        </p>
-      </header>
-
+    <GateShell
+      title="Choose a workspace"
+      description={`${name}, you belong to more than one. Pick the one you want to work in — you can switch any time from the header.`}
+    >
       {tenants.length === 0 ? (
         <p className="mt-5 text-[13px] text-ivory/50">
           You are signed in but not a member of any workspace. Ask an Owner to invite you.
@@ -62,6 +57,6 @@ export function ChooseWorkspace({ tenants, name }: { tenants: TenantChoiceDTO[];
           ))}
         </ul>
       )}
-    </AuthShell>
+    </GateShell>
   );
 }
