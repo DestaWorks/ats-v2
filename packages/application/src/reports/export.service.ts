@@ -43,6 +43,9 @@ export const exportService = {
     return toCsv(
       cohort.candidates.map((row) => ({ row, cohort, now })),
       COLUMNS,
+      cohort.capped
+        ? `TRUNCATED: this export contains the first ${cohort.candidates.length} candidates only. More match these filters. Narrow the date range or filter by client for a complete export.`
+        : undefined,
     );
   },
 };

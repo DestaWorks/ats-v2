@@ -86,3 +86,33 @@ describe("pipelineReportsService.pipelineFunnel", () => {
     expect(newCandidateStage?.reachedCount).toBe(2);
   });
 });
+
+describe("truncation reaches the DTO", () => {
+  it("pipelineFunnel carries capped through from the cohort", async () => {
+    h.loadCohort.mockResolvedValue({
+      candidates: [],
+      clientNames: new Map(),
+      userNames: new Map(),
+      rulesByClient: new Map(),
+      capped: true,
+    });
+    h.maxStageOrderAsOf.mockResolvedValue(new Map());
+    await expect(pipelineReportsService.pipelineFunnel(ctx, {})).resolves.toMatchObject({
+      capped: true,
+    });
+  });
+
+  it("executiveSummary carries capped through from the cohort", async () => {
+    h.loadCohort.mockResolvedValue({
+      candidates: [],
+      clientNames: new Map(),
+      userNames: new Map(),
+      rulesByClient: new Map(),
+      capped: true,
+    });
+    h.maxStageOrderAsOf.mockResolvedValue(new Map());
+    await expect(pipelineReportsService.executiveSummary(ctx, {})).resolves.toMatchObject({
+      capped: true,
+    });
+  });
+});

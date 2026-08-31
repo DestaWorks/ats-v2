@@ -65,7 +65,7 @@ export const teamReportsService = {
         };
       });
 
-    return { rows };
+    return { capped: cohort.capped, rows };
   },
 
   /** Source ROI — per-source funnel (legacy `index.html:8532-8571`). */
@@ -113,6 +113,6 @@ export const teamReportsService = {
         };
       });
 
-    return { rows };
+    return { capped: cohort.capped, rows };
   },
 };

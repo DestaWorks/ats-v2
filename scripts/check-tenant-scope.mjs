@@ -225,13 +225,48 @@ check(
 );
 
 check(
+  "audit-writes-name-a-tenant-when-nothing-else-can",
+  "`writeAudit` inside an UNSCOPED transaction passes `tenantId` explicitly (6.5)",
+  (fail) => {
+    const UNSCOPED_WRAPPERS = new Set(["withTransaction", "withAnnouncedTenant"]);
+    for (const file of sourceFiles(join(repoRoot, "packages/application/src"))) {
+      if (/\.(test|spec)\.ts$/.test(file)) continue;
+      const sf = parse(file);
+      walk(sf, (node) => {
+        if (!ts.isCallExpression(node)) return;
+        if (!ts.isIdentifier(node.expression)) return;
+        if (!UNSCOPED_WRAPPERS.has(node.expression.text)) return;
+        walk(node, (inner) => {
+          if (!ts.isCallExpression(inner)) return;
+          if (!ts.isIdentifier(inner.expression)) return;
+          if (inner.expression.text !== "writeAudit") return;
+          const params = inner.arguments[1];
+          const named =
+            params !== undefined &&
+            ts.isObjectLiteralExpression(params) &&
+            params.properties.some(
+              (prop) =>
+                (ts.isPropertyAssignment(prop) || ts.isShorthandPropertyAssignment(prop)) &&
+                ts.isIdentifier(prop.name) &&
+                prop.name.text === "tenantId",
+            );
+          if (named) return;
+          fail(
+            `writeAudit() inside \`${node.expression.text}(...)\` passes no \`tenantId\`. That ` +
+              `transaction announces no tenant, so the seam cannot supply one and ` +
+              `activity_log.tenantId (NOT NULL) rejects the row`,
+            at(sf, inner),
+          );
+        });
+      });
+    }
+  },
+);
+
+check(
   "global-model-lists-carry-a-predicate",
   "a list read of a GLOBAL model is constrained by tenant or by caller-supplied ids (6.3)",
   (fail) => {
-    // The seam cannot scope a global model — that is what "global" means — so a `findMany` over
-    // one returns every row on the installation unless its `where` says otherwise. Reads keyed by
-    // ids or an email the caller already holds are fine; an absent or unconstrained `where` is
-    // the cross-tenant enumeration shape, and no other check in this file can see it.
     const KEYS = ["tenantId", "tenant", "memberships", "membership", "id", "email", "userId"];
     for (const file of ALLOWLISTED) {
       const repo = repositories.get(file);

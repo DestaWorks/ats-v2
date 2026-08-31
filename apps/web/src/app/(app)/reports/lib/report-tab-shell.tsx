@@ -13,6 +13,26 @@ function isFailure<T>(value: T | ApiFailure): value is ApiFailure {
   return typeof value === "object" && value !== null && "code" in value && "issues" in value;
 }
 
+/** Rendered here, not per tab, so a new tab cannot forget the warning. */
+function isCapped<T>(value: T): boolean {
+  return (
+    typeof value === "object" && value !== null && (value as { capped?: unknown }).capped === true
+  );
+}
+
+function TruncationNotice() {
+  return (
+    <p
+      role="status"
+      className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+    >
+      <strong className="font-semibold">Showing the first 3,000 candidates.</strong> More match
+      these filters, so every figure below is computed on part of the data. Narrow the date range or
+      filter by client for an accurate report.
+    </p>
+  );
+}
+
 /** The loading/error/data states every report tab shares — one place, not re-typed 9×. */
 export function ReportTabShell<T>({
   data,
@@ -31,7 +51,12 @@ export function ReportTabShell<T>({
   if (isFailure(data)) {
     return <ErrorState title="Couldn't load this report" message={messageForFailure(data)} />;
   }
-  return <>{children(data)}</>;
+  return (
+    <>
+      {isCapped(data) && <TruncationNotice />}
+      {children(data)}
+    </>
+  );
 }
 
 /** A simple horizontal bar (count vs. a max) — the shared visual idiom for distribution rows. */
