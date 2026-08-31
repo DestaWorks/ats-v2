@@ -1,5 +1,4 @@
 import type { Prisma } from "../generated/prisma/client";
-import type { Role } from "@destaworks/domain/constants";
 import { db } from "../prisma";
 import { REFERENCE_ROWS_CAP } from "../query-limits";
 
@@ -37,19 +36,6 @@ export const userRepository = {
     });
   },
 
-  /** `{ id, name }` options for exactly one role, sorted by name — feeds the Daily Log "Team"
-   *  view's target roster / feedback picker, which is Associate-only by design (a Manager sets
-   *  targets/gives feedback to their associates, not to other leadership or Admin accounts that
-   *  happen to exist in the same user table). */
-  listByRole(role: Role, tx?: Prisma.TransactionClient) {
-    return db(tx).user.findMany({
-      where: { role },
-      select: { id: true, name: true },
-      orderBy: { name: "asc" },
-      take: REFERENCE_ROWS_CAP,
-    });
-  },
-
   /** Case-insensitive email lookup — `id` only, for existence checks (e.g. access-request
    *  approval must not try to create a second account for an already-registered email). */
   findByEmail(email: string, tx?: Prisma.TransactionClient) {
@@ -62,15 +48,16 @@ export const userRepository = {
   /**
    * The identity fields a BACKGROUND job needs to re-establish who it is acting as. A job runs
    * long after the request that queued it, so it cannot carry a session; it carries an actor id
-   * and reads the current record here. Reading the role fresh rather than freezing it at enqueue
-   * time is the point — a user who lost the capability in between must not have a job still
-   * running with the old one. `role` is returned raw; the caller validates it against the `Role`
-   * union, because that vocabulary lives in `domain`, not here.
+   * and reads the current record here.
+   *
+   * Identity only — no role. The job's authority is the actor's `Membership` in the tenant the
+   * queued row names, read fresh by the caller, so a user who lost the capability between enqueue
+   * and run cannot still be running with the old one.
    */
   findActorById(id: string, tx?: Prisma.TransactionClient) {
     return db(tx).user.findUnique({
       where: { id },
-      select: { id: true, email: true, name: true, role: true },
+      select: { id: true, email: true, name: true },
     });
   },
 

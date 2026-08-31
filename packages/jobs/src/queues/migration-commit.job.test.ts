@@ -57,12 +57,11 @@ const h = vi.hoisted(() => ({
   fakeTx: { __tx: true },
   /** The one tenant this fixture runs in — the run's, and the actor's membership's. */
   tenant: "t1",
-  actor: {
-    id: "u1",
-    email: "owner@desta.works",
-    name: "Owner",
-    role: "Owner" as string,
-  } as { id: string; email: string; name: string; role: string } | null,
+  actor: { id: "u1", email: "owner@desta.works", name: "Owner" } as {
+    id: string;
+    email: string;
+    name: string;
+  } | null,
   /**
    * The actor's membership in the run's tenant, which is where `claim` now reads their role.
    * Held apart from `actor` so a test can revoke the membership without deleting the user.
@@ -282,7 +281,7 @@ beforeEach(() => {
   store.runs.clear();
   store.upserts = [];
   store.seq = 0;
-  h.actor = { id: "u1", email: "owner@desta.works", name: "Owner", role: "Owner" };
+  h.actor = { id: "u1", email: "owner@desta.works", name: "Owner" };
   h.membership = { tenantId: h.tenant, role: "Owner" };
   clearMigrationCommitEnqueuer();
 });

@@ -54,7 +54,20 @@ function toDTO(user: BetterAuthUser): AdminUserDTO {
  * Wraps Better Auth's admin plugin (`auth.api.*`) — that plugin owns storage/hashing for this
  * domain, so there's no repository here. Every call forwards the request's `headers` so Better
  * Auth resolves the acting admin's session for ITS OWN inner permission check (`auth.ts`'s
- * `roles`/`adminRoles` config) — the route itself already gated on `requireCapability` first.
+ * `roles`/`adminRoles` config) — the route itself already gated on `requireCapability` first,
+ * against the membership, which is the authoritative check.
+ *
+ * ── Why `role` is still Better Auth's here, and only here ───────────────────────────────────────
+ *
+ * `setRole` and `create`'s `role` write `User.role`, and `toDTO` reads it back. That is the last
+ * place in the app that touches the column, and it cannot move to `Membership` while these calls
+ * go through the plugin: every `auth.api.*` admin endpoint gates itself on `session.user.role`
+ * (`plugins/admin/routes.mjs`) and the plugin's own create hook writes `defaultRole` on every
+ * account regardless of what we pass. Stop writing it and the whole surface 403s for everyone.
+ *
+ * It cannot escalate: `requireCapability("manageUsers"|"manageRoles")` runs against the active
+ * workspace's membership FIRST, so the plugin's check can only refuse what we already allowed.
+ * Retiring it means replacing these endpoints outright — see SAAS-RESTRUCTURE-PLAN 6.4.
  */
 export const adminUserService = {
   async list(): Promise<AdminUserListDTO> {
