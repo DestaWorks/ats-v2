@@ -8,6 +8,12 @@
 > deliver it — with the risks named honestly. **This is the document to send.** (The deeper
 > internal risk analysis behind it is `WHY-MIGRATE.md`.)
 
+> **Kept as sent, with two corrections.** This brief is dated 2026-07-01 and describes the rebuild
+> before it happened; the rebuild has since shipped. Two lines were corrected because leaving them
+> would misrepresent the product: the AI row (the app is provider-agnostic, not tied to one
+> vendor) and the hosting row (the API runs on Render alongside Vercel). Everything else is left
+> as it was sent. For where things actually stand, see the root `README.md`.
+
 ---
 
 ## 1. The short version
@@ -139,8 +145,8 @@ concrete. In plain terms:
 | **PostgreSQL (on Supabase)** | The real database — replaces the Google Sheet; backed up and secure |
 | **Better Auth** | Secure login and roles — enforced on the server, not the browser |
 | **Tailwind CSS** | Styling — lets us reuse the current look and layout as-is |
-| **Claude API (Anthropic)** | The AI features — daily/weekly briefs, résumé parsing, and matching |
-| **Vercel** | Hosting and reliable, repeatable deploys |
+| **AI — your choice of provider** | The AI features — daily/weekly briefs, resume parsing, and matching. Anthropic, OpenAI and Google all work; switching is a one-line setting change, so you are never locked to one vendor's pricing |
+| **Vercel + Render** | Hosting and reliable, repeatable deploys |
 | *Prisma · Zod* | Supporting tools that keep the data safe and correct |
 
 Everything here is a proven, mainstream choice — nothing exotic — so the app stays easy to
@@ -196,7 +202,7 @@ person seeing only what their role allows, enforced securely on the server (not 
 **Your ATS priorities are built into the plan** — the four things you flagged for the ATS are all
 here:
 - **Role-based access** — each person sees only what their role allows.
-- **The bulk importer** — brings in our historical records and matches résumés to candidate
+- **The bulk importer** — brings in our historical records and matches resumes to candidate
   profiles (with a confidence check, so a low-confidence match is flagged for a human rather than
   guessed).
 - **Assisted license verification** — a verification queue that lists who needs checking, gives
@@ -216,7 +222,8 @@ here:
 This is a tight, full plan with no slack. Three things keep it on track:
 
 1. **Unblock me in week 1.** **You hold the keys — I build against them** (just as you set it up).
-   I never need to hold the keys myself; I just need them provisioned: Claude API, Supabase,
+   I never need to hold the keys myself; I just need them provisioned: an AI provider key
+   (Anthropic, OpenAI or Google — any one), Supabase,
    hosting, and Google login, plus access to the current backend and an export of our current
    data. **Important — the clock starts when these are in my hands, not when you say "go."** The
    timeline is counted from that day (call it day zero: keys provisioned, backend access granted,

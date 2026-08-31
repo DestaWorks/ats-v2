@@ -30,8 +30,8 @@ The executable build guide, broken into **small tasks**. Read with `STACK-ARCHIT
 authz + audit) → contract schema → this feature's controller in apps/api → port this piece of UI
 1:1 → hook → test → retire the legacy piece.`
 
-**Done-when (every feature):** works end-to-end on real data Â· authz enforced server-side Â· inputs
-validated Â· changes audited Â· tests green Â· legacy piece retired.
+**Done-when (every feature):** works end-to-end on real data · authz enforced server-side · inputs
+validated · changes audited · tests green · legacy piece retired.
 
 ---
 
@@ -48,7 +48,7 @@ validated Â· changes audited Â· tests green Â· legacy piece retired.
 - [ ] **Branch protection on `main`** — *needs the GitHub remote (Biruh); config-only, do when repo is pushed.*
 - **Done-when:** ✅ `pnpm build` compiles; typecheck/lint/test/format all green; a cross-layer import fails lint (proven). *(Branch protection pending remote.)*
 
-### 0.1b Environments & domains — local Â· staging Â· production (set up early)
+### 0.1b Environments & domains — local · staging · production (set up early)
 Three isolated environments from day one, each on its own domain; **staging and production never
 share a database.** *(`zyx.com` below is a placeholder for the real domain.)*
 
@@ -65,8 +65,9 @@ share a database.** *(`zyx.com` below is a placeholder for the real domain.)*
 - [ ] **Supabase:** **two separate projects** — `desta-ats-staging` and `desta-ats-prod`
       (separate databases, separate credentials). *Never point staging at production PII.*
 - [ ] **Env vars per environment** (in Vercel + `.env.example`, no secrets committed): `DATABASE_URL`,
-      Better Auth secret + `BETTER_AUTH_URL` (the env's own domain), Google OAuth creds, Claude API
-      key — a **distinct set** for local / staging / prod.
+      Better Auth secret + `BETTER_AUTH_URL` (the env's own domain), Google OAuth creds, an AI
+      provider key (`AI_MODEL` picks Anthropic / OpenAI / Google) — a **distinct set** for local /
+      staging / prod.
 - [ ] **Google OAuth redirect URIs** registered for **all three** origins (`localhost`,
       `staging.zyx.com`, `zyx.com`) or sign-in breaks per environment.
 - [ ] Promotion path: branch → preview URL → merge to `staging` (QA on `staging.zyx.com`) → merge to
@@ -145,7 +146,7 @@ share a database.** *(`zyx.com` below is a placeholder for the real domain.)*
 # WAVE 1 — Data In (Month 1)
 
 ### 1.1 Candidate schema (brings ONLY candidate + minimal client tables)  ✅ *(done — design `docs/design/wave-1.1-candidate-schema.md`)*
-- [x] `candidates` model (simplified from the legacy 32 cols → 28 keep Â· 1 drop `TelehealthPref`→tag Â· 3 defer resume→`documents` in 1.2); status as **code** + `stageOrder` mirror + `track` + `licenseStatus` → migrated (`20260703123908_add_candidate_client_stagehistory`).
+- [x] `candidates` model (simplified from the legacy 32 cols → 28 keep · 1 drop `TelehealthPref`→tag · 3 defer resume→`documents` in 1.2); status as **code** + `stageOrder` mirror + `track` + `licenseStatus` → migrated (`20260703123908_add_candidate_client_stagehistory`).
 - [x] Denormalized `stageEnteredAt` + `placedAt` (set-once on `STARTED_DAY1`) drive days-in-stage / SLA; `stage-timing.ts` reads `stageEnteredAt`, fixing the legacy `UpdatedAt` overload.
 - [x] Minimal `clients` model seeded from `BASE_CLIENTS` (`lib/constants/clients.ts`, `scripts/seed-clients.ts` / `pnpm db:seed:clients`, idempotent); `candidates.clientId` **FK from day one** (`onDelete: SetNull`).
 - [x] `stage_history` model (`onDelete: Cascade`) → migrated; every `move` appends a row atomically.

@@ -94,9 +94,11 @@ apps/
 │       ├── (app)/        # authenticated feature routes (pipeline, candidates,
 │       │                 #   sourcing, discover, roles, dashboard, activity, …)
 │       ├── (auth)/       # sign-in, request-access
-│       ├── portal/       # client portal (external audience)
-│       └── api/auth/     # Better Auth catch-all — the ONLY route left here
-├── api/                  # NestJS — the only backend HTTP surface
+│       ├── portal/       # client portal (external audience); portal/access/route.ts
+│       │                 #   trades a one-time token for a cookie
+│       └── api/auth/     # Better Auth catch-all — the ONLY route under app/api
+├── api/                  # NestJS — the only backend HTTP surface (49 controllers,
+│   │                     #   200 route handlers, 27 feature modules, no global prefix)
 │   └── src/modules/      # one module per domain area; controllers are thin transport
 └── admin/                # platform-admin console
 
@@ -136,27 +138,57 @@ pnpm install
 
 # 2. Configure environment
 cp .env.example .env
-#    then fill in DATABASE_URL, BETTER_AUTH_SECRET, Google OAuth, and an AI key
+#    then fill in DATABASE_URL, DIRECT_URL, BETTER_AUTH_SECRET, Google OAuth, and an AI key.
+#    Put DATABASE_URL in `.env`, never in `.env.local`: Next.js prefers `.env.local`
+#    while the Prisma CLI reads only `.env`, so the two would disagree.
 
 # 3. Generate the Prisma client and run migrations
 pnpm db:generate
 pnpm db:migrate
 
-# 4. Seed baseline data (optional but recommended for local dev)
-pnpm db:seed           # owner account
-pnpm db:seed:clients   # clients
-pnpm db:seed:rules     # client scoring rules
-pnpm db:seed:demo      # demo candidates/data
+# 4. Seed baseline data (recommended for local dev — run in this order)
+pnpm db:seed           # first Tenant + Owner account + Membership
+pnpm db:seed:clients   # clients (from BASE_CLIENTS)
+pnpm db:seed:rules     # client scoring rules — REQUIRES db:seed:clients first
+pnpm db:seed:demo      # demo candidates, tagged `demo-*` so they can be purged
 
 # 5. Start BOTH processes — the web app serves no data on its own
-pnpm dev:api           # NestJS API  (API_PORT, default 3004)
-pnpm dev               # Next.js web (in a second terminal)
+pnpm dev:api                  # NestJS API on 3004  (API_PORT, then PORT, then 3004)
+pnpm dev -- --port 3003       # Next.js web, second terminal — see "Ports" below
+pnpm dev:worker               # third terminal; only needed for briefs/report exports
 ```
 
 `apps/web` has no API routes: every read and write goes over HTTP to `apps/api`. Running `pnpm dev`
-alone gives a shell that cannot load a page. `API_URL` (server-side) and `NEXT_PUBLIC_API_URL`
+alone gives a shell that cannot load a page — `apps/web/src/lib/api/client.ts` throws outright when
+`NEXT_PUBLIC_API_URL` is unset. `API_URL` (server-rendered reads) and `NEXT_PUBLIC_API_URL`
 (browser) must both point at the API, and `WEB_ORIGINS` must list the web origin or the browser's
 credentialed calls are refused by CORS.
+
+`NEXT_PUBLIC_API_URL` is also read at **build** time: `apps/web/next.config.ts` derives the CSP
+`connect-src` origin from it, so a build with it unset produces a bundle whose browser calls are
+CSP-blocked even if the runtime value is correct.
+
+#### Ports — read this before your first run
+
+The dev scripts and `.env.example` do **not** agree out of the box, and the mismatch presents as
+CORS failures rather than as an obvious error:
+
+| Process | Command | Port |
+|---|---|---|
+| API | `pnpm dev:api` | **3004** (`API_PORT` → `PORT` → 3004) |
+| Web | `pnpm dev` | **3000** (Next default — the script passes no `--port`) |
+| Web | `pnpm dev:web` | **3007** |
+| Admin | `pnpm dev:admin` | **3000** — collides with `pnpm dev`; Next auto-bumps whichever starts second |
+
+`.env.example` ships `WEB_ORIGINS="http://localhost:3003"` and `BETTER_AUTH_URL="http://localhost:3000"`,
+so neither dev script matches the CORS allowlist as shipped. **Pick one web port and make all three
+agree**: the project convention is **3003**, so run the web app with `pnpm dev -- --port 3003` and
+set `BETTER_AUTH_URL="http://localhost:3003"` and `WEB_ORIGINS="http://localhost:3003"` in your
+`.env`. If you prefer 3007 (`pnpm dev:web`), change both env values to match instead.
+
+The **worker** (`pnpm dev:worker`) is a separate process from the API. The API only enqueues; four
+jobs — `generateDailyBrief`, `generateWeeklyBrief`, `reportExport`, `migrationCommit` — never
+complete without it. Everything else works with the API alone.
 
 ### Environment variables
 
@@ -166,9 +198,16 @@ never commit real secrets (NDA-binding).
 
 | Variable | Purpose |
 |----------|---------|
-| `BETTER_AUTH_URL` | This environment's own origin |
+| `BETTER_AUTH_URL` | This environment's own origin (the **web** origin, not the API's) |
 | `BETTER_AUTH_SECRET` | Auth signing secret (`openssl rand -base64 32`) |
-| `DATABASE_URL` | Supabase / Postgres connection string |
+| `DATABASE_URL` | Runtime Postgres connection — Supabase **transaction** pooler (6543) |
+| `DIRECT_URL` | Migrations **and** the pg-boss queue — Supabase **session** pooler (5432). The transaction pooler supports neither the prepared statements migrations need nor the `LISTEN`/`NOTIFY` session the queue holds |
+| `API_URL` | Where `apps/web`'s server-rendered pages reach `apps/api`. Server-only; no default — unset throws |
+| `NEXT_PUBLIC_API_URL` | Where the **browser** reaches `apps/api`. No default — unset throws; also fixes the CSP `connect-src` at build time |
+| `WEB_ORIGINS` | `apps/api` only — comma-separated browser origins allowed to call it with credentials. An allowlist; never `*` |
+| `API_PORT` | Port `apps/api` listens on (falls back to `PORT`, then `3004`) |
+| `PLATFORM_API_URL` | Where `apps/admin` reaches the API. Server-only, deliberately not `NEXT_PUBLIC_` |
+| `PLATFORM_ADMIN_USER_IDS` | Comma-separated **user ids** allowed on the `/platform/*` plane. Unset → the plane refuses everyone, including a tenant Owner |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth |
 | `AI_MODEL` | `provider/model` string (e.g. `anthropic/claude-opus-4-8`) |
 | `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `GOOGLE_GENERATIVE_AI_API_KEY` | AI provider key (set whichever you use) |
@@ -185,8 +224,9 @@ never commit real secrets (NDA-binding).
 | `pnpm dev:admin` | Start the platform-admin console |
 | `pnpm build` / `pnpm build:api` | Production build — web / API bundle |
 | `pnpm start` | Serve the production build |
-| `pnpm test` | Run tests (Vitest) |
+| `pnpm test` | Run tests (Vitest) — 214 files; excludes the isolation suite |
 | `pnpm test:watch` | Run tests in watch mode |
+| `pnpm test:isolation` | Tenant-isolation suite against a throwaway Postgres it provisions itself |
 | `pnpm typecheck` | TypeScript type-check (web + API) |
 | `pnpm lint` | Lint with ESLint |
 | `pnpm format` / `pnpm format:check` | Format / check formatting with Prettier |
@@ -194,6 +234,9 @@ never commit real secrets (NDA-binding).
 | `pnpm auth:check` | Prove every endpoint sits behind the right guard |
 | `pnpm tenant:check` | Prove no repository method can query without a tenant |
 | `pnpm rls:check` / `pnpm raw-index:check` | RLS coverage / raw-SQL indexes survive migrations |
+| `pnpm deps:check` | One version per dependency across the workspace (the pnpm `catalog:`) |
+| `pnpm tenant:reconcile` | Read-only: prove every row belongs to exactly one tenant |
+| `pnpm setup:storage` | One-off — create the `avatars` / `resumes` S3 buckets |
 | `pnpm jobs` | Inspect and retry background jobs |
 | `pnpm db:generate` | Generate the Prisma client |
 | `pnpm db:migrate` | Create/apply a dev migration |
@@ -206,16 +249,25 @@ never commit real secrets (NDA-binding).
 ## Testing & CI
 
 Every PR runs the full verification suite in GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)),
-in four jobs: **Commit messages** · **Static analysis** (format, lint, typecheck, dependency-graph,
+in five jobs: **Commit messages** · **Static analysis** (format, lint, typecheck, dependency-graph,
 architecture, raw-SQL indexes, RLS coverage, auth-surface parity, tenant scope) · **Tests** (unit,
 contract, and a check that no log call names a PII field) · **Tenant isolation** (two tenants seeded
-against a throwaway Postgres, proving A cannot read B per table). Run the same checks locally
-before opening a PR:
+against a throwaway Postgres, proving A cannot read B per table) · **Build** (web + the
+platform-admin console).
+
+The suite is **216 test files** — 214 run by `pnpm test`, plus the two tenant-isolation files, which
+need a real Postgres and run only under `pnpm test:isolation`. Run the same checks locally before
+opening a PR:
 
 ```bash
 pnpm db:generate && pnpm typecheck && pnpm lint && pnpm test && pnpm format:check
-pnpm arch:check && pnpm auth:check && pnpm tenant:check && pnpm rls:check
+pnpm deps:check && pnpm arch:check && pnpm auth:check && pnpm tenant:check
+pnpm rls:check && pnpm raw-index:check
 ```
+
+`pnpm test:isolation` provisions its own throwaway Postgres cluster on a loopback port and deletes
+it afterwards, so it needs no configuration — but it will not run against a database you supply
+unless `ISOLATION_DATABASE_URL` points at a disposable one.
 
 ---
 
@@ -255,11 +307,16 @@ See [`docs/PROJECT-CONTEXT.md`](docs/PROJECT-CONTEXT.md) and
 
 ## Documentation
 
-Start with the **live build docs** — where anything conflicts, `DECISIONS.md` wins.
+**Precedence, highest first:** [`docs/SAAS-RESTRUCTURE-PLAN.md`](docs/SAAS-RESTRUCTURE-PLAN.md) (the
+base document — read it before any task) → [`docs/DECISIONS.md`](docs/DECISIONS.md) (locked
+decisions from the pre-restructure build) → everything else. Where a doc conflicts with the plan,
+**the doc is what gets corrected.**
 
 | Doc | Purpose |
 |-----|---------|
-| [`docs/DECISIONS.md`](docs/DECISIONS.md) | **Authoritative** — locked decisions; every other doc conforms |
+| [`docs/SAAS-RESTRUCTURE-PLAN.md`](docs/SAAS-RESTRUCTURE-PLAN.md) | **Base document** — package graph, dependency law, engineering standards, 10 phases with a done-when each |
+| [`docs/ARCHITECTURE-PROPOSAL.md`](docs/ARCHITECTURE-PROPOSAL.md) | The decision behind the plan: multi-tenant SaaS on a monorepo, with the trade-offs |
+| [`docs/DECISIONS.md`](docs/DECISIONS.md) | Locked decisions D1–D8; authoritative below the plan |
 | [`docs/IMPLEMENTATION-PLAN.md`](docs/IMPLEMENTATION-PLAN.md) | Executable build guide — per-wave tasks and status |
 | [`docs/ESTIMATE.md`](docs/ESTIMATE.md) | The 3-month, 7-wave schedule |
 | [`docs/STACK-ARCHITECTURE.md`](docs/STACK-ARCHITECTURE.md) | Locked stack + layered architecture + conventions |
@@ -268,7 +325,11 @@ Start with the **live build docs** — where anything conflicts, `DECISIONS.md` 
 | [`docs/DATA-MODEL.md`](docs/DATA-MODEL.md) | Entities, pipeline stages, scoring rules, schema |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) · [`docs/EDD.md`](docs/EDD.md) | Current + target architecture and engineering design |
 | [`docs/API-CONTRACT.md`](docs/API-CONTRACT.md) · [`docs/MODULE-BREAKDOWN.md`](docs/MODULE-BREAKDOWN.md) | Legacy operations map + line-level module map |
-| [`docs/MIGRATION-CHEATSHEET.md`](docs/MIGRATION-CHEATSHEET.md) | Which app (old/new) to use for which task during the rebuild |
+| [`docs/MIGRATION-CHEATSHEET.md`](docs/MIGRATION-CHEATSHEET.md) | Which app (old/new) to use for which task during the rebuild — **largely historical**, see its banner |
+| [`docs/MIGRATION-GAP-ANALYSIS.md`](docs/MIGRATION-GAP-ANALYSIS.md) | Legacy Sheet → Postgres: migrate/derive/drop per tab, and the blockers before any import |
+| [`docs/PROJECT-CONTEXT.md`](docs/PROJECT-CONTEXT.md) | Engagement, company, portfolio, and the binding NDA/compliance constraints |
+| [`docs/SECURITY-AUDIT-APP.md`](docs/SECURITY-AUDIT-APP.md) · [`docs/SECURITY-AUDIT-LEGACY.md`](docs/SECURITY-AUDIT-LEGACY.md) | Security review of the new app / of the legacy app |
+| [`docs/design/`](docs/design/) · [`docs/reviews/`](docs/reviews/) | Per-slice design notes from the wave build · client review correspondence |
 | [`CLAUDE.md`](CLAUDE.md) | Guidance for AI/human contributors |
 
 ---
@@ -276,9 +337,12 @@ Start with the **live build docs** — where anything conflicts, `DECISIONS.md` 
 ## Contributing
 
 1. Work on a branch; open a **reviewable PR** with small, described commits (no whole-file uploads).
-2. Add new functionality to `src/` — **never** expand `legacy/index.html`.
+   While the restructure runs, branch from `restructure`, never from `main` — see
+   [`docs/CONVENTIONS.md`](docs/CONVENTIONS.md) §1.
+2. Add new functionality to the monorepo packages. There is no `src/` tree any more, and a new
+   backend endpoint is a **NestJS controller in `apps/api`** — never a route handler in `apps/web`.
 3. **Preserve behavior** when porting a legacy view unless a change is explicitly requested.
-4. Keep CI green (typecheck, lint, test, format).
+4. Keep CI green (typecheck, lint, test, format, and the architecture/auth/tenant gates).
 5. **Ask before destructive actions** (data migration, purging candidates, dropping columns).
 
 Read [`CLAUDE.md`](CLAUDE.md) and [`docs/CONVENTIONS.md`](docs/CONVENTIONS.md) before your first PR.

@@ -1,8 +1,38 @@
 # Data Model — DestaHealth ATS
 
-Reconstructed from `index.html`. Field lists are derived from how the client reads/writes
-records; the authoritative schema is the Google Sheet (not in this repo). Use this to design
-the PostgreSQL schema. Fields marked _(?)_ are inferred and need confirmation.
+> ## The built schema is `packages/db/prisma/schema.prisma` — that file wins
+>
+> This document reverse-engineered the legacy Sheet in order to *design* the Postgres schema. The
+> schema now exists: **46 models, 49 migrations**. Where the two disagree, the schema file is the
+> answer. Read this for entity meaning, field provenance and the pipeline/scoring rules; read the
+> schema for what the columns actually are.
+>
+> Four things below are known to be out of date:
+>
+> - **There are no database enums.** `schema.prisma` contains **zero `enum` blocks**. `role`,
+>   `track`, `license_status` and `status` are all plain `String` columns, validated against
+>   `as const` tuples in `@destaworks/domain` and zod schemas in `@destaworks/contracts`. The
+>   "**Enums:** enforce … as DB enums" line near the bottom, and the "fixed enum" wording in the
+>   roles section, describe a choice that was deliberately not taken.
+> - **Multi-tenancy is missing entirely.** Phase 6 added `Tenant` and `Membership` and a
+>   `tenant_id` on every tenant-scoped table, enforced by a scoping seam no repository call can
+>   bypass and by Postgres RLS. Neither the entity list nor the "Cross-cutting columns" list
+>   below mentions any of it. **`tenant_id` belongs in that list.**
+> - **Role lives on the Membership**, not the user — one role per workspace, not per account.
+> - **Some proposed tables were never built** (`invites`, `verification_presets`,
+>   `shift_handoffs`, `client_profile`), and some were built under different names (`briefs` →
+>   `daily_briefs` + `weekly_briefs`; `targets`/`actuals` → `daily_targets`/`daily_actuals`).
+>   Several shipped models are absent here — among them `ScreeningScorecard`, `ClientPortalToken`,
+>   `PortalAccessRequest`, `ClientTask`, `ClientMeeting`, `ClientNote`, `AiSettings`,
+>   `AiUsageEvent`, `MigrationRun`, `ScheduleRun`, `ReportExport`.
+>
+> Verified still correct: the **13 pipeline stages**, their codes, orders, labels, SLA days and
+> the four terminal states all match `packages/domain/src/constants/pipeline-status.ts` exactly.
+
+Reconstructed from `index.html` (gitignored and local-only — a fresh clone will not have it).
+Field lists are derived from how the client reads/writes
+records; the authoritative source for the *legacy* data is the Google Sheet. This was used to
+design the PostgreSQL schema. Fields marked _(?)_ are inferred and need confirmation.
 
 ---
 
@@ -42,7 +72,7 @@ The central pipeline record.
 **Pipeline stages (`STATUSES`) — codes, not labels**
 Status is stored as a **stable code** with a numeric `stage_order` ordinal and a display-label
 lookup. **Scoring, stage gates, and funnels key off the code/ordinal — never the label** (so
-labels can be re-worded without breaking logic). Defined in `lib/constants`.
+labels can be re-worded without breaking logic). Defined in `packages/domain/src/constants/pipeline-status.ts`.
 
 | Code | `stage_order` | Display label |
 |------|---------------|---------------|
@@ -95,7 +125,7 @@ Pre-pipeline sourcing record. Promoted into a Candidate.
 |-------|-------|
 | `Email` | Identity key |
 | `Name` (`user`) | Display name |
-| `Role` | Exactly **one** of a **fixed enum**: `Owner / Director / Manager / Screener / Associate / Admin`. `admin` is a **role value**, not a separate boolean flag |
+| `Role` | One of a **fixed set of six** (a validated string, **not** a DB enum): `Owner / Director / Manager / Screener / Associate / Admin`. `admin` is a **role value**, not a separate boolean flag. **As built, this lives on `Membership`, not on the user** — one role per workspace. `User.role` still exists but authorizes nothing; Better Auth's admin plugin owns it |
 | `Avatar` | Image (resized client-side) |
 | `EmailSignature` | Stored per user (currently localStorage too) |
 | Password _(?)_ | Backend-managed (change/reset/forgot) |
@@ -104,7 +134,8 @@ Pre-pipeline sourcing record. Promoted into a Candidate.
 > `BASE_ROLES` currently hardcodes some users by name. `USER_ROLES` merges base + custom.
 > The target model stores roles in the DB, not in code.
 
-**Roles & capabilities.** The 6 roles above are a **fixed enum**. "Leadership" is **not** a
+**Roles & capabilities.** The 6 roles above are a **fixed set** (a string constant, not a DB
+enum — see the banner). "Leadership" is **not** a
 role — it is a **capability group** derived from role via a **capability map** (e.g.
 `viewReports`, `bulkImport`, `viewCredentials`, `viewAudit`, `purgeCandidate`). Guards check
 capabilities, not role literals. **Custom roles are deferred to v2**; v1 ships the fixed enum +
@@ -166,7 +197,7 @@ Ritu Suri & Associates, NJ-Psych Candidates, Future Potential Clients.
 | `openedAt` / `closedAt` | `closedAt` stamped when status flips to Filled/Closed, cleared on reopen |
 | `createdById`, `createdAt`, `updatedAt` | |
 
-Matching is 3 separate pure scoring engines (`lib/rules/role-matching.ts`, no `Source`/portal field —
+Matching is 3 separate pure scoring engines (`packages/domain/src/rules/role-matching.ts`, no `Source`/portal field —
 that legacy concept was never built): a client-tunable **active matcher** (weights from
 `ClientMatchProfile`, falls back to `DEFAULT_MATCH_WEIGHTS`), a fixed-weight **dormant
 re-engagement scorer**, and a **triage-strip ranker** (priority + staleness + match quality → "top 3
@@ -281,15 +312,21 @@ Per-associate goals (`ats_targets_*`) vs. actuals (`ats_actuals_*`); pipeline he
 | `saved_views` | Persisted shareable filters/views (replaces localStorage for shareable state) |
 
 **Cross-cutting columns** on every business table: `id` (uuid), `created_at`, `updated_at`,
-`created_by`, `deleted_at` (soft-delete). Every **migratable** entity also carries a
-**`legacy_id`** column for **idempotent upsert** from the Sheet ETL.
+`created_by`, `deleted_at` (soft-delete), and — added by Phase 6 — **`tenant_id`**, which is what
+the scoping seam and the RLS policies key off. Every **migratable** entity also carries a
+**`legacy_id`** column for **idempotent upsert** from the Sheet ETL; the uniqueness that makes the
+upsert idempotent is on `(tenant_id, legacy_id)`, not on `legacy_id` alone.
 
 **Migration dedupe / merge:** dedupe is **email-primary** (name is secondary / manual-review);
-merge policy is **keep-newest + flag** for human review. Résumé→profile matching requires a
+merge policy is **keep-newest + flag** for human review. Resume→profile matching requires a
 confidence threshold + manual confirm (no silent wrong-person PII matches).
 
-**Enums:** enforce `role`, `track`, `license_status` as DB enums. **Status** is a stable-code
-enum with a `stage_order` ordinal + display-label lookup (labels are not stored on rows).
+**Enums:** ~~enforce `role`, `track`, `license_status` as DB enums.~~ **Not what was built.**
+`schema.prisma` declares no `enum` blocks at all; these are `String` columns validated at the
+application boundary by `as const` tuples in `@destaworks/domain` plus zod schemas in
+`@destaworks/contracts`. **Status** is a stable-code
+constant with a `stage_order` ordinal + display-label lookup (labels are not stored on rows) —
+that half shipped as described.
 
 **Audit:** generic `activity_log(actor, action, entity, entity_id, before, after, at)`.
 `before`/`after` hold PII intentionally → access-controlled + encrypted, reads gated by

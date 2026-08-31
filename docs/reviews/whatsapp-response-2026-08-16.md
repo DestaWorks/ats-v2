@@ -14,7 +14,7 @@ Pull the latest branch to see these.
 - F2 — CSV export formula injection
 - F3 — portal-approval race condition
 - F4 — role-note IDOR
-- F5–F10 — résumé/ETL idempotency, recap undercount, mention markRead bug, stuck-badge mismatch
+- F5–F10 — resume/ETL idempotency, recap undercount, mention markRead bug, stuck-badge mismatch
 - H2 remainder — will look into expanding encryption coverage (email/phone/NPI/notes)
 
 **Deferred to go-live:**

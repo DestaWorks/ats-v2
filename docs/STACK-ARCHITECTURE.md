@@ -596,13 +596,17 @@ fails at build time. (No bespoke `eslint-local-rules/` package to maintain.)
 These come from the signed Developer NDA and from how the Owner runs security. Treat them as
 **acceptance criteria**, not preferences (full context: `docs/PROJECT-CONTEXT.md`).
 
-- **No secrets in code, ever.** Keys/tokens/DB URLs live in env vars / Vercel & Supabase
-  secret stores only. The **Owner holds all keys** (Claude API, Supabase, Vercel, billing,
-  patient-data access); we build against them. Never commit a `.env`; commit `.env.example`.
+- **No secrets in code, ever.** Keys/tokens/DB URLs live in env vars / Vercel, Render & Supabase
+  secret stores only. The **Owner holds all keys** (the AI provider key, Supabase, Vercel, Render,
+  billing, patient-data access); we build against them. Never commit a `.env`; commit
+  `.env.example`.
 - **Permissive licenses only.** Add a dependency carrying **MIT / BSD / Apache-2.0** freely.
   **Never add a copyleft/reciprocal dependency (GPL / LGPL / AGPL)** without the Owner's
-  written consent. Keep an **SBOM** (`docs/THIRD-PARTY-LICENSES.md` or a generated manifest)
-  and update it when dependencies change. Add a CI license check.
+  written consent. Keep an **SBOM** and update it when dependencies change; add a CI license
+  check. **Neither exists yet** — there is no SBOM file in the repo and no license job in
+  `ci.yml`, so this is an open NDA §5b obligation, not a description of what is in place.
+  (`pnpm-workspace.yaml` records the licence check for `pg-boss` by hand, which is the current
+  substitute.)
 - **AI tooling** (incl. Claude Code) must not transmit confidential source to third parties in
   a way that compromises confidentiality/ownership; output is Owner-owned Work Product.
 - **PHI/PII handling (HIPAA + Ethiopian Data Protection Proclamation 1321/2024):** encrypt at
@@ -613,15 +617,18 @@ These come from the signed Developer NDA and from how the Owner runs security. T
 
 ---
 
-## 13. AI features (Claude API)
+## 13. AI features (provider-agnostic)
 
-- All LLM calls go through **server-side endpoints** (`server/ai/**`) with a **server-held
-  Anthropic key** — never from the client.
+- All LLM calls go through the **Vercel AI SDK**, server-side only (`packages/integrations/src/ai`),
+  with a **server-held provider key** — never from the client. The **Anthropic, OpenAI and Google
+  adapters are all installed**; `AI_MODEL` is a `provider/model` string, so swapping vendors is one
+  env var and no code change, with `AI_MODEL_FALLBACK` tried once if the primary fails.
+  **Never hard-wire a single vendor** — that is a standing constraint, not a preference.
 - ATS AI surfaces: resume extraction, daily/weekly briefs, JD parsing, inbound triage, CRM
   workspace, and (roadmap) resume→profile matching and "find providers like this".
 - **Model tiering:** use the cheapest model that meets the bar per task (e.g. a fast model for
   extraction/conversation, a stronger model for grading/judgement) — mirrors the company's
-  LMS pattern. Pick current Claude models at build time; pin the model id in config, not
+  LMS pattern. Pick current models at deploy time; the model id lives in `AI_MODEL`, never
   scattered in code. Validate model output with zod before persisting.
 
 ---

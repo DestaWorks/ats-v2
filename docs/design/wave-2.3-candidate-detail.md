@@ -9,7 +9,7 @@ Wave 2.1 board (`docs/design/wave-2.1-pipeline.md`) it links from.
 **Feature:** clicking a candidate card on the pipeline board opens a **full candidate profile** at
 `/candidates/[id]` — the biggest visible gap. A demoable page with a header (name, credential/track,
 client, current stage + a **stage-mover** reusing the existing move route), tabs **Details / License /
-Résumé / Notes**, inline **edit** (PATCH profile fields), a **verify-license** action, a **résumé
+Resume / Notes**, inline **edit** (PATCH profile fields), a **verify-license** action, a **resume
 list** (filename + `legacyUrl` + status; no byte preview), and **notes** (list + add, role-scoped
 server-side, **XSS-safe** — fixes the legacy `dangerouslySetInnerHTML` stored-XSS). Ports
 `legacy/index.html` ~9384–9527 (Module 4) 1:1 in behavior.
@@ -439,7 +439,7 @@ src/app/(app)/candidates/[id]/page.tsx        (RSC) getCurrentUser()→redirect;
   └─ candidate-detail.tsx                       ("use client") owns tab state + local candidate/notes state; ErrorState on load failure
        ├─ detail-header.tsx                      name; credential + licenseState + track badges (Badge); clientName; current-stage Badge
        │    └─ stage-mover.tsx                    reuses POST /:id/move (§7.1); shows blocked reasons
-       ├─ detail-tabs.tsx                         ARIA tablist (Details / License / Résumé / Notes) — §7.5
+       ├─ detail-tabs.tsx                         ARIA tablist (Details / License / Resume / Notes) — §7.5
        ├─ details-tab.tsx                         edit form via useZodForm(candidateEditSchema) → PATCH (§7.2)
        ├─ license-tab.tsx                         track-aware: Operations → "no license required" card; else verify form → POST verify-license (§7.3)
        ├─ resume-tab.tsx                          <Table> of documents: filename + status + "Open" (legacyUrl) — §7.4
@@ -488,14 +488,14 @@ or optimistically patch local state, then reconcile with the route response.
 - On success: patch local candidate license fields; toast; note the stage-mover may now allow a
   previously-blocked move.
 
-### 7.4 Résumé tab (list only — byte preview deferred to W6)
+### 7.4 Resume tab (list only — byte preview deferred to W6)
 
-- `initial.documents` in a `<Table caption="Résumé documents" columns={["File","Type","Status","Uploaded",""]}>`.
+- `initial.documents` in a `<Table caption="Resume documents" columns={["File","Type","Status","Uploaded",""]}>`.
 - Each row: `originalFilename`; `type` (Badge); a **status** column derived from `storageKey`/`legacyUrl`
   (`storageKey` → "Stored" / `legacyUrl` only → "Legacy link" / neither → "Metadata only"); `createdAt`;
   and an **"Open" link** to `legacyUrl` (`target="_blank" rel="noopener noreferrer"`) when present.
 - **No iframe / byte preview** (legacy Drive iframe) — deferred to Wave 6 storage. `EmptyState` when the
-  candidate has no documents ("No résumé attached — upload via Parse Résumé").
+  candidate has no documents ("No resume attached — upload via Parse Resume").
 
 ### 7.5 Tabs — a11y (ARIA tablist)
 
@@ -546,7 +546,7 @@ Per the scope, these are explicitly out of this slice (IMPLEMENTATION-PLAN §2.2
 - **Outreach-history panel** (legacy `OutreachAttempts` JSON) + `candidate_log_outreach`.
 - **Auto-handoff to Operate on "Started"** (`op_add_provider`) — *with the idempotency-key fix* for the
   legacy `"P"+Date.now()` dup bug. Lives with the `move` path, not this detail slice.
-- **Résumé byte/storage preview** (Drive iframe → Supabase bucket) — Wave 6. This slice lists metadata +
+- **Resume byte/storage preview** (Drive iframe → Supabase bucket) — Wave 6. This slice lists metadata +
   `legacyUrl` only.
 - **Standalone track-editor pill** — track is **edit-only in the Details form** for now.
 - **The 5-way note-type badge** (call/email/text/client/internal) — collapsed to `internal`/`external`.
@@ -624,7 +624,7 @@ Vitest, mirroring `move.route.test.ts` / `save.route.test.ts` (hoisted mocks: `s
   display names needs a users lookup. Deferred — `authorName` is denormalized on notes; stage-history
   shows the id (or is omitted from the header) until a resolver lands. Confirm acceptable for the demo.
 - **Assumption:** `documentRepository.listByCandidate` already excludes soft-deleted docs (verified);
-  résumé "status" is derived from `storageKey`/`legacyUrl` presence (no dedicated status column exists).
+  resume "status" is derived from `storageKey`/`legacyUrl` presence (no dedicated status column exists).
 - **Assumption:** the deferred notes ETL will map legacy `NoteType` `call`/`email`/`text`/`internal` →
   `internal` and `client` → `external` (documented in §2); the two-value model is intentional for v1.
 - **Assumption:** `clients` is small (≤ a handful of rows) → fetch-all + in-memory `id→name` map (reused

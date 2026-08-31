@@ -1,8 +1,22 @@
 # Decisions & Cleanup Resolutions
 
 Authoritative record of the decisions from the pre-implementation multi-lens review (architect,
-front-end, back-end, product, end-user). Every other doc should conform to this. Where docs
-conflict, **this doc wins.** Dated 2026-07-01.
+front-end, back-end, product, end-user). Written 2026-07-01; amended in place since (each
+amendment is dated where it appears).
+
+> ### Precedence, and what "authoritative" means here
+>
+> [`SAAS-RESTRUCTURE-PLAN.md`](./SAAS-RESTRUCTURE-PLAN.md) is the **base document and wins on
+> conflict** — including against this file. This file is authoritative *below* it: it is the record
+> of the locked calls, and every other doc conforms to it. Where a restructure phase has overtaken
+> a decision, the decision carries a dated amendment rather than being deleted, so the reasoning
+> survives.
+>
+> **Paths written before the restructure are not where code lives now.** This document names
+> `server/**`, `lib/**` and `app/api/**/route.ts`; Phase 2 moved every file into a
+> `@destaworks/*` package and Phase 4.3 deleted the App Router API. The mapping table at the top of
+> [`STACK-ARCHITECTURE.md`](./STACK-ARCHITECTURE.md) translates them. The **rules** below are
+> current; the **paths** are historical.
 
 ---
 
@@ -19,12 +33,24 @@ at the same time.** No window where legacy promote writes a candidate the new pi
 Until a domain is ported, legacy writes to that domain are **frozen/redirected** (not dual-run).
 
 **D3 — RBAC = fixed 6 roles + capability groups.** Roles: `Owner, Director, Manager, Screener,
-Associate, Admin` (a Prisma enum). **"Leadership" is a capability group in code**, not a hardcoded
+Associate, Admin`. **"Leadership" is a capability group in code**, not a hardcoded
 role list — guards check capabilities (e.g. `can('viewReports')`), mapped from role. **`admin` is a
-role value** (not a separate boolean flag) — an account is exactly one role. **Custom-role creation
+role value** (not a separate boolean flag). **Custom-role creation
 is deferred to v2.** Better Auth stores `role` as a validated string; a zod `Role` guard + typed
-session cast gives type-safety (we do not fight Better Auth to make it a Postgres enum — the enum
-lives in `lib/constants` + zod, enforced server-side).
+session cast gives type-safety (we do not fight Better Auth to make it a Postgres enum — the fixed
+set lives in `@destaworks/domain`'s constants + zod, enforced server-side). `schema.prisma`
+declares **no `enum` blocks at all**; every status-like column is a string backed by a domain
+constant, and role is no exception.
+
+**D3 amended 2026-08-31 — authority lives on the Membership, not the account.** Phase 6 made the
+installation multi-tenant, so "an account is exactly one role" no longer holds: a user has one
+`Membership` per workspace and **the role on the membership for the active workspace is what
+authorizes**. `requireCapability` resolves through the membership. The `User.role` column still
+exists and is still written by `seed-owner.ts` and `admin-user.service.ts`, but it authorizes
+nothing in application code — it is retained only because Better Auth's admin plugin declares the
+field itself and gates its own account-management endpoints on it, so removing the remap would 403
+that whole surface. It cannot escalate, because the membership check runs first. What retiring it
+would take is recorded in `SAAS-RESTRUCTURE-PLAN.md` 6.4.
 
 **D4 — License verification (Biruh priority #3) = assisted queue in v1, automation fast-follow.**
 v1 ships a **verification queue** (candidates needing verification, one-click state-board links,
@@ -46,6 +72,16 @@ PII. Secrets, `BETTER_AUTH_URL`, and Google OAuth redirect URIs are **per-enviro
 (no shared keys). **Migrations and the Sheet→Postgres data migration are dry-run on
 `staging.zyx.com` first, then applied to production.** Set up in Wave 0 (`IMPLEMENTATION-PLAN.md`
 0.1b / 0.2). Needs from Biruh: domain/DNS access, Vercel, the two Supabase projects.
+
+*Amended 2026-08-31 — two hosts, and deploys are manual.* Since Phase 4 the API is a long-lived
+process, so an environment is **two** deployments, not one: `apps/web` on Vercel and `apps/api`
+plus its worker on **Render** (`render.yaml`). The Vercel project has **no Git integration** —
+nothing deploys on push. `.github/workflows/deploy.yml` is dispatched by hand with a full commit
+SHA, refuses any revision whose four required checks (Commit messages · Static analysis · Tests ·
+Build) are not green, ships the API first and waits for `/health`, then the web app, then tags the
+revision `deploy/<env>-YYYY-MM-DD-<run>`. The domain placeholder `zyx.com` is still unresolved: the
+real production domain and database have not been provisioned, so today's deployed environment is
+**staging**.
 
 **D7 — Server-state fetching = RSC reads + typed `ApiResult<T>` mutation helpers, not TanStack
 Query (supersedes the "Client-state classification" line under Resolved review findings →
@@ -138,8 +174,16 @@ exist in any environment yet (`storageEnabled` gates every code path, mirroring 
   + encryption**; application/observability logs must never contain PII. State this distinction;
   restrict `before/after` reads by capability.
 - **PII columns tagged** (`LicenseNumber`, `NPI`, contact) as sensitive → role/capability-restricted
-  in DTO mapping + encrypted at rest (app-layer, since Better Auth means no Supabase RLS). Specify
-  the mechanism (column omission in DTO by capability + pgcrypto/envelope for at-rest).
+  in DTO mapping + encrypted at rest (app-layer). Mechanism: column omission in the DTO by
+  capability, plus AES-256-GCM envelope encryption at the repository boundary, keyed by
+  `FIELD_ENCRYPTION_KEY` (`packages/db/src/field-crypto.ts`).
+  *Amended 2026-08-31:* the original parenthetical **"since Better Auth means no Supabase RLS" is
+  no longer true.** Phase 6 added real Postgres Row-Level Security — `ENABLE` + `FORCE` + a
+  `tenant_isolation` policy per tenant-scoped model — enforced by `pnpm rls:check` in CI and proved
+  per table against a throwaway Postgres by the **Tenant isolation** job. RLS is a *tenant*
+  boundary, not a column-sensitivity one, so it complements the DTO/encryption rules above rather
+  than replacing them. What was verified: only `licenseNumber` and the resume extraction output are
+  encrypted today — NPI and contact fields are not (see `SECURITY-AUDIT-APP.md`).
 - **Transactions:** services call a `withTransaction` helper in `server/db`; repositories receive
   `tx`. The reference example must not call `prisma.$transaction` in a service (it violates the
   `no-prisma-outside-repositories` lint rule).
@@ -189,11 +233,19 @@ exist in any environment yet (`storageEnabled` gates every code path, mirroring 
 - **Signup gating:** public self-registration disabled — account creation is invite/approval-gated.
 - **Off-the-shelf lint boundaries** (`eslint-plugin-boundaries` / `import/no-restricted-paths`)
   instead of hand-written AST rules; keep `import "server-only"`.
+  *Amended 2026-08-31:* superseded once the tree became packages. The dependency law is now
+  enforced by **`scripts/check-architecture.mjs`** (`pnpm arch:check`), which parses every import
+  with the TypeScript compiler API and compares it against the workspace manifests; exemptions are
+  data in `scripts/architecture-baseline.json` and each carries a `reason`. It is a CI gate, not a
+  lint rule.
 
 **Plans / docs hygiene**
 - **One authoritative plan:** `IMPLEMENTATION-PLAN.md` (tasks) + `ESTIMATE.md` (schedule) are
   authoritative. `PLAN.md` + `MIGRATION-PLAN.md` are **superseded** (banner + kept for history).
   Update the `CLAUDE.md` doc map accordingly.
+  *Amended 2026-08-31:* those two plans covered the Wave 0–6 rebuild, which shipped. The live plan
+  for current work is **`SAAS-RESTRUCTURE-PLAN.md`**; IMPLEMENTATION-PLAN and ESTIMATE are now a
+  record of what was built and on what schedule, not instructions for new work.
 - **Remove stack hedges** ("Vite or Next", "Fastify/NestJS", "auth provider") from ARCHITECTURE/
   EDD/MIGRATION-PLAN — the stack is locked (see STACK-ARCHITECTURE).
 - **Fold `CONVENTIONS.md` §3 folder structure** into STACK-ARCHITECTURE's `modules/`+`server/*`.
