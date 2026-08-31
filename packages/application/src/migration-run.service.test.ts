@@ -89,9 +89,6 @@ function actorIs(role: string, tenantId = "t1"): void {
     id: "u1",
     email: "o@desta.works",
     name: "Owner",
-    // Still on the user row and deliberately contradicting the membership below, so a test that
-    // passes could not be reading it.
-    role: "Owner",
   });
   h.membershipRepo.listActiveForUser.mockResolvedValue([
     { id: "u1-m", tenantId, tenantSlug: tenantId, tenantName: tenantId, role },
@@ -203,7 +200,6 @@ describe("claim", () => {
       id: "u1",
       email: "o@desta.works",
       name: "Owner",
-      role: "Owner",
     });
     // Owner in the tenant they usually work in, Screener in the one this run belongs to.
     h.membershipRepo.listActiveForUser.mockResolvedValue([

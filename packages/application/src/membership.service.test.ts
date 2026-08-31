@@ -200,7 +200,6 @@ describe("invite", () => {
       id: "u2",
       email: "john@desta.works",
       name: "John Roe",
-      role: "Associate",
     });
     h.findByTenantAndUser.mockResolvedValue(null);
     h.upsertInvitation.mockResolvedValue(membership({ status: "invited", role: "Screener" }));
@@ -244,7 +243,6 @@ describe("invite", () => {
       id: "u2",
       email: "john@desta.works",
       name: "John Roe",
-      role: "Associate",
     });
     h.findByTenantAndUser.mockResolvedValue(membership({ status: "active" }));
 

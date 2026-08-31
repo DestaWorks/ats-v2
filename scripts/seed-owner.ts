@@ -9,8 +9,12 @@ import { prisma } from "@destaworks/db/prisma";
  *
  * The MEMBERSHIP is what makes the account usable. Since Phase 6, `getCurrentUser()` resolves the
  * active tenant and reads the role from that membership — a user row alone resolves to no tenant
- * and every guarded page answers 401. `User.role` is still written because Better Auth's admin
- * plugin owns that column and caches it in the session cookie; it is not what authorizes anything.
+ * and every guarded page answers 401. `User.role` authorizes nothing here.
+ *
+ * It is still written for one reason: Better Auth's admin plugin gates each of its own endpoints
+ * on `session.user.role`, so a seeded Owner with a null column would be refused by the plugin on
+ * the admin screen even though the membership grants `manageUsers`. Seeding it is what keeps that
+ * surface usable until those endpoints are replaced (SAAS-RESTRUCTURE-PLAN 6.4).
  *
  * Idempotent on both halves, so re-running it against a seeded database is a no-op.
  *

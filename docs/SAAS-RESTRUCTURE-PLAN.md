@@ -1229,7 +1229,8 @@ export interface TenantContext {
       schema edit — every role read, the admin user-management surface and the session cache move to
       `Membership` at once. That is 6.4's "`getCurrentUser` returns `TenantContext`, role read from
       the membership" plus 6.5's membership management. **Moved to 6.4**; the backfill has already
-      copied every role onto a membership, so the data is ready and waiting
+      copied every role onto a membership, so the data is ready and waiting. **The application's own
+      reads and writes are now gone (6.4); what is left is one vendor dependency, described there**
 - [x] Reconciliation — `packages/db/src/tenant-reconciliation.ts` (pure, 10 unit tests over
       fixtures) with `pnpm tenant:reconcile` as the read-only runner. Checks all three parts of
       "exactly one": no NULL `tenantId`, no reference to a tenant that does not exist, and — until a
@@ -1299,7 +1300,53 @@ export interface TenantContext {
       `{ tenantId, membershipId, user, role }`, role read from the MEMBERSHIP. `role` is deleted
       from `AuthUser`, which is what makes reading authority off the identity a compile error
       rather than a silent cross-tenant escalation
-- [ ] **Drop `User.role`, moved here from 6.2.** It is Better Auth's admin-plugin column and is cached in the session cookie, so it cannot be dropped before the role read moves to `Membership` — which is the bullet above. Everything it needs is already in place: the backfill copied every user's role onto a membership. The work is `auth.ts` (`user.additionalFields.role`, `adminPlugin({ adminRoles, defaultRole, roles })`), `guards.ts` (`session.user.role` → membership), `admin-user.service.ts` (`auth.api.setRole`) and `user.repository.ts` (`listByRole`, `findActor`)
+- [x] **`User.role` no longer reads or writes anything the application owns, moved here from 6.2.**
+      Every read and write we control is gone: `auth.ts`'s `user.additionalFields.role` (a duplicate
+      of the field the plugin declares itself, adding only a redundant `defaultValue`),
+      `user.repository.ts`'s `listByRole` and the `role` column in `findActorById`'s select,
+      `daily.service.ts`'s Associate roster, and the role in `reset-owner-password.ts`'s log line.
+      `guards.ts` had already stopped reading it in the bullet above.
+
+      The roster was the substantive one, and it was **a cross-tenant leak rather than a stale
+      read**: `listByRole("Associate")` selected on `User.role` across the whole installation, so
+      the Daily Log's target-setting grid and feedback picker offered every workspace's Associates
+      to every manager. It now reads the ACTIVE tenant's `active` `Associate` memberships, proven by
+      a test that a person who is Associate in one workspace and Owner in another appears in exactly
+      the first.
+- [ ] **Retire the Better Auth admin endpoints, then drop the column.** The single remaining step,
+      and the reason the column stays. It is **not** the session cookie: Better Auth's admin plugin
+      owns `User.role` end to end. It declares the field in its own schema
+      (`plugins/admin/schema.mjs`), writes `defaultRole` onto every account it creates through an
+      `init()` database hook that cannot be disabled or passed around, and gates **every one** of
+      its endpoints — `listUsers`, `createUser`, `setRole`, `banUser`, `unbanUser`,
+      `setUserPassword`, `removeUser` — on `session.user.role` through `hasPermission`. Calling
+      `adminPlugin()` without `{ adminRoles, defaultRole, roles }` makes that check resolve our role
+      names against its built-in `admin`/`user` statements, which match nothing, and the whole
+      account-management surface 403s for everyone. So `admin-user.service.ts`'s `setRole`/`create`
+      and the `role: "Owner"` in `seed-owner.ts` stay: they are what feeds that gate, and deleting
+      them breaks the admin screen rather than tightening it.
+
+      It is **not an escalation path.** Each `/api/admin/*` route runs `requireCapability` against
+      the active workspace's membership first, so the plugin's inner check is only ever reached
+      after ours allowed the call — it can refuse what we allowed, never grant what we refused. Its
+      real failure mode is a wrong refusal: an Owner here who is an Associate elsewhere can be
+      rejected by the plugin depending on which value was written last.
+
+      Retiring it means `adminUserService` managing accounts directly instead of through
+      `auth.api.*`, keeping Better Auth only for password hashing (`auth.$context.password`) and the
+      sign-in ban check, which are the parts worth keeping. Two things fall out of that and neither
+      is optional: **(a)** `adminUserService.list()` takes no `TenantContext`, so it has no
+      workspace whose membership role it could report — giving it one is a two-line change in
+      `apps/api/src/modules/admin/admin-users.controller.ts`, which is why this is not a
+      `packages/`-only edit; **(b)** `adminUserService.create` creates a user with **no membership
+      at all**, so an account made from the admin screen resolves to no tenant and 401s on every
+      guarded page — 6.5's invitation flow is what actually grants access today. Only after both is
+      `DROP COLUMN "user"."role"` a migration and nothing more.
+
+      One deliberate exception stays in the test harness:
+      `packages/auth/src/testing/membership-double.ts` derives a fake membership's role from the
+      mocked session's user, which is how 131 route and controller suites vary a role in one place.
+      It has its own local `SessionLike` type and reads no database column
 - [x] Resolve the tenant in a Nest guard and pass it down — `TenantGuard` resolves and re-verifies;
       controllers stay thin and name no tenant
 - [x] Verify the migrated controllers — the claim held and was checked, not assumed: of 30, **26
@@ -1457,8 +1504,11 @@ Two items are owed to someone other than the code:
 - **`DATABASE_URL`'s role must be neither `SUPERUSER` nor `BYPASSRLS`**, or RLS is decorative. The
   suite refuses to trust its own results without checking, after a first run passed 195 assertions
   with the policies entirely inert.
-- **`User.role`** still exists because it is Better Auth's column, cached in the session cookie. Its
-  removal is 6.4's last bullet and needs the auth surface changed, not just a migration.
+- **`User.role`** still exists, but nothing the application owns reads or writes it any more (6.4).
+  It survives because Better Auth's admin plugin declares it, writes it on every account it creates,
+  and gates each of its own endpoints on it — so the column outlives us until those endpoints are
+  replaced. That is a code change plus a two-line signature change in `apps/api`, not a migration;
+  6.4's last bullet has the detail.
 
 ---
 

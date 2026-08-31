@@ -41,11 +41,31 @@ import {
 } from "@destaworks/db/repositories/daily.repository";
 import { clientRepository } from "@destaworks/db/repositories/client.repository";
 import { userRepository } from "@destaworks/db/repositories/user.repository";
+import { membershipRepository } from "@destaworks/db/tenancy/membership.repository";
 import { AppError } from "@destaworks/integrations/http/app-error";
 import { cachedUserList } from "@destaworks/integrations/http/request-cache";
 
 /** The capability that gates target-setting (leadership; legacy: the Daily Brief manager modal). */
 const SET_TARGETS_CAP = "viewReports" as const;
+
+/**
+ * The Associate roster this workspace's leadership sets targets for and sends feedback to.
+ *
+ * Read from the active tenant's MEMBERSHIPS, not from a role on the user row: the same person can
+ * be an Associate here and an Owner elsewhere, and a `User.role` lookup would both answer with the
+ * wrong workspace's role and return people who are not members of this one at all.
+ */
+async function associateRoster(ctx: TenantContext): Promise<{ id: string; name: string }[]> {
+  const [rows, users] = await Promise.all([
+    membershipRepository.listByTenant(ctx.tenantId),
+    cachedUserList(),
+  ]);
+  const names = new Map(users.map((u) => [u.id, u.name]));
+  return rows
+    .filter((row) => row.status === "active" && row.role === "Associate")
+    .map((row) => ({ id: row.userId, name: names.get(row.userId) ?? "Unknown" }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
 
 /** Legacy Daily Log excluded these 2 non-recruiting placeholder clients from the per-client
  *  sourcing breakdown (not real targets); the EOS modal did NOT apply this exclusion — both
@@ -146,7 +166,7 @@ export const dailyService = {
           this.liveActuals(ctx.user.id, date, tz, ctx),
           dailyRepository.actualFor(ctx, ctx.user.id, date),
           clientRepository.list(ctx),
-          canSetTargets ? userRepository.listByRole("Associate") : Promise.resolve(undefined),
+          canSetTargets ? associateRoster(ctx) : Promise.resolve(undefined),
           canSetTargets ? dailyRepository.targetsForDate(ctx, date) : Promise.resolve(undefined),
           canSetTargets
             ? dailyRepository.logsForDateRange(ctx, monday, date)
@@ -507,7 +527,7 @@ export const dailyService = {
     const [logs, users, associates] = await Promise.all([
       dailyRepository.logsForDateRange(ctx, monday, weekEnd),
       cachedUserList(),
-      userRepository.listByRole("Associate"),
+      associateRoster(ctx),
     ]);
     const names = new Map(users.map((u) => [u.id, u.name]));
     const byUser = new Map<string, TeamBreakdownDTO["rows"][number]>();
