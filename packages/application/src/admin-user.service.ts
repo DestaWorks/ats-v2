@@ -3,6 +3,7 @@ import { auth } from "@destaworks/auth/auth";
 import { requestContext } from "@destaworks/config/request-context";
 import { toIso, isoOrNull } from "@destaworks/domain/utils/iso";
 import { writeAudit } from "@destaworks/db/audit";
+import { membershipRepository } from "@destaworks/db/tenancy/membership.repository";
 import { withAnnouncedTenant } from "@destaworks/db/tenant-transaction";
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { Role } from "@destaworks/domain/constants";
@@ -100,15 +101,37 @@ export const adminUserService = {
         data: { emailVerified: true },
       },
     });
-    await withAnnouncedTenant(ctx.tenantId, (tx) =>
-      writeAudit(tx, {
+    // The account and its membership are one act. Without this the person signs in, resolves to no
+    // workspace, and every guarded page answers 401 — an "Add user" that appears to work and does
+    // not. Active, not invited: the administrator sets the password and hands it over, so there is
+    // nobody left to accept.
+    await withAnnouncedTenant(ctx.tenantId, async (tx) => {
+      const membership = await membershipRepository.upsertMembership(
+        {
+          tenantId: ctx.tenantId,
+          userId: result.user.id,
+          role: input.role,
+          invitedById: ctx.user.id,
+          status: "active",
+        },
+        tx,
+      );
+      await writeAudit(tx, {
         entity: "user",
         entityId: result.user.id,
         actor: ctx.user.id,
         action: "create",
         after: { email: result.user.email, role: input.role },
-      }),
-    );
+      });
+      await writeAudit(tx, {
+        entity: "membership",
+        entityId: membership.id,
+        actor: ctx.user.id,
+        action: "create",
+        tenantId: ctx.tenantId,
+        after: { userId: result.user.id, role: input.role, status: "active" },
+      });
+    });
     return { user: toDTO(result.user), generatedPassword };
   },
 

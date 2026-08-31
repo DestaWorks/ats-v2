@@ -7,6 +7,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
  */
 
 const h = vi.hoisted(() => ({
+  upsertMembership: vi.fn().mockResolvedValue({ id: "m_new" }),
   listUsers: vi.fn(),
   createUser: vi.fn(),
   setRole: vi.fn(),
@@ -36,6 +37,9 @@ vi.mock("@destaworks/auth/auth", () => ({
   },
 }));
 vi.mock("@destaworks/db/audit", () => ({ writeAudit: h.writeAudit }));
+vi.mock("@destaworks/db/tenancy/membership.repository", () => ({
+  membershipRepository: { upsertMembership: h.upsertMembership },
+}));
 const announced: string[] = vi.hoisted(() => []);
 
 vi.mock("@destaworks/db/tenant-transaction", () => ({
@@ -183,6 +187,41 @@ describe("adminUserService.create", () => {
         actor: "actor1",
         action: "create",
       }),
+    );
+  });
+
+  it("grants an ACTIVE membership in the acting admin's workspace, or the account is unusable", async () => {
+    h.createUser.mockResolvedValue({ user: baseUser });
+    await adminUserService.create(adminCtx, {
+      name: "New",
+      email: "new@desta.works",
+      role: "Associate",
+    });
+
+    expect(h.upsertMembership).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tenantId: adminCtx.tenantId,
+        role: "Associate",
+        invitedById: adminCtx.user.id,
+      }),
+      expect.anything(),
+    );
+  });
+
+  it("does not leave the account merely invited — there is nobody to accept", async () => {
+    h.createUser.mockResolvedValue({ user: baseUser });
+    h.upsertMembership.mockClear();
+    await adminUserService.create(adminCtx, {
+      name: "New",
+      email: "new@desta.works",
+      role: "Associate",
+    });
+
+    const [payload] = h.upsertMembership.mock.calls[0] ?? [];
+    expect(payload).not.toHaveProperty("status", "invited");
+    expect(h.writeAudit).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ entity: "membership", action: "create" }),
     );
   });
 });

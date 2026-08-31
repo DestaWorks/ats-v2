@@ -190,19 +190,25 @@ export const membershipRepository = {
   },
 
   /**
-   * Create an invitation, or re-invite someone previously removed.
+   * Grant a membership, or revive one previously removed.
    *
    * An upsert rather than a create because `@@unique([tenantId, userId])` means a removed member
-   * still occupies the row: re-inviting them has to revive it, not collide with it. The update
-   * branch is narrow on purpose — it never touches an `active` row's role (that would be a silent
-   * privilege change dressed up as an invitation), which the service enforces before calling.
+   * still occupies the row: re-granting has to revive it, not collide with it. The update branch
+   * is narrow on purpose — it never touches an `active` row's role (that would be a silent
+   * privilege change), which the service enforces before calling.
+   *
+   * `status` is the caller's, because the two ways in differ: an account that already exists is
+   * `invited` and must accept, while an account an administrator CREATES is `active` — they set
+   * the password and hand it over, so there is nobody left to accept and an invitation would
+   * leave the person able to sign in and reach nothing.
    */
-  upsertInvitation(
+  upsertMembership(
     input: {
       tenantId: string;
       userId: string;
       role: string;
       invitedById: string;
+      status: "invited" | "active";
     },
     tx?: AnyTx,
   ): Promise<MembershipRow> {
@@ -212,10 +218,10 @@ export const membershipRepository = {
         tenantId: input.tenantId,
         userId: input.userId,
         role: input.role,
-        status: "invited",
+        status: input.status,
         invitedById: input.invitedById,
       },
-      update: { role: input.role, status: "invited", invitedById: input.invitedById },
+      update: { role: input.role, status: input.status, invitedById: input.invitedById },
       select: MEMBERSHIP_SELECT,
     });
   },

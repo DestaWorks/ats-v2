@@ -161,12 +161,13 @@ export const membershipService = {
     }
 
     const row = await withTenantTransaction(ctx, async (tx) => {
-      const created = await membershipRepository.upsertInvitation(
+      const created = await membershipRepository.upsertMembership(
         {
           tenantId: ctx.tenantId,
           userId: found.id,
           role: input.role,
           invitedById: ctx.user.id,
+          status: "invited",
         },
         tx,
       );
