@@ -1518,9 +1518,15 @@ Two items are owed to someone other than the code:
 
 - [ ] Commit the existing importers under `scripts/migrate/`
 - [ ] Point them at tenant #1 — two files deep, trivially redirected
-- [ ] Resolve the 9 outstanding field-mapping decisions in `resolutions.json`
-- [ ] Fill the actor map — 28 of 29 candidates currently resolve to `system-import`
-- [ ] Decide `ATS_ClientSignals` (59 rows, no Postgres target, no design doc)
+- [x] Resolve the outstanding field-mapping decisions — **all settled 2026-08-31**, recorded in
+      `docs/MIGRATION-GAP-ANALYSIS.md` §7. The workbook is confirmed complete and real; quiz tabs,
+      legacy operational state and regenerable briefs are dropped; Indrasur tags and Word resumes
+      are preserved as-is; the first-listed credential is primary, flagged per row in the plan run
+- [ ] Fill the actor map — 28 of 29 candidates resolve to `system-import`. **The last open data
+      question.** Every imported record needs an author; without it the whole history reads as
+      created by nobody, and activity trails start empty
+- [x] ~~Decide `ATS_ClientSignals`~~ — **V2 scope (Biruh, 2026-08-31).** The ETL skips the tab and
+      builds nothing for it; the 59 rows are preserved in the export so V2 inherits them.
 - [ ] Resume files: Drive → private storage bucket, widen the MIME allowlist, implement `deleteObject`
 - [ ] Reconcile: `inserted + updated + skipped + errored == sourceRows` for every tab
 - [ ] Plan run against production data with zero writes, reviewed before apply

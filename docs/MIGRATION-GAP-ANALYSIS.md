@@ -21,9 +21,10 @@ The export has **20 tabs**. `Code.gs` references **29**. They overlap on 18.
 - The workbook is the **"Healthcare 101" quiz sheet with the ATS bolted on** — `Sheet1` (empty) and
   `Events` (400 rows) are quiz results, unrelated to recruiting.
 
-`ATS_ClientSignals` (59 rows × 27 cols) is undocumented scope: `CompanyName`, `RoleTitleRaw`,
-`SalaryMin/Max`, `PostURL`, `DedupeHash`, `SignalScore`, `MatchedCandidateIDs`. No Postgres target,
-no design doc, no importer. **Needs a decision.**
+`ATS_ClientSignals` (59 rows × 27 cols): `CompanyName`, `RoleTitleRaw`, `SalaryMin/Max`, `PostURL`,
+`DedupeHash`, `SignalScore`, `MatchedCandidateIDs` — scraped openings, deduplicated and scored
+against candidates. **V2 scope by decision (2026-08-31).** No Postgres target and no importer on
+purpose; the rows are kept in the export so V2 starts with them rather than from nothing.
 
 ---
 
@@ -268,18 +269,33 @@ and lead soft-delete state, whose columns are absent from the export entirely.
 
 ## 7. Open questions for Biruh
 
-1. **Is this the complete production workbook?** 29 candidates is small for a system described as
-   live with real users, and 11 expected tabs are absent. Confirm there is no second workbook
-   before we treat this as the full picture. *(Highest priority — everything below assumes the answer.)*
-2. **`ATS_ClientSignals`** (59 rows) — migrate, or drop? It has no target table and no design.
-3. **`Events` + `Sheet1`** (400 quiz rows) — drop?
-4. **`IndrasurID:NN` tags** — does the Indrasur linkage need to survive migration?
-5. **`"PMHNP-BC , FNP"`** — which is primary?
-6. **Word-format resumes** (5 of 12) — store as-is, or convert to PDF during the file pass?
-7. Confirm `OP_Providers` is out of scope (belongs to desta-operate).
-8. Confirm `Invites`, `AccessRequests`, `Migration_Queue`, `Settings` are droppable.
-9. **`ATS_OverviewBriefs`** (76 rows) — add `userId` and re-key the unique constraint, or drop as
-   regenerable? *(`ATS_ClientSignals` is parked by decision 2026-08-25.)*
+1. ~~**Is this the complete production workbook?**~~ **CONFIRMED 2026-08-31 (Biruh): yes, this is
+   the real and complete data.** 29 candidates and 11 absent tabs are the true picture, not a
+   partial export — the absent tabs are features built and never used. Migration targets the
+   production database when we are ready.
+2. ~~**`ATS_ClientSignals`** (59 rows) — migrate, or drop?~~ **DECIDED 2026-08-31 (Biruh): V2 scope.**
+   Not dead scope and not migration scope. The 59 rows are **preserved, not dropped** — export them
+   with the rest of the workbook and keep them outside the system until V2 designs the feature.
+   Nothing is built for it now: no table, no importer, no UI, and the ETL skips the tab.
+**Items 3–9 delegated to engineering judgement, 2026-08-31 ("choose the right one"). Decided:**
+
+3. **`Events` + `Sheet1`** — **DROP.** 400 rows of Healthcare-101 quiz results and an empty sheet.
+   Unrelated to recruiting; the workbook was a quiz sheet with the ATS bolted on. Kept in the raw
+   export, imported nowhere.
+4. **`IndrasurID:NN` tags** — **PRESERVE**, as candidate tags exactly as written. Reversible and
+   nearly free; discarding an external system's linkage is not. No schema change.
+5. **`"PMHNP-BC , FNP"`** — **primary is the FIRST listed** (`PMHNP-BC`), the rest preserved as
+   tags. It matches how the field was written and how scoring already reads a single credential.
+   Flagged per row in the plan run so a wrong guess is visible before apply, not after.
+6. **Word-format resumes** (5 of 12) — **STORE AS-IS.** The file is evidence; converting it during
+   a migration means the stored document is no longer what the candidate sent. Widening the MIME
+   allowlist is the smaller change, and conversion can happen later without redoing the import.
+7. **`OP_Providers`** — **OUT OF SCOPE.** Belongs to desta-operate, a different product.
+8. **`Invites`, `AccessRequests`, `Migration_Queue`, `Settings`** — **DROP.** All four are
+   operational state of the legacy app, not business records. The new system has its own.
+9. **`ATS_OverviewBriefs`** (76 rows) — **DROP as regenerable.** They are AI summaries of pipeline
+   state, derivable from the candidate and stage data being migrated. Importing them would carry a
+   uniqueness rule that has to be re-keyed per workspace to hold a text blob nobody reads twice.
 
 ---
 
