@@ -58,11 +58,15 @@ jobs:
         run: |
           set -euo pipefail
           node apps/api/dist/main.js & pid=$!
+          # LIVENESS, not readiness. There is no Postgres in this runner, so `/health` answers 503
+          # by design and `curl -fsS` would fail on it forever; `/health/live` is the endpoint that
+          # answers `{"status":"ok"}` and proves what this step is actually for — the artefact
+          # boots, resolves its externalised native deps, and routes.
           for _ in $(seq 1 30); do
-            if curl -fsS http://127.0.0.1:3004/health > /dev/null; then break; fi
+            if curl -fsS http://127.0.0.1:3004/health/live > /dev/null; then break; fi
             sleep 1
           done
-          curl -fsS http://127.0.0.1:3004/health | tee /dev/stderr | grep -q '"status":"ok"'
+          curl -fsS http://127.0.0.1:3004/health/live | tee /dev/stderr | grep -q '"status":"ok"'
 
           # The reason production runs node rather than tsx: under tsx the runner killed the
           # process on SIGTERM before the handler drained, so a rolling deploy reset live requests.
@@ -108,6 +112,10 @@ jobs:
 
       # The API is the read path for every ported page, so a web deploy on top of an API that is
       # not yet serving shows users an error boundary. Block until /health answers.
+      # API_HEALTH_URL must point at READINESS — `https://<api-host>/health` — never at
+      # `/health/live`. Liveness only proves the process is routing, which it does perfectly well
+      # with an unreachable database or unapplied migrations; readiness is what distinguishes a
+      # deploy that works from one that merely started. `{"ok":true,...}` is that endpoint's body.
       - name: Wait for the API to serve this revision
         env:
           API_HEALTH_URL: ${{ vars.API_HEALTH_URL }}
@@ -118,7 +126,7 @@ jobs:
             exit 1
           fi
           for _ in $(seq 1 60); do
-            if curl -fsS "${API_HEALTH_URL}" | grep -q '"status":"ok"'; then
+            if curl -fsS "${API_HEALTH_URL}" | grep -q '"ok":true'; then
               echo "API is serving"
               exit 0
             fi

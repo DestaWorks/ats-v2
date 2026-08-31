@@ -34,8 +34,35 @@ services:
         sync: false
       - key: BETTER_AUTH_SECRET
         sync: false
+      # This process validates the session cookie itself (`packages/auth` guards); Better Auth
+      # resolves its own issuer from this and rejects sessions when it disagrees with the origin.
+      - key: BETTER_AUTH_URL
+        sync: false
       - key: PLATFORM_ADMIN_USER_IDS
         sync: false
+      # MUST match the value apps/web and the worker hold. Rows written under one key are
+      # unreadable under another and unreadable with none — `field-crypto.ts` throws rather than
+      # returning ciphertext, so a mismatch here is not degraded reads, it is 500s on every
+      # candidate with an encrypted licence number.
+      - key: FIELD_ENCRYPTION_KEY
+        sync: false
+      # Without these the limiter falls back to a per-process Map, so the effective limit becomes
+      # limit x instance-count and resets on every deploy. Harmless at one instance; the moment
+      # this service scales past one it is no longer a rate limit.
+      - key: UPSTASH_REDIS_REST_URL
+        sync: false
+      - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false
+      # Declared rather than defaulted, because the ceiling they add up against is Supabase's and
+      # it is shared with Vercel's serverless instances. These reproduce the in-code defaults;
+      # raise them only against confirmed headroom.
+      - key: DB_POOL_MAX
+        value: "5"
+      - key: JOBS_SENDER_POOL_MAX
+        value: "2"
+      # Everything else this service reads is activate-by-key and documented in `.env.example`:
+      # AI_MODEL + a provider key, the S3_* group, APOLLO_API_KEY / HUNTER_API_KEY, EMAIL_*.
+      # Unset means that feature reports "not configured"; it does not mean the API is degraded.
 
   - type: worker
     name: destaworks-worker
@@ -53,3 +80,28 @@ services:
         sync: false
       - key: BETTER_AUTH_SECRET
         sync: false
+      # The same key the API and apps/web hold — see the note on the web service. The report-export
+      # job reads candidate rows, so a worker without it dead-letters every export.
+      - key: FIELD_ENCRYPTION_KEY
+        sync: false
+      # This worker runs exactly two kinds of job, and these are what they need: brief generation
+      # calls a model, report export writes the CSV to object storage. Unset here does not degrade
+      # the job, it fails it — and unlike a request, nobody is watching when it does.
+      - key: AI_MODEL
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: S3_ENDPOINT
+        sync: false
+      - key: S3_REGION
+        sync: false
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: S3_PUBLIC_URL_BASE
+        sync: false
+      - key: DB_POOL_MAX
+        value: "5"
+      - key: JOBS_WORKER_POOL_MAX
+        value: "4"
