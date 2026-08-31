@@ -90,9 +90,9 @@ read them as a record of what was built, not as instructions for new work.
 | `docs/API-CONTRACT.md` | The ~90 Apps Script `event:` operations (de-facto API) |
 | `docs/MODULE-BREAKDOWN.md` | **Deep line-level map of every module: sub-modules, complexity, gotchas** |
 | `docs/CONVENTIONS.md` | Coding standards, naming, git/PR rules for the new codebase |
-| `docs/ESTIMATE.md` | **LIVE — LOCKED 3-month plan: 7 waves, per-module hours, month-by-month, conditions** |
-| `docs/IMPLEMENTATION-PLAN.md` | **LIVE — executable build guide: per-module tasks (schema→API→client→tests) + done-when** |
-| `docs/MIGRATION-CHEATSHEET.md` | **End-user: which app (old/new) to use for which task, month by month, during the rebuild** |
+| `docs/ESTIMATE.md` | _Historical_ — the LOCKED 3-month plan the Wave 0–6 build ran to: 7 waves, per-module hours, conditions |
+| `docs/IMPLEMENTATION-PLAN.md` | _Historical_ — the Wave 0–6 build guide: per-module tasks (schema→API→client→tests) + done-when. A record of what was built, not instructions for new work |
+| `docs/MIGRATION-CHEATSHEET.md` | _Superseded_ — which app to use month by month during the rebuild. Every domain is ported; only the data import is left |
 | `docs/ARCHITECTURE-PROPOSAL.md` | **The architecture decision: multi-tenant SaaS on a monorepo, with the reasoning and trade-offs** |
 | `docs/MIGRATION-GAP-ANALYSIS.md` | Legacy Sheet → Postgres: migrate/derive/drop per tab + restructuring blockers |
 | `docs/PRODUCT-WALKTHROUGH.md` | The product as a plain-English user journey, zero tech talk |

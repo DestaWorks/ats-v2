@@ -49,8 +49,16 @@ authorizes**. `requireCapability` resolves through the membership. The `User.rol
 exists and is still written by `seed-owner.ts` and `admin-user.service.ts`, but it authorizes
 nothing in application code — it is retained only because Better Auth's admin plugin declares the
 field itself and gates its own account-management endpoints on it, so removing the remap would 403
-that whole surface. It cannot escalate, because the membership check runs first. What retiring it
-would take is recorded in `SAAS-RESTRUCTURE-PLAN.md` 6.4.
+that whole surface. What retiring it would take is recorded in `SAAS-RESTRUCTURE-PLAN.md` 6.4.
+
+*Two checks, not one — do not conflate them.* `requireCapability` authorizes the **actor**: it
+proves this person may administer accounts in the workspace they are signed in to. It says nothing
+about the **target**, and the Better Auth admin endpoints address the global `User` table by a
+caller-supplied id. Until 2026-08-31 that gap was live: an administrator of one workspace could
+name any user id on the installation and ban, delete, re-role or reset the password of another
+customer's staff, because the Better Auth call landed before the audit write that failed. Every
+`adminUserService` mutation now resolves the target's `Membership` in the acting tenant first. A
+claim that this surface "cannot escalate" is only true with **both** checks in place.
 
 **D4 — License verification (Biruh priority #3) = assisted queue in v1, automation fast-follow.**
 v1 ships a **verification queue** (candidates needing verification, one-click state-board links,
@@ -79,7 +87,11 @@ plus its worker on **Render** (`render.yaml`). The Vercel project has **no Git i
 nothing deploys on push. `.github/workflows/deploy.yml` is dispatched by hand with a full commit
 SHA, refuses any revision whose four required checks (Commit messages · Static analysis · Tests ·
 Build) are not green, ships the API first and waits for `/health`, then the web app, then tags the
-revision `deploy/<env>-YYYY-MM-DD-<run>`. The domain placeholder `zyx.com` is still unresolved: the
+revision `deploy/<env>-YYYY-MM-DD-<run>`. **Those four are not all five CI jobs: `Tenant isolation`
+is deliberately absent from the gate**, so the one job that proves tenant A cannot read tenant B —
+per table, against a real Postgres — is not required to ship. That is a gap, recorded here rather
+than left to be discovered from the workflow file; it should be added to the required set before
+the installation carries a second tenant. The domain placeholder `zyx.com` is still unresolved: the
 real production domain and database have not been provisioned, so today's deployed environment is
 **staging**.
 
