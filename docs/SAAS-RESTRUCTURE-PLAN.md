@@ -1340,9 +1340,20 @@ export interface TenantContext {
       request host FIRST and looks the token up inside that workspace, so a token presented on
       another tenant's host does not resolve either
 - [x] Resume upload is now tenant-prefixed — `tenantStorageKey(ctx.tenantId, …)`, since the method
-      that mints the key carries a context. One un-scoped key remains (report export)
-- [ ] Wire the last un-scoped storage key (report export) once 6.5 resolves a
-      tenant — ratcheted by `scripts/check-rls-coverage.mjs`
+      that mints the key carries a context
+- [x] **The last un-scoped storage key is wired.** The report export writes
+      `t/<tenantId>/candidates/<exportId>.csv`. The tenant comes from the JOB PAYLOAD — the only
+      place a resumed job can learn it, and written by the enqueuing endpoint off the
+      session-resolved context, never from a request body, so it is not a forgeable claim; no
+      system context was needed. Exports written before the prefix keep downloading, because `get`
+      resolves the key persisted on the row rather than rebuilding it from the id — the shape only
+      ever changes on the minting side, and the signed URL is minted the same way for either shape,
+      so who may fetch one is unchanged. With both call sites converted, `unscopedStorageKey`, its
+      reason union and its runtime allowlist are **deleted**: there is no constructor left that
+      produces an un-owned key. `check-rls-coverage.mjs` is tightened to match — the budget is 0,
+      re-adding the hatch to `storage.ts` fails the build, and so does asserting `as
+      ScopedStorageKey`/`as PersistedStorageKey` anywhere but `storage.ts`, which was the one way
+      left to forge the brand once the hatch was gone
 - [ ] Deploy step, not a code change: `DATABASE_URL`'s role must be neither `SUPERUSER` nor
       `BYPASSRLS`, or none of the above applies to it
 - **Done-when:** a query that bypasses the extension returns zero rows rather than another tenant's data

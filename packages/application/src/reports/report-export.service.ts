@@ -19,7 +19,7 @@ import {
   persistedStorageKey,
   type ScopedStorageKey,
   storageEnabled,
-  unscopedStorageKey,
+  tenantStorageKey,
   uploadPrivate,
 } from "@destaworks/integrations/storage";
 import { exportService } from "./export.service";
@@ -56,21 +56,20 @@ function toStatus(raw: string): ReportExportStatusValue {
 }
 
 /**
- * The object key. The export's cuid carries all the entropy, so the key is unguessable even if
- * the bucket were ever misconfigured — defence in depth behind the private bucket, not instead
- * of it. No candidate name, client or filter value appears in it: a key is metadata that leaks
- * into storage logs and provider dashboards.
+ * The object key: `t/<tenantId>/candidates/<exportId>.csv` (6.6). The export's cuid carries all the
+ * entropy, so the key is unguessable even if the bucket were ever misconfigured — defence in depth
+ * behind the private bucket, not instead of it. No candidate name, client or filter value appears
+ * in it: a key is metadata that leaks into storage logs and provider dashboards.
  *
- * 6.6: this belongs at `t/<tenantId>/candidates/<exportId>.csv`, which becomes a one-line change
- * (`tenantStorageKey(ctx.tenantId, "candidates", …)`) once 6.5 resolves a tenant for the job that
- * calls `fulfil`. Declared as an exception rather than left to look intentional — see
- * `unscopedStorageKey`.
+ * The tenant comes from the job payload, which is the only place a resumed job can learn it — and
+ * the payload's `tenantId` is written by the enqueuing endpoint from the session-resolved context,
+ * never from a request body, so it is not a claim the caller can forge.
+ *
+ * Minting only, never reading: `get` resolves the key persisted on the row, so exports written
+ * before this prefix existed keep downloading from the key they were actually stored at.
  */
-function storageKeyFor(exportId: string): ScopedStorageKey {
-  return unscopedStorageKey(
-    `candidates/${exportId}.csv`,
-    "report-export-awaiting-6.5-tenant-resolution",
-  );
+function storageKeyFor(tenantId: string, exportId: string): ScopedStorageKey {
+  return tenantStorageKey(tenantId, "candidates", `${exportId}.csv`);
 }
 
 function toDto(row: ReportExportRow, downloadUrl?: string): ReportExportDTO {
@@ -147,7 +146,7 @@ export const reportExportService = {
     const filters = reportFiltersSchema.parse(rawFilters);
     const csv = await exportService.candidatesCsv(ctx, filters);
     const bytes = Buffer.from(csv, "utf8");
-    const key = storageKeyFor(exportId);
+    const key = storageKeyFor(tenantId, exportId);
     await uploadPrivate(EXPORT_BUCKET, key, bytes, "text/csv; charset=utf-8");
     await reportExportRepository.markReady(ctx, exportId, key, bytes.byteLength, now);
     // Size and identifiers only. The CSV itself is candidate PII and never reaches a log line.
