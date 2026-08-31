@@ -97,7 +97,7 @@ export const noteService = {
   async add(ctx: TenantContext, candidateId: string, input: AddNoteServiceInput): Promise<NoteDTO> {
     const candidate = await candidateRepository.findById(ctx, candidateId);
     if (!candidate) throw new AppError("NOT_FOUND", "Candidate not found");
-    const users = await userRepository.list();
+    const users = await userRepository.listByTenant(ctx.tenantId);
     const recipients = resolveMentions(input.body, users).filter((u) => u.id !== ctx.user.id);
 
     const created = await withTenantTransaction(ctx, async (tx) => {

@@ -27,7 +27,7 @@ export const teamReportsService = {
     const [cohort, historyMax, users] = await Promise.all([
       loadCohort(ctx, filters),
       stageHistoryRepository.maxStageOrderAsOf(ctx, now),
-      userRepository.list(),
+      userRepository.listByTenant(ctx.tenantId),
     ]);
 
     const byUser = new Map<string, typeof cohort.candidates>();

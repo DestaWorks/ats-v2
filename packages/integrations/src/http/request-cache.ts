@@ -45,5 +45,13 @@ export const cachedClientNameMap = async (ctx: TenantContext): Promise<Map<strin
 
 export const cachedClientRulesList = (ctx: TenantContext) => clientRulesListFor(ctx.tenantId);
 
-/** `User` is a GLOBAL model — one human, many tenants — so this one carries no tenant at all. */
-export const cachedUserList = cache(() => userRepository.list());
+/**
+ * This workspace's operators.
+ *
+ * `User` is a GLOBAL model — one human, many tenants — which is exactly why this takes a tenant:
+ * the enforcement seam cannot scope the table, so the caller must, and every screen this feeds is
+ * tenant-scoped. It reads through `listByTenant`, whose membership predicate IS the scope.
+ */
+const userListFor = cache((tenantId: string) => userRepository.listByTenant(tenantId));
+
+export const cachedUserList = (ctx: TenantContext) => userListFor(ctx.tenantId);

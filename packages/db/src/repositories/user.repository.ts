@@ -25,13 +25,47 @@ export const userRepository = {
   },
 
   /**
-   * All users as `{ id, name }` options, sorted by name — feeds the "view as owner" filter
-   * dropdown. Display names only (no email/PII); the user table is small (fixed team).
+   * This workspace's users as `{ id, name }` options, sorted by name — feeds the "view as owner"
+   * filter dropdown. Display names only (no email/PII).
+   *
+   * `User` is a GLOBAL model, so the enforcement seam does NOT scope it: without the membership
+   * predicate below this returns every operator on the installation, and the tenant-scoped screens
+   * that render it would show one customer another customer's staff. The predicate IS the scope
+   * here — that is why this takes a `tenantId` rather than reading the table directly.
    */
-  list(tx?: Prisma.TransactionClient) {
+  listByTenant(tenantId: string, tx?: Prisma.TransactionClient) {
     return db(tx).user.findMany({
+      where: { memberships: { some: { tenantId } } },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
+      take: REFERENCE_ROWS_CAP,
+    });
+  },
+
+  /**
+   * The administration screen's roster for one workspace: every account holding a membership here,
+   * in any status, with the account-management fields that screen acts on.
+   *
+   * Scoped by the same membership predicate as `listByTenant`, and for the same reason. `role` is
+   * the Better Auth `User.role` column rather than `Membership.role` because that is still the
+   * column `setRole` writes through the admin plugin — showing the other one would report a role
+   * this screen cannot change. Retiring that column is SAAS-RESTRUCTURE-PLAN 6.4.
+   */
+  listAdminUsersByTenant(tenantId: string, tx?: Prisma.TransactionClient) {
+    return db(tx).user.findMany({
+      where: { memberships: { some: { tenantId } } },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        image: true,
+        role: true,
+        banned: true,
+        banReason: true,
+        banExpires: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: "desc" },
       take: REFERENCE_ROWS_CAP,
     });
   },
@@ -62,7 +96,7 @@ export const userRepository = {
   },
 
   /** Batch-resolve a set of user ids to their emails in ONE query — mirrors `namesByIds`. Used
-   *  ONLY server-side (e.g. mention notification emails); `list()` deliberately never selects
+   *  ONLY server-side (e.g. mention notification emails); `listByTenant()` deliberately never selects
    *  email since its result feeds the client-side @mention picker. */
   async emailsByIds(ids: string[], tx?: Prisma.TransactionClient): Promise<Map<string, string>> {
     const unique = [...new Set(ids)];

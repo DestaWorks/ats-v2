@@ -58,7 +58,7 @@ const SET_TARGETS_CAP = "viewReports" as const;
 async function associateRoster(ctx: TenantContext): Promise<{ id: string; name: string }[]> {
   const [rows, users] = await Promise.all([
     membershipRepository.listByTenant(ctx.tenantId),
-    cachedUserList(),
+    cachedUserList(ctx),
   ]);
   const names = new Map(users.map((u) => [u.id, u.name]));
   return rows
@@ -526,7 +526,7 @@ export const dailyService = {
     // populations are deliberately different, so this fetches both rather than filtering one.
     const [logs, users, associates] = await Promise.all([
       dailyRepository.logsForDateRange(ctx, monday, weekEnd),
-      cachedUserList(),
+      cachedUserList(ctx),
       associateRoster(ctx),
     ]);
     const names = new Map(users.map((u) => [u.id, u.name]));

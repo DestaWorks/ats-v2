@@ -188,9 +188,11 @@ describe("authorization — the declared gate per route", () => {
 });
 
 describe("GET/POST /admin/users", () => {
-  it("lists accounts", async () => {
+  it("lists accounts, scoped to the actor's workspace", async () => {
     h.list.mockResolvedValue({ users: [USER], total: 1 });
-    expect(await controller().list()).toEqual({ users: [USER], total: 1 });
+    const actor = await admitted("list");
+    expect(await controller().list(actor)).toEqual({ users: [USER], total: 1 });
+    expect(h.list).toHaveBeenCalledWith(actor);
   });
 
   it("creates one and returns the one-time password, attributed to the session actor", async () => {

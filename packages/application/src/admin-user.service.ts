@@ -4,6 +4,8 @@ import { requestContext } from "@destaworks/config/request-context";
 import { toIso, isoOrNull } from "@destaworks/domain/utils/iso";
 import { writeAudit } from "@destaworks/db/audit";
 import { membershipRepository } from "@destaworks/db/tenancy/membership.repository";
+import { userRepository } from "@destaworks/db/repositories/user.repository";
+import { AppError } from "@destaworks/integrations/http/app-error";
 import { withAnnouncedTenant } from "@destaworks/db/tenant-transaction";
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { Role } from "@destaworks/domain/constants";
@@ -65,18 +67,33 @@ function toDTO(user: BetterAuthUser): AdminUserDTO {
  * go through the plugin: every `auth.api.*` admin endpoint gates itself on `session.user.role`
  * (`plugins/admin/routes.mjs`) and the plugin's own create hook writes `defaultRole` on every
  * account regardless of what we pass. Stop writing it and the whole surface 403s for everyone.
- *
- * It cannot escalate: `requireCapability("manageUsers"|"manageRoles")` runs against the active
- * workspace's membership FIRST, so the plugin's check can only refuse what we already allowed.
  * Retiring it means replacing these endpoints outright — see SAAS-RESTRUCTURE-PLAN 6.4.
+ *
+ * ── Why every mutation calls `requireMemberOfTenant` first ──────────────────────────────────────
+ *
+ * `requireCapability(...)` in the controller authorizes the ACTOR: it proves this person may
+ * administer accounts in the workspace they are signed in to. It says nothing about the TARGET.
+ * `auth.api.*` addresses the global `User` table by id, so without the check below an
+ * administrator of one workspace could name any user id on the installation and ban, delete,
+ * re-role or reset the password of another customer's staff. Authorizing the actor and locating
+ * the target are two questions; this file has to answer both.
  */
+/**
+ * Refuse a target that holds no membership in the acting workspace.
+ *
+ * `NOT_FOUND`, not `FORBIDDEN`: a distinguishable "forbidden" would confirm that the id names a
+ * real account somewhere on the installation, turning every mutation into an oracle for probing
+ * other customers' user ids.
+ */
+async function requireMemberOfTenant(ctx: TenantContext, userId: string): Promise<void> {
+  const membership = await membershipRepository.findByTenantAndUser(ctx.tenantId, userId);
+  if (membership === null) throw new AppError("NOT_FOUND", "No such user in this workspace");
+}
+
 export const adminUserService = {
-  async list(): Promise<AdminUserListDTO> {
-    const result = await auth.api.listUsers({
-      headers: await requestContext().headers(),
-      query: { limit: 500, sortBy: "createdAt", sortDirection: "desc" },
-    });
-    return { users: result.users.map((u) => toDTO(u)), total: result.total };
+  async list(ctx: TenantContext): Promise<AdminUserListDTO> {
+    const users = await userRepository.listAdminUsersByTenant(ctx.tenantId);
+    return { users: users.map((u) => toDTO(u)), total: users.length };
   },
 
   /**
@@ -121,6 +138,7 @@ export const adminUserService = {
         entityId: result.user.id,
         actor: ctx.user.id,
         action: "create",
+        tenantId: ctx.tenantId,
         after: { email: result.user.email, role: input.role },
       });
       await writeAudit(tx, {
@@ -136,6 +154,7 @@ export const adminUserService = {
   },
 
   async setRole(ctx: TenantContext, userId: string, role: Role): Promise<AdminUserDTO> {
+    await requireMemberOfTenant(ctx, userId);
     const result = await auth.api.setRole({
       headers: await requestContext().headers(),
       body: { userId, role },
@@ -146,6 +165,7 @@ export const adminUserService = {
         entityId: userId,
         actor: ctx.user.id,
         action: "setRole",
+        tenantId: ctx.tenantId,
         after: { role },
       }),
     );
@@ -153,6 +173,7 @@ export const adminUserService = {
   },
 
   async ban(ctx: TenantContext, userId: string, input: BanUserInput): Promise<AdminUserDTO> {
+    await requireMemberOfTenant(ctx, userId);
     const result = await auth.api.banUser({
       headers: await requestContext().headers(),
       body: {
@@ -167,6 +188,7 @@ export const adminUserService = {
         entityId: userId,
         actor: ctx.user.id,
         action: "ban",
+        tenantId: ctx.tenantId,
         after: { banReason: input.reason ?? null, expiresInDays: input.expiresInDays ?? null },
       }),
     );
@@ -174,12 +196,19 @@ export const adminUserService = {
   },
 
   async unban(ctx: TenantContext, userId: string): Promise<AdminUserDTO> {
+    await requireMemberOfTenant(ctx, userId);
     const result = await auth.api.unbanUser({
       headers: await requestContext().headers(),
       body: { userId },
     });
     await withAnnouncedTenant(ctx.tenantId, (tx) =>
-      writeAudit(tx, { entity: "user", entityId: userId, actor: ctx.user.id, action: "unban" }),
+      writeAudit(tx, {
+        entity: "user",
+        entityId: userId,
+        actor: ctx.user.id,
+        action: "unban",
+        tenantId: ctx.tenantId,
+      }),
     );
     return toDTO(result.user);
   },
@@ -187,6 +216,7 @@ export const adminUserService = {
   /** Generates + returns a new password once (never persisted in plaintext — the audit row
    *  records that a reset happened, never the password itself). */
   async resetPassword(ctx: TenantContext, userId: string): Promise<{ generatedPassword: string }> {
+    await requireMemberOfTenant(ctx, userId);
     const generatedPassword = generatePassword();
     await auth.api.setUserPassword({
       headers: await requestContext().headers(),
@@ -198,15 +228,23 @@ export const adminUserService = {
         entityId: userId,
         actor: ctx.user.id,
         action: "resetPassword",
+        tenantId: ctx.tenantId,
       }),
     );
     return { generatedPassword };
   },
 
   async remove(ctx: TenantContext, userId: string): Promise<void> {
+    await requireMemberOfTenant(ctx, userId);
     await auth.api.removeUser({ headers: await requestContext().headers(), body: { userId } });
     await withAnnouncedTenant(ctx.tenantId, (tx) =>
-      writeAudit(tx, { entity: "user", entityId: userId, actor: ctx.user.id, action: "remove" }),
+      writeAudit(tx, {
+        entity: "user",
+        entityId: userId,
+        actor: ctx.user.id,
+        action: "remove",
+        tenantId: ctx.tenantId,
+      }),
     );
   },
 };

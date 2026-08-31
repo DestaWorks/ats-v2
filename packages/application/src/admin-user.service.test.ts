@@ -6,18 +6,32 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
  * `create`/`resetPassword` generate + return a password when none is supplied.
  */
 
-const h = vi.hoisted(() => ({
-  upsertMembership: vi.fn().mockResolvedValue({ id: "m_new" }),
-  listUsers: vi.fn(),
-  createUser: vi.fn(),
-  setRole: vi.fn(),
-  banUser: vi.fn(),
-  unbanUser: vi.fn(),
-  setUserPassword: vi.fn(),
-  removeUser: vi.fn(),
-  writeAudit: vi.fn(),
-  fakeTx: { __tx: true },
-}));
+const h = vi.hoisted(() => {
+  const fakeTx = { __tx: true };
+  return {
+    fakeTx,
+    upsertMembership: vi.fn().mockResolvedValue({ id: "m_new" }),
+    findByTenantAndUser: vi.fn(),
+    listAdminUsersByTenant: vi.fn(),
+    createUser: vi.fn(),
+    setRole: vi.fn(),
+    banUser: vi.fn(),
+    unbanUser: vi.fn(),
+    setUserPassword: vi.fn(),
+    removeUser: vi.fn(),
+    /**
+     * Stands in for the real writer AND for the column constraint behind it: `activity_log`
+     * .`tenantId` is NOT NULL, and the raw client `withAnnouncedTenant` yields has no seam to
+     * stamp it. A mock that accepted anything is why a missing `tenantId` shipped — every
+     * mutation 500'd after its destructive half had already committed, and the suite stayed green.
+     */
+    writeAudit: vi.fn((tx: unknown, params: { tenantId?: string }) => {
+      if (tx === fakeTx && params.tenantId === undefined) {
+        throw new Error("activity_log.tenantId is NOT NULL — required on a raw transaction");
+      }
+    }),
+  };
+});
 
 vi.mock("server-only", () => ({}));
 vi.mock("@destaworks/config/request-context", () => ({
@@ -26,7 +40,6 @@ vi.mock("@destaworks/config/request-context", () => ({
 vi.mock("@destaworks/auth/auth", () => ({
   auth: {
     api: {
-      listUsers: h.listUsers,
       createUser: h.createUser,
       setRole: h.setRole,
       banUser: h.banUser,
@@ -38,7 +51,13 @@ vi.mock("@destaworks/auth/auth", () => ({
 }));
 vi.mock("@destaworks/db/audit", () => ({ writeAudit: h.writeAudit }));
 vi.mock("@destaworks/db/tenancy/membership.repository", () => ({
-  membershipRepository: { upsertMembership: h.upsertMembership },
+  membershipRepository: {
+    upsertMembership: h.upsertMembership,
+    findByTenantAndUser: h.findByTenantAndUser,
+  },
+}));
+vi.mock("@destaworks/db/repositories/user.repository", () => ({
+  userRepository: { listAdminUsersByTenant: h.listAdminUsersByTenant },
 }));
 const announced: string[] = vi.hoisted(() => []);
 
@@ -66,14 +85,17 @@ const baseUser = {
 };
 
 beforeEach(() => {
-  h.listUsers.mockReset();
+  h.listAdminUsersByTenant.mockReset();
   h.createUser.mockReset();
   h.setRole.mockReset();
   h.banUser.mockReset();
   h.unbanUser.mockReset();
   h.setUserPassword.mockReset();
   h.removeUser.mockReset();
-  h.writeAudit.mockReset();
+  // `mockClear`, not `mockReset`: the invariant above is the point of this mock.
+  h.writeAudit.mockClear();
+  h.findByTenantAndUser.mockReset();
+  h.findByTenantAndUser.mockResolvedValue({ id: "m1", tenantId: "t1", userId: "u1" });
 });
 
 const adminCtx = {
@@ -84,12 +106,10 @@ const adminCtx = {
 };
 
 describe("adminUserService.list", () => {
-  it("calls listUsers with forwarded headers and maps the DTOs", async () => {
-    h.listUsers.mockResolvedValue({ users: [baseUser], total: 1 });
-    const result = await adminUserService.list();
-    expect(h.listUsers).toHaveBeenCalledWith(
-      expect.objectContaining({ headers: expect.any(Headers), query: expect.any(Object) }),
-    );
+  it("reads only THIS workspace's members and maps the DTOs", async () => {
+    h.listAdminUsersByTenant.mockResolvedValue([{ ...baseUser, image: null }]);
+    const result = await adminUserService.list(adminCtx);
+    expect(h.listAdminUsersByTenant).toHaveBeenCalledWith("t1");
     expect(result).toEqual({
       users: [
         {
@@ -310,5 +330,57 @@ describe("adminUserService.remove", () => {
         action: "remove",
       }),
     );
+  });
+});
+
+/**
+ * Regression for the cross-tenant admin plane.
+ *
+ * `requireCapability` in the controller proves the ACTOR may administer accounts in the workspace
+ * they are signed in to. It never looked at the TARGET, and `auth.api.*` addresses the global
+ * `User` table by id — so an administrator of one workspace could name any user id on the
+ * installation and ban, delete, re-role or reset the password of another customer's staff. Each
+ * case below drives the target's membership lookup to `null` and asserts the Better Auth call is
+ * never reached: the destructive half lands FIRST, so refusing afterwards is not refusing at all.
+ */
+describe("adminUserService — a target outside the acting workspace", () => {
+  beforeEach(() => {
+    h.findByTenantAndUser.mockResolvedValue(null);
+  });
+
+  it("refuses setRole and never calls Better Auth", async () => {
+    await expect(adminUserService.setRole(adminCtx, "victim", "Owner")).rejects.toThrow();
+    expect(h.setRole).not.toHaveBeenCalled();
+  });
+
+  it("refuses ban and never calls Better Auth", async () => {
+    await expect(adminUserService.ban(adminCtx, "victim", { reason: null })).rejects.toThrow();
+    expect(h.banUser).not.toHaveBeenCalled();
+  });
+
+  it("refuses unban and never calls Better Auth", async () => {
+    await expect(adminUserService.unban(adminCtx, "victim")).rejects.toThrow();
+    expect(h.unbanUser).not.toHaveBeenCalled();
+  });
+
+  it("refuses resetPassword and never calls Better Auth", async () => {
+    await expect(adminUserService.resetPassword(adminCtx, "victim")).rejects.toThrow();
+    expect(h.setUserPassword).not.toHaveBeenCalled();
+  });
+
+  it("refuses remove and never calls Better Auth", async () => {
+    await expect(adminUserService.remove(adminCtx, "victim")).rejects.toThrow();
+    expect(h.removeUser).not.toHaveBeenCalled();
+  });
+
+  it("answers NOT_FOUND, so the id is not an oracle for accounts in other workspaces", async () => {
+    await expect(adminUserService.remove(adminCtx, "victim")).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
+  });
+
+  it("looks the target up in the ACTING workspace, not one named by the caller", async () => {
+    await expect(adminUserService.remove(adminCtx, "victim")).rejects.toThrow();
+    expect(h.findByTenantAndUser).toHaveBeenCalledWith("t1", "victim");
   });
 });

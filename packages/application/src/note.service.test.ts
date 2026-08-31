@@ -27,7 +27,7 @@ const h = vi.hoisted(() => ({
   candidateRepo: { findById: vi.fn() },
   noteRepo: { create: vi.fn(), listByCandidate: vi.fn() },
   mentionRepo: { createMany: vi.fn() },
-  userRepo: { list: vi.fn(), emailsByIds: vi.fn() },
+  userRepo: { listByTenant: vi.fn(), emailsByIds: vi.fn() },
   writeAudit: vi.fn(),
   sendEmail: vi.fn(),
 }));
@@ -73,8 +73,8 @@ beforeEach(() => {
   h.noteRepo.listByCandidate.mockReset();
   h.mentionRepo.createMany.mockReset();
   h.mentionRepo.createMany.mockResolvedValue(0);
-  h.userRepo.list.mockReset();
-  h.userRepo.list.mockResolvedValue([]);
+  h.userRepo.listByTenant.mockReset();
+  h.userRepo.listByTenant.mockResolvedValue([]);
   h.userRepo.emailsByIds.mockReset();
   h.userRepo.emailsByIds.mockResolvedValue(new Map());
   h.writeAudit.mockReset();
@@ -128,7 +128,7 @@ describe("noteService.add", () => {
     h.candidateRepo.findById.mockResolvedValue({ id: "c1" });
     h.noteRepo.create.mockResolvedValue(noteRow({ body: "@Biruh @Test see this" }));
     // Author (Test User) mentions himself + Biruh — only Biruh gets a mention row.
-    h.userRepo.list.mockResolvedValue([
+    h.userRepo.listByTenant.mockResolvedValue([
       { id: "u1", name: "Test User" },
       { id: "u2", name: "Biruh Desta" },
     ]);
@@ -162,7 +162,7 @@ describe("noteService.add", () => {
   it("emails a mentioned recipient with a resolvable address, in addition to the in-app mention", async () => {
     h.candidateRepo.findById.mockResolvedValue({ id: "c1", name: "Jane Doe" });
     h.noteRepo.create.mockResolvedValue(noteRow({ body: "@Biruh see this" }));
-    h.userRepo.list.mockResolvedValue([{ id: "u2", name: "Biruh Desta" }]);
+    h.userRepo.listByTenant.mockResolvedValue([{ id: "u2", name: "Biruh Desta" }]);
     h.userRepo.emailsByIds.mockResolvedValue(new Map([["u2", "biruh@desta.works"]]));
 
     await noteService.add(h.user as TenantContext, "c1", {
@@ -181,7 +181,7 @@ describe("noteService.add", () => {
   it("skips a recipient with no resolvable email — never calls sendEmail for them", async () => {
     h.candidateRepo.findById.mockResolvedValue({ id: "c1", name: "Jane Doe" });
     h.noteRepo.create.mockResolvedValue(noteRow({ body: "@Biruh see this" }));
-    h.userRepo.list.mockResolvedValue([{ id: "u2", name: "Biruh Desta" }]);
+    h.userRepo.listByTenant.mockResolvedValue([{ id: "u2", name: "Biruh Desta" }]);
     h.userRepo.emailsByIds.mockResolvedValue(new Map()); // no email on file
 
     await noteService.add(h.user as TenantContext, "c1", {
@@ -208,7 +208,7 @@ describe("noteService.add", () => {
   it("a failed send never fails the note-add (best-effort)", async () => {
     h.candidateRepo.findById.mockResolvedValue({ id: "c1", name: "Jane Doe" });
     h.noteRepo.create.mockResolvedValue(noteRow({ body: "@Biruh see this" }));
-    h.userRepo.list.mockResolvedValue([{ id: "u2", name: "Biruh Desta" }]);
+    h.userRepo.listByTenant.mockResolvedValue([{ id: "u2", name: "Biruh Desta" }]);
     h.userRepo.emailsByIds.mockResolvedValue(new Map([["u2", "biruh@desta.works"]]));
     h.sendEmail.mockRejectedValue(new Error("SMTP down"));
 

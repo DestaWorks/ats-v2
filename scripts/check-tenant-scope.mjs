@@ -225,6 +225,52 @@ check(
 );
 
 check(
+  "global-model-lists-carry-a-predicate",
+  "a list read of a GLOBAL model is constrained by tenant or by caller-supplied ids (6.3)",
+  (fail) => {
+    // The seam cannot scope a global model — that is what "global" means — so a `findMany` over
+    // one returns every row on the installation unless its `where` says otherwise. Reads keyed by
+    // ids or an email the caller already holds are fine; an absent or unconstrained `where` is
+    // the cross-tenant enumeration shape, and no other check in this file can see it.
+    const KEYS = ["tenantId", "tenant", "memberships", "membership", "id", "email", "userId"];
+    for (const file of ALLOWLISTED) {
+      const repo = repositories.get(file);
+      if (!repo) continue;
+      walk(repo.sf, (node) => {
+        if (!ts.isCallExpression(node)) return;
+        const callee = node.expression;
+        if (!ts.isPropertyAccessExpression(callee) || callee.name.text !== "findMany") return;
+        const model = ts.isPropertyAccessExpression(callee.expression)
+          ? callee.expression.name.text
+          : undefined;
+        if (model === undefined) return;
+        const capitalised = model.charAt(0).toUpperCase() + model.slice(1);
+        if (!GLOBAL_MODELS.has(capitalised)) return;
+
+        const arg = node.arguments[0];
+        const where =
+          arg && ts.isObjectLiteralExpression(arg)
+            ? arg.properties.find(
+                (prop) =>
+                  ts.isPropertyAssignment(prop) &&
+                  ts.isIdentifier(prop.name) &&
+                  prop.name.text === "where",
+              )
+            : undefined;
+        const text = where ? where.getText(repo.sf) : "";
+        if (KEYS.some((key) => text.includes(key))) return;
+        fail(
+          `a \`findMany\` over \`${capitalised}\` (a GLOBAL model) carries ` +
+            `${where ? "no tenant or id predicate" : "no `where` at all"} — it returns every ` +
+            `row on the installation, and the seam cannot scope it`,
+          at(repo.sf, node),
+        );
+      });
+    }
+  },
+);
+
+check(
   "scoped-repositories-use-the-seam",
   "a tenant-scoped repository imports its client from the seam, never from ../prisma (6.3)",
   (fail) => {
