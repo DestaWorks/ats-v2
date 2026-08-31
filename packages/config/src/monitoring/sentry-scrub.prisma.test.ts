@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { scrubEvent } from "@/lib/monitoring/sentry-scrub";
+import { scrubEvent } from "./sentry-scrub";
 import type { ErrorEvent } from "@sentry/nextjs";
 
 describe("scrubEvent — Prisma messages", () => {

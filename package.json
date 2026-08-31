@@ -47,6 +47,7 @@
     "format:check": "prettier --check .",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
     "db:studio": "prisma studio",
     "db:seed": "NODE_OPTIONS=--conditions=react-server tsx scripts/seed-owner.ts",
     "db:seed:clients": "NODE_OPTIONS=--conditions=react-server tsx scripts/seed-clients.ts",

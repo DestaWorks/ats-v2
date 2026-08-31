@@ -8,6 +8,7 @@ import { createJobWorker, type JobWorker } from "@destaworks/jobs/runtime/worker
 import { jobQueue } from "@destaworks/jobs/runtime";
 import { Scheduler } from "@destaworks/jobs/scheduler";
 import { SCHEDULES, prismaScheduleClaimStore } from "@destaworks/jobs/schedules";
+import { initSentry } from "./instrumentation";
 import { installJobRuntime } from "./jobs-runtime";
 
 /**
@@ -31,6 +32,7 @@ async function bootstrap(): Promise<void> {
   // request to fail, so without this it starts, consumes nothing, and looks healthy.
   requireServerEnv();
   installNodeLogger();
+  initSentry();
 
   if (REGISTERED_JOBS.length === 0) {
     // Not an error: the runtime lands before the handlers do, and a worker that refused to start

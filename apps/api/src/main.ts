@@ -7,6 +7,7 @@ import { installNodeLogger } from "@destaworks/config/logger/install";
 import { shutdownApplication } from "@destaworks/application/lifecycle";
 import { installNestRequestContext } from "./common/request-context/nest-request-context";
 import { requestContextMiddleware } from "./common/request-context/request-context.middleware";
+import { initSentry } from "./instrumentation";
 import { installJobRuntime } from "./jobs-runtime";
 import { AppModule } from "./app.module";
 
@@ -55,6 +56,7 @@ async function bootstrap(): Promise<void> {
   // to a server that was already dead. An unmet requirement has to be a failed boot.
   requireServerEnv();
   installNodeLogger();
+  initSentry();
 
   // The composition root is the only place that names a driver. Everything else — controllers via
   // `JOB_QUEUE`, Next routes via the application-layer port — holds the lazy handle, which is what

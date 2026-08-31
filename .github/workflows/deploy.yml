@@ -87,13 +87,51 @@ jobs:
           path: apps/api/dist/
           retention-days: 14
 
+  # Schema before code. `prisma migrate deploy` applies only committed migrations and never
+  # generates, resets or drops anything; it takes an advisory lock, so a re-run or a concurrent
+  # dispatch waits rather than racing. It runs as its own job, deliberately host-neutral — the
+  # API's host is a separate decision, and wherever it lands this step is the same.
+  #
+  # DIRECT_URL, not DATABASE_URL: a transaction pooler supports neither the advisory lock nor the
+  # prepared statements migrations use. Failing here leaves the previous version serving the
+  # previous schema, which is the safe direction.
+  migrate:
+    name: Apply migrations (${{ inputs.environment }})
+    runs-on: ubuntu-latest
+    needs: api-artifact
+    environment: ${{ inputs.environment }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - uses: ./.github/actions/setup
+
+      - name: Apply migrations
+        env:
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${DIRECT_URL}" ]; then
+            echo "::error::DIRECT_URL is not set — the deploy would ship code against an unmigrated database."
+            exit 1
+          fi
+          pnpm db:deploy
+
+      - name: Report what is applied
+        env:
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+        run: pnpm db:status
+
   # Render builds from the repo, so "deploy" here is: ask it to build this exact SHA, then wait
   # until it is actually serving. Without the wait a green workflow would only mean "the request
   # was accepted", which is the failure mode where a broken API is reported as deployed.
   deploy-api:
-    name: Roll out the API to Render (${{ inputs.environment }})
+    name: Roll out the API (${{ inputs.environment }})
     runs-on: ubuntu-latest
-    needs: api-artifact
+    needs: [api-artifact, migrate]
     environment: ${{ inputs.environment }}
     permissions:
       contents: read

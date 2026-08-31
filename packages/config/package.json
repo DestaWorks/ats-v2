@@ -8,6 +8,7 @@
     "./env": "./src/env.ts",
     "./logger": "./src/logger/index.ts",
     "./logger/*": "./src/logger/*.ts",
+    "./monitoring/*": "./src/monitoring/*.ts",
     "./request-context": "./src/request-context.ts"
   },
   "dependencies": {

@@ -24,7 +24,36 @@
  * already refuses to log those messages for exactly this reason; an error tracker must refuse too,
  * or the PII simply leaves by a different door.
  */
-import type { Breadcrumb, ErrorEvent } from "@sentry/nextjs";
+/**
+ * Shapes, not the SDK's types. Two copies of `@sentry/core` exist in this tree — one behind the
+ * Next SDK, one behind the Node SDK — so importing either skews against the other, and `config`
+ * is a dependency-free leaf besides. The functions are generic in the caller's own type, so each
+ * SDK gets its own shape back and can still read the fields these declare nothing about.
+ */
+export interface Breadcrumb {
+  category?: string | undefined;
+  message?: string | undefined;
+  data?: Record<string, unknown> | undefined;
+}
+
+export interface ErrorEvent {
+  request?:
+    | {
+        url?: string | undefined;
+        method?: string | undefined;
+        headers?: Record<string, string> | undefined;
+      }
+    | undefined;
+  user?: { id?: string | number | undefined } | undefined;
+  extra?: Record<string, unknown> | undefined;
+  contexts?: Record<string, unknown> | undefined;
+  tags?: Record<string, unknown> | undefined;
+  breadcrumbs?: unknown[] | undefined;
+  exception?:
+    | { values?: { type?: string | undefined; value?: string | undefined }[] | undefined }
+    | undefined;
+  message?: string | undefined;
+}
 
 /** Matches broadly on purpose — a false positive (redacting a harmless "hostname" key) costs
  *  nothing; a false negative (letting a real "licenseNumber" through) is the failure mode that
@@ -65,7 +94,7 @@ function scrubExceptionMessages(event: ErrorEvent): void {
 /** `beforeSend` — strips request payload/cookies/most headers (a body, query string, or cookie
  *  can carry candidate PII or a session token), reduces `user` to an opaque id (never
  *  email/name), and deep-scrubs `extra`/`contexts`/`tags`. */
-export function scrubEvent(event: ErrorEvent): ErrorEvent {
+export function scrubEvent<T extends ErrorEvent>(event: T): T {
   if (event.request) {
     const { url, method, headers } = event.request;
     const userAgent = headers?.["user-agent"] ?? headers?.["User-Agent"];
@@ -84,14 +113,16 @@ export function scrubEvent(event: ErrorEvent): ErrorEvent {
   if (event.extra) event.extra = scrubDeep(event.extra);
   if (event.contexts) event.contexts = scrubDeep(event.contexts);
   if (event.tags) event.tags = scrubDeep(event.tags) as typeof event.tags;
-  if (event.breadcrumbs) event.breadcrumbs = event.breadcrumbs.map(scrubBreadcrumb);
+  if (event.breadcrumbs) {
+    event.breadcrumbs = event.breadcrumbs.map((crumb) => scrubBreadcrumb(crumb as Breadcrumb));
+  }
   return event;
 }
 
 /** `beforeBreadcrumb` — deep-scrubs breadcrumb `data` (network breadcrumbs only carry sizes by
  *  default, not bodies, but custom/console breadcrumbs can carry arbitrary content) and hard-caps
  *  console-breadcrumb message length. */
-export function scrubBreadcrumb(breadcrumb: Breadcrumb): Breadcrumb {
+export function scrubBreadcrumb<T extends Breadcrumb>(breadcrumb: T): T {
   if (breadcrumb.data) breadcrumb.data = scrubDeep(breadcrumb.data);
   if (breadcrumb.category === "console" && breadcrumb.message) {
     breadcrumb.message = breadcrumb.message.slice(0, 200);
