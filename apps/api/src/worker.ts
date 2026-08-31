@@ -1,4 +1,5 @@
 import { logger } from "@destaworks/config/logger";
+import { requireServerEnv } from "@destaworks/config/env";
 import { installNodeLogger } from "@destaworks/config/logger/install";
 import { shutdownApplication } from "@destaworks/application/lifecycle";
 import { logJobHealth } from "@destaworks/jobs/observability";
@@ -26,6 +27,9 @@ import { installJobRuntime } from "./jobs-runtime";
  * install, the same signal handling — because those are properties of a process, not of a server.
  */
 async function bootstrap(): Promise<void> {
+  // Same reason as `main.ts`, and it matters more here: a worker with a bad DIRECT_URL has no
+  // request to fail, so without this it starts, consumes nothing, and looks healthy.
+  requireServerEnv();
   installNodeLogger();
 
   if (REGISTERED_JOBS.length === 0) {
