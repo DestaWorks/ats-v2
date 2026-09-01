@@ -24,11 +24,10 @@
     "@destaworks/db": "workspace:*",
     "@destaworks/domain": "workspace:*",
     "@sentry/nextjs": "^10.70.0",
-    "@upstash/ratelimit": "^2.0.8",
-    "@upstash/redis": "^1.38.2",
     "ai": "^7.0.14",
     "nodemailer": "^9.0.3",
     "react": "catalog:",
+    "redis": "^6.2.1",
     "zod": "catalog:"
   },
   "devDependencies": {

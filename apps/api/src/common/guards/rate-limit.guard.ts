@@ -7,7 +7,7 @@ import type { AuthenticatedRequest, PortalRequest } from "./authenticated-reques
 /**
  * Applies a handler's `@RateLimit(...)` rule through the shared limiter.
  *
- * Transport only: the limiter itself is imported, so the Upstash backing, the in-memory fallback,
+ * Transport only: the limiter itself is imported, so the Redis backing, the in-memory fallback,
  * the thresholds and its deliberate fail-open on a Redis outage are unchanged and undivided.
  *
  * The key is `name:userId` for an authenticated caller and `name:ip:<address>` for an anonymous

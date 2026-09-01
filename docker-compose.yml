@@ -23,6 +23,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3004
+      REDIS_URL: redis://redis:6379
     ports:
       - "${API_PORT:-3004}:3004"
     healthcheck:
@@ -68,6 +69,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3000
+      REDIS_URL: redis://redis:6379
       # Server-rendered reads are container-to-container, so they take the service name. The
       # browser half uses the public URL baked in above — the two are different on purpose.
       API_URL: http://api:3004
@@ -97,6 +99,20 @@ services:
     depends_on:
       api:
         condition: service_healthy
+
+  redis:
+    image: redis:8-alpine
+    restart: unless-stopped
+    # Rate-limit counters only — no sessions, no queue, both of which live in Postgres. Losing
+    # this loses nothing but the current windows, so it is deliberately NOT persisted.
+    command:
+      ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory-policy", "volatile-ttl"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    # Not published. Only the api and web containers reach it, over the compose network.
 
   # One-shot, behind a profile so `up` never runs it: migrating must be something someone decides
   # to do, not a side effect of a container starting. Run it before rolling the others.
