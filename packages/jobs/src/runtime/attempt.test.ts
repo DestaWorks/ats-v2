@@ -3,6 +3,7 @@ import { z } from "zod";
 import { AppError } from "@destaworks/integrations/http/app-error";
 import { defineJob } from "../registry";
 import type { JobDefinition } from "../queue";
+import { requestMemo } from "@destaworks/config/request-cache";
 import { runAttempt } from "./attempt";
 
 const payloadSchema = z.object({ candidateId: z.string() }).strict();
@@ -136,5 +137,40 @@ describe("runAttempt", () => {
     expect(outcome.status).toBe("failed");
     expect(outcome.output).toEqual({ code: "INTERNAL", attempt: 1, permanent: false });
     expect(JSON.stringify(outcome.output)).not.toContain("example.com");
+  });
+});
+
+/**
+ * A job is the worker's equivalent of a request, so it gets its own cache scope. Without one
+ * `requestMemo` calls straight through — correct, but uncached, and silently so. Worse, a scope
+ * shared BETWEEN attempts would hand one tenant's rows to the next job off the queue.
+ */
+describe("runAttempt — the request-cache scope", () => {
+  it("opens a scope, so a memo inside one job loads once", async () => {
+    const load = vi.fn(async (t: string) => t);
+    const memo = requestMemo("job-scope", load);
+
+    await runAttempt(
+      defineJob(definition(), async () => {
+        await memo("t1");
+        await memo("t1");
+      }),
+      input(),
+    );
+
+    expect(load).toHaveBeenCalledTimes(1);
+  });
+
+  it("gives each attempt its own scope — one job never reads another's rows", async () => {
+    const load = vi.fn(async (t: string) => t);
+    const memo = requestMemo("job-scope", load);
+    const job = defineJob(definition(), async () => {
+      await memo("t1");
+    });
+
+    await runAttempt(job, input());
+    await runAttempt(job, input({ attempt: 2 }));
+
+    expect(load).toHaveBeenCalledTimes(2);
   });
 });

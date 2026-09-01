@@ -90,3 +90,60 @@ describe("writeAudit", () => {
     });
   });
 });
+
+/**
+ * The tenant contract, tested here rather than in the 21 service suites that mock this module.
+ *
+ * `activity_log.tenantId` is NOT NULL. On a client from `db(ctx, tx)` the seam stamps it and the
+ * caller must not; on the raw client `withAnnouncedTenant`/`withTransaction` yield there is no
+ * seam, so the caller must name it or Postgres rejects the row. Getting that wrong shipped once:
+ * six admin mutations wrote through a raw client without a tenant, so each landed its Better Auth
+ * call and then 500'd on the audit — the destructive half committed, the record of it did not.
+ *
+ * `scripts/check-tenant-scope.mjs` catches the static shape. These cover the contract itself.
+ */
+describe("writeAudit — the tenant contract", () => {
+  function txSpy() {
+    const create = vi.fn();
+    return {
+      create,
+      tx: { activityLog: { create } } as unknown as Parameters<typeof writeAudit>[0],
+    };
+  }
+
+  it("passes tenantId straight through when the caller names one", () => {
+    const { create, tx } = txSpy();
+    writeAudit(tx, {
+      entity: "user",
+      entityId: "u1",
+      actor: "a1",
+      action: "create",
+      tenantId: "t1",
+    });
+    expect(create.mock.calls[0]![0].data).toMatchObject({ tenantId: "t1" });
+  });
+
+  // Passing `tenantId: undefined` is unrepresentable — `exactOptionalPropertyTypes` rejects it,
+  // so the only way to omit it is to leave the key out, which is what this covers.
+  it("omits tenantId entirely when the caller names none, leaving it to the seam", () => {
+    const { create, tx } = txSpy();
+    writeAudit(tx, { entity: "user", entityId: "u1", actor: "a1", action: "create" });
+    expect(create.mock.calls[0]![0].data).not.toHaveProperty("tenantId");
+  });
+
+  it("redacts before it stamps, so a tenant-named row is no less redacted", () => {
+    const { create, tx } = txSpy();
+    writeAudit(tx, {
+      entity: "candidate",
+      entityId: "c1",
+      actor: "a1",
+      action: "update",
+      tenantId: "t1",
+      after: { email: "jane@example.test", name: "Jane" },
+    });
+    expect(create.mock.calls[0]![0].data).toMatchObject({
+      tenantId: "t1",
+      after: { email: "[REDACTED]", name: "Jane" },
+    });
+  });
+});
