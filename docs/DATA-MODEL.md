@@ -46,14 +46,33 @@ The central pipeline record.
 | `CandidateID` / `id` | Primary key (uuid) |
 | `legacy_id` | Original Sheet ID — carried for idempotent ETL upsert |
 | `Name` | |
-| `Email`, `Phone` | Contact (one required by most stage gates). **Sensitive** — role/capability-restricted in DTO + encrypted at rest. `Email` is the dedupe key (see migration). |
+| `Email`, `Phone` | Contact (one required by most stage gates). **Sensitive** — role/capability-restricted in DTO. **NOT encrypted at rest**, deliberately: `Email` is the dedupe key and both are searched and sorted on, none of which works against ciphertext. See the note below. |
 | `Credential` | e.g. PMHNP, PMHNP-BC, MD, DO, PsyD, PhD, LCSW, LPC, LMHC, LMFT, NP |
 | `LicenseState` | 2-letter state |
 | `LicenseStatus` | `Not Verified` / `Active` / `Expired` / `Under Investigation` |
-| `LicenseNumber` _(?)_ | **Sensitive** — role/capability-restricted in DTO + encrypted at rest |
+| `LicenseNumber` _(?)_ | **Sensitive** — role/capability-restricted in DTO **and encrypted at rest** (AES-256-GCM, `packages/db/src/field-crypto.ts`) |
 | `LicenseExpiry` | Nullable, **indexed** — drives the verification queue / expiry timeline (D4) |
-| `NPI` _(?)_ | National Provider Identifier. **Sensitive** — role/capability-restricted in DTO + encrypted at rest |
+| `NPI` _(?)_ | National Provider Identifier. **Sensitive** — role/capability-restricted in DTO. **NOT encrypted at rest** — see the note below. |
 | `Status` | Stable **code** (not label) — see below; scoring/gates/funnels key off code/ordinal |
+
+> ### What is actually encrypted at rest, and why the rest is not
+>
+> **Encrypted:** `Candidate.licenseNumber`, and a document's `extractedText` / `extractedData`.
+> That is the whole list — AES-256-GCM at the repository boundary, keyed by `FIELD_ENCRYPTION_KEY`.
+>
+> **Not encrypted:** `email`, `phone`, `name`, note bodies, and the `SourceLead` table. This
+> document previously claimed otherwise; the claim was wrong and is corrected here rather than
+> quietly widened, because widening it would break the product. `email` is the dedupe key, and
+> name, email and phone are searched, sorted and filtered on — none of which works against
+> ciphertext with a random IV. Doing it properly needs deterministic encryption or blind indexes,
+> which is a project with its own trade-offs, not a flag to turn on.
+>
+> **What protects them instead:** Postgres row-level security (`FORCE`d on 39 tables, so one
+> workspace cannot read another's rows), capability-gated DTO mapping, an append-only audit trail
+> that redacts these fields before writing, and encryption of the database volume at the host.
+>
+> `licenseNumber` is encrypted because it is the one field that is neither searched nor sorted, so
+> the cost is nil. That asymmetry is the reason, not an oversight.
 | `Client` / `client_id` | **FK to `clients` from day one** (seeded from `BASE_CLIENTS`); not a free-text label |
 | `Source` | Indeed, LinkedIn, Rocket Reach, Referral, Scraped, etc. |
 | `Track` | `Clinical` (default) or `Operations` |

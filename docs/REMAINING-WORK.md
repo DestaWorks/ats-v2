@@ -4,16 +4,12 @@ Everything known to be outstanding, in the order it should be done. Audited 2026
 tree where all ten CI gates pass, there are zero `TODO`/`FIXME`/`HACK` markers in source, and zero
 skipped tests.
 
-**How to read the priorities.** P0 blocks launch outright. P1 must be true before real data or
-real users touch the system. P2 is real debt with a known cost. P3 is worth doing when convenient.
+**How to read the priorities.** P0 blocks launch outright. P3 is worth doing when convenient.
+P1 and P2 are empty — those tiers were cleared on 2026-09-01/02; see [Done](#done-for-reference).
 
 | | | |
 |---|---|---|
 | **P0** | [Phase 7 — the data migration](#p0--phase-7-the-data-migration) | Nothing else matters until this exists |
-| **P0** | [Owner decisions](#p0--decisions-only-the-owner-can-make) | Cheap to answer, block other work |
-| **P1** | [Encryption coverage (H2)](#p1--h2-encryption-covers-2-of-9-sensitive-columns) | Docs claim more than the code does |
-| **P1** | [`xlsx` advisories](#p1--xlsx-two-high-advisories-with-no-npm-fix) | Two HIGH, no fix on npm |
-| **P1** | [Verify alpine + `sharp`](#p1--verify-image-optimisation-under-musl) | Unproven at runtime |
 | ~~P2~~ | **All four P2 items are done** — see [Done](#done-for-reference) | 2026-09-01 |
 | **P3** | [Playwright, or drop the claim](#p3--playwright-or-stop-claiming-it) | Claimed, absent |
 | **P3** | [`storageKey` prefix check](#p3--storagekey-prefix-check) | Deliberately deferred to Phase 7 |
@@ -36,66 +32,6 @@ Postgres, plus the reconciliation that proves nothing was lost.
 **Do first:** a rehearsal. Restore a copy of the real data into a throwaway database, run all 49
 migrations against it, and see what breaks. Non-destructive, and it is the only way to find out
 what the Sheet actually contains versus what the schema expects.
-
----
-
-## P0 — Decisions only the Owner can make
-
-None of these are engineering. Each blocks something.
-
-1. **Where the containers run.** The images build and run; nothing in the repo names a host. Also
-   decides the registry the deploy workflow pulls from.
-2. **The production domain and database.** `zyx.com` is still a placeholder. Today's environment
-   is staging.
-3. **The `system` actor for imported records.** Deferred to the migration discussion — Phase 7
-   needs an answer.
-4. **`docs/CLIENT-BRIEF.md`** — it is a record of what was sent to the client in July, now carrying
-   a correction banner. Keep the corrections, or revert it to exactly as sent?
-
----
-
-## P1 — H2: encryption covers 2 of 9+ sensitive columns
-
-From `SECURITY-AUDIT-APP.md`, still open.
-
-Only `Candidate.licenseNumber` and the resume extraction output pass through `encryptField`.
-`Candidate.email`, `phone`, `name`, `CandidateNote.body` and the entire `SourceLead` table
-(`npi`, `email`, `phone`, `notes`) have **no encryption path at all** — not "the key is off", but
-never wired.
-
-**The sharp edge:** the docs claim NPI and contact fields are encrypted at rest. They are not.
-Either widen the coverage or correct the claim — but not neither, because a claim that outruns the
-code is worse than an honest gap.
-
-**Also unresolved:** there is no backfill. The design is encrypt-on-next-write, so rows written
-before the key was set stay plaintext indefinitely.
-
----
-
-## P1 — `xlsx`: two HIGH advisories with no npm fix
-
-`xlsx@0.18.5` carries Prototype Pollution and ReDoS. The fix is `>=0.20.2`, but **npm stops at
-0.18.5** — SheetJS publishes only to their own CDN now.
-
-Used by `apps/web/src/app/(app)/sourcing/lib/lead-import.ts` to parse uploaded spreadsheets in the
-browser.
-
-**Three options, all needing a decision:**
-
-- install from the SheetJS CDN (changes where a dependency comes from),
-- replace it with a maintained parser for the narrow use,
-- accept the risk in writing, noting it is client-side and operator-triggered.
-
----
-
-## P1 — Verify image optimisation under musl
-
-The images moved to Alpine. `sharp` (Next's image optimiser) publishes musl builds and the build
-passes — but **a build passing does not prove image optimisation works at runtime**.
-
-**Test:** load a page using `next/image` with optimisation from the running container and confirm
-the image renders and is actually transformed. Ten minutes, and it closes the last unknown from
-the Alpine switch.
 
 ---
 
@@ -147,6 +83,28 @@ So the list above is not mistaken for the whole picture:
   resolution per package.
 - The API image runs `npm ci` from committed manifests, with a CI check that its pins match
   `pnpm-lock.yaml`.
+
+**The four open decisions, settled 2026-09-02** — three of them dissolved on inspection:
+
+- **PHI:** assumed, and recorded as `DECISIONS.md` D9. Not a legal ruling — the safe default,
+  because assuming PHI costs a pricier host and assuming wrong is a reportable breach. It settles
+  hosting: a provider that signs a BAA, Postgres on a droplet rather than a managed service,
+  Supabase retired (~$949/mo against ~$72), Redis local rather than hosted.
+- **LGPL:** not a question after all. `next/image` is used in no screen, and a search of all five
+  container images for `sharp`/`libvips` returns nothing — it exists only in the build workspace
+  and is distributed nowhere, which is what LGPL's obligations attach to. Recorded in the licence
+  gate with a note to re-check if `next/image` is ever adopted.
+- **`xlsx`:** both HIGH advisories gone. Swapped to `@e965/xlsx@0.20.3` — the same SheetJS code
+  above the patched version, on npm so the lockfile pins it by integrity hash, Apache-2.0. No
+  feature lost; the tests passed unchanged, which is what proves the API is identical.
+- **`sharp` under musl:** moot. It is in no image and `next/image` is used in no screen, so
+  there is no image optimisation to verify. The same finding that settled the LGPL question
+  closed this one.
+- **H2 encryption:** the claim was corrected, not the code. `email` is the dedupe key and name,
+  email and phone are searched and sorted — none of which works against ciphertext with a random
+  IV. `licenseNumber` is encrypted precisely because it is neither searched nor sorted. Doing more
+  properly needs deterministic encryption or blind indexes, which is a project rather than a flag.
+  `DATA-MODEL.md` now states what is true and why the rest is not.
 
 **P2 closed 2026-09-01** — and two of the four turned out to be different from how they were filed:
 

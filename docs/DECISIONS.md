@@ -60,6 +60,28 @@ customer's staff, because the Better Auth call landed before the audit write tha
 `adminUserService` mutation now resolves the target's `Membership` in the acting tenant first. A
 claim that this surface "cannot escalate" is only true with **both** checks in place.
 
+**D9 — Treat the data as PHI until a lawyer says otherwise, and pick hosting accordingly.**
+_Decided 2026-09-02._ Whether candidate records are PHI in the legal sense is a question for
+counsel, not for engineering — but leaving it open was blocking every infrastructure choice, and
+the two ways of being wrong are not symmetric. Assume PHI and the cost is a slightly pricier host;
+assume not and be wrong, and it is a reportable breach.
+
+So: **assume PHI.** In practice that means hosting must come from a provider willing to sign a
+**BAA**, which rules out the cheapest options (Hetzner is ~5x cheaper and will not sign one).
+DigitalOcean signs a BAA on request with Standard or Premium Support. Their **Managed Database is
+not a covered product**, so Postgres runs on a droplet under the same agreement rather than as a
+managed service — which is DigitalOcean's own guidance, not a workaround.
+
+That also retires Supabase. It was only ever managed Postgres here — Better Auth owns identity,
+S3 owns files — and its HIPAA route is the Team plan plus an add-on, roughly **$949/month against
+~$72 for two droplets**. Redis likewise runs as a local container rather than a hosted limiter,
+because the rate-limit keys are user ids and IP addresses and shipping those to a vendor makes
+them a business associate for the sake of a counter.
+
+**Revisit if counsel says this is not PHI:** the hosting field reopens and the cheap options
+return. Nothing in the codebase depends on this — it is a procurement decision, recorded so it
+stops being asked.
+
 **D4 — License verification (Biruh priority #3) = assisted queue in v1, automation fast-follow.**
 v1 ships a **verification queue** (candidates needing verification, one-click state-board links,
 editable status, expiry timeline). Real per-state automated verification is a **fast-follow**
