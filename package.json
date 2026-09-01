@@ -62,7 +62,9 @@
     "tenant:check": "turbo run //#app:tenant-check",
     "tenant:reconcile": "NODE_OPTIONS=--conditions=react-server tsx scripts/check-tenant-reconciliation.ts",
     "rls:check": "turbo run //#app:rls-check",
-    "test:isolation": "turbo run //#app:test-isolation"
+    "test:isolation": "turbo run //#app:test-isolation",
+    "app:test-e2e": "playwright test",
+    "test:e2e": "turbo run //#app:test-e2e"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.7",
@@ -114,6 +116,7 @@
     "@destaworks/prettier-config": "workspace:*",
     "@destaworks/tsconfig": "workspace:*",
     "@destaworks/vitest-config": "workspace:*",
+    "@playwright/test": "^1.51.1",
     "@tailwindcss/postcss": "^4.0.0",
     "@types/node": "^22.10.0",
     "@types/nodemailer": "^8.0.1",

@@ -209,3 +209,70 @@ jobs:
 
       - name: Build the platform-admin console
         run: pnpm exec turbo run //#admin:build ${{ env.TURBO_AFFECTED }}
+
+  # Playwright coverage of the four critical flows (docs/STACK-ARCHITECTURE.md,
+  # docs/CONVENTIONS.md §10): sign-in, add/move candidate, promote lead, parse resume.
+  #
+  # Same shape as `isolation` — its own throwaway `postgres:16` service container, never a shared
+  # or hosted database — but the schema is built with `prisma migrate deploy` (what a real deploy
+  # runs) rather than the isolation job's raw-SQL replay, since this job isn't proving anything
+  # about the migration mechanism itself. `apps/web` and `apps/api` are started as real dev
+  # servers (the same `pnpm dev:web` / `pnpm dev:api` a developer runs locally) and Playwright
+  # drives a real signed-in browser session against them.
+  #
+  # Resume extraction is mocked at the network layer inside the spec (`page.route`), so no
+  # `ANTHROPIC_API_KEY` secret is needed here — `ANTHROPIC_API_KEY` below is a dummy value that
+  # only satisfies the app's "is AI configured" presence check, never a real call.
+  e2e:
+    name: E2E
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: destaworks_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/destaworks_e2e
+      DIRECT_URL: postgresql://postgres:postgres@127.0.0.1:5432/destaworks_e2e
+      BETTER_AUTH_URL: http://localhost:3007
+      BETTER_AUTH_SECRET: e2e-ci-only-not-a-real-secret
+      API_URL: http://localhost:3004
+      NEXT_PUBLIC_API_URL: http://localhost:3004
+      WEB_ORIGINS: http://localhost:3007
+      ANTHROPIC_API_KEY: e2e-ci-only-dummy-key
+      SEED_OWNER_EMAIL: owner@e2e.local
+      SEED_OWNER_PASSWORD: E2eOwnerPass123!
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup
+
+      - name: Apply migrations
+        run: pnpm exec prisma migrate deploy
+
+      - name: Seed the Owner
+        run: pnpm db:seed
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run the critical-flow specs
+        run: pnpm app:test-e2e
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7

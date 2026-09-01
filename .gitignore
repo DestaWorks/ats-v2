@@ -54,3 +54,8 @@ yarn-error.log*
 
 # API build output (apps/api/build.mjs) — an immutable artefact, rebuilt per deploy.
 apps/api/dist/
+
+# Playwright — saved session state (a real cookie) and run artefacts, neither ever committed.
+/e2e/.auth/
+/playwright-report/
+/test-results/

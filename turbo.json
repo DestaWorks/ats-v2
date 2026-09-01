@@ -166,6 +166,10 @@
         "scripts/check-tenant-scope.mjs",
         "scripts/tenant-scope-baseline.json"
       ]
+    },
+    "//#app:test-e2e": {
+      "cache": false,
+      "inputs": ["e2e/**", "apps/web/src/**", "apps/api/src/modules/**", "playwright.config.ts"]
     }
   }
 }
