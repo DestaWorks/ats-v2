@@ -85,6 +85,9 @@ const SECURITY_HEADERS = [
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  // Opt-in, not always-on: `standalone` emits a self-contained server + traced node_modules, which
+  // is what the container image copies. Left off elsewhere so the Vercel build is unchanged.
+  ...(process.env.NEXT_OUTPUT_STANDALONE === "1" && { output: "standalone" as const }),
   // Pino (and its dev-only pretty transport) load worker threads / native-ish modules at runtime;
   // bundling them breaks `pino.transport()`. Leave them to Node's own resolver.
   transpilePackages: [

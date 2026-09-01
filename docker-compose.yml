@@ -1,0 +1,111 @@
+# Runs the four long-lived processes plus a one-shot migrator, from the one Dockerfile.
+#
+# Values come from a `.env` beside this file (compose reads it automatically). Nothing here has a
+# default that would let a required secret go unset: the API validates its environment as the
+# first statement of `main.ts` and exits naming every missing key, which is the intended failure.
+#
+#   docker compose --profile migrate run --rm migrate   # schema first, always
+#   docker compose up -d --build                        # then the processes
+#
+# The database is deliberately NOT a service. Postgres here holds real candidate PII, wants
+# backups and point-in-time recovery, and must outlive any `docker compose down` — it is a managed
+# database reached over the network, and DATABASE_URL/DIRECT_URL point at it.
+
+services:
+  api:
+    build:
+      context: .
+      target: api
+    image: desta-ats/api:${TAG:-latest}
+    restart: unless-stopped
+    env_file:
+      - ${ENV_FILE:-.env}
+    environment:
+      NODE_ENV: production
+      PORT: 3004
+    ports:
+      - "${API_PORT:-3004}:3004"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3004/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+  worker:
+    build:
+      context: .
+      target: worker
+    image: desta-ats/worker:${TAG:-latest}
+    restart: unless-stopped
+    env_file:
+      - ${ENV_FILE:-.env}
+    environment:
+      NODE_ENV: production
+    # Not `depends_on: api`. The worker takes its work from the queue, not from the API, and the
+    # two are separate processes precisely so neither waits on the other.
+
+  web:
+    build:
+      context: .
+      target: web
+      args:
+        # Build-time, and this is the one that catches people out: NEXT_PUBLIC_* is inlined into
+        # the browser bundle and fixes the CSP `connect-src` origin. It must be the URL the
+        # BROWSER uses, never the internal `http://api:3004`. Changing it means rebuilding.
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?set NEXT_PUBLIC_API_URL to the public API URL}
+        NEXT_PUBLIC_SENTRY_DSN: ${NEXT_PUBLIC_SENTRY_DSN:-}
+    image: desta-ats/web:${TAG:-latest}
+    restart: unless-stopped
+    env_file:
+      - ${ENV_FILE:-.env}
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      # Server-rendered reads are container-to-container, so they take the service name. The
+      # browser half uses the public URL baked in above — the two are different on purpose.
+      API_URL: http://api:3004
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+
+  admin:
+    build:
+      context: .
+      target: admin
+    image: desta-ats/admin:${TAG:-latest}
+    restart: unless-stopped
+    env_file:
+      - ${ENV_FILE:-.env}
+    environment:
+      NODE_ENV: production
+      PORT: 3010
+      # Server-side only, and deliberately not NEXT_PUBLIC_: the platform console talks to the API
+      # from its server, never from the browser, so the internal service name is the whole story
+      # and no API origin is baked into a bundle.
+      PLATFORM_API_URL: http://api:3004
+    ports:
+      - "${ADMIN_PORT:-3010}:3010"
+    depends_on:
+      api:
+        condition: service_healthy
+
+  # One-shot, behind a profile so `up` never runs it: migrating must be something someone decides
+  # to do, not a side effect of a container starting. Run it before rolling the others.
+  migrate:
+    build:
+      context: .
+      target: migrate
+    image: desta-ats/migrate:${TAG:-latest}
+    profiles: ["migrate"]
+    env_file:
+      - ${ENV_FILE:-.env}
+    restart: "no"
