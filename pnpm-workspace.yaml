@@ -13,7 +13,20 @@ packages:
 # references these as `catalog:` so a version bump happens here, once, and cannot drift
 # between packages (see scripts/check-dependency-drift.mjs).
 catalog:
+  # ONE VERSION PER DEPENDENCY IS NOT ENOUGH — the LOCKFILE has to hold one RESOLUTION too.
+  #
+  # `@types/react`, `@types/node`, `react` and `react-dom` are peers of most of this graph, so a
+  # lockfile carrying two resolutions of any of them gives pnpm a separate peer-hash of everything
+  # downstream. That is not academic: it produced 12 copies of `next`, 10 of `better-auth` and 4
+  # of `@prisma/client` at 75MB each, and a web build that mixes two copies of Next fails at
+  # prerender with `useContext` of null or `<Html> outside pages/_document`.
+  #
+  # `deps:check` cannot see it: it compares DECLARED specs, which were already correct. Run
+  # `pnpm dedupe` when the lockfile drifts — it collapses to the fewest resolutions the ranges
+  # allow, which is the fix. Ranges stay ranges, so a patch is still a deliberate bump away.
   esbuild: ^0.28.1
+  next: ^15.5.23
+  "@types/node": ^22.10.0
   "@types/react": ^19.0.0
   "@types/react-dom": ^19.0.0
   # MIT (as are its three dependencies: pg, cron-parser, serialize-error), so it clears the

@@ -20,6 +20,22 @@ const updateBaseline = process.argv.includes("--update-baseline");
 /* ------------------------------------------------------------------ the declared law ---- */
 
 /** The dependency graph from SAAS-RESTRUCTURE-PLAN "The dependency law". Package short names. */
+/**
+ * Framework packages a unit imports but deliberately does NOT declare, because they resolve from
+ * the repository root instead.
+ *
+ * `app:build` runs `next build apps/web` FROM THE ROOT — Tailwind v4's scan root follows the
+ * working directory, so a build started inside apps/web would never see the classes in
+ * `@destaworks/ui` (the same reason apps/admin's manifest gives for having no build script).
+ * Declaring the framework in apps/web as well gives pnpm a second peer-resolution hash for
+ * `next`, so the tree carries two physical copies and every prerender dies on `useContext` of
+ * null or `<Html> outside pages/_document`.
+ *
+ * It costs nothing in an image: they are root DEV dependencies, so no production install
+ * resolves them, which is the whole reason apps/web got its own manifest.
+ */
+const FRAMEWORK_FROM_ROOT = new Map([["web", new Set(["next", "react", "react-dom"])]]);
+
 const ALLOWED_DEPENDENCIES = {
   domain: [],
   config: [],
@@ -464,6 +480,7 @@ check("dependency-direction", "Dependency direction matches the declared graph",
   // Externals the code imports but no manifest declares (root manifest covers the app).
   for (const r of records) {
     if (r.target.kind !== "external" || r.isTest || !r.unit.hasOwnManifest) continue;
+    if (FRAMEWORK_FROM_ROOT.get(r.unit.short)?.has(r.target.package)) continue;
     const m = r.unit.manifest;
     const known =
       (m.dependencies ?? {})[r.target.package] ??
