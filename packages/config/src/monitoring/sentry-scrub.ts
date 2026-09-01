@@ -42,15 +42,25 @@ export interface ErrorEvent {
         url?: string | undefined;
         method?: string | undefined;
         headers?: Record<string, string> | undefined;
+        // Declared because `scrubEvent` DROPS them: a body, query string, cookie jar or env
+        // block can each carry candidate PII or a session token.
+        data?: unknown;
+        query_string?: unknown;
+        cookies?: unknown;
+        env?: unknown;
       }
     | undefined;
   user?: { id?: string | number | undefined } | undefined;
   extra?: Record<string, unknown> | undefined;
   contexts?: Record<string, unknown> | undefined;
   tags?: Record<string, unknown> | undefined;
-  breadcrumbs?: unknown[] | undefined;
+  breadcrumbs?: Breadcrumb[] | undefined;
   exception?:
-    | { values?: { type?: string | undefined; value?: string | undefined }[] | undefined }
+    | {
+        values?:
+          | { type?: string | undefined; value?: string | undefined; stacktrace?: unknown }[]
+          | undefined;
+      }
     | undefined;
   message?: string | undefined;
 }
@@ -114,7 +124,7 @@ export function scrubEvent<T extends ErrorEvent>(event: T): T {
   if (event.contexts) event.contexts = scrubDeep(event.contexts);
   if (event.tags) event.tags = scrubDeep(event.tags) as typeof event.tags;
   if (event.breadcrumbs) {
-    event.breadcrumbs = event.breadcrumbs.map((crumb) => scrubBreadcrumb(crumb as Breadcrumb));
+    event.breadcrumbs = event.breadcrumbs.map((crumb) => scrubBreadcrumb(crumb));
   }
   return event;
 }

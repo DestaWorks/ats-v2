@@ -76,7 +76,7 @@ carries the earlier wave-by-wave feature status.
 | Backend | NestJS — `apps/api`, the only HTTP API surface |
 | Jobs | pg-boss on the existing Postgres — `apps/api`'s worker process |
 | Monorepo | pnpm workspaces + Turborepo |
-| Hosting | `apps/web` on Vercel (production `main` · staging `staging` · per-PR previews) · `apps/api` on Render (`render.yaml`) |
+| Hosting | Containerised — one [`Dockerfile`](Dockerfile) with `api`, `worker`, `web`, `admin` and `migrate` targets, composed by [`docker-compose.yml`](docker-compose.yml). Everything runs on one host under one domain, which is what keeps the session cookie same-site |
 | Package manager | pnpm |
 
 ---
@@ -273,12 +273,43 @@ unless `ISOLATION_DATABASE_URL` points at a disposable one.
 
 ## Deployment
 
-Two hosts, because the API is a long-lived process: **`apps/web` on Vercel**, **`apps/api` and its
-worker on Render** ([`render.yaml`](render.yaml)). Deploys are dispatched manually from
+Everything ships as containers on **one host, under one domain**. One [`Dockerfile`](Dockerfile)
+builds five targets — `api`, `worker`, `web`, `admin` and `migrate` — from a single install and
+source graph, and [`docker-compose.yml`](docker-compose.yml) runs them.
+
+One host is a security decision as much as an operational one: the session cookie is
+`SameSite=Lax`, so a browser will not send it on a cross-**site** request. Splitting the web app
+and the API across two registrable domains would 401 every browser mutation, and the tempting fix
+— `SameSite=None` — would remove the app's only CSRF control, since CORS plus SameSite is the
+whole defence. Same-site subdomains keep both properties for free.
+
+Deploys are dispatched manually from
 [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) with the exact SHA CI passed — it
 refuses a revision whose four required checks are not green, ships the **API first** and waits for
 `/health`, then the web app, then tags the revision `deploy/<env>-YYYY-MM-DD-<run>` so there is an
-answer to "roll back to what?".
+answer to "roll back to what?". The workflow publishes each target to GHCR tagged with the SHA,
+applies migrations in their own job before anything serves the new schema, and only then asks the
+host to pull.
+
+### Running the containers
+
+**[`docs/DOCKER.md`](docs/DOCKER.md) is the step-by-step guide** — start there if Docker is not
+something you use daily. The short version:
+
+```bash
+pnpm docker:migrate   # apply database changes, then exit
+pnpm docker:up        # start api, worker, web, admin
+pnpm docker:down      # stop them
+```
+
+`NEXT_PUBLIC_API_URL` is a **build** argument, not runtime configuration: it is inlined into the
+browser bundle and fixes the CSP `connect-src` origin. It must be the URL the *browser* uses, not
+the internal `http://api:3004`, and changing it means rebuilding the web image rather than
+restarting it. Compose refuses to start without it.
+
+Postgres is deliberately **not** a compose service. It holds real candidate PII, wants backups and
+point-in-time recovery, and has to outlive any `docker compose down` — it is a managed database
+reached over the network.
 
 Three isolated environments (see `docs/DECISIONS.md` D6):
 

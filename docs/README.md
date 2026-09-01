@@ -105,7 +105,7 @@ The three questions this section used to carry are **closed**:
 _Resolved: **AI = provider-agnostic** via the Vercel AI SDK — Anthropic, OpenAI and Google
 adapters are all installed and selected by the `AI_MODEL` env var; never one vendor hard-wired.
 Compliance = HIPAA + Ethiopian Data Protection Proclamation 1321/2024. Hosting = `apps/web` on
-Vercel, `apps/api` + worker on Render, Postgres on Supabase. Owner holds all secrets. Sequencing =
+`apps/api` + worker as containers, Postgres managed. Owner holds all secrets. Sequencing =
 ATS. **Auth = Better Auth on Supabase Postgres.**_
 
 ## Changelog

@@ -250,11 +250,12 @@ ats-v2/
 │   # `generators/` NOT BUILT — no package has been scaffolded from a template; every one was
 │   # extracted by hand in Phase 2. Open, low priority.
 │
-│   # `infrastructure/` NOT BUILT — no Dockerfile, no compose file, no per-environment directory.
-│   # Phase 4.4 chose Render instead, configured by `render.yaml` at the repository root, so the
-│   # docker/ half of this row has no consumer. Correct the plan here, not the tree.
+│   # `infrastructure/` NOT BUILT as a directory — the container build lives at the repository
+│   # root instead (`Dockerfile`, `docker-compose.yml`, `.dockerignore`), which is where the build
+│   # context has to be for a monorepo. Correct the plan here, not the tree.
 │
-├── render.yaml                   # Phase 4.4 — api + worker services, `oregon`
+├── Dockerfile                    # one file, four targets: api · worker · web · migrate
+├── docker-compose.yml            # the three processes + a one-shot migrator
 ├── scripts/
 │   # `migrate/` NOT BUILT — Phase 7 has not started; the importers are still outside the repo.
 │
@@ -884,8 +885,9 @@ on `apps/web` serving no more than the one auth route. It was verified falsifiab
 from the portal route, each fail it.
 
 ### 4.4 Deployment
-- [x] Host `apps/api` — the **target** is recorded: Render (`render.yaml`), two services from one
-      repo, `oregon`. Not Vercel, because a long-lived process is the reason this left serverless.
+- [x] Ship `apps/api` as a **container** — one `Dockerfile`, four targets, all built and run.
+      Not serverless, because a long-lived process is the reason this left it. **Which host runs
+      the container is still open**, and nothing in the repo assumes an answer.
       **The monthly figure is still owed** — it depends on the instance size and count the owner
       picks, so it is not estimated here
 - [x] Health checks, graceful shutdown, connection-pool sizing for a persistent process
@@ -903,9 +905,9 @@ SIGTERM before the shutdown handler had drained, so a rolling deploy answered in
 with a reset. Under node the handler owns the signal, and SIGTERM now stops the listener, lets
 in-flight requests finish, and only then returns the pooler slots. The deploy workflow builds that
 artefact from the same pinned SHA the web app deploys from, boots it, and fails if it does not
-answer `/health` or does not exit within 20s of SIGTERM. Render then builds that same SHA — the
-workflow's `deploy-api` job triggers it and blocks until `/health` reports healthy, so a green run
-means "serving", never "the request was accepted" — and `deploy` (Vercel, `apps/web`) runs after
+answer `/health/live` or does not exit within 20s of SIGTERM. A `migrate` job then applies the
+schema before anything serves it, and the rollout blocks until `/health` reports ready, so a green
+run means "serving", never "the request was accepted" — and the web deploy runs after
 it, never beside it, because a web deploy on top of an API that is not yet up shows users the
 error boundary.
 
@@ -920,9 +922,10 @@ max-client-connections headroom confirmed first, which is why it is a deploy-tim
 
 **What the owner still owes.** Three things, none of them code:
 
-- `RENDER_DEPLOY_HOOK_URL` (secret) and `API_HEALTH_URL` (variable). The workflow **fails loudly**
-  when either is unset rather than skipping the step, so a missing secret cannot read as a
-  successful deploy that quietly shipped nothing.
+- Where the containers run, the registry they are pulled from, and `API_HEALTH_URL` (variable)
+  plus `DIRECT_URL` (secret) for the migrate job. The workflow **fails loudly** when either is
+  unset rather than skipping the step, so a missing secret cannot read as a successful deploy that
+  quietly shipped nothing.
 - **The monthly figure** for the instance size and count actually chosen.
 - **Confirmation that Supabase's max-client-connections ceiling accommodates a persistent pool**
   alongside the existing serverless one, before `DB_POOL_MAX` is raised above its default.
@@ -1361,10 +1364,18 @@ export interface TenantContext {
       heading naming it, and `tenant-scope.test.ts`'s `describe("the 6.3 -> 6.4 bridge")` block now
       exercises `UNSCOPED_CONTEXT` and `withTransaction` instead. The identifier survives only in
       `check-tenant-scope.mjs`'s `ESCAPE_HATCHES` list, where its 0 count is now trivially true.
-      The ratchet fell from **100 escape-hatch uses across 45 files to 28 across 10**
-      (`dbUnscoped` 17, `withTransaction` 8, `UNSCOPED_CONTEXT` 3, `bridgeUnscopedCallers` 0),
+      The ratchet fell from **100 escape-hatch uses across 45 files to 26 across 9**
+      (`dbUnscoped` 17, `withTransaction` 6, `UNSCOPED_CONTEXT` 3, `bridgeUnscopedCallers` 0),
       matching `scripts/tenant-scope-baseline.json`. Removing the bridge exposed two unscoped reads
-      it had been hiding — see 6.6
+      it had been hiding — see 6.6.
+
+      **The remaining 26 are not debt, and "drive it to 0" was the wrong target.** 22 are the
+      tenancy plane and the seam — `membership.repository.ts` PRODUCES the context every other
+      repository demands, so requiring one there is circular — and 4 are test fixtures. The check
+      now reports the three groups separately, so the number that must reach zero is **debt, which
+      is 0 today**; the reason for each exemption is recorded in `INHERENTLY_UNSCOPED` in
+      `scripts/check-tenant-scope.mjs`. A single undifferentiated count against an unreachable
+      goal is a signal nobody can act on.
 - **Done-when:** every endpoint resolves a tenant before touching data ✅ — both halves. Resolution
   is the `TenantGuard`/`getCurrentUser` work above; the data half is the bridge deletion, after
   which a repository call without a context is a compile error rather than a silent full-table read
@@ -1724,7 +1735,7 @@ ever run end to end for the same reason.
 | `GET /reports/export` (the synchronous export) has no caller since the job replaced it — dead surface still served | `apps/web/src/app/(app)/reports/export-csv-button.tsx` posts the job instead | Delete it |
 
 **Owner actions, not engineering** (listed so they are not counted as gaps): branch protection on
-`main` (3); the API host rollout, `RENDER_DEPLOY_HOOK_URL`, `API_HEALTH_URL`, the monthly figure and
+`main` (3); choosing the container host and registry, `API_HEALTH_URL`, the monthly figure and
 the Supabase connection-ceiling confirmation (4.4); a separate staging database (D6); confirming
 `DATABASE_URL`'s role is neither `SUPERUSER` nor `BYPASSRLS` (6.6); how `apps/admin` obtains a
 session, AI spend in currency, and a platform-scoped audit sink (8); and tagging the phase gates.

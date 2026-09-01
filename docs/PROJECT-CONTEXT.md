@@ -44,7 +44,7 @@ dated June 26–27 2026). This is the "why and under what rules" behind the tech
 > the same stack we locked for the ATS rebuild (`docs/STACK-ARCHITECTURE.md`), with two
 > deliberate divergences: the AI layer is **provider-agnostic** (Anthropic · OpenAI · Google via
 > the Vercel AI SDK, chosen by `AI_MODEL`) rather than tied to one vendor, and the backend is a
-> long-lived **NestJS process on Render** rather than serverless endpoints.
+> long-lived, containerised **NestJS process** rather than serverless endpoints.
 
 ## The mandate (today → where we take it)
 
@@ -115,7 +115,8 @@ and process.
 
 ## To raise with Biruh later (holding for now)
 
-- Provisioning of an **AI provider key (any of Anthropic / OpenAI / Google), two Supabase projects (staging + prod), Vercel,
-  Google OAuth, domain/DNS access (`zyx.com` + `staging.zyx.com`), and Apps Script access**
+- Provisioning of an **AI provider key (any of Anthropic / OpenAI / Google), two Postgres
+  databases (staging + prod), a container host, Google OAuth, domain/DNS access
+  (`zyx.com` + `staging.zyx.com`), and Apps Script access**
   (Owner holds keys; engineer builds against env secrets). See `DECISIONS.md` D6 for the
   environment/domain setup.

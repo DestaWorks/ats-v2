@@ -17,7 +17,8 @@ in a **short fast-follow**. Solo (Leliso) working AI-assisted, **5 days/week × 
 Organized into **7 waves**.
 
 > **The 3-month clock starts at T+0 = keys/data provided**, not at "yes." T+0 is the day Biruh
-> has provisioned the keys (Claude API, **two Supabase projects — staging + prod**, Vercel,
+> has provisioned the keys (an AI provider key — Anthropic, OpenAI or Google, chosen by
+> `AI_MODEL`; **two Postgres databases — staging + prod**, the container host,
 > Google OAuth), granted **domain/DNS access** (for `zyx.com` + `staging.zyx.com`) and Apps
 > Script access, and delivered a data export. Every day of delay before T+0 shifts the finish
 > date one-for-one — the clock cannot start on a promise.
@@ -152,7 +153,8 @@ conditions below hold.
 
 ### Non-negotiable conditions
 1. **Clock starts at T+0 = keys/data provided** — the 3-month count begins the day Biruh has
-   provisioned the keys (Claude API, **two Supabase projects — staging + prod**, Vercel, Google
+   provisioned the keys (an AI provider key, **two Postgres databases — staging + prod**, the
+   container host, Google
    OAuth), granted **domain/DNS access** (`zyx.com` + `staging.zyx.com`) and Apps Script access,
    and delivered a data export — **not** the day the work is approved. Every day between "yes" and
    T+0 pushes the finish date one-for-one.

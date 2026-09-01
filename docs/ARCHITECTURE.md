@@ -113,7 +113,7 @@ server-enforced authorization — reached **incrementally**, running beside the 
 **Stack in one line:** pnpm/Turborepo monorepo · Next.js (App Router) + TS · Tailwind v4 + Sonner ·
 NestJS controllers → application services → repositories → Prisma · PostgreSQL (Supabase) · Better
 Auth (6 fixed roles → capability groups) · Zod · RSC + typed fetch helpers (no client cache
-library) · provider-agnostic LLM via the Vercel AI SDK · `apps/web` on Vercel, `apps/api` on Render.
+library) · provider-agnostic LLM via the Vercel AI SDK · `apps/api` runs as a container (`Dockerfile`).
 → **Full detail: `docs/STACK-ARCHITECTURE.md`. The package graph and its CI checks:
 `docs/SAAS-RESTRUCTURE-PLAN.md`. Locked decisions: `docs/DECISIONS.md`.**
 

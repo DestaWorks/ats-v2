@@ -18,7 +18,7 @@ in `docs/IMPLEMENTATION-PLAN.md` + `docs/ESTIMATE.md`.
 > the API, one organisation. All three have since changed, and
 > [`SAAS-RESTRUCTURE-PLAN.md`](./SAAS-RESTRUCTURE-PLAN.md) is the base document that wins on
 > conflict. What is different now: the repo is a pnpm/Turborepo monorepo of `apps/*` + nine
-> `@destaworks/*` packages; the API is a **separate NestJS process** (`apps/api`) on Render, and
+> `@destaworks/*` packages; the API is a **separate NestJS process** (`apps/api`), containerised, and
 > the App Router handlers were **deleted** in Phase 4.3; and the system is **multi-tenant**. The
 > goals, the threat model, and the migration reasoning below are still the reasoning we hold.
 
@@ -114,7 +114,7 @@ Separate config per environment (local/staging/prod).
 
 ### 2.9 Environments & domains (DECISIONS D6)
 Three isolated environments: **production `zyx.com`** (`main` branch, Supabase `desta-ats-prod`),
-**staging `staging.zyx.com`** (`staging` branch, Supabase `desta-ats-staging`), plus per-PR Vercel
+**staging `staging.zyx.com`** (`staging` branch, Supabase `desta-ats-staging`), plus per-PR
 previews and local. Staging and production use **two separate Supabase projects** — staging never
 touches production PII. Secrets, `BETTER_AUTH_URL`, and Google OAuth redirect URIs are
 per-environment/per-domain. **Migrations and the Sheet→Postgres data migration are rehearsed on
@@ -201,7 +201,8 @@ enable for all → remove the legacy view's code from `index.html`. **Pipeline (
   may hard-wire one provider.)*
 - ✅ **Compliance regime:** US HIPAA (where applicable) + Ethiopian Data Protection
   Proclamation 1321/2024.
-- ✅ **Hosting / managed Postgres:** Vercel + Supabase (Postgres).
+- ✅ **Hosting / managed Postgres:** containers (one `Dockerfile`, five targets) + managed
+  Postgres. The container host is an open decision; nothing in the repo names one.
 - ✅ **Secrets ownership:** the Owner holds all keys; we build against env vars.
 - ✅ **Auth layer:** **Better Auth on Supabase Postgres** (decided — Supabase as managed
   Postgres only; Better Auth for auth/RBAC). To be shared with the Owner, not blocked on him.

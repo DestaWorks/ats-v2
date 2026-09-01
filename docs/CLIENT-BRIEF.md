@@ -11,8 +11,9 @@
 > **Kept as sent, with two corrections.** This brief is dated 2026-07-01 and describes the rebuild
 > before it happened; the rebuild has since shipped. Two lines were corrected because leaving them
 > would misrepresent the product: the AI row (the app is provider-agnostic, not tied to one
-> vendor) and the hosting row (the API runs on Render alongside Vercel). Everything else is left
-> as it was sent. For where things actually stand, see the root `README.md`.
+> vendor) and the hosting row (the API is a long-lived container, and where it runs is still an
+> open decision). Everything else is left as it was sent. For where things actually stand, see the
+> root `README.md`.
 
 ---
 
@@ -146,7 +147,7 @@ concrete. In plain terms:
 | **Better Auth** | Secure login and roles — enforced on the server, not the browser |
 | **Tailwind CSS** | Styling — lets us reuse the current look and layout as-is |
 | **AI — your choice of provider** | The AI features — daily/weekly briefs, resume parsing, and matching. Anthropic, OpenAI and Google all work; switching is a one-line setting change, so you are never locked to one vendor's pricing |
-| **Vercel + Render** | Hosting and reliable, repeatable deploys |
+| **Docker** | The app ships as containers, so it runs the same way on any host and deploys are repeatable |
 | *Prisma · Zod* | Supporting tools that keep the data safe and correct |
 
 Everything here is a proven, mainstream choice — nothing exotic — so the app stays easy to

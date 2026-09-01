@@ -1,8 +1,8 @@
 name: Deploy
 
 # Deployment is deliberately separate from PR validation (SAAS-RESTRUCTURE-PLAN Phase 3), and
-# deliberately manual: the Vercel project has no Git integration, so nothing here is triggered
-# by a push. A human dispatches it with the exact revision CI already passed.
+# deliberately manual: nothing here is triggered by a push. A human dispatches it with the exact
+# revision CI already passed.
 on:
   workflow_dispatch:
     inputs:
@@ -21,12 +21,10 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # The API's host is Render (`render.yaml`) — not Vercel, because apps/api is a long-lived
-  # process, which is the whole reason it left serverless (SAAS-RESTRUCTURE-PLAN 4.4). Render
-  # builds from the repo itself, so this job is the gate rather than the shipper: it proves the
-  # pinned revision boots and serves before `deploy-api` asks Render to roll it out. Render is
-  # told WHICH revision by the deploy hook, so the bytes it runs and the bytes proven here come
-  # from the same SHA.
+  # apps/api is a long-lived process, which is the whole reason it left serverless
+  # (SAAS-RESTRUCTURE-PLAN 4.4). This job is the gate rather than the shipper: it proves the
+  # pinned revision boots, serves and shuts down cleanly BEFORE any image is published from it,
+  # so a broken revision never reaches a registry.
   api-artifact:
     name: Build the API from ${{ inputs.ref }}
     runs-on: ubuntu-latest
@@ -87,10 +85,101 @@ jobs:
           path: apps/api/dist/
           retention-days: 14
 
+  # Publish the containers. A registry is not a host: this stays correct whichever machine
+  # eventually pulls them, which is the open decision. Tagged with the immutable SHA, never
+  # `latest`, so what runs is always identifiable and a rollback is a tag change.
+  #
+  # NEXT_PUBLIC_API_URL is a BUILD argument, not runtime env — it is inlined into the browser
+  # bundle and fixes the CSP `connect-src` origin, so the web image is per-environment and a
+  # wrong value means rebuilding rather than restarting.
+  images:
+    name: Publish images (${{ inputs.environment }})
+    runs-on: ubuntu-latest
+    needs: api-artifact
+    environment: ${{ inputs.environment }}
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Require the browser-facing API URL
+        env:
+          NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${NEXT_PUBLIC_API_URL}" ]; then
+            echo "::error::NEXT_PUBLIC_API_URL is not set for this environment — the web image would be built with a blank API origin and every browser call would be CSP-blocked."
+            exit 1
+          fi
+
+      - name: api
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: api
+          push: true
+          tags: ghcr.io/${{ github.repository }}/api:${{ inputs.ref }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: worker
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: worker
+          push: true
+          tags: ghcr.io/${{ github.repository }}/worker:${{ inputs.ref }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: migrate
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: migrate
+          push: true
+          tags: ghcr.io/${{ github.repository }}/migrate:${{ inputs.ref }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: web
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: web
+          push: true
+          tags: ghcr.io/${{ github.repository }}/web:${{ inputs.ref }}
+          build-args: |
+            NEXT_PUBLIC_API_URL=${{ vars.NEXT_PUBLIC_API_URL }}
+            NEXT_PUBLIC_SENTRY_DSN=${{ vars.NEXT_PUBLIC_SENTRY_DSN }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: admin
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: admin
+          push: true
+          tags: ghcr.io/${{ github.repository }}/admin:${{ inputs.ref }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
   # Schema before code. `prisma migrate deploy` applies only committed migrations and never
   # generates, resets or drops anything; it takes an advisory lock, so a re-run or a concurrent
   # dispatch waits rather than racing. It runs as its own job, deliberately host-neutral — the
-  # API's host is a separate decision, and wherever it lands this step is the same.
+  # host is a separate decision, and wherever it lands this step is the same.
   #
   # DIRECT_URL, not DATABASE_URL: a transaction pooler supports neither the advisory lock nor the
   # prepared statements migrations use. Failing here leaves the previous version serving the
@@ -125,28 +214,32 @@ jobs:
           DIRECT_URL: ${{ secrets.DIRECT_URL }}
         run: pnpm db:status
 
-  # Render builds from the repo, so "deploy" here is: ask it to build this exact SHA, then wait
-  # until it is actually serving. Without the wait a green workflow would only mean "the request
-  # was accepted", which is the failure mode where a broken API is reported as deployed.
+  # The images are already published, so "deploy" here is: tell the host to pull this exact tag,
+  # then wait until it is actually serving. Without the wait a green workflow would only mean "the
+  # request was accepted", which is the failure mode where a broken API is reported as deployed.
   deploy-api:
     name: Roll out the API (${{ inputs.environment }})
     runs-on: ubuntu-latest
-    needs: [api-artifact, migrate]
+    needs: [images, migrate]
     environment: ${{ inputs.environment }}
     permissions:
       contents: read
     steps:
-      - name: Trigger the Render deploy for this revision
+      # Whatever pulls the new tag — a platform webhook, a self-hosted runner, an agent on the
+      # box — is reached through one generic URL, so choosing the host does not mean editing this
+      # workflow. It fails loudly when unset rather than skipping, because a skipped rollout that
+      # reports success is the failure mode this whole file exists to prevent.
+      - name: Tell the host to roll out this revision
         env:
-          HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+          HOOK: ${{ secrets.DEPLOY_HOOK_URL }}
         run: |
           set -euo pipefail
           if [ -z "${HOOK}" ]; then
-            echo "::error::RENDER_DEPLOY_HOOK_URL is not set — the API would silently not deploy."
+            echo "::error::DEPLOY_HOOK_URL is not set — the API would silently not deploy. It must trigger a pull of ghcr.io/${{ github.repository }}/api:${{ inputs.ref }}"
             exit 1
           fi
           curl -fsS "${HOOK}?ref=${{ inputs.ref }}" > /dev/null
-          echo "Asked Render to deploy ${{ inputs.ref }}"
+          echo "Asked the host to roll out ${{ inputs.ref }}"
 
       # The API is the read path for every ported page, so a web deploy on top of an API that is
       # not yet serving shows users an error boundary. Block until /health answers.
@@ -177,7 +270,7 @@ jobs:
     name: Deploy ${{ inputs.ref }} to ${{ inputs.environment }}
     runs-on: ubuntu-latest
     # After the API, never beside it: apps/web renders through it, so shipping web first would
-    # serve the error boundary until Render caught up.
+    # serve the error boundary until the API caught up.
     needs: deploy-api
     # Attach GitHub environment protection rules (required reviewers for production) here.
     environment: ${{ inputs.environment }}
@@ -216,39 +309,41 @@ jobs:
             fi
           done
 
-      - uses: ./.github/actions/setup
-
-      - name: Install Vercel CLI
-        run: pnpm add -g vercel@latest
-
-      - name: Pull Vercel environment
-        env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-        run: |
-          vercel pull --yes \
-            --environment=${{ inputs.environment == 'production' && 'production' || 'preview' }} \
-            --token=${{ secrets.VERCEL_TOKEN }}
-
-      - name: Build
-        env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-        run: vercel build ${{ inputs.environment == 'production' && '--prod' || '' }} --token=${{ secrets.VERCEL_TOKEN }}
-
-      # `--prebuilt` ships the artifact built above from `inputs.ref`, so the deployed bytes come
-      # from the revision that passed CI rather than from a rebuild of a moving branch.
-      - name: Deploy
+      # The images were published by `images` and the API is already serving, so this is the
+      # front-end half of the same rollout: tell the host to pull the web and admin tags.
+      - name: Roll out the web and admin containers
         id: deploy
         env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          HOOK: ${{ secrets.DEPLOY_HOOK_WEB_URL }}
         run: |
           set -euo pipefail
-          url=$(vercel deploy --prebuilt ${{ inputs.environment == 'production' && '--prod' || '' }} \
-            --token=${{ secrets.VERCEL_TOKEN }})
-          echo "url=${url}" >> "$GITHUB_OUTPUT"
-          echo "Deployed ${{ inputs.ref }} to ${url}"
+          if [ -z "${HOOK}" ]; then
+            echo "::error::DEPLOY_HOOK_WEB_URL is not set — the web and admin containers would silently not deploy. It must trigger a pull of ghcr.io/${{ github.repository }}/web:${{ inputs.ref }} and .../admin:${{ inputs.ref }}"
+            exit 1
+          fi
+          curl -fsS "${HOOK}?ref=${{ inputs.ref }}" > /dev/null
+          echo "url=${{ vars.WEB_URL }}" >> "$GITHUB_OUTPUT"
+          echo "Asked the host to roll out web + admin at ${{ inputs.ref }}"
+
+      # A rollout that was accepted is not a rollout that serves.
+      - name: Wait for the web app to answer
+        env:
+          WEB_HEALTH_URL: ${{ vars.WEB_HEALTH_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${WEB_HEALTH_URL}" ]; then
+            echo "::error::WEB_HEALTH_URL is not set — cannot confirm the web app came back up."
+            exit 1
+          fi
+          for _ in $(seq 1 60); do
+            if curl -fsS -o /dev/null "${WEB_HEALTH_URL}"; then
+              echo "Web is serving"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::Web did not answer within 10 minutes."
+          exit 1
 
       # "Nothing currently records what is live" — SAAS-RESTRUCTURE-PLAN, Deploy tags. This is
       # the answer to "roll back to what?".

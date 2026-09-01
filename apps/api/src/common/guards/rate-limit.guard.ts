@@ -45,7 +45,7 @@ type RateLimitedRequest = AuthenticatedRequest &
     readonly socket?: { readonly remoteAddress?: string | undefined } | undefined;
   };
 
-/** First `x-forwarded-for` hop is the client behind Render's proxy. Spoofable, so it bounds one
+/** First `x-forwarded-for` hop is the client when a proxy sits in front. Spoofable, so it bounds one
  *  caller rather than identifying them; no address falls back to the old shared bucket. */
 function anonymousBucket(request: RateLimitedRequest): string {
   const forwarded = request.headers["x-forwarded-for"];

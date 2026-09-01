@@ -90,6 +90,20 @@ jobs:
       - name: Dependency-graph validation
         run: pnpm exec turbo run //#app:deps-check ${{ env.TURBO_AFFECTED }}
 
+      # The container images install the bundle's externals with `npm ci` from committed manifests,
+      # so a SECOND lockfile governs what ships in `api` and `migrate`. This is what keeps it
+      # honest: every pinned version must equal the one pnpm resolved, and the dependency set must
+      # still match `apps/api/externals.mjs`. Beside deps-check because it is the same class of
+      # failure — a version that differs between what was tested and what ships.
+      - name: Runtime manifest matches the workspace
+        run: pnpm exec turbo run //#app:runtime-check ${{ env.TURBO_AFFECTED }}
+
+      # NDA §5b is contractual: permissive licences only, and a maintained record of third-party
+      # components. Fails on any licence nobody has reviewed, and regenerates nothing — the SBOM
+      # is committed, so a new dependency is a visible diff rather than a silent arrival.
+      - name: Third-party licenses
+        run: pnpm exec turbo run //#app:license-check ${{ env.TURBO_AFFECTED }}
+
       # Owned by the architecture-checks workstream: dependency direction, the forbidden-import
       # list, cycles, Prisma containment, `apps/* -> db|application`. Assumed script name
       # `arch:check`; if that workstream names it differently, this one line changes.

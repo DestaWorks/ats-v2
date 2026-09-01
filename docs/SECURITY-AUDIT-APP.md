@@ -11,8 +11,8 @@
 >   The API is now 200 route handlers across 49 NestJS controllers in `apps/api`; exactly two
 >   App Router handlers remain repo-wide. The auth posture over that new surface is checked by
 >   `pnpm auth:check` in CI, not by this document.
-> - **H6 assumes a serverless deployment on Vercel.** `apps/api` is a long-lived Render service
->   plus a worker, so the reasoning about per-instance state does not carry over unexamined.
+> - **H6 assumes a serverless deployment.** `apps/api` is a long-lived container plus a worker,
+>   so the reasoning about per-instance state does not carry over unexamined.
 > - **M2's remediation targets `next.config.ts` headers** for API responses. The API is not
 >   Next.js any more.
 > - **"No admin panel (deferred to Wave 5)"** (§L4) is out of date — `apps/admin` shipped in

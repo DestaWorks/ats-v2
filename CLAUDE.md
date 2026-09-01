@@ -94,6 +94,8 @@ read them as a record of what was built, not as instructions for new work.
 | `docs/IMPLEMENTATION-PLAN.md` | _Historical_ — the Wave 0–6 build guide: per-module tasks (schema→API→client→tests) + done-when. A record of what was built, not instructions for new work |
 | `docs/MIGRATION-CHEATSHEET.md` | _Superseded_ — which app to use month by month during the rebuild. Every domain is ported; only the data import is left |
 | `docs/ARCHITECTURE-PROPOSAL.md` | **The architecture decision: multi-tenant SaaS on a monorepo, with the reasoning and trade-offs** |
+| `docs/REMAINING-WORK.md` | **LIVE — everything outstanding, prioritised P0–P3, audited 2026-09-01** |
+| `docs/DOCKER.md` | **Running the app in containers — plain-language guide to the `pnpm docker:*` commands** |
 | `docs/MIGRATION-GAP-ANALYSIS.md` | Legacy Sheet → Postgres: migrate/derive/drop per tab + restructuring blockers |
 | `docs/PRODUCT-WALKTHROUGH.md` | The product as a plain-English user journey, zero tech talk |
 | `docs/USER-FLOW-SOURCE-TO-HIRE.md` | Click-by-click of the flagship flow: one candidate from found to hired |

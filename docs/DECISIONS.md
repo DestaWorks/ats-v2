@@ -79,11 +79,13 @@ plus per-PR Vercel preview URLs and local. (`zyx.com` = placeholder for the real
 PII. Secrets, `BETTER_AUTH_URL`, and Google OAuth redirect URIs are **per-environment/per-domain**
 (no shared keys). **Migrations and the Sheet→Postgres data migration are dry-run on
 `staging.zyx.com` first, then applied to production.** Set up in Wave 0 (`IMPLEMENTATION-PLAN.md`
-0.1b / 0.2). Needs from Biruh: domain/DNS access, Vercel, the two Supabase projects.
+0.1b / 0.2). Needs from Biruh: domain/DNS access, a container host, the two Postgres databases.
 
 *Amended 2026-08-31 — two hosts, and deploys are manual.* Since Phase 4 the API is a long-lived
-process, so an environment is **two** deployments, not one: `apps/web` on Vercel and `apps/api`
-plus its worker on **Render** (`render.yaml`). The Vercel project has **no Git integration** —
+process, so an environment is more than one deployment: `apps/web`, `apps/api` and its worker.
+All of them are containerised — one `Dockerfile`, four targets, run by `docker-compose.yml` — and
+**the host is deliberately not named anywhere in the repo**, because it has not been chosen. The
+Vercel project (where `apps/web` runs today) has **no Git integration** —
 nothing deploys on push. `.github/workflows/deploy.yml` is dispatched by hand with a full commit
 SHA, refuses any revision whose four required checks (Commit messages · Static analysis · Tests ·
 Build) are not green, ships the API first and waits for `/health`, then the web app, then tags the

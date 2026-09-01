@@ -356,6 +356,36 @@ check(
  * The escape hatches that let pre-6.3 code keep working. Every one is deleted by the end of 6.4;
  * until then the only property worth enforcing is that their number falls.
  */
+/**
+ * Files where unscoped access is INHERENT, not debt — each with the reason it cannot be scoped.
+ *
+ * The plan's "6.4 drives this to 0" cannot be met and should not be: every remaining use is the
+ * tenancy plane, the seam itself, or a test of the seam. Driving the number to zero would mean
+ * deleting the app's ability to work out which tenant a user belongs to.
+ *
+ * Splitting the count is what makes the ratchet mean something. `debt` is the number that must
+ * reach zero; `inherent` is the number that never will, and saying so keeps a real signal from
+ * being buried in an unreachable target.
+ */
+const INHERENTLY_UNSCOPED = {
+  "packages/db/src/tenancy/membership.repository.ts":
+    "The tenancy plane. `Membership` and `Tenant` are GLOBAL models and this file PRODUCES the " +
+    "context every other repository demands — `findActiveByUserAndSlug` is the query that decides " +
+    "which tenant a request may be in, so requiring a context here would be circular.",
+  "packages/db/src/memberships.ts":
+    "The same plane: resolves a user's memberships before any tenant is known.",
+  "packages/db/src/tenant-scope.ts":
+    "The seam itself — it DEFINES `dbUnscoped`, so it necessarily names it.",
+  "packages/db/src/tenant-scope.test.ts":
+    "Tests OF the seam. Proving the escape hatch behaves requires using it.",
+  "packages/db/isolation/seam.test.ts":
+    "Tenant-isolation tests: they assert that an unscoped client is refused by RLS, which means " +
+    "opening one.",
+};
+
+/** Test doubles. A fixture bypassing the seam proves nothing about production code paths. */
+const TEST_FIXTURE = /\.(test|spec)\.ts$/;
+
 const ESCAPE_HATCHES = new Set([
   "dbUnscoped",
   "UNSCOPED_CONTEXT",
@@ -483,12 +513,29 @@ for (const r of GLOBAL_REPOSITORIES) {
 }
 console.log(`\n  seam allowlist (GLOBAL_MODELS): ${[...GLOBAL_MODELS].sort().join(", ")}`);
 
+const inherentUses = Object.entries(usesByFile)
+  .filter(([file]) => file in INHERENTLY_UNSCOPED)
+  .reduce((total, [, n]) => total + n, 0);
+const fixtureUses = Object.entries(usesByFile)
+  .filter(([file]) => !(file in INHERENTLY_UNSCOPED) && TEST_FIXTURE.test(file))
+  .reduce((total, [, n]) => total + n, 0);
+const debtUses = totalUses - inherentUses - fixtureUses;
+
 console.log(
   `\n  escape-hatch ratchet: ${totalUses} uses in ${Object.keys(usesByFile).length} files ` +
     `(baseline ${baselineTotal}) — ${Object.entries(usesByHatch)
       .map(([k, v]) => `${k}=${v}`)
       .sort()
-      .join(" ")}\n  6.4 drives this to 0.`,
+      .join(" ")}`,
+);
+console.log(
+  `    of which ${inherentUses} are inherent (the tenancy plane and the seam), ` +
+    `${fixtureUses} are test fixtures, and ${debtUses} are DEBT.`,
+);
+console.log(
+  debtUses === 0
+    ? "    debt is 0 — every remaining use is one the seam cannot own. Reasons are in this file."
+    : `    ${debtUses} use(s) should take a TenantContext instead. That is the number to drive to 0.`,
 );
 
 const failed = checks.filter((c) => c.violations.length > 0);
