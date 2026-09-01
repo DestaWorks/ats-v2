@@ -32,6 +32,7 @@
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
+    "@e965/xlsx": "0.20.3",
     "@heroicons/react": "^2.2.0",
     "@hookform/resolvers": "^5.4.0",
     "@sentry/nextjs": "^10.70.0",
@@ -43,7 +44,6 @@
     "recharts": "^3.10.1",
     "server-only": "^0.0.1",
     "sonner": "^1.7.4",
-    "xlsx": "^0.18.5",
     "zod": "catalog:"
   },
   "devDependencies": {
