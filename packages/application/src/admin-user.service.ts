@@ -94,6 +94,7 @@ export const adminUserService = {
         actor: ctx.user.id,
         action: "create",
         after: { email: result.user.email, role: input.role },
+        tenantId: ctx.tenantId,
       }),
     );
     return { user: toDTO(result.user), generatedPassword };
@@ -111,6 +112,7 @@ export const adminUserService = {
         actor: ctx.user.id,
         action: "setRole",
         after: { role },
+        tenantId: ctx.tenantId,
       }),
     );
     return toDTO(result.user);
@@ -132,6 +134,7 @@ export const adminUserService = {
         actor: ctx.user.id,
         action: "ban",
         after: { banReason: input.reason ?? null, expiresInDays: input.expiresInDays ?? null },
+        tenantId: ctx.tenantId,
       }),
     );
     return toDTO(result.user);
@@ -143,7 +146,13 @@ export const adminUserService = {
       body: { userId },
     });
     await withAnnouncedTenant(ctx.tenantId, (tx) =>
-      writeAudit(tx, { entity: "user", entityId: userId, actor: ctx.user.id, action: "unban" }),
+      writeAudit(tx, {
+        entity: "user",
+        entityId: userId,
+        actor: ctx.user.id,
+        action: "unban",
+        tenantId: ctx.tenantId,
+      }),
     );
     return toDTO(result.user);
   },
@@ -162,6 +171,7 @@ export const adminUserService = {
         entityId: userId,
         actor: ctx.user.id,
         action: "resetPassword",
+        tenantId: ctx.tenantId,
       }),
     );
     return { generatedPassword };
@@ -170,7 +180,13 @@ export const adminUserService = {
   async remove(ctx: TenantContext, userId: string): Promise<void> {
     await auth.api.removeUser({ headers: await requestContext().headers(), body: { userId } });
     await withAnnouncedTenant(ctx.tenantId, (tx) =>
-      writeAudit(tx, { entity: "user", entityId: userId, actor: ctx.user.id, action: "remove" }),
+      writeAudit(tx, {
+        entity: "user",
+        entityId: userId,
+        actor: ctx.user.id,
+        action: "remove",
+        tenantId: ctx.tenantId,
+      }),
     );
   },
 };

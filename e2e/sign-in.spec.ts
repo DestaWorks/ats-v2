@@ -11,7 +11,7 @@ test("signs in with the seeded Owner's credentials and reaches the dashboard", a
   await page.goto("/sign-in");
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password", { exact: true }).fill(password);
-  await page.getByRole("button", { name: "Sign In" }).click();
+  await page.getByRole("button", { name: "Sign In", exact: true }).click();
 
   await expect(page).toHaveURL(/\/dashboard/);
 });
@@ -22,7 +22,7 @@ test("rejects the wrong password", async ({ page }) => {
   await page.goto("/sign-in");
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password", { exact: true }).fill("definitely-wrong-password");
-  await page.getByRole("button", { name: "Sign In" }).click();
+  await page.getByRole("button", { name: "Sign In", exact: true }).click();
 
   await expect(page).toHaveURL(/\/sign-in/);
   await expect(page.getByText(/sign in failed|invalid/i)).toBeVisible();

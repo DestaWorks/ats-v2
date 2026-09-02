@@ -12,8 +12,14 @@ const API_BASE_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:300
  * (`packages/domain/src/rules/lead-lifecycle.ts`) allows promotion from any non-`Promoted`
  * status — so no outreach/response steps are needed to make it promotable.
  */
-export async function createLead(request: APIRequestContext, name: string): Promise<string> {
-  const response = await request.post(`${API_BASE_URL}/leads`, { data: { name } });
+export async function createLead(
+  request: APIRequestContext,
+  name: string,
+  clientId?: string,
+): Promise<string> {
+  const response = await request.post(`${API_BASE_URL}/leads`, {
+    data: { name, ...(clientId ? { clientId } : {}) },
+  });
   if (!response.ok()) {
     throw new Error(`Failed to create fixture lead: ${response.status()} ${await response.text()}`);
   }
@@ -54,14 +60,45 @@ export async function createProspect(
 /** Fixture-only: a candidate, bypassing the `/candidates/new` UI form (already covered by
  *  `candidate-pipeline.spec.ts`) — for specs that just need SOME candidate to act on. Defaults to
  *  `Operations` (needs no credential/license); pass `"Clinical"` for specs exercising the License
- *  tab, which `trackFieldVisibility` hides entirely for Operations. */
+ *  tab, which `trackFieldVisibility` hides entirely for Operations. `email` is only needed by specs
+ *  that go on to move the candidate into a stage gated on contact info (e.g. `QUALIFIED_PRESCREEN`
+ *  for an Operations candidate — see `stage-gates.ts`). */
 export async function createCandidate(
   request: APIRequestContext,
   name: string,
   track: "Operations" | "Clinical" = "Operations",
+  email?: string,
 ): Promise<string> {
-  const body = await post(request, "/candidates", { name, track });
+  const body = await post(request, "/candidates", { name, track, ...(email ? { email } : {}) });
   return (body["candidate"] as { id: string }).id;
+}
+
+/** Fixture-only: verifies a candidate's license via the same `POST /candidates/:id/verify-license`
+ *  the License tab's form uses — for specs that need a candidate already in a given license state
+ *  (e.g. License Verify's Expiry Timeline, which only lists `Active` candidates with a known
+ *  expiry) without re-exercising the verify form `candidate-detail.spec.ts` already covers. */
+export async function verifyLicense(
+  request: APIRequestContext,
+  candidateId: string,
+  licenseStatus: string,
+  licenseExpiry?: string,
+): Promise<void> {
+  await post(request, `/candidates/${candidateId}/verify-license`, {
+    licenseStatus,
+    ...(licenseExpiry ? { licenseExpiry } : {}),
+  });
+}
+
+/** Fixture-only: moves a candidate to `toStatus` via the same server-authoritative
+ *  `POST /candidates/:id/move` the pipeline board uses — for specs that need a candidate already
+ *  sitting in a particular stage (e.g. Screening's `SCREENING_ELIGIBLE_STATUSES`) without
+ *  re-exercising the drag/select move interaction `candidate-pipeline.spec.ts` already covers. */
+export async function moveCandidateStatus(
+  request: APIRequestContext,
+  candidateId: string,
+  toStatus: string,
+): Promise<void> {
+  await post(request, `/candidates/${candidateId}/move`, { toStatus });
 }
 
 /** Fixture-only: soft-deletes a candidate (`DELETE /candidates/:id`), for specs exercising the
@@ -78,6 +115,20 @@ export async function deleteCandidate(
   }
 }
 
+/** Fixture-only: an admin-created account with a known plaintext password (`POST /admin/users`
+ *  accepts an explicit `password`, bypassing the auto-generate-and-display-once banner
+ *  `admin-user.spec.ts` already covers), for specs that need to sign in as a non-Owner role. Rides
+ *  the Owner session already in `request`'s context — `manageUsers` is Owner/Admin-only. */
+export async function createUser(
+  request: APIRequestContext,
+  name: string,
+  email: string,
+  role: string,
+  password: string,
+): Promise<void> {
+  await post(request, "/admin/users", { name, email, role, password });
+}
+
 /** Fixture-only: an open role. Requires a `clientId` — create a client first. */
 export async function createRole(
   request: APIRequestContext,
@@ -86,4 +137,32 @@ export async function createRole(
 ): Promise<string> {
   const body = await post(request, "/roles", { clientId, title });
   return (body["role"] as { id: string }).id;
+}
+
+/** Fixture-only: a CRM client contact, for specs that need one to exist before generating a
+ *  Client Portal access link. Only `fullName` is required. */
+export async function createClientContact(
+  request: APIRequestContext,
+  clientId: string,
+  fullName: string,
+): Promise<string> {
+  const body = await post(request, `/crm/clients/${clientId}/contacts`, { fullName });
+  return (body["contact"] as { id: string }).id;
+}
+
+/** Fixture-only: a Client Portal access link for an existing contact
+ *  (`client-portal.service.ts#generateLink`) — returns the RAW one-time token, which the spec
+ *  exchanges itself by visiting `/portal/access?token=...` (the real link a client would click).
+ *  Rides the Owner session; generating a portal link is a staff-side CRM action. */
+export async function generatePortalLink(
+  request: APIRequestContext,
+  clientId: string,
+  contactId: string,
+): Promise<string> {
+  const body = await post(
+    request,
+    `/crm/clients/${clientId}/portal/contacts/${contactId}/tokens`,
+    {},
+  );
+  return body["token"] as string;
 }
