@@ -163,6 +163,10 @@
         "vitest.isolation.config.ts"
       ]
     },
+    "//#app:test-e2e": {
+      "cache": false,
+      "inputs": ["e2e/**", "apps/web/src/**", "apps/api/src/modules/**", "playwright.config.ts"]
+    },
     "//#app:test-logs": {
       "dependsOn": ["^topo", "^build"],
       "inputs": ["apps/*/src/**", "packages/*/src/**", "package.json"]
