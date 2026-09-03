@@ -64,5 +64,19 @@ export default defineConfig({
       stdout: "pipe",
       stderr: "pipe",
     },
+    {
+      // `dev:admin` has no explicit port (defaults to Next's 3000), which would collide with
+      // whatever else is already using it locally — pinned to 3008 here so it's an address the
+      // platform-tenants-console spec can navigate to explicitly, without touching apps/web's
+      // baseURL. `PLATFORM_API_URL` has no default in `apps/admin/src/lib/platform-api.ts` — unset,
+      // every platform-admin page fails closed with a MISCONFIGURED refusal.
+      command: "pnpm dev:admin -- --port 3008",
+      url: "http://localhost:3008/tenants",
+      reuseExistingServer: !process.env.CI,
+      timeout: 180_000,
+      stdout: "pipe",
+      stderr: "pipe",
+      env: { PLATFORM_API_URL: "http://localhost:3004" },
+    },
   ],
 });

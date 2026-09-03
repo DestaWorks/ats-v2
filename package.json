@@ -38,6 +38,7 @@
     "db:seed:clients": "NODE_OPTIONS=--conditions=react-server tsx scripts/seed-clients.ts",
     "db:seed:demo": "NODE_OPTIONS=--conditions=react-server tsx scripts/seed-demo.ts",
     "db:seed:rules": "NODE_OPTIONS=--conditions=react-server tsx scripts/seed-rules.ts",
+    "db:seed:tenant-b": "NODE_OPTIONS=--conditions=react-server tsx scripts/seed-second-tenant.ts",
     "db:status": "NODE_OPTIONS=--conditions=react-server tsx scripts/db-status.ts",
     "db:studio": "prisma studio",
     "deps:check": "turbo run //#app:deps-check",
