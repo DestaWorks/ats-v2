@@ -1,7 +1,9 @@
 # Project Plan — DestaHealth ATS Rebuild
 
-> **⚠️ SUPERSEDED — kept for history.** The live plan is **`docs/IMPLEMENTATION-PLAN.md`**
-> (tasks) + **`docs/ESTIMATE.md`** (schedule), governed by **`docs/DECISIONS.md`** (authoritative).
+> **⚠️ SUPERSEDED — kept for history.** The base document for current work is
+> **`docs/SAAS-RESTRUCTURE-PLAN.md`**; the Wave 0–6 rebuild that replaced this plan is recorded in
+> **`docs/IMPLEMENTATION-PLAN.md`** (tasks) + **`docs/ESTIMATE.md`** (schedule), governed by
+> **`docs/DECISIONS.md`**.
 > The M0–M6 milestones and the strangler-fig/anti-corruption-layer framing below are retired
 > (per DECISIONS **D1**, migration is a one-time ETL, not a live Sheet adapter). Read for
 > historical context only; do not build from it.
@@ -28,7 +30,7 @@ control, no secrets in code, permissive licenses, HIPAA + Ethiopian Proclamation
 ## Two tracks, interleaved
 
 - **Track A — Platform:** baseline → new app skeleton → data layer → port views → decommission.
-- **Track B — Product:** ① RBAC ② bulk importer + résumé matching ③ automated license
+- **Track B — Product:** ① RBAC ② bulk importer + resume matching ③ automated license
   verification ④ smarter sourcing (similarity + supply-gap).
 
 They are not separate projects. RBAC (B①) is delivered *as* the auth layer. The bulk importer
@@ -72,11 +74,11 @@ from devtools); CI green; deployed to a Vercel preview.
 - Build the **bulk importer**: idempotent Sheet→Postgres import (normalize statuses, expand
   outreach JSON, map roles, dedupe) with an added/skipped/errored report — usable as a
   product feature for ongoing historical-record imports.
-- **Résumé→profile auto-matching** (B②): parse résumé (Claude API, server-side) and match to /
+- **Resume→profile auto-matching** (B②): parse resume (Claude API, server-side) and match to /
   create candidate profiles during import.
 - Dual-read parity check; flip the ACL from Sheet-adapter to Postgres repositories.
 
-**Done when:** historical records imported and verified against the Sheet; résumé matching
+**Done when:** historical records imported and verified against the Sheet; resume matching
 works on a real batch; API serves Postgres; Sheet is read-only legacy.
 
 ### M3 — Port the core pipeline  *(Phase 3 start · ~weeks 5–8 · "By 60")*
@@ -113,7 +115,7 @@ supported states with an audit trail; manual fallback documented.
 "By 90" = leading a meaningful build and go-to for the ATS.
 
 ### M6 — Decommission + harden  *(Phase 4 · after porting)*
-- Migrate résumé files to object storage with signed expiring URLs.
+- Migrate resume files to object storage with signed expiring URLs.
 - Retire the Apps Script + Sheet; rotate exposed credentials.
 - Delete legacy `index.html`. Finalize observability (error tracking, structured logs) and the
   audit log. Complete the compliance checklist (HIPAA + Proclamation 1321/2024).
@@ -166,7 +168,7 @@ relevant milestone. **Holding the access-keys conversation for now.**
   Vercel, Claude API key, Google OAuth client. Engineer builds against them (env secrets);
   never holds raw keys.
 - **Data (needed by M2):** export of / read access to the current Sheet; a sample of historical
-  résumé records for the importer + matching.
+  resume records for the importer + matching.
 - **Info (quick answers):** rough candidate/lead volume; whether email is sent server-side.
 - **Confirm:** milestone cadence in the week-one sync.
 

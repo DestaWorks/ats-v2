@@ -44,6 +44,7 @@ export const timeReportsService = {
       .filter((d): d is number => d !== null);
 
     return {
+      capped: cohort.capped,
       timeInStage,
       timeToFill: { avgDays: average(ttf), medianDays: median(ttf), count: ttf.length },
     };
@@ -89,6 +90,6 @@ export const timeReportsService = {
         reasons,
       }));
 
-    return { byLicenseStatus, requiringAction };
+    return { capped: cohort.capped, byLicenseStatus, requiringAction };
   },
 };

@@ -294,7 +294,8 @@ them. Nothing infers a shape from an implementation detail.
 - **Enforce layer boundaries with off-the-shelf lint** (`eslint-plugin-boundaries` /
   `import/no-restricted-paths`) plus `import "server-only"` — not hand-written AST rules. This
   keeps Prisma out of components and services out of the client bundle.
-- **No secrets in code, ever.** Env vars / Vercel & Supabase secret stores only; the **Owner
+- **No secrets in code, ever.** Env vars and the host's secret store only — never in an image
+  layer, which is why the `Dockerfile` takes no secret as a build argument; the **Owner
   holds the keys**, we build against them. Commit `.env.example`, never `.env`.
 - Least-privilege access to sensitive columns by role; encrypt PHI/PII at rest.
 - Parameterized queries only (Prisma) — no string-built SQL.

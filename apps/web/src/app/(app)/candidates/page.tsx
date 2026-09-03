@@ -11,7 +11,7 @@ import type { CandidateListDTO } from "@destaworks/contracts/validation/candidat
 import type { ListSort } from "@destaworks/contracts/validation/pipeline";
 // import type { GetSavedViewsResponse } from "@destaworks/contracts/http/saved-view";
 import type { LookupOptionsDTO } from "@destaworks/contracts/validation/lookups";
-import { getVerifiedUser } from "@destaworks/auth/guards";
+import { requirePageUser } from "@/lib/page-user";
 import { apiGet, query } from "@/lib/api/server";
 import { readSearchParams, type RawSearchParams } from "@/lib/search-params";
 // import { SavedViewsBar } from "../lib/saved-views-bar";
@@ -32,7 +32,7 @@ export default async function CandidatesPage({
 }: {
   searchParams: Promise<RawSearchParams>;
 }) {
-  const user = await getVerifiedUser();
+  const user = await requirePageUser();
 
   const q = readSearchParams(await searchParams);
 

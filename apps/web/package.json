@@ -1,0 +1,53 @@
+{
+  "name": "@destaworks/web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "//": [
+    "The operator app's own manifest. It had none until now: web WAS the root application",
+    "before Phase 2.9 moved its files under apps/, and the root manifest simply stayed put.",
+    "",
+    "Two costs of that, both real. Size: every web dependency -- Next, React, recharts,",
+    "@dnd-kit, xlsx -- sat in the ROOT dependencies, so a production install for the API or",
+    "the worker dragged the entire UI tree into a backend container image.",
+    "",
+    "Correctness: two checks in scripts/check-architecture.mjs are gated on `hasOwnManifest`",
+    "and are skipped entirely for a unit without one -- `imports <workspace package> but the",
+    "manifest does not declare it`, and `imports external <package> undeclared in its",
+    "manifest`. The largest app in the repo was opted out of both. See the same note in",
+    "apps/admin/package.json, which has had a manifest since it was created.",
+    "",
+    "No scripts here on purpose: the build runs from the repo root (`app:build`), because the",
+    "working directory decides what Tailwind v4 scans -- from apps/web it would root here and",
+    "never see the classes inside @destaworks/ui."
+  ],
+  "dependencies": {
+    "@destaworks/auth": "workspace:*",
+    "@destaworks/config": "workspace:*",
+    "@destaworks/contracts": "workspace:*",
+    "@destaworks/domain": "workspace:*",
+    "@destaworks/integrations": "workspace:*",
+    "@destaworks/ui": "workspace:*",
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
+    "@e965/xlsx": "0.20.3",
+    "@heroicons/react": "^2.2.0",
+    "@hookform/resolvers": "^5.4.0",
+    "@sentry/nextjs": "^10.70.0",
+    "better-auth": "^1.6.23",
+    "jszip": "^3.10.1",
+    "papaparse": "^5.5.4",
+    "pdfjs-dist": "^6.3.289",
+    "react-hook-form": "^7.80.0",
+    "recharts": "^3.10.1",
+    "server-only": "^0.0.1",
+    "sonner": "^1.7.4",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@destaworks/tsconfig": "workspace:*",
+    "typescript": "catalog:"
+  }
+}

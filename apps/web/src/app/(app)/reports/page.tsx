@@ -1,5 +1,5 @@
 import { hasCapability } from "@destaworks/domain/constants";
-import { getVerifiedUser } from "@destaworks/auth/guards";
+import { requirePageUser } from "@/lib/page-user";
 import type { GetReportsFilterOptionsResponse } from "@destaworks/contracts/reports/filter-options";
 import type { ExecutiveSummaryDTO } from "@destaworks/contracts/validation/reports";
 import { apiGet } from "@/lib/api/server";
@@ -13,7 +13,7 @@ import { ReportsView } from "./reports-view";
  * gates consistently on `viewReports`, matching the nav.
  */
 export default async function ReportsPage() {
-  const user = await getVerifiedUser();
+  const user = await requirePageUser();
 
   if (!hasCapability(user.role, "viewReports")) {
     return (

@@ -5,11 +5,12 @@ import type { ZodType } from "zod";
  * on this interface, never on the backing driver, so the driver is a decision this codebase can
  * revisit without touching a single caller.
  *
- * That mattered immediately: the app already depends on `@upstash/redis`, and the obvious choice
- * would have been BullMQ on top of it. Upstash's client is REST-based, and BullMQ needs a TCP
- * connection with blocking commands (`BRPOPLPUSH`) — so the Redis already here cannot back it, and
- * real Redis is new infrastructure and new cost while the API host is still undecided. Postgres is
- * already provisioned, already backed up, and already has a direct connection available.
+ * That mattered immediately: the obvious alternative was BullMQ on Redis. The app now runs Redis
+ * for rate limiting, so the earlier objection — that the only Redis here spoke REST and could not
+ * hold the blocking connection BullMQ needs — no longer applies. The decision stands on the
+ * remaining reason, which was always the stronger one: an enqueue that travels inside the caller's
+ * transaction cannot be lost when that transaction rolls back, and only a queue in the same
+ * database can offer that. Redis here is a counter, deliberately not persisted.
  *
  * The trade-off is written down rather than assumed: a Postgres queue adds load and connections to
  * the same database serving requests, and at high throughput a dedicated broker is faster. At this

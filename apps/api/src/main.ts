@@ -2,10 +2,12 @@ import "reflect-metadata";
 import { NestFactory } from "@nestjs/core";
 import type { INestApplication } from "@nestjs/common";
 import { logger } from "@destaworks/config/logger";
+import { requireServerEnv } from "@destaworks/config/env";
 import { installNodeLogger } from "@destaworks/config/logger/install";
 import { shutdownApplication } from "@destaworks/application/lifecycle";
 import { installNestRequestContext } from "./common/request-context/nest-request-context";
 import { requestContextMiddleware } from "./common/request-context/request-context.middleware";
+import { initSentry } from "./instrumentation";
 import { installJobRuntime } from "./jobs-runtime";
 import { AppModule } from "./app.module";
 
@@ -49,7 +51,12 @@ function resolvePort(): number {
  * only thing that knows the process is stopping.
  */
 async function bootstrap(): Promise<void> {
+  // Before the logger, before Nest, and a long way before `listen`: a missing BETTER_AUTH_SECRET
+  // used to crash this process AFTER it had announced itself, so the orchestrator routed traffic
+  // to a server that was already dead. An unmet requirement has to be a failed boot.
+  requireServerEnv();
   installNodeLogger();
+  initSentry();
 
   // The composition root is the only place that names a driver. Everything else — controllers via
   // `JOB_QUEUE`, Next routes via the application-layer port — holds the lazy handle, which is what

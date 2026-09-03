@@ -1,5 +1,4 @@
 import type { Prisma } from "../generated/prisma/client";
-import type { Role } from "@destaworks/domain/constants";
 import { db } from "../prisma";
 import { REFERENCE_ROWS_CAP } from "../query-limits";
 
@@ -26,26 +25,47 @@ export const userRepository = {
   },
 
   /**
-   * All users as `{ id, name }` options, sorted by name — feeds the "view as owner" filter
-   * dropdown. Display names only (no email/PII); the user table is small (fixed team).
+   * This workspace's users as `{ id, name }` options, sorted by name — feeds the "view as owner"
+   * filter dropdown. Display names only (no email/PII).
+   *
+   * `User` is a GLOBAL model, so the enforcement seam does NOT scope it: without the membership
+   * predicate below this returns every operator on the installation, and the tenant-scoped screens
+   * that render it would show one customer another customer's staff. The predicate IS the scope
+   * here — that is why this takes a `tenantId` rather than reading the table directly.
    */
-  list(tx?: Prisma.TransactionClient) {
+  listByTenant(tenantId: string, tx?: Prisma.TransactionClient) {
     return db(tx).user.findMany({
+      where: { memberships: { some: { tenantId } } },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
       take: REFERENCE_ROWS_CAP,
     });
   },
 
-  /** `{ id, name }` options for exactly one role, sorted by name — feeds the Daily Log "Team"
-   *  view's target roster / feedback picker, which is Associate-only by design (a Manager sets
-   *  targets/gives feedback to their associates, not to other leadership or Admin accounts that
-   *  happen to exist in the same user table). */
-  listByRole(role: Role, tx?: Prisma.TransactionClient) {
+  /**
+   * The administration screen's roster for one workspace: every account holding a membership here,
+   * in any status, with the account-management fields that screen acts on.
+   *
+   * Scoped by the same membership predicate as `listByTenant`, and for the same reason. `role` is
+   * the Better Auth `User.role` column rather than `Membership.role` because that is still the
+   * column `setRole` writes through the admin plugin — showing the other one would report a role
+   * this screen cannot change. Retiring that column is SAAS-RESTRUCTURE-PLAN 6.4.
+   */
+  listAdminUsersByTenant(tenantId: string, tx?: Prisma.TransactionClient) {
     return db(tx).user.findMany({
-      where: { role },
-      select: { id: true, name: true },
-      orderBy: { name: "asc" },
+      where: { memberships: { some: { tenantId } } },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        image: true,
+        role: true,
+        banned: true,
+        banReason: true,
+        banExpires: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: "desc" },
       take: REFERENCE_ROWS_CAP,
     });
   },
@@ -62,20 +82,21 @@ export const userRepository = {
   /**
    * The identity fields a BACKGROUND job needs to re-establish who it is acting as. A job runs
    * long after the request that queued it, so it cannot carry a session; it carries an actor id
-   * and reads the current record here. Reading the role fresh rather than freezing it at enqueue
-   * time is the point — a user who lost the capability in between must not have a job still
-   * running with the old one. `role` is returned raw; the caller validates it against the `Role`
-   * union, because that vocabulary lives in `domain`, not here.
+   * and reads the current record here.
+   *
+   * Identity only — no role. The job's authority is the actor's `Membership` in the tenant the
+   * queued row names, read fresh by the caller, so a user who lost the capability between enqueue
+   * and run cannot still be running with the old one.
    */
   findActorById(id: string, tx?: Prisma.TransactionClient) {
     return db(tx).user.findUnique({
       where: { id },
-      select: { id: true, email: true, name: true, role: true },
+      select: { id: true, email: true, name: true },
     });
   },
 
   /** Batch-resolve a set of user ids to their emails in ONE query — mirrors `namesByIds`. Used
-   *  ONLY server-side (e.g. mention notification emails); `list()` deliberately never selects
+   *  ONLY server-side (e.g. mention notification emails); `listByTenant()` deliberately never selects
    *  email since its result feeds the client-side @mention picker. */
   async emailsByIds(ids: string[], tx?: Prisma.TransactionClient): Promise<Map<string, string>> {
     const unique = [...new Set(ids)];

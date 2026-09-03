@@ -3,12 +3,12 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 
 /**
  * `RateLimitGuard` — transport around the shared limiter. The limiter's own thresholds, its
- * in-memory fallback and its deliberate fail-open on an Upstash outage are covered by
+ * in-memory fallback and its deliberate fail-open on a Redis outage are covered by
  * `packages/integrations/src/http/rate-limit.test.ts`; this file asserts the part the guard owns:
  * that a declared rule is applied at all, and that the bucket key separates callers the way the
  * Next.js routes already do (`name:userId` per user, bare `name` when anonymous).
  *
- * It runs the REAL limiter — no Upstash env in test, so the in-memory path — because two callers
+ * It runs the REAL limiter — no REDIS_URL in test, so the in-memory path — because two callers
  * provably not sharing a bucket is better evidence of correct keying than a spied-on key string.
  */
 

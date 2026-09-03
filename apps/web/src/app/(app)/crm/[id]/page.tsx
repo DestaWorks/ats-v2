@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { hasCapability } from "@destaworks/domain/constants";
-import { getVerifiedUser } from "@destaworks/auth/guards";
+import { requirePageUser } from "@/lib/page-user";
 import type { GetCrmClientResponse } from "@destaworks/contracts/http/crm";
 import { AppError } from "@destaworks/integrations/http/app-error";
 import { ErrorState } from "@destaworks/ui/error-state";
@@ -8,7 +8,7 @@ import { apiGet } from "@/lib/api/server";
 import { ClientDetail } from "./client-detail";
 
 export default async function ClientDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const user = await getVerifiedUser();
+  const user = await requirePageUser();
 
   if (!hasCapability(user.role, "viewCrm")) {
     return (

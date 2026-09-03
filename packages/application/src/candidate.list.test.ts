@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { MAX_ROWS_CAP } from "@destaworks/db/query-limits";
 import type { TenantContext } from "@destaworks/domain/tenant";
 
 /**
@@ -319,5 +320,30 @@ describe("candidateService.listCandidates — score path (fit / hot)", () => {
     expect(list.candidates.map((c) => c.id)).toEqual(["hi"]);
     expect(list.page).toBe(1);
     expect(list.totalPages).toBe(1);
+  });
+});
+
+describe("candidateService.listCandidates — fit ranking truncation", () => {
+  it("reports capped when the score-path read comes back at MAX_ROWS_CAP", async () => {
+    h.candidateRepo.listCards.mockResolvedValue(
+      Array.from({ length: MAX_ROWS_CAP }, (_, i) => row({ id: `c${i}` })),
+    );
+    const list = await candidateService.listCandidates({ sort: "fit" }, owner);
+    expect(list.capped).toBe(true);
+  });
+
+  it("does not report capped one row below the cap", async () => {
+    h.candidateRepo.listCards.mockResolvedValue(
+      Array.from({ length: MAX_ROWS_CAP - 1 }, (_, i) => row({ id: `c${i}` })),
+    );
+    const list = await candidateService.listCandidates({ sort: "fit" }, owner);
+    expect(list.capped).toBe(false);
+  });
+
+  it("never reports capped on the DB path, which orders and counts in SQL", async () => {
+    h.candidateRepo.listCards.mockResolvedValue([row()]);
+    h.candidateRepo.count.mockResolvedValue(50_000);
+    const list = await candidateService.listCandidates({}, owner);
+    expect(list.capped).toBe(false);
   });
 });

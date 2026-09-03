@@ -215,4 +215,32 @@ describe("the audit trail is written by the services and only by the services", 
       expect(run).toThrowError(expect.objectContaining({ code: "UNAUTHORIZED" }));
     });
   });
+  describe("an identity-authenticated mutation is attributed, not exempt", () => {
+    it("admits a mutation carrying the identity IdentityAuthGuard resolved", () => {
+      const interceptor = new AuditActorInterceptor();
+      expect(
+        interceptor.intercept(contextFor({ method: "POST", identity: { id: "u1" } }), {
+          handle: () => "ok",
+        }),
+      ).toBe("ok");
+    });
+
+    it("still refuses when the guard resolved nothing", () => {
+      const interceptor = new AuditActorInterceptor();
+      expect(() =>
+        interceptor.intercept(contextFor({ method: "POST", identity: undefined }), {
+          handle: () => "ok",
+        }),
+      ).toThrowError(expect.objectContaining({ code: "UNAUTHORIZED" }));
+    });
+
+    it("refuses an identity object carrying no id", () => {
+      const interceptor = new AuditActorInterceptor();
+      expect(() =>
+        interceptor.intercept(contextFor({ method: "POST", identity: { email: "a@b.c" } }), {
+          handle: () => "ok",
+        }),
+      ).toThrowError(expect.objectContaining({ code: "UNAUTHORIZED" }));
+    });
+  });
 });

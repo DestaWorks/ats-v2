@@ -38,4 +38,14 @@ describe("toCsv", () => {
     const csv = toCsv([{ n: -5 }], [{ header: "N", value: (r) => r.n }]);
     expect(csv).toBe("N\r\n-5");
   });
+
+  it("appends the note as a trailing row — the warning has to survive leaving the app", () => {
+    const csv = toCsv([{ a: 1 }], [{ header: "A", value: (r) => r.a }], "TRUNCATED: first 1 only");
+    expect(csv.split("\r\n")).toEqual(["A", "1", "TRUNCATED: first 1 only"]);
+  });
+
+  it("adds no trailing row when there is no note", () => {
+    const csv = toCsv([{ a: 1 }], [{ header: "A", value: (r) => r.a }]);
+    expect(csv.split("\r\n")).toHaveLength(2);
+  });
 });

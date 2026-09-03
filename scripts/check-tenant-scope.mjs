@@ -225,6 +225,87 @@ check(
 );
 
 check(
+  "audit-writes-name-a-tenant-when-nothing-else-can",
+  "`writeAudit` inside an UNSCOPED transaction passes `tenantId` explicitly (6.5)",
+  (fail) => {
+    const UNSCOPED_WRAPPERS = new Set(["withTransaction", "withAnnouncedTenant"]);
+    for (const file of sourceFiles(join(repoRoot, "packages/application/src"))) {
+      if (/\.(test|spec)\.ts$/.test(file)) continue;
+      const sf = parse(file);
+      walk(sf, (node) => {
+        if (!ts.isCallExpression(node)) return;
+        if (!ts.isIdentifier(node.expression)) return;
+        if (!UNSCOPED_WRAPPERS.has(node.expression.text)) return;
+        walk(node, (inner) => {
+          if (!ts.isCallExpression(inner)) return;
+          if (!ts.isIdentifier(inner.expression)) return;
+          if (inner.expression.text !== "writeAudit") return;
+          const params = inner.arguments[1];
+          const named =
+            params !== undefined &&
+            ts.isObjectLiteralExpression(params) &&
+            params.properties.some(
+              (prop) =>
+                (ts.isPropertyAssignment(prop) || ts.isShorthandPropertyAssignment(prop)) &&
+                ts.isIdentifier(prop.name) &&
+                prop.name.text === "tenantId",
+            );
+          if (named) return;
+          fail(
+            `writeAudit() inside \`${node.expression.text}(...)\` passes no \`tenantId\`. That ` +
+              `transaction announces no tenant, so the seam cannot supply one and ` +
+              `activity_log.tenantId (NOT NULL) rejects the row`,
+            at(sf, inner),
+          );
+        });
+      });
+    }
+  },
+);
+
+check(
+  "global-model-lists-carry-a-predicate",
+  "a list read of a GLOBAL model is constrained by tenant or by caller-supplied ids (6.3)",
+  (fail) => {
+    const KEYS = ["tenantId", "tenant", "memberships", "membership", "id", "email", "userId"];
+    for (const file of ALLOWLISTED) {
+      const repo = repositories.get(file);
+      if (!repo) continue;
+      walk(repo.sf, (node) => {
+        if (!ts.isCallExpression(node)) return;
+        const callee = node.expression;
+        if (!ts.isPropertyAccessExpression(callee) || callee.name.text !== "findMany") return;
+        const model = ts.isPropertyAccessExpression(callee.expression)
+          ? callee.expression.name.text
+          : undefined;
+        if (model === undefined) return;
+        const capitalised = model.charAt(0).toUpperCase() + model.slice(1);
+        if (!GLOBAL_MODELS.has(capitalised)) return;
+
+        const arg = node.arguments[0];
+        const where =
+          arg && ts.isObjectLiteralExpression(arg)
+            ? arg.properties.find(
+                (prop) =>
+                  ts.isPropertyAssignment(prop) &&
+                  ts.isIdentifier(prop.name) &&
+                  prop.name.text === "where",
+              )
+            : undefined;
+        const text = where ? where.getText(repo.sf) : "";
+        if (KEYS.some((key) => text.includes(key))) return;
+        fail(
+          `a \`findMany\` over \`${capitalised}\` (a GLOBAL model) carries ` +
+            `${where ? "no tenant or id predicate" : "no `where` at all"} — it returns every ` +
+            `row on the installation, and the seam cannot scope it`,
+          at(repo.sf, node),
+        );
+      });
+    }
+  },
+);
+
+check(
   "scoped-repositories-use-the-seam",
   "a tenant-scoped repository imports its client from the seam, never from ../prisma (6.3)",
   (fail) => {
@@ -275,6 +356,36 @@ check(
  * The escape hatches that let pre-6.3 code keep working. Every one is deleted by the end of 6.4;
  * until then the only property worth enforcing is that their number falls.
  */
+/**
+ * Files where unscoped access is INHERENT, not debt — each with the reason it cannot be scoped.
+ *
+ * The plan's "6.4 drives this to 0" cannot be met and should not be: every remaining use is the
+ * tenancy plane, the seam itself, or a test of the seam. Driving the number to zero would mean
+ * deleting the app's ability to work out which tenant a user belongs to.
+ *
+ * Splitting the count is what makes the ratchet mean something. `debt` is the number that must
+ * reach zero; `inherent` is the number that never will, and saying so keeps a real signal from
+ * being buried in an unreachable target.
+ */
+const INHERENTLY_UNSCOPED = {
+  "packages/db/src/tenancy/membership.repository.ts":
+    "The tenancy plane. `Membership` and `Tenant` are GLOBAL models and this file PRODUCES the " +
+    "context every other repository demands — `findActiveByUserAndSlug` is the query that decides " +
+    "which tenant a request may be in, so requiring a context here would be circular.",
+  "packages/db/src/memberships.ts":
+    "The same plane: resolves a user's memberships before any tenant is known.",
+  "packages/db/src/tenant-scope.ts":
+    "The seam itself — it DEFINES `dbUnscoped`, so it necessarily names it.",
+  "packages/db/src/tenant-scope.test.ts":
+    "Tests OF the seam. Proving the escape hatch behaves requires using it.",
+  "packages/db/isolation/seam.test.ts":
+    "Tenant-isolation tests: they assert that an unscoped client is refused by RLS, which means " +
+    "opening one.",
+};
+
+/** Test doubles. A fixture bypassing the seam proves nothing about production code paths. */
+const TEST_FIXTURE = /\.(test|spec)\.ts$/;
+
 const ESCAPE_HATCHES = new Set([
   "dbUnscoped",
   "UNSCOPED_CONTEXT",
@@ -402,12 +513,29 @@ for (const r of GLOBAL_REPOSITORIES) {
 }
 console.log(`\n  seam allowlist (GLOBAL_MODELS): ${[...GLOBAL_MODELS].sort().join(", ")}`);
 
+const inherentUses = Object.entries(usesByFile)
+  .filter(([file]) => file in INHERENTLY_UNSCOPED)
+  .reduce((total, [, n]) => total + n, 0);
+const fixtureUses = Object.entries(usesByFile)
+  .filter(([file]) => !(file in INHERENTLY_UNSCOPED) && TEST_FIXTURE.test(file))
+  .reduce((total, [, n]) => total + n, 0);
+const debtUses = totalUses - inherentUses - fixtureUses;
+
 console.log(
   `\n  escape-hatch ratchet: ${totalUses} uses in ${Object.keys(usesByFile).length} files ` +
     `(baseline ${baselineTotal}) — ${Object.entries(usesByHatch)
       .map(([k, v]) => `${k}=${v}`)
       .sort()
-      .join(" ")}\n  6.4 drives this to 0.`,
+      .join(" ")}`,
+);
+console.log(
+  `    of which ${inherentUses} are inherent (the tenancy plane and the seam), ` +
+    `${fixtureUses} are test fixtures, and ${debtUses} are DEBT.`,
+);
+console.log(
+  debtUses === 0
+    ? "    debt is 0 — every remaining use is one the seam cannot own. Reasons are in this file."
+    : `    ${debtUses} use(s) should take a TenantContext instead. That is the number to drive to 0.`,
 );
 
 const failed = checks.filter((c) => c.violations.length > 0);

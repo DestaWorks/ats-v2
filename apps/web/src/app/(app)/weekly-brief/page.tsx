@@ -1,6 +1,6 @@
 import { hasCapability } from "@destaworks/domain/constants";
 import { dateKeyForOffset, mondayOf } from "@destaworks/domain/daily";
-import { getVerifiedUser } from "@destaworks/auth/guards";
+import { requirePageUser } from "@/lib/page-user";
 import { viewerTzOffset } from "@destaworks/integrations/http/viewer-tz";
 import type { WeeklyBriefDTO } from "@destaworks/contracts/validation/briefs";
 import { ErrorState } from "@destaworks/ui/error-state";
@@ -18,7 +18,7 @@ import { WeeklyBriefView } from "./weekly-brief-view";
  * its redundant first client fetch.
  */
 export default async function WeeklyBriefPage() {
-  const user = await getVerifiedUser();
+  const user = await requirePageUser();
 
   if (!hasCapability(user.role, "viewReports")) {
     return (

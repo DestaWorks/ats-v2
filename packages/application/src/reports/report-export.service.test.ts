@@ -105,7 +105,7 @@ describe("get", () => {
 
   it("mints a short-lived URL once ready, and never a permanent one", async () => {
     h.findById.mockResolvedValue(
-      row({ status: "ready", storageKey: "candidates/exp1.csv", byteSize: 42, readyAt: NOW }),
+      row({ status: "ready", storageKey: "t/t1/candidates/exp1.csv", byteSize: 42, readyAt: NOW }),
     );
     h.getSignedDownloadUrl.mockResolvedValue("https://storage/signed");
     const dto = await reportExportService.get(ctx, "exp1", "u1");
@@ -115,7 +115,29 @@ describe("get", () => {
       expiresInSeconds: 300,
       byteSize: 42,
     });
+    expect(h.getSignedDownloadUrl).toHaveBeenCalledWith("exports", "t/t1/candidates/exp1.csv", 300);
+  });
+
+  it("still downloads an export stored before keys carried a tenant", async () => {
+    // The key is read off the row, never rebuilt from the id, so adding the prefix to the minting
+    // side cannot orphan a file someone already exported.
+    h.findById.mockResolvedValue(
+      row({ status: "ready", storageKey: "candidates/exp1.csv", byteSize: 42, readyAt: NOW }),
+    );
+    h.getSignedDownloadUrl.mockResolvedValue("https://storage/signed-legacy");
+    const dto = await reportExportService.get(ctx, "exp1", "u1");
+    expect(dto.downloadUrl).toBe("https://storage/signed-legacy");
     expect(h.getSignedDownloadUrl).toHaveBeenCalledWith("exports", "candidates/exp1.csv", 300);
+  });
+
+  it("refuses a legacy-keyed export to anyone but its requester, exactly as a prefixed one", async () => {
+    h.findById.mockResolvedValue(
+      row({ requestedById: "u2", status: "ready", storageKey: "candidates/exp1.csv" }),
+    );
+    await expect(reportExportService.get(ctx, "exp1", "u1")).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
+    expect(h.getSignedDownloadUrl).not.toHaveBeenCalled();
   });
 
   it("surfaces a failed export with its code, so the poller stops waiting", async () => {
@@ -141,16 +163,34 @@ describe("fulfil", () => {
     );
     const [bucket, key, bytes, contentType] = h.uploadPrivate.mock.calls[0] ?? [];
     expect(bucket).toBe("exports");
-    expect(key).toBe("candidates/exp1.csv");
+    expect(key).toBe("t/t1/candidates/exp1.csv");
     expect(contentType).toBe("text/csv; charset=utf-8");
     expect(Buffer.isBuffer(bytes)).toBe(true);
     expect(h.markReady).toHaveBeenCalledWith(
       expect.objectContaining({ tenantId: expect.any(String) }),
       "exp1",
-      "candidates/exp1.csv",
+      "t/t1/candidates/exp1.csv",
       10,
       NOW,
     );
+  });
+
+  it("writes each tenant's export under its own prefix, so two ids cannot collide", async () => {
+    h.candidatesCsv.mockResolvedValue("Name\n");
+    await reportExportService.fulfil("same-id", "tenant-a", {}, NOW);
+    await reportExportService.fulfil("same-id", "tenant-b", {}, NOW);
+    expect(h.uploadPrivate.mock.calls.map((call) => call[1])).toEqual([
+      "t/tenant-a/candidates/same-id.csv",
+      "t/tenant-b/candidates/same-id.csv",
+    ]);
+  });
+
+  it("stores under the payload's tenant, which the enqueuing endpoint set from the session", async () => {
+    h.candidatesCsv.mockResolvedValue("Name\n");
+    await reportExportService.fulfil("exp1", "t9", {}, NOW);
+    const [, key] = h.uploadPrivate.mock.calls[0] ?? [];
+    expect(key).toBe("t/t9/candidates/exp1.csv");
+    expect(h.candidatesCsv).toHaveBeenCalledWith(expect.objectContaining({ tenantId: "t9" }), {});
   });
 
   it("re-validates the queued filters instead of trusting them", async () => {

@@ -1,3 +1,4 @@
+import { runWithRequestCache } from "@destaworks/config/request-cache";
 import { runWithRequestContext, type HttpRequestLike } from "./nest-request-context";
 
 /**
@@ -17,5 +18,8 @@ export function requestContextMiddleware(
   _response: unknown,
   next: () => void,
 ): void {
-  runWithRequestContext(request, next);
+  // The cache scope nests inside the context scope and lives exactly as long: the reads it
+  // memoizes are per-request by nature, and anything outliving the request would serve one
+  // caller's tenant data to the next.
+  runWithRequestContext(request, () => runWithRequestCache(next));
 }

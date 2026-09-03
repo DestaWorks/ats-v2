@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { hasCapability } from "@destaworks/domain/constants";
-import { getVerifiedUser } from "@destaworks/auth/guards";
+import { requirePageUser } from "@/lib/page-user";
 import { AddCandidateForm } from "./add-candidate-form";
-import { cachedClientList } from "@destaworks/integrations/http/request-cache";
+import type { LookupOptionsDTO } from "@destaworks/contracts/validation/lookups";
+import { apiGet } from "@/lib/api/server";
 
 /**
  * Add candidate (RSC, Wave 2.4). Mirrors the pipeline board / detail guard-then-load pattern (the
@@ -12,9 +13,9 @@ import { cachedClientList } from "@destaworks/integrations/http/request-cache";
  * a UI hint only.
  */
 export default async function AddCandidatePage() {
-  const user = await getVerifiedUser();
+  const user = await requirePageUser();
 
-  const clientRows = await cachedClientList(user);
+  const { clients: clientRows } = await apiGet<LookupOptionsDTO>("/lookups");
   const clients = clientRows.map((c) => ({ id: c.id, name: c.name }));
   const canEditCredential = hasCapability(user.role, "viewCredentials");
 

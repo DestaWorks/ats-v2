@@ -1,5 +1,5 @@
 import { isLeadStatus, type LeadStatus } from "@destaworks/domain/constants";
-import { getVerifiedUser } from "@destaworks/auth/guards";
+import { requirePageUser } from "@/lib/page-user";
 import type { LookupOptionsDTO } from "@destaworks/contracts/validation/lookups";
 import type { LeadListDTO } from "@destaworks/contracts/validation/lead";
 import { apiGet, query } from "@/lib/api/server";
@@ -21,7 +21,7 @@ export default async function SourcingPage({
 }: {
   searchParams: Promise<RawSearchParams>;
 }) {
-  await getVerifiedUser();
+  await requirePageUser();
   const q = readSearchParams(await searchParams);
 
   const status: LeadStatus | undefined = q.guarded("status", isLeadStatus);

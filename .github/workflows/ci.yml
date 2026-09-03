@@ -90,6 +90,20 @@ jobs:
       - name: Dependency-graph validation
         run: pnpm exec turbo run //#app:deps-check ${{ env.TURBO_AFFECTED }}
 
+      # The container images install the bundle's externals with `npm ci` from committed manifests,
+      # so a SECOND lockfile governs what ships in `api` and `migrate`. This is what keeps it
+      # honest: every pinned version must equal the one pnpm resolved, and the dependency set must
+      # still match `apps/api/externals.mjs`. Beside deps-check because it is the same class of
+      # failure — a version that differs between what was tested and what ships.
+      - name: Runtime manifest matches the workspace
+        run: pnpm exec turbo run //#app:runtime-check ${{ env.TURBO_AFFECTED }}
+
+      # NDA §5b is contractual: permissive licences only, and a maintained record of third-party
+      # components. Fails on any licence nobody has reviewed, and regenerates nothing — the SBOM
+      # is committed, so a new dependency is a visible diff rather than a silent arrival.
+      - name: Third-party licenses
+        run: pnpm exec turbo run //#app:license-check ${{ env.TURBO_AFFECTED }}
+
       # Owned by the architecture-checks workstream: dependency direction, the forbidden-import
       # list, cycles, Prisma containment, `apps/* -> db|application`. Assumed script name
       # `arch:check`; if that workstream names it differently, this one line changes.
@@ -209,3 +223,83 @@ jobs:
 
       - name: Build the platform-admin console
         run: pnpm exec turbo run //#admin:build ${{ env.TURBO_AFFECTED }}
+
+  # This branch predates main's Playwright setup, so this job is ported over rather than waiting
+  # for a merge (see e2e/workspace-members.spec.ts, e2e/workspace-switching.spec.ts). Same shape
+  # as `isolation` — its own throwaway `postgres:16` service container, never a shared or hosted
+  # database — but the schema is built with `prisma migrate deploy` (what a real deploy runs)
+  # rather than the isolation job's raw-SQL replay. `apps/web` and `apps/api` are started as real
+  # dev servers and Playwright drives a real signed-in browser session against them.
+  #
+  # Two tenants exist here, not one: `db:seed` creates the default workspace and its Owner,
+  # `db:seed:tenant-b` (scripts/seed-second-tenant.ts) creates a second one with its own Owner —
+  # the multi-tenant specs (cross-tenant invite, the header switcher, /choose-workspace) need both.
+  # `PLATFORM_ADMIN_USER_IDS` is set from the default Owner's real database id, looked up with
+  # scripts/print-user-id.ts AFTER seeding — a `cuid` can't be predicted ahead of that, and no
+  # application path may ever be given one to choose (packages/auth/src/platform-admin.ts) — so the
+  # platform-tenants-console spec has a platform admin to sign in as.
+  e2e:
+    name: E2E
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: destaworks_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/destaworks_e2e
+      DIRECT_URL: postgresql://postgres:postgres@127.0.0.1:5432/destaworks_e2e
+      BETTER_AUTH_URL: http://localhost:3007
+      BETTER_AUTH_SECRET: e2e-ci-only-not-a-real-secret
+      API_URL: http://localhost:3004
+      NEXT_PUBLIC_API_URL: http://localhost:3004
+      WEB_ORIGINS: http://localhost:3007
+      ANTHROPIC_API_KEY: e2e-ci-only-dummy-key
+      SEED_OWNER_EMAIL: owner@e2e.local
+      SEED_OWNER_PASSWORD: E2eOwnerPass123!
+      SEED_TENANT_B_SLUG: e2e-tenant-b
+      SEED_TENANT_B_NAME: E2E Second Workspace
+      SEED_TENANT_B_OWNER_EMAIL: owner-b@e2e.local
+      SEED_TENANT_B_OWNER_PASSWORD: E2eOwnerBPass123!
+      PLATFORM_API_URL: http://localhost:3004
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup
+
+      - name: Apply migrations
+        run: pnpm exec prisma migrate deploy
+
+      - name: Seed the Owner and a second tenant
+        run: |
+          pnpm db:seed
+          pnpm db:seed:tenant-b
+
+      - name: Grant the seeded Owner the platform-admin plane
+        run: |
+          OWNER_ID=$(NODE_OPTIONS=--conditions=react-server pnpm exec tsx scripts/print-user-id.ts "$SEED_OWNER_EMAIL")
+          echo "PLATFORM_ADMIN_USER_IDS=$OWNER_ID" >> "$GITHUB_ENV"
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run the E2E specs
+        run: pnpm app:test-e2e
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7

@@ -14,7 +14,8 @@ import { TENANT_COOKIE } from "@destaworks/domain/constants";
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { AuthUser } from "@destaworks/auth/guards";
 import { CurrentTenant } from "../../common/decorators/current-tenant.decorator";
-import { CurrentUser } from "../../common/decorators/current-user.decorator";
+import { CurrentIdentity } from "../../common/decorators/current-identity.decorator";
+import { IdentityAuthGuard } from "../../common/guards/identity-auth.guard";
 import { SessionAuthGuard } from "../../common/guards/session-auth.guard";
 import { TenantGuard } from "../../common/guards/tenant.guard";
 import { ZodValidationPipe, type ContractOutput } from "../../common/pipes/zod-validation.pipe";
@@ -40,7 +41,8 @@ const TENANT_COOKIE_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
  *
  * ── Why the guards differ per route ────────────────────────────────────────────────────────────
  *
- * The first three routes carry `SessionAuthGuard` ALONE, on purpose. Listing your workspaces,
+ * The first three routes carry `IdentityAuthGuard` — identity, no tenant — on purpose. Listing
+ * your workspaces,
  * switching between them, and accepting an invitation are all things you do when you are not yet
  * in a tenant — a `TenantGuard` on them would refuse exactly the person who needs them, and would
  * make a fresh invitee unable to accept the invitation that would give them access.
@@ -64,8 +66,8 @@ export class TenantsController {
 
   /** GET /tenants — the workspaces this user may switch into, plus open invitations. */
   @Get()
-  @UseGuards(SessionAuthGuard)
-  async list(@CurrentUser() user: AuthUser): Promise<GetTenantsResponse> {
+  @UseGuards(IdentityAuthGuard)
+  async list(@CurrentIdentity() user: AuthUser): Promise<GetTenantsResponse> {
     return this.memberships.listForUser(user);
   }
 
@@ -77,11 +79,11 @@ export class TenantsController {
    * a workspace it has no active membership in gets a 403 and no `Set-Cookie` at all.
    */
   @Post("switch")
-  @UseGuards(SessionAuthGuard)
+  @UseGuards(IdentityAuthGuard)
   async switch(
     @Body(new ZodValidationPipe(switchTenantSchema))
     body: ContractOutput<typeof switchTenantSchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentIdentity() user: AuthUser,
     @Res({ passthrough: true }) response: CookieResponseLike,
   ): Promise<PostTenantSwitchResponse> {
     const result = await this.memberships.switchTenant(user, body);
@@ -97,11 +99,11 @@ export class TenantsController {
 
   /** POST /tenants/members/accept — accept your own invitation. Declared before `members`. */
   @Post("members/accept")
-  @UseGuards(SessionAuthGuard)
+  @UseGuards(IdentityAuthGuard)
   async accept(
     @Body(new ZodValidationPipe(acceptInvitationSchema))
     body: ContractOutput<typeof acceptInvitationSchema>,
-    @CurrentUser() user: AuthUser,
+    @CurrentIdentity() user: AuthUser,
   ): Promise<PostTenantMemberAcceptResponse> {
     return this.memberships.acceptInvitation(user, body);
   }

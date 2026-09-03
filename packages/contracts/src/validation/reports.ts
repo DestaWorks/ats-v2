@@ -33,7 +33,12 @@ export function reportFiltersFromParams(params: URLSearchParams): ReportFilters 
 
 // --- DTOs ------------------------------------------------------------------
 
-export interface ExecutiveSummaryDTO {
+/** Every report derives from one `REPORT_ROW_CAP`-bounded read; each reports whether it hit it. */
+export interface TruncatableReport {
+  capped: boolean;
+}
+
+export interface ExecutiveSummaryDTO extends TruncatableReport {
   total: number;
   placed: number;
   inReview: number;
@@ -51,7 +56,7 @@ export interface PipelineFunnelStageDTO {
   /** % of the previous stage's `reachedCount` — null for the first stage. */
   conversionPct: number | null;
 }
-export interface PipelineFunnelDTO {
+export interface PipelineFunnelDTO extends TruncatableReport {
   stages: PipelineFunnelStageDTO[];
 }
 
@@ -83,7 +88,7 @@ export interface JourneyRowDTO {
   clientName: string | null;
   segments: JourneySegmentDTO[];
 }
-export interface MassJourneyDTO {
+export interface MassJourneyDTO extends TruncatableReport {
   windowStart: string; // ISO date
   windowEnd: string; // ISO date
   totalCandidates: number;
@@ -104,7 +109,7 @@ export interface TeamPerformanceRowDTO {
   avgDaysInStage: number | null;
   conversionPct: number | null;
 }
-export interface TeamPerformanceDTO {
+export interface TeamPerformanceDTO extends TruncatableReport {
   rows: TeamPerformanceRowDTO[];
 }
 
@@ -116,7 +121,7 @@ export interface SourceRoiRowDTO {
   placed: number;
   conversionPct: number | null;
 }
-export interface SourceRoiDTO {
+export interface SourceRoiDTO extends TruncatableReport {
   rows: SourceRoiRowDTO[];
 }
 
@@ -156,7 +161,7 @@ export interface ClientCapacityDTO {
   clients: ClientCapacityCardDTO[];
 }
 
-export interface TimeAnalysisDTO {
+export interface TimeAnalysisDTO extends TruncatableReport {
   timeInStage: {
     status: CandidateStatus;
     label: string;
@@ -167,7 +172,7 @@ export interface TimeAnalysisDTO {
   timeToFill: { avgDays: number | null; medianDays: number | null; count: number };
 }
 
-export interface ComplianceDTO {
+export interface ComplianceDTO extends TruncatableReport {
   byLicenseStatus: { licenseStatus: string; count: number }[];
   requiringAction: {
     id: string;

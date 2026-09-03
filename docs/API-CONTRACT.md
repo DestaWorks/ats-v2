@@ -1,14 +1,26 @@
 # API Contract — Apps Script Operations (de-facto)
 
-The legacy backend is a single Google Apps Script endpoint. The client multiplexes ~90
+> ## This is the LEGACY contract. It is not the current API.
+>
+> The system's API today is **NestJS in `apps/api`** — 200 route handlers across 49 controllers,
+> contract-first with zod schemas in `@destaworks/contracts`, which are the real definition of
+> every request and response shape. Nothing below describes an endpoint you can call.
+>
+> Keep this file for one job: answering "what did the old backend do for this operation?" when
+> checking parity. The replacement it calls for has been built.
+>
+> **Neither source file is in this repo.** `legacy/Code.gs` and `legacy/index.html` are both
+> gitignored and local-only, so a fresh clone cannot follow any reference below to either one.
+
+The legacy backend was a single Google Apps Script endpoint. The client multiplexed ~90
 operations by POSTing `{ event: "<name>", ...payload }` — that's **74 distinct `event:` strings
 plus the sub-actions multiplexed through `ats_log`** (`daily_log`, `journal_entry`,
-`assign_role`, `crm_*`, etc.). This is the **de-facto API contract** and the checklist of
-behavior the new typed API must replace.
+`assign_role`, `crm_*`, etc.). "~90" counts those sub-actions; "74" counts only the distinct
+`event:` strings, so the two numbers describe the same surface at different granularity.
 
-> ⚠️ The Apps Script source is **not in this repo**. Request/response shapes below are
-> inferred from client call sites in `index.html`. Confirm each against `Code.gs` before
-> relying on it. Writes using `mode:"no-cors"` are fire-and-forget (client cannot read the
+> ⚠️ Request/response shapes below were **inferred from client call sites** in `index.html`
+> before the Apps Script source was obtained. `Code.gs` is authoritative where the two disagree.
+> Writes using `mode:"no-cors"` are fire-and-forget (client cannot read the
 > response); reads use `text/plain` POST and parse JSON.
 
 ## Transport notes

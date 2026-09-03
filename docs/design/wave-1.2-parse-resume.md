@@ -1,4 +1,4 @@
-# Wave 1.2 — Parse Résumé (Module 8) Design
+# Wave 1.2 — Parse Resume (Module 8) Design
 
 **Status:** design (architect). Backend implements the Prisma model + migration + service/route/tests
 from this spec. Design only — no implementation, no migration in this doc. Conforms to `DECISIONS.md`
@@ -7,9 +7,9 @@ from this spec. Design only — no implementation, no migration in this doc. Con
 (`candidate.service.ts` / `candidate.dto.ts` / `candidate.repository.ts`), `src/lib/constants/*`, and
 the shared HTTP / auth / audit infra (`api-handler.ts`, `guards.ts`, `audit.ts`).
 
-**Feature:** upload a résumé PDF → client-side pdf.js text extraction → Claude structured extraction →
+**Feature:** upload a resume PDF → client-side pdf.js text extraction → Claude structured extraction →
 inline-editable review UI (3 role layouts) → save to a Candidate, with a **confidence-gated
-résumé→profile match** that NEVER silently attaches to an existing candidate below threshold. Brings the
+resume→profile match** that NEVER silently attaches to an existing candidate below threshold. Brings the
 `documents` table deferred from Wave 1.1 (D-2).
 
 We replace legacy **Gemini** (`handleExtractResume_`, Code.gs ~2076 + prompt/schema ~3125–3260) with
@@ -59,7 +59,7 @@ model Document {
 
   // captured extraction (SENSITIVE — see §3)
   extractedText    String?                      // pdf.js text the endpoint consumed
-  extractedData    Json?                        // full structured résumé (snapshot, licensure, NPI/DEA, bullets…)
+  extractedData    Json?                        // full structured resume (snapshot, licensure, NPI/DEA, bullets…)
 
   // lifecycle
   uploadedById     String?                      // actor id string (mirrors D-9)
@@ -75,8 +75,8 @@ model Document {
 }
 ```
 
-- **`onDelete: Cascade`** (candidate → documents): a résumé is pure candidate PII/PHI. When a candidate is
-  **hard-purged** (Wave 2.5), their documents must go with them — no orphaned résumé PII. (Contrast Wave 1.1
+- **`onDelete: Cascade`** (candidate → documents): a resume is pure candidate PII/PHI. When a candidate is
+  **hard-purged** (Wave 2.5), their documents must go with them — no orphaned resume PII. (Contrast Wave 1.1
   `Candidate.client` = `SetNull`; clients aren't PII, candidates own their docs.) Soft-delete of a candidate
   leaves documents in place (they're filtered via the same default-exclude extension when listed through the
   candidate).
@@ -95,14 +95,14 @@ Why not upload to a Supabase Storage bucket in 1.2:
 1. **pdf.js already gives us everything 1.2 needs** — the extracted text (for Claude) and the structured
    profile JSON (for the 3 render layouts and the saved Candidate). The raw bytes are not required to
    complete the §1.2 done-when.
-2. **Raw résumés are the heaviest PII/PHI surface in the app** (names, emails, phones, license numbers, NPI,
+2. **Raw resumes are the heaviest PII/PHI surface in the app** (names, emails, phones, license numbers, NPI,
    DEA, employment history). Persisting bytes at rest opens a hardening scope — private-bucket setup,
    server-signed URL access (Better Auth means **no Supabase RLS**, per DECISIONS — access control is
    app-layer only), at-rest encryption, retention/purge on candidate delete. That belongs in the dedicated
    documents/file wave (Wave 6), not bolted onto 1.2.
 3. **Forward-compatible, no future migration:** `storageKey` is nullable now; Wave 6 backfills the bucket
    path without a schema change. `legacyUrl` preserves the legacy Google Drive pointer carried by the ETL
-   (1.3/1.4) so no historical résumé link is lost at cutover.
+   (1.3/1.4) so no historical resume link is lost at cutover.
 
 Trade-off (accepted, vetoable — OQ-1): until Wave 6, the app has the extracted text/JSON but not a
 re-downloadable original PDF for docs created via the new flow. Legacy docs keep their Drive URL. If the
@@ -139,14 +139,14 @@ Lives under `src/server/ai/` (all LLM calls server-side, server-held key — STA
 ```ts
 export interface ParseResumeInput {
   variant: ResumeVariant;   // "clinical" | "prescriber" | "operations"  (the role picker)
-  text: string;             // pdf.js-extracted résumé text (client-side)
-  // vision fallback (OQ-3): optional base64 PDF for scanned/low-text résumés
+  text: string;             // pdf.js-extracted resume text (client-side)
+  // vision fallback (OQ-3): optional base64 PDF for scanned/low-text resumes
   pdfBase64?: string;
 }
 ```
 
 `ResumeVariant` is a new const `RESUME_VARIANTS = ["clinical","prescriber","operations"] as const` in
-`lib/constants`. **Distinct from the app `Role` enum** (Owner/Director/…): this is the résumé layout/track
+`lib/constants`. **Distinct from the app `Role` enum** (Owner/Director/…): this is the resume layout/track
 selector. `variant` maps to Candidate `track`: clinical→`Clinical`, prescriber→`Prescriber`,
 operations→`Operations`.
 
@@ -240,7 +240,7 @@ const data = resp.parsed_output;           // null-guard → AppError("EXTRACTIO
 ```
 
 - **Model (S-3):** `claude-opus-4-8`, pinned in a `config` module (STACK: "pin the model id in config, not
-  scattered in code"). Volume is recruiter-scale (one résumé at a time), and errors on license #/NPI/DEA are
+  scattered in code"). Volume is recruiter-scale (one resume at a time), and errors on license #/NPI/DEA are
   wrong-person-PII risks, so accuracy > cost. `RESUME_MODEL` is a single swap point to drop to
   `claude-sonnet-4-6` if volume/cost ever dominates.
 - **Adaptive thinking**, `effort: "medium"` — extraction isn't deeply reasoning-heavy, but medical accuracy
@@ -301,7 +301,7 @@ Candidate). `create` still forces `NEW_CANDIDATE` (service ignores any status) �
 
 ---
 
-## 5. Résumé → profile matching (confidence threshold + manual confirm)
+## 5. Resume → profile matching (confidence threshold + manual confirm)
 
 Pure helper `matchResumeToCandidate(extracted, candidateList): ResumeMatch` (unit-tested, §7). Enforces the
 **no-silent-wrong-person-merge** invariant from DECISIONS / DATA-MODEL.
@@ -341,12 +341,12 @@ authZ posture as `candidateService`; no special capability). zod-validate the bo
 ### 6.1 `POST /api/resume/extract`
 - Body: `{ variant: ResumeVariant, text: string, pdfBase64?: string }` (zod). `text` min length guard
   (legacy required >50 chars); empty → `AppError("BAD_REQUEST")`.
-- **Key-absent (S-6):** `if (!resumeExtractionEnabled) throw new AppError("FEATURE_DISABLED", "Résumé
+- **Key-absent (S-6):** `if (!resumeExtractionEnabled) throw new AppError("FEATURE_DISABLED", "Resume
   extraction is not configured", 503)`. `resumeExtractionEnabled = Boolean(process.env.ANTHROPIC_API_KEY)`,
   exported from the AI config module — mirrors `googleEnabled`. The route/page always exist; only the live
   call is gated. The client can read the flag (via a server-passed prop, like `SignInForm googleEnabled`) to
   disable the extract button + show a configuration hint.
-- Success: `json({ variant, data })` (the zod-validated structured résumé + the computed
+- Success: `json({ variant, data })` (the zod-validated structured resume + the computed
   `match: ResumeMatch` against the current candidate list, so the UI can render the confirm step). Returns the
   extraction to the client for the review UI; **no** Candidate is written yet.
 
@@ -380,7 +380,7 @@ Route error envelope, status mapping, and no-PII-leak all come free from `apiHan
   flow (~3192). POST the text (+ `variant`) to `/api/resume/extract`. (Keep the base64 around only if the
   vision fallback OQ-3 is enabled.) This keeps heavy PDF parsing off the server and matches §1.2.
 - **Inline-editable review form.** Port the `contentEditable` review (legacy `Ed`/`EdList`/`updateP`) to
-  **react-hook-form + zod** (`useZodForm`) over the same résumé schema — a controlled form instead of
+  **react-hook-form + zod** (`useZodForm`) over the same resume schema — a controlled form instead of
   `contentEditable` (fixes the legacy "blur-clobbers-unsaved-edits" gotcha and the deep-clone-on-every-blur
   cost). Reuse `Field` for labeled controls; arrays (experience bullets, licensure rows, DEA, systems) render
   as editable lists. Note: legacy had **no add/remove-row UI** — recommend adding minimal add/remove for
@@ -426,7 +426,7 @@ Route error envelope, status mapping, and no-PII-leak all come free from `apiHan
 ## 9. Open questions / assumptions (vetoable)
 
 - **OQ-1 (storage):** Assume physical PDF bytes deferred to Wave 6 (S-2). **Veto** if the Owner requires
-  re-downloadable original résumés now → provision a private Supabase bucket + server-signed URLs in 1.2
+  re-downloadable original resumes now → provision a private Supabase bucket + server-signed URLs in 1.2
   (schema is already ready via `storageKey`).
 - **OQ-2 (attach semantics):** On an `auto`/confirmed match, does save **overwrite** the existing candidate's
   fields with the freshly extracted ones, or only attach the document and leave candidate data as-is?
@@ -434,7 +434,7 @@ Route error envelope, status mapping, and no-PII-leak all come free from `apiHan
   human-edited data), consistent with the "keep-newest + flag, no silent overwrite" merge policy. Confirm.
 - **OQ-3 (vision fallback):** Assume **text-mode is the shipped contract** (§1.2 done-when). Legacy *preferred*
   vision because Gemini read PDFs better than pdf.js text. Claude reads PDFs well too. Recommend shipping
-  text-mode 1.2 and adding the `document`-block vision path as a fast-follow for scanned/low-text résumés
+  text-mode 1.2 and adding the `document`-block vision path as a fast-follow for scanned/low-text resumes
   (schema/route already accept `pdfBase64`). Confirm whether vision is in-scope for 1.2 or deferred.
 - **OQ-4 (array editing):** Legacy had no add/remove-row UI; assumption is to add minimal add/remove for the
   editable arrays. Confirm it's in scope (small) vs strict 1:1 port.

@@ -14,8 +14,9 @@
  *   2. A tenant-scoped table is missing `ENABLE`, `FORCE` or the `tenant_isolation` policy in the
  *      RLS migration.
  *   3. A GLOBAL model has acquired a `tenantId`, or a tenant-scoped one has lost it.
- *   4. The number of un-scoped object-storage keys has grown. Same ratchet as `dbUnscoped`: the
- *      two remaining sites are known and shrinking, and a third must be a deliberate act.
+ *   4. An object-storage key is built without an owner in it. The budget is now zero: the escape
+ *      hatch itself is gone, and so are the two ways back to it — re-adding `unscopedStorageKey`,
+ *      or asserting the brand onto a bare string outside the module that owns it.
  */
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
@@ -26,8 +27,12 @@ const MIGRATIONS_DIR = "packages/db/prisma/migrations";
 const RLS_MIGRATION = "20260830120000_enable_tenant_row_level_security";
 const PENDING_EXPAND = "packages/db/isolation/pending-6.1-expand.sql";
 
-/** Un-scoped storage keys still permitted, and the sites that hold them. Only ever goes down. */
-const UNSCOPED_STORAGE_KEY_BUDGET = 2;
+/** Un-scoped storage keys still permitted. Zero, and there is no way back up. */
+const UNSCOPED_STORAGE_KEY_BUDGET = 0;
+
+/** The one module allowed to mint a branded key, since it is where the rule the brand stands for
+ *  is actually enforced. */
+const STORAGE_MODULE = "packages/integrations/src/storage.ts";
 
 /**
  * The one model that names a tenant and is still global, with the reason.
@@ -213,10 +218,25 @@ function sourceFiles(dir, out = []) {
 }
 
 let unscopedKeys = 0;
+const brandAssertions = [];
 for (const file of [...sourceFiles("packages"), ...sourceFiles("apps")]) {
-  if (file.endsWith("storage.ts") || file.includes(".test.")) continue;
-  const uses = readFileSync(file, "utf8").match(/unscopedStorageKey\(/g);
+  if (file.includes(".test.")) continue;
+  const source = readFileSync(file, "utf8");
+  if (file.replaceAll("\\", "/") === STORAGE_MODULE) {
+    if (/\bunscopedStorageKey\b/.test(source)) {
+      fail(
+        "storage-keys-carry-their-owner",
+        `${STORAGE_MODULE} still defines an un-scoped key constructor. Every write site names an ` +
+          `owner now, so the hatch is a way back to keys that do not — it stays deleted.`,
+      );
+    }
+    continue;
+  }
+  const uses = source.match(/unscopedStorageKey\(/g);
   if (uses) unscopedKeys += uses.length;
+  // The brand is a compile-time marker, so an assertion outside the module that validates the key
+  // buys back exactly what deleting the hatch removed.
+  if (/\bas\s+(?:Scoped|Persisted)StorageKey\b/.test(source)) brandAssertions.push(file);
 }
 if (unscopedKeys > UNSCOPED_STORAGE_KEY_BUDGET) {
   fail(
@@ -224,6 +244,13 @@ if (unscopedKeys > UNSCOPED_STORAGE_KEY_BUDGET) {
     `${unscopedKeys} object-storage keys are built without an owner (budget ${UNSCOPED_STORAGE_KEY_BUDGET}). ` +
       `A key with no tenant in it is a leak waiting for an id collision — use tenantStorageKey or ` +
       `userStorageKey.`,
+  );
+}
+for (const file of brandAssertions) {
+  fail(
+    "storage-keys-carry-their-owner",
+    `${file} asserts a storage-key brand onto a string. Only ${STORAGE_MODULE} may, because only ` +
+      `there has the key been checked — use tenantStorageKey, userStorageKey or persistedStorageKey.`,
   );
 }
 
@@ -238,5 +265,6 @@ if (failures.length > 0) {
 console.log(
   `RLS coverage: OK — ${schemaScoped.size} tenant-scoped tables enabled, forced and policied; ` +
     `${globalListed.size} global models carry no tenant; ` +
-    `${unscopedKeys}/${UNSCOPED_STORAGE_KEY_BUDGET} un-scoped storage keys remain.`,
+    `${unscopedKeys}/${UNSCOPED_STORAGE_KEY_BUDGET} un-scoped storage keys remain, and the ` +
+    `brand is asserted nowhere outside ${STORAGE_MODULE}.`,
 );

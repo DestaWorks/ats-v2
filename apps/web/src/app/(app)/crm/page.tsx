@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { hasCapability } from "@destaworks/domain/constants";
-import { getVerifiedUser } from "@destaworks/auth/guards";
+import { requirePageUser } from "@/lib/page-user";
 import type { GetCrmClientsResponse } from "@destaworks/contracts/http/crm";
 import { apiGet } from "@/lib/api/server";
 import { ErrorState } from "@destaworks/ui/error-state";
@@ -14,7 +14,7 @@ import { AddClientButton } from "./add-client-modal";
  * capability, so this is a friendly no-access screen + the real gate, matching `migration/page.tsx`.
  */
 export default async function CrmPage() {
-  const user = await getVerifiedUser();
+  const user = await requirePageUser();
 
   if (!hasCapability(user.role, "viewCrm")) {
     return (

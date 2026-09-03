@@ -50,8 +50,8 @@ export class AdminUsersController {
 
   @Get()
   @RequireCapability("manageUsers")
-  async list(): Promise<AdminUserListDTO> {
-    return await this.users.list();
+  async list(@CurrentUser() actor: AuthContext): Promise<AdminUserListDTO> {
+    return await this.users.list(actor);
   }
 
   /** 201: this creates an account, and returns its one-time password exactly once. */

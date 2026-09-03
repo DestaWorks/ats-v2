@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { hasCapability } from "@destaworks/domain/constants";
-import { getVerifiedUser } from "@destaworks/auth/guards";
+import { requirePageUser } from "@/lib/page-user";
 import type { CredentialsOverviewDTO } from "@destaworks/contracts/validation/credentials";
 import { apiGet } from "@/lib/api/server";
 import { ErrorState } from "@destaworks/ui/error-state";
@@ -20,7 +20,7 @@ import { NlcTracker } from "./nlc-tracker";
  * page summarizes (via the stat cards) and links out instead of duplicating that UI.
  */
 export default async function CredentialsPage() {
-  const user = await getVerifiedUser();
+  const user = await requirePageUser();
 
   if (!hasCapability(user.role, "viewCredentials")) {
     return (

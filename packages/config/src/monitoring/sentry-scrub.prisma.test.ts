@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { scrubEvent } from "@/lib/monitoring/sentry-scrub";
-import type { ErrorEvent } from "@sentry/nextjs";
+import { scrubEvent, type ErrorEvent } from "./sentry-scrub";
 
 describe("scrubEvent — Prisma messages", () => {
   it("redacts a Prisma error message, which embeds field values", () => {

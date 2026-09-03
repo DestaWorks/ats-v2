@@ -17,11 +17,13 @@ function escapeCell(value: string | number | null): string {
   return /[",\n\r]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
 }
 
-/** Build a CSV string (CRLF line endings, per RFC4180) from rows + a column definition list. */
-export function toCsv<T>(rows: T[], columns: CsvColumn<T>[]): string {
+/** Build a CSV string (CRLF line endings, per RFC4180) from rows + a column definition list.
+ *  `note` appends one trailing row, so a truncation warning travels inside the file. */
+export function toCsv<T>(rows: T[], columns: CsvColumn<T>[], note?: string): string {
   const lines = [columns.map((c) => escapeCell(c.header)).join(",")];
   for (const row of rows) {
     lines.push(columns.map((c) => escapeCell(c.value(row))).join(","));
   }
+  if (note !== undefined) lines.push(escapeCell(note));
   return lines.join("\r\n");
 }

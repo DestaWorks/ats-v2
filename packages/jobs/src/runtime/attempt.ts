@@ -1,4 +1,5 @@
 import { logger } from "@destaworks/config/logger";
+import { runWithRequestCache } from "@destaworks/config/request-cache";
 import { AppError } from "@destaworks/integrations/http/app-error";
 import type { RegisteredJob } from "../registry";
 import { failureCode, failureOutput, isPermanentFailure } from "./failure";
@@ -39,7 +40,13 @@ export interface AttemptInput {
  * raced against that signal so a handler that ignores it still frees the worker slot. Only the
  * first is cooperative; only the second is a guarantee.
  */
-export async function runAttempt(job: RegisteredJob, input: AttemptInput): Promise<AttemptOutcome> {
+export function runAttempt(job: RegisteredJob, input: AttemptInput): Promise<AttemptOutcome> {
+  // One cache scope per ATTEMPT, not per process: a job is the worker's equivalent of a request,
+  // and a cache outliving it would serve one tenant's rows to the next job off the queue.
+  return runWithRequestCache(() => attempt(job, input));
+}
+
+async function attempt(job: RegisteredJob, input: AttemptInput): Promise<AttemptOutcome> {
   const log = logger.child({ job: job.name, jobId: input.jobId, attempt: input.attempt });
   const startedAt = Date.now();
 

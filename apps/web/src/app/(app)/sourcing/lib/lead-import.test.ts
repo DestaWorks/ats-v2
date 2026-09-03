@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { utils as xlsxUtils, write as writeWorkbook } from "xlsx";
+import { utils as xlsxUtils, write as writeWorkbook } from "@e965/xlsx";
 import { mapCsvToLeadRows, normalizeImportStatus, parseCsv, parseXlsx } from "./lead-import";
 
 describe("parseCsv", () => {

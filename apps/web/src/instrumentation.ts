@@ -1,5 +1,5 @@
 import * as Sentry from "@sentry/nextjs";
-import { scrubBreadcrumb, scrubEvent } from "@/lib/monitoring/sentry-scrub";
+import { scrubBreadcrumb, scrubEvent } from "@destaworks/config/monitoring/sentry-scrub";
 
 /**
  * Server + edge error tracking (Sentry) — activate-by-key, same dormant-until-configured posture

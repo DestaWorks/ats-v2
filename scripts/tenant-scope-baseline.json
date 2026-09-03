@@ -2,7 +2,6 @@
   "unscopedUses": {
     "packages/application/src/admin-user.service.test.ts": 1,
     "packages/application/src/client-portal.service.test.ts": 1,
-    "packages/application/src/client-portal.service.ts": 2,
     "packages/application/src/membership.service.test.ts": 1,
     "packages/application/src/platform-admin.service.test.ts": 1,
     "packages/db/isolation/seam.test.ts": 2,

@@ -20,7 +20,7 @@ import type { TenantContext } from "@destaworks/domain/tenant";
 import type { PortalContext } from "@destaworks/auth/portal-guards";
 import { hashPortalToken } from "@destaworks/auth/portal-guards";
 import { writeAudit } from "@destaworks/db/audit";
-import { withTenantTransaction, withTransaction } from "@destaworks/db/with-transaction";
+import { withTenantTransaction } from "@destaworks/db/with-transaction";
 import { clientContactRepository } from "@destaworks/db/repositories/client-contact.repository";
 import { clientPortalTokenRepository } from "@destaworks/db/repositories/client-portal-token.repository";
 import { clientRepository } from "@destaworks/db/repositories/client.repository";
@@ -215,10 +215,10 @@ export const clientPortalService = {
       const row = await openRoleRepository.create(
         scope,
         {
+          ...defined(input),
           clientId: ctx.clientId,
           postedByContactId: ctx.contactId,
           status: "Open",
-          ...defined(input),
         },
         tx,
       );
@@ -235,7 +235,9 @@ export const clientPortalService = {
   },
 
   async logView(ctx: PortalContext, page: string): Promise<void> {
-    await withTransaction((tx) =>
+    // `withTenantTransaction`: the unscoped one announces no tenant, so the audit write is rejected.
+    const scope = portalScopeFor(ctx.tenantId, ctx.contactId);
+    await withTenantTransaction(scope, (tx) =>
       writeAudit(tx, {
         entity: "portal_view",
         entityId: ctx.contactId,

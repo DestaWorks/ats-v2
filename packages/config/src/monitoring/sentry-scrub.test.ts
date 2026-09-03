@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { scrubEvent, scrubBreadcrumb } from "./sentry-scrub";
-import type { Breadcrumb, ErrorEvent } from "@sentry/nextjs";
+import { scrubEvent, scrubBreadcrumb, type Breadcrumb, type ErrorEvent } from "./sentry-scrub";
 
 describe("scrubEvent", () => {
   it("strips the request body, query string, and cookies entirely", () => {

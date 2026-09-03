@@ -6,7 +6,7 @@ import {
   type AuditEntity,
 } from "@destaworks/domain/constants";
 import { EmptyState } from "@destaworks/ui/empty-state";
-import { getVerifiedUser } from "@destaworks/auth/guards";
+import { requirePageUser } from "@/lib/page-user";
 import type {
   ActivityListDTO,
   ActivityActorOptionsDTO,
@@ -31,7 +31,7 @@ export default async function ActivityPage({
 }: {
   searchParams: Promise<RawSearchParams>;
 }) {
-  const user = await getVerifiedUser();
+  const user = await requirePageUser();
 
   if (!hasCapability(user.role, "viewAudit")) {
     return (

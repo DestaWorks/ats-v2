@@ -1,5 +1,29 @@
 # New App Security Audit (Wave 0.9 companion — `src/` scope)
 
+> ## Point-in-time audit of a tree that no longer exists — re-audit before relying on it
+>
+> Dated **2026-07-17**, against the single-app `src/` layout. Everything it inspected has since
+> moved or been deleted, so **every `src/...` path and line number below is dead** and the
+> cross-doc line references (`README.md:206`, `docs/DECISIONS.md:96-98`) now point at unrelated
+> text. What changed structurally:
+>
+> - **"every one of 60 API routes"** describes App Router handlers that **Phase 4.3 deleted**.
+>   The API is now 200 route handlers across 49 NestJS controllers in `apps/api`; exactly two
+>   App Router handlers remain repo-wide. The auth posture over that new surface is checked by
+>   `pnpm auth:check` in CI, not by this document.
+> - **H6 assumes a serverless deployment.** `apps/api` is a long-lived container plus a worker,
+>   so the reasoning about per-instance state does not carry over unexamined.
+> - **M2's remediation targets `next.config.ts` headers** for API responses. The API is not
+>   Next.js any more.
+> - **"No admin panel (deferred to Wave 5)"** (§L4) is out of date — `apps/admin` shipped in
+>   Phase 8, and the `/platform/*` plane it talks to is gated by `PLATFORM_ADMIN_USER_IDS`.
+> - **Multi-tenancy did not exist when this was written.** Phase 6 added `Tenant`/`Membership`,
+>   a tenant-scoping seam, and Postgres RLS — an entire boundary this audit never looked at.
+> - **§L3's "Next.js 15.5.19, one major behind"** is a dependency snapshot; check `package.json`.
+>
+> The **findings themselves are not all closed** — treat each as open until re-verified against
+> the current tree, not as fixed because the file moved. Kept unedited below for that reason.
+
 **Date:** 2026-07-17 · **Auditor:** Claude (AI-assisted, 5 parallel research passes) · **Source:**
 the live Next.js/Prisma/Better-Auth app (`src/`), current production Vercel deployment + env
 config. Companion to `docs/SECURITY-AUDIT-LEGACY.md` (the Apps Script backend audit) — this
@@ -47,7 +71,7 @@ only partially do.
 
 ### H2 — The encryption subsystem covers only 2 of ~9+ sensitive columns; email/phone/NPI/notes were never in scope, contradicting the docs
 - Only `Candidate.licenseNumber` and `Document.extractedText`/`extractedData` are ever passed through `encryptField`. `Candidate.email`, `phone`, `name`, `CandidateNote.body` (freeform — could contain PHI-adjacent commentary), and the entire `SourceLead` table (`npi`, `email`, `phone`, `notes`) have **no encryption code path at all** — not "key is off," but literally never wired.
-- `README.md:206` and `docs/DECISIONS.md:96-98` state PII columns including **NPI and contact fields** are "encrypted at rest" — this is not true in the current implementation; only license number and résumé-extraction output are covered.
+- `README.md:206` and `docs/DECISIONS.md:96-98` state PII columns including **NPI and contact fields** are "encrypted at rest" — this is not true in the current implementation; only license number and resume-extraction output are covered.
 - **Separately confirmed:** `FIELD_ENCRYPTION_KEY` is not currently set in the production Vercel environment at all, so even the two fields that ARE wired are being stored as plaintext right now.
 - **No backfill/rotation story exists** — the design is "encrypt on next write" (`field-crypto.ts:14-15`); if the key is added today, every already-plaintext row (likely most of the historical dataset) stays plaintext indefinitely unless a candidate/document record happens to be edited again. No backfill script exists under `scripts/`.
 
@@ -92,14 +116,14 @@ Better Auth's own 8-char minimum only applies to the `/sign-up/email` route, whi
 No `headers()` in `next.config.ts`, no `middleware.ts`, no `vercel.json`. Missing: CSP, `X-Frame-Options` (sign-in page is iframe-able — clickjacking risk), `X-Content-Type-Options`, `Permissions-Policy`, explicit `Referrer-Policy`. This isn't a documented tradeoff — no mention in CLAUDE.md/DECISIONS.md — it looks like an oversight. (HSTS is present via Vercel's platform default, so that one's covered.)
 - **Fix applied:** `next.config.ts` now sets `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, a restrictive `Permissions-Policy`, and a same-origin `Content-Security-Policy` (`default-src 'self'`, `frame-ancestors 'none'`, etc.) on every route. CSP intentionally keeps `script-src`/`style-src 'unsafe-inline'` (no nonce infrastructure exists yet) — the app has zero `dangerouslySetInnerHTML`/external scripts, so the value here is blocking all non-self origins, not hardening an XSS vector that doesn't exist. Verified via `next build` (succeeds) + a local dev-server `curl` showing all headers present on `/sign-in`; **not verified in a real browser this session** — recommend a quick visual smoke pass on the next preview deploy before this reaches production, in case any current UI relies on something the CSP unexpectedly blocks.
 
-### M3 — AI prompt-injection surface in résumé/JD/inbound extraction (narrow, contained)
-`src/server/ai/parse-resume.ts:86` and siblings concatenate raw user-supplied text directly into the model prompt with only a plain-text header as a "boundary" (not a real one). A malicious résumé could inject instructions that influence AI-generated free-text fields (`snapshot`, `bullets`). **Contained**: the structured-output schema has no boolean/score field an injection could flip, and a human always reviews before `/api/resume/save` persists anything — so the blast radius is "misleading text a recruiter might read," not an autonomous wrong decision.
+### M3 — AI prompt-injection surface in resume/JD/inbound extraction (narrow, contained)
+`src/server/ai/parse-resume.ts:86` and siblings concatenate raw user-supplied text directly into the model prompt with only a plain-text header as a "boundary" (not a real one). A malicious resume could inject instructions that influence AI-generated free-text fields (`snapshot`, `bullets`). **Contained**: the structured-output schema has no boolean/score field an injection could flip, and a human always reviews before `/api/resume/save` persists anything — so the blast radius is "misleading text a recruiter might read," not an autonomous wrong decision.
 
 ### M4 — `POST /api/leads/import` is ungated where its sibling bulk-import routes require leadership
 `/api/migration/prepare` and `/api/migration/commit` both require `requireCapability("bulkImport")`; `/api/leads/import` (same class of operation — bulk CSV import) only requires `requireUser()`. Worth confirming whether this is intentional (matches the "sourcing is open to any operator" design) or a gap.
 
 ### M5 — Some write-endpoint schemas skip `.strict()`, inconsistent with the rest of the codebase
-`moveInputSchema`/`bulkMoveInputSchema` (`src/lib/validation/pipeline.ts:148-158`), `importInputSchema` (`migration.ts:25-37`), and both résumé schemas (`resume.ts:120-165`) don't reject unknown keys the way candidate/lead schemas do. Low risk (nothing downstream reads unnamed fields) but worth normalizing for defense-in-depth consistency.
+`moveInputSchema`/`bulkMoveInputSchema` (`src/lib/validation/pipeline.ts:148-158`), `importInputSchema` (`migration.ts:25-37`), and both resume schemas (`resume.ts:120-165`) don't reject unknown keys the way candidate/lead schemas do. Low risk (nothing downstream reads unnamed fields) but worth normalizing for defense-in-depth consistency.
 
 ### M6 — `email`/`phone` carry no protection story at any layer — likely intentional, but undocumented as such
 `toCandidateDTO` gates only `licenseNumber`; email/phone/name flow to every signed-in user unconditionally, are never encrypted, and aren't called out anywhere as a deliberate scope decision (vs. `licenseNumber`, which clearly is one). Worth an explicit decision record either way.
@@ -118,7 +142,7 @@ Single static key, no versioning beyond the fixed `enc:v1:` prefix, no re-encryp
 - **L2 — Session cookie config is entirely implicit Better Auth defaults** (httpOnly/secure/sameSite/7-day expiry) — reasonable values, but undocumented in-repo; a future library upgrade changing defaults would silently change session behavior with nothing to catch it.
 - **L3 — Next.js is one major version behind** (15.5.19; 16.x is current). Prisma (7.8.0) and Better Auth (1.6.23) look current.
 - **L4 — Dead/unenforced capabilities** (`manageUsers`, `manageRoles`, `manageAccessRequests`, `configureClientPortal`, `viewAnalytics`, `viewCrm`) exist in the role model but are referenced by zero routes — expected, since the Admin module (Wave 5) hasn't shipped; just needs re-checking when it does.
-- **L5 — Legacy-imported résumé links point to raw external Google Drive URLs** with no proxying/re-authorization by this app — access control for those documents lives entirely in whatever sharing settings exist on the external files, outside this app's control.
+- **L5 — Legacy-imported resume links point to raw external Google Drive URLs** with no proxying/re-authorization by this app — access control for those documents lives entirely in whatever sharing settings exist on the external files, outside this app's control.
 - **L6 — ✅ FIXED (2026-07-18) — `X-Powered-By: Next.js` header still sent** (default not disabled in `next.config.ts`) — trivial fingerprinting signal, essentially free to turn off. `poweredByHeader: false` added alongside the M2 headers work.
 
 ### What's already working well (confirmed, not just assumed)

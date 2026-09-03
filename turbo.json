@@ -12,39 +12,6 @@
   ],
   "globalEnv": ["CI", "NODE_ENV"],
   "tasks": {
-    "topo": {
-      "dependsOn": ["^topo"]
-    },
-    "build": {
-      "dependsOn": ["^build"],
-      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
-    },
-    "lint": {
-      "dependsOn": ["^topo", "^build"]
-    },
-    "typecheck": {
-      "dependsOn": ["^topo", "^build"],
-      "outputs": ["dist/**", "*.tsbuildinfo"]
-    },
-    "test": {
-      "dependsOn": ["^topo", "^build"]
-    },
-    "//#app:build": {
-      "dependsOn": ["^build"],
-      "outputs": ["apps/web/.next/**", "!apps/web/.next/cache/**"],
-      "inputs": [
-        "apps/web/src/**",
-        "apps/web/public/**",
-        "apps/web/next.config.ts",
-        "apps/web/postcss.config.mjs",
-        "apps/web/tsconfig.json",
-        "packages/*/src/**",
-        "prisma.config.ts",
-        "tsconfig.json",
-        "package.json"
-      ],
-      "env": ["ANALYZE", "NEXT_PUBLIC_*", "SENTRY_*", "VERCEL_*"]
-    },
     "//#admin:build": {
       "dependsOn": ["^build"],
       "outputs": ["apps/admin/.next/**", "!apps/admin/.next/cache/**"],
@@ -73,6 +40,55 @@
       ],
       "outputs": ["apps/api/.tsbuildinfo"]
     },
+    "//#app:arch-check": {
+      "inputs": [
+        "apps/*/src/**",
+        "packages/*/src/**",
+        "apps/*/package.json",
+        "packages/*/package.json",
+        "package.json",
+        "pnpm-workspace.yaml",
+        "scripts/check-architecture.mjs",
+        "scripts/architecture-baseline.json"
+      ]
+    },
+    "//#app:auth-check": {
+      "inputs": [
+        "apps/api/src/modules/**",
+        "apps/api/src/common/guards/**",
+        "apps/web/src/app/api/**",
+        "scripts/check-auth-surface.mjs"
+      ]
+    },
+    "//#app:build": {
+      "dependsOn": ["^build"],
+      "outputs": ["apps/web/.next/**", "!apps/web/.next/cache/**"],
+      "inputs": [
+        "apps/web/src/**",
+        "apps/web/public/**",
+        "apps/web/next.config.ts",
+        "apps/web/postcss.config.mjs",
+        "apps/web/tsconfig.json",
+        "packages/*/src/**",
+        "prisma.config.ts",
+        "tsconfig.json",
+        "package.json"
+      ],
+      "env": ["ANALYZE", "NEXT_PUBLIC_*", "SENTRY_*", "VERCEL_*"]
+    },
+    "//#app:deps-check": {
+      "inputs": ["package.json", "pnpm-workspace.yaml", "scripts/check-dependency-drift.mjs"]
+    },
+    "//#app:license-check": {
+      "inputs": [
+        "package.json",
+        "apps/*/package.json",
+        "packages/*/package.json",
+        "pnpm-lock.yaml",
+        "pnpm-workspace.yaml",
+        "scripts/check-licenses.mjs"
+      ]
+    },
     "//#app:lint": {
       "dependsOn": ["^topo", "^build"],
       "inputs": [
@@ -84,10 +100,38 @@
         "package.json"
       ]
     },
-    "//#app:typecheck": {
-      "dependsOn": ["^topo", "^build"],
-      "inputs": ["apps/*/src/**", "packages/*/src/**", "scripts/**", "*.ts", "package.json"],
-      "outputs": ["*.tsbuildinfo"]
+    "//#app:raw-index-check": {
+      "inputs": ["packages/db/prisma/migrations/**", "scripts/check-raw-sql-indexes.mjs"]
+    },
+    "//#app:rls-check": {
+      "inputs": [
+        "packages/db/prisma/schema.prisma",
+        "packages/db/prisma/migrations/**",
+        "packages/db/src/tenant-models.ts",
+        "packages/*/src/**",
+        "apps/*/src/**",
+        "scripts/check-rls-coverage.mjs"
+      ]
+    },
+    "//#app:runtime-check": {
+      "inputs": [
+        "apps/api/externals.mjs",
+        "apps/api/runtime/package.json",
+        "apps/api/runtime-migrate/package.json",
+        "apps/*/package.json",
+        "packages/*/package.json",
+        "package.json",
+        "pnpm-lock.yaml",
+        "scripts/check-runtime-manifest.mjs"
+      ]
+    },
+    "//#app:tenant-check": {
+      "inputs": [
+        "apps/*/src/**",
+        "packages/*/src/**",
+        "scripts/check-tenant-scope.mjs",
+        "scripts/tenant-scope-baseline.json"
+      ]
     },
     "//#app:test": {
       "dependsOn": ["^topo", "^build"],
@@ -107,35 +151,6 @@
         "package.json"
       ]
     },
-    "//#app:test-logs": {
-      "dependsOn": ["^topo", "^build"],
-      "inputs": ["apps/*/src/**", "packages/*/src/**", "package.json"]
-    },
-    "//#app:deps-check": {
-      "inputs": ["package.json", "pnpm-workspace.yaml", "scripts/check-dependency-drift.mjs"]
-    },
-    "//#app:arch-check": {
-      "inputs": [
-        "apps/*/src/**",
-        "packages/*/src/**",
-        "apps/*/package.json",
-        "packages/*/package.json",
-        "package.json",
-        "pnpm-workspace.yaml",
-        "scripts/check-architecture.mjs",
-        "scripts/architecture-baseline.json"
-      ]
-    },
-    "//#app:rls-check": {
-      "inputs": [
-        "packages/db/prisma/schema.prisma",
-        "packages/db/prisma/migrations/**",
-        "packages/db/src/tenant-models.ts",
-        "packages/*/src/**",
-        "apps/*/src/**",
-        "scripts/check-rls-coverage.mjs"
-      ]
-    },
     "//#app:test-isolation": {
       "cache": false,
       "inputs": [
@@ -148,24 +163,35 @@
         "vitest.isolation.config.ts"
       ]
     },
-    "//#app:auth-check": {
-      "inputs": [
-        "apps/api/src/modules/**",
-        "apps/api/src/common/guards/**",
-        "apps/web/src/app/api/**",
-        "scripts/check-auth-surface.mjs"
-      ]
+    "//#app:test-e2e": {
+      "cache": false,
+      "inputs": ["e2e/**", "apps/web/src/**", "apps/api/src/modules/**", "playwright.config.ts"]
     },
-    "//#app:raw-index-check": {
-      "inputs": ["packages/db/prisma/migrations/**", "scripts/check-raw-sql-indexes.mjs"]
+    "//#app:test-logs": {
+      "dependsOn": ["^topo", "^build"],
+      "inputs": ["apps/*/src/**", "packages/*/src/**", "package.json"]
     },
-    "//#app:tenant-check": {
-      "inputs": [
-        "apps/*/src/**",
-        "packages/*/src/**",
-        "scripts/check-tenant-scope.mjs",
-        "scripts/tenant-scope-baseline.json"
-      ]
+    "//#app:typecheck": {
+      "dependsOn": ["^topo", "^build"],
+      "inputs": ["apps/*/src/**", "packages/*/src/**", "scripts/**", "*.ts", "package.json"],
+      "outputs": ["*.tsbuildinfo"]
+    },
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
+    },
+    "lint": {
+      "dependsOn": ["^topo", "^build"]
+    },
+    "test": {
+      "dependsOn": ["^topo", "^build"]
+    },
+    "topo": {
+      "dependsOn": ["^topo"]
+    },
+    "typecheck": {
+      "dependsOn": ["^topo", "^build"],
+      "outputs": ["dist/**", "*.tsbuildinfo"]
     }
   }
 }

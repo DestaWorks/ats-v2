@@ -15,7 +15,7 @@ const h = vi.hoisted(() => ({
   findByIdInTenant: vi.fn(),
   listByTenant: vi.fn(),
   countActiveByRole: vi.fn(),
-  upsertInvitation: vi.fn(),
+  upsertMembership: vi.fn(),
   updateStatus: vi.fn(),
   namesByIds: vi.fn(),
   emailsByIds: vi.fn(),
@@ -34,7 +34,7 @@ vi.mock("@destaworks/db/tenancy/membership.repository", () => ({
     findByIdInTenant: h.findByIdInTenant,
     listByTenant: h.listByTenant,
     countActiveByRole: h.countActiveByRole,
-    upsertInvitation: h.upsertInvitation,
+    upsertMembership: h.upsertMembership,
     updateStatus: h.updateStatus,
   },
 }));
@@ -177,7 +177,7 @@ describe("member management is gated on a capability, not a role name", () => {
         code: "FORBIDDEN",
       });
     }
-    expect(h.upsertInvitation).not.toHaveBeenCalled();
+    expect(h.upsertMembership).not.toHaveBeenCalled();
     expect(h.updateStatus).not.toHaveBeenCalled();
   });
 
@@ -200,18 +200,17 @@ describe("invite", () => {
       id: "u2",
       email: "john@desta.works",
       name: "John Roe",
-      role: "Associate",
     });
     h.findByTenantAndUser.mockResolvedValue(null);
-    h.upsertInvitation.mockResolvedValue(membership({ status: "invited", role: "Screener" }));
+    h.upsertMembership.mockResolvedValue(membership({ status: "invited", role: "Screener" }));
 
     const result = await membershipService.invite(contextWith("Admin"), {
       email: "john@desta.works",
       role: "Screener",
     });
 
-    expect(h.upsertInvitation).toHaveBeenCalledWith(
-      { tenantId: "t1", userId: "u2", role: "Screener", invitedById: "u1" },
+    expect(h.upsertMembership).toHaveBeenCalledWith(
+      { tenantId: "t1", userId: "u2", role: "Screener", invitedById: "u1", status: "invited" },
       { tx: true },
     );
     expect(result.member.status).toBe("invited");
@@ -235,7 +234,7 @@ describe("invite", () => {
         role: "Associate",
       }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
-    expect(h.upsertInvitation).not.toHaveBeenCalled();
+    expect(h.upsertMembership).not.toHaveBeenCalled();
   });
 
   it("refuses to re-invite somebody who is already an active member", async () => {
@@ -244,7 +243,6 @@ describe("invite", () => {
       id: "u2",
       email: "john@desta.works",
       name: "John Roe",
-      role: "Associate",
     });
     h.findByTenantAndUser.mockResolvedValue(membership({ status: "active" }));
 
@@ -254,7 +252,7 @@ describe("invite", () => {
         role: "Owner",
       }),
     ).rejects.toMatchObject({ code: "CONFLICT" });
-    expect(h.upsertInvitation).not.toHaveBeenCalled();
+    expect(h.upsertMembership).not.toHaveBeenCalled();
   });
 });
 

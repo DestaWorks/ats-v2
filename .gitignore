@@ -54,3 +54,6 @@ yarn-error.log*
 
 # API build output (apps/api/build.mjs) — an immutable artefact, rebuilt per deploy.
 apps/api/dist/
+
+# Playwright's saved sign-in session (auth.setup.ts) — a live credential, not source.
+/e2e/.auth/

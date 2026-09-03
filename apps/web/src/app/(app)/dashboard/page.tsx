@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { BoltIcon, FlagIcon, UserGroupIcon } from "@heroicons/react/24/outline";
-import { getVerifiedUser } from "@destaworks/auth/guards";
+import { requirePageUser } from "@/lib/page-user";
 import { viewerTzOffset } from "@destaworks/integrations/http/viewer-tz";
 import type { DashboardStatsDTO } from "@destaworks/contracts/validation/pipeline";
 import type { DailyOverviewDTO } from "@destaworks/contracts/validation/daily";
@@ -24,7 +24,7 @@ import { PipelineDistributionChart } from "./pipeline-distribution-chart-lazy";
  * stage + dot legend), headline stats, the attention list, and a prominent link into the board.
  */
 export default async function DashboardPage() {
-  const user = await getVerifiedUser();
+  const user = await requirePageUser();
 
   // Daily strip's "today" is the USER-LOCAL date (`app-tz` cookie, shared with `/daily-log` and
   // `/weekly-brief` — see those pages' comments) — seed it server-side when the cookie is

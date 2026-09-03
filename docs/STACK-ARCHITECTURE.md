@@ -47,7 +47,7 @@ generic stack notes in `ARCHITECTURE.md`/`EDD.md` and locks the decisions.
 | Forms | **react-hook-form + zodResolver** |
 | Drag & drop | **dnd-kit** (accessible) |
 | UI primitives | **shadcn/Radix** for a11y-hard primitives only (Dialog, DropdownMenu, Combobox, Sonner) |
-| Hosting | **`apps/web` on Vercel** — production `zyx.com` (`main`) · staging `staging.zyx.com` (`staging`) · per-PR previews². **`apps/api` on Render** (`render.yaml`, two services: API + worker) — a long-lived process is the reason it left serverless³ |
+| Hosting | **Containerised** — one `Dockerfile` with `api`, `worker`, `web`, `admin` and `migrate` targets, composed by `docker-compose.yml`. One host, one domain: the session cookie is `SameSite=Lax`, so splitting web and API across registrable domains would 401 every browser mutation³ |
 | Package manager | **pnpm** workspaces + **Turborepo** |
 
 > ¹ **Decided.** Company direction names "Supabase (PostgreSQL + auth)"; we use **Supabase
@@ -63,9 +63,10 @@ generic stack notes in `ARCHITECTURE.md`/`EDD.md` and locks the decisions.
 > dry-run on staging first, then applied to production. Full setup: `IMPLEMENTATION-PLAN.md` 0.1b.
 > (`zyx.com` is a placeholder for the real domain.)
 >
-> ³ **Described, not yet rolled out.** `render.yaml` and the `deploy-api` job exist and the deploy
-> workflow blocks on `/health` before shipping the web app; what is outstanding is an owner action
-> — the deploy hook, the health URL, and the monthly figure. See SAAS-RESTRUCTURE-PLAN 4.4.
+> ³ **Built, not yet rolled out.** The images build and run — `api` serves `/health/live`, `web`
+> serves, `migrate` applies the schema — and the deploy workflow applies migrations before the API
+> rolls out and blocks on readiness before shipping the web app. What is outstanding is an owner
+> decision: where the containers run, and the registry they are pulled from.
 
 ---
 
@@ -567,7 +568,7 @@ the same inline-style soup. No `@apply` soup; extract shared patterns into compo
 | `server/services` | Integration with mocked repos / test DB | Vitest |
 | `app/api` routes | Integration incl. authz failure cases | Vitest + test Postgres |
 | `lib/validation` | Schema round-trip / edge cases | Vitest |
-| Critical flows | E2E: sign-in, add/move candidate, promote lead, parse resume | Playwright |
+| Critical flows | E2E: sign-in, add/move candidate, promote lead, parse resume | Playwright — **planned, not adopted**: it is in no manifest and there are no e2e specs, so nothing exercises a real browser today |
 
 CI runs typecheck + lint + tests on every PR. Red = no merge.
 
@@ -596,13 +597,17 @@ fails at build time. (No bespoke `eslint-local-rules/` package to maintain.)
 These come from the signed Developer NDA and from how the Owner runs security. Treat them as
 **acceptance criteria**, not preferences (full context: `docs/PROJECT-CONTEXT.md`).
 
-- **No secrets in code, ever.** Keys/tokens/DB URLs live in env vars / Vercel & Supabase
-  secret stores only. The **Owner holds all keys** (Claude API, Supabase, Vercel, billing,
+- **No secrets in code, ever.** Keys/tokens/DB URLs live in env vars and the host's secret store
+  only — never in an image layer, which is why the `Dockerfile` takes no secret as a build arg.
+  The **Owner holds all keys** (the AI provider key, the database, the hosting accounts, billing,
   patient-data access); we build against them. Never commit a `.env`; commit `.env.example`.
 - **Permissive licenses only.** Add a dependency carrying **MIT / BSD / Apache-2.0** freely.
   **Never add a copyleft/reciprocal dependency (GPL / LGPL / AGPL)** without the Owner's
-  written consent. Keep an **SBOM** (`docs/THIRD-PARTY-LICENSES.md` or a generated manifest)
-  and update it when dependencies change. Add a CI license check.
+  written consent. Keep an **SBOM** and update it when dependencies change; add a CI license
+  check. **Neither exists yet** — there is no SBOM file in the repo and no license job in
+  `ci.yml`, so this is an open NDA §5b obligation, not a description of what is in place.
+  (`pnpm-workspace.yaml` records the licence check for `pg-boss` by hand, which is the current
+  substitute.)
 - **AI tooling** (incl. Claude Code) must not transmit confidential source to third parties in
   a way that compromises confidentiality/ownership; output is Owner-owned Work Product.
 - **PHI/PII handling (HIPAA + Ethiopian Data Protection Proclamation 1321/2024):** encrypt at
@@ -613,15 +618,18 @@ These come from the signed Developer NDA and from how the Owner runs security. T
 
 ---
 
-## 13. AI features (Claude API)
+## 13. AI features (provider-agnostic)
 
-- All LLM calls go through **server-side endpoints** (`server/ai/**`) with a **server-held
-  Anthropic key** — never from the client.
+- All LLM calls go through the **Vercel AI SDK**, server-side only (`packages/integrations/src/ai`),
+  with a **server-held provider key** — never from the client. The **Anthropic, OpenAI and Google
+  adapters are all installed**; `AI_MODEL` is a `provider/model` string, so swapping vendors is one
+  env var and no code change, with `AI_MODEL_FALLBACK` tried once if the primary fails.
+  **Never hard-wire a single vendor** — that is a standing constraint, not a preference.
 - ATS AI surfaces: resume extraction, daily/weekly briefs, JD parsing, inbound triage, CRM
   workspace, and (roadmap) resume→profile matching and "find providers like this".
 - **Model tiering:** use the cheapest model that meets the bar per task (e.g. a fast model for
   extraction/conversation, a stronger model for grading/judgement) — mirrors the company's
-  LMS pattern. Pick current Claude models at build time; pin the model id in config, not
+  LMS pattern. Pick current models at deploy time; the model id lives in `AI_MODEL`, never
   scattered in code. Validate model output with zod before persisting.
 
 ---

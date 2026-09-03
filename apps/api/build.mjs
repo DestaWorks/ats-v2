@@ -1,6 +1,7 @@
 import { build } from "esbuild";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { EXTERNAL } from "./externals.mjs";
 
 /**
  * Bundle the API into a single file so production runs plain `node dist/main.js`.
@@ -33,31 +34,7 @@ await build({
   // "external"` — that externalises every bare import including `@destaworks/*`, and those
   // resolve to TypeScript source that Node cannot load, so the bundle would die on its first
   // import. Prisma and pg carry native binaries loaded by path at runtime.
-  external: [
-    "@prisma/client",
-    ".prisma/client",
-    "@prisma/adapter-pg",
-    "pg",
-    "pg-native",
-    // Nest's optional peers. It `require`s these lazily behind feature checks we never trigger —
-    // no microservices, no websockets, and validation is Zod rather than class-validator — so the
-    // unresolved require is dead code. Installing them to satisfy the bundler would add three
-    // dependencies to ship a path that never runs.
-    "@nestjs/microservices",
-    "@nestjs/microservices/microservices-module.js",
-    "@nestjs/websockets/socket-module.js",
-    "class-transformer",
-    "class-transformer/storage",
-    "class-validator",
-    // Pino resolves its transport worker by path relative to the running file, so a bundled copy
-    // looks for `dist/lib/worker.js` and dies. Only pretty mode uses a transport, so bundling it
-    // would produce an artefact that boots in production and crashes anywhere else — externalising
-    // keeps both modes working.
-    "pino",
-    "pino-pretty",
-    // Sentry loads OpenTelemetry instrumentation by module name at runtime.
-    "@sentry/node",
-  ],
+  external: EXTERNAL,
   banner: {
     js: "import{createRequire as __cr}from'module';const require=__cr(import.meta.url);",
   },

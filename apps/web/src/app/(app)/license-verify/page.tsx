@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { stateBoardLink } from "@destaworks/domain/constants";
-import { getVerifiedUser } from "@destaworks/auth/guards";
+import { requirePageUser } from "@/lib/page-user";
 import type { LicenseVerifyDashboardDTO } from "@destaworks/contracts/validation/license-verify";
 import { apiGet } from "@/lib/api/server";
 import { Table, Td } from "@destaworks/ui/table";
@@ -15,7 +15,7 @@ import { expiryDaysColor } from "../pipeline/lib/status-style";
  * lives; that's already the `/candidates/:id` License tab. This page only launches into it.
  */
 export default async function LicenseVerifyPage() {
-  await getVerifiedUser();
+  await requirePageUser();
   const { queue, timeline, queueTruncated } = await apiGet<LicenseVerifyDashboardDTO>(
     "/license-verify/dashboard",
   );
