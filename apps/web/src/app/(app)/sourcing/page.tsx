@@ -1,4 +1,5 @@
-import { isLeadStatus, type LeadStatus } from "@destaworks/domain/constants";
+import { isLeadStatus, type LeadStatus, hasModule } from "@destaworks/domain/constants";
+import { UpsellState } from "@destaworks/ui/upsell-state";
 import { requirePageUser } from "@/lib/page-user";
 import type { LookupOptionsDTO } from "@destaworks/contracts/validation/lookups";
 import type { LeadListDTO } from "@destaworks/contracts/validation/lead";
@@ -21,7 +22,15 @@ export default async function SourcingPage({
 }: {
   searchParams: Promise<RawSearchParams>;
 }) {
-  await requirePageUser();
+  const user = await requirePageUser();
+
+  if (!hasModule(user.modules, "sourcing")) {
+    return (
+      <div className="flex flex-col gap-4 px-8 py-6">
+        <UpsellState feature="Sourcing" />
+      </div>
+    );
+  }
   const q = readSearchParams(await searchParams);
 
   const status: LeadStatus | undefined = q.guarded("status", isLeadStatus);

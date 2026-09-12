@@ -1,6 +1,9 @@
 import { requirePageUser } from "@/lib/page-user";
 import { hasCapability } from "@destaworks/domain/constants";
-import type { GetTenantMembersResponse } from "@destaworks/contracts/validation/tenant";
+import type {
+  GetTenantMembersResponse,
+  GetTenantRolesResponse,
+} from "@destaworks/contracts/validation/tenant";
 import { ErrorState } from "@destaworks/ui/error-state";
 import { apiGet } from "@/lib/api/server";
 import { MembersView } from "./members-view";
@@ -16,18 +19,21 @@ import { MembersView } from "./members-view";
 export default async function WorkspacePage() {
   const user = await requirePageUser();
 
-  if (!hasCapability(user.role, "manageUsers")) {
+  if (!hasCapability(user, "manageUsers")) {
     return (
       <div className="mx-auto flex max-w-4xl flex-col gap-6 p-6 sm:p-8">
         <ErrorState
           title="You don't have access"
-          message="Managing workspace members is limited to Owners, Directors and Admins."
+          message="Managing workspace members is limited to roles that grant it. Ask a workspace administrator."
         />
       </div>
     );
   }
 
-  const { members } = await apiGet<GetTenantMembersResponse>("/tenants/members");
+  const [{ members }, { roles }] = await Promise.all([
+    apiGet<GetTenantMembersResponse>("/tenants/members"),
+    apiGet<GetTenantRolesResponse>("/tenants/roles"),
+  ]);
 
   return (
     <div className="flex flex-col gap-5 px-8 py-6">
@@ -39,7 +45,7 @@ export default async function WorkspacePage() {
         </p>
       </header>
 
-      <MembersView initial={members} currentUserId={user.user.id} />
+      <MembersView initial={members} roles={roles} currentUserId={user.user.id} />
     </div>
   );
 }

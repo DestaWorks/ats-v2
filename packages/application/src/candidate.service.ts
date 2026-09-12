@@ -545,7 +545,7 @@ export const candidateService = {
    * record is gone — never echo PII).
    */
   async purge(id: string, ctx: TenantContext) {
-    if (!hasCapability(ctx.role, "purgeCandidate")) {
+    if (!hasCapability(ctx, "purgeCandidate")) {
       throw new AppError("FORBIDDEN", "You don't have permission to purge candidates");
     }
     const existing = await candidateRepository.findById(ctx, id, { includeDeleted: true });
@@ -657,7 +657,7 @@ export const candidateService = {
       notes: visibleNotes(notes, viewer).map(toNoteDTO),
       stageHistory: history.slice(0, 10).map(toStageEventDTO),
       outreach,
-      canVerifyCredentials: hasCapability(viewer.role, "viewCredentials"),
+      canVerifyCredentials: hasCapability(viewer, "viewCredentials"),
       scoring,
     };
   },

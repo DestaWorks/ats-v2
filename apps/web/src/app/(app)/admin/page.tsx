@@ -10,6 +10,7 @@ import type { LookupOptionsDTO } from "@destaworks/contracts/validation/lookups"
 import { ErrorState } from "@destaworks/ui/error-state";
 import { apiGet } from "@/lib/api/server";
 import { AdminDashboard } from "./admin-dashboard";
+import type { GetTenantRolesResponse } from "@destaworks/contracts/validation/tenant";
 
 /**
  * Admin (Wave 5.3) — Users / Access Requests / Roles / Blocked. Gated `manageUsers` (the
@@ -21,7 +22,7 @@ import { AdminDashboard } from "./admin-dashboard";
 export default async function AdminPage() {
   const user = await requirePageUser();
 
-  if (!hasCapability(user.role, "manageUsers")) {
+  if (!hasCapability(user, "manageUsers")) {
     return (
       <div className="mx-auto flex max-w-4xl flex-col gap-6 p-6 sm:p-8">
         <ErrorState
@@ -32,11 +33,12 @@ export default async function AdminPage() {
     );
   }
 
-  const canConfigurePortal = hasCapability(user.role, "configureClientPortal");
-  const canManageAi = hasCapability(user.role, "manageAiSettings");
-  const [{ users }, { requests }, portalRequests, clients, aiSettings, aiUsage] = await Promise.all(
-    [
+  const canConfigurePortal = hasCapability(user, "configureClientPortal");
+  const canManageAi = hasCapability(user, "manageAiSettings");
+  const [{ users }, roles, { requests }, portalRequests, clients, aiSettings, aiUsage] =
+    await Promise.all([
       apiGet<AdminUserListDTO>("/admin/users"),
+      apiGet<GetTenantRolesResponse>("/tenants/roles").then((r) => r.roles),
       apiGet<AccessRequestListDTO>("/admin/access-requests"),
       canConfigurePortal
         ? apiGet<PortalAccessRequestListDTO>("/admin/portal/requests").then((r) => r.requests)
@@ -59,12 +61,15 @@ export default async function AdminPage() {
             avgLatencyMs: 0,
             recent: [],
           }),
-    ],
-  );
+    ]);
 
   return (
     <AdminDashboard
       initialUsers={users}
+      roles={roles}
+      canManageRoles={hasCapability(user, "manageRoles")}
+      ownedModules={user.modules}
+      grantable={user.capabilities}
       initialRequests={requests}
       currentUserId={user.user.id}
       canConfigurePortal={canConfigurePortal}

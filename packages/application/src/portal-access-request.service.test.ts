@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { MODULES, ROLE_CAPABILITIES } from "@destaworks/domain/constants";
 
 /**
  * `portalAccessRequestService.approve`/`decline` — atomically CLAIM the row (pending → approved/
@@ -39,6 +40,8 @@ import { portalAccessRequestService } from "./portal-access-request.service";
 const actor = {
   tenantId: "t1",
   membershipId: "u1-m",
+  modules: MODULES,
+  capabilities: ROLE_CAPABILITIES.Owner,
   user: { id: "u1", email: "o@desta.works", name: "Owner" },
   role: "Owner" as const,
 };
@@ -59,6 +62,8 @@ beforeEach(() => {
 const ctx = {
   tenantId: "t1",
   membershipId: "m1",
+  modules: MODULES,
+  capabilities: ROLE_CAPABILITIES.Owner,
   role: "Owner" as const,
   user: { id: "u1", email: "u@desta.works", name: "U" },
 };

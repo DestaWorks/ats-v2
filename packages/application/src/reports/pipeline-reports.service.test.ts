@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { MODULES, ROLE_CAPABILITIES } from "@destaworks/domain/constants";
 
 /**
  * `pipelineReportsService.pipelineFunnel` — Wave 5.2. Proves the core fix end-to-end: a candidate
@@ -59,6 +60,8 @@ beforeEach(() => {
 const ctx = {
   tenantId: "t1",
   membershipId: "m1",
+  modules: MODULES,
+  capabilities: ROLE_CAPABILITIES.Owner,
   role: "Owner" as const,
   user: { id: "u1", email: "u@desta.works", name: "U" },
 };

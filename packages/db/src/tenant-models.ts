@@ -28,11 +28,12 @@
  * `Tenant` and `Membership` are themselves global: a query that filtered memberships by the active
  * tenant could never answer "which tenants may this user switch to".
  *
- * `Membership` is the one model here that HAS a `tenantId` and is still global — it IS the tenant
- * boundary rather than something inside it, so an RLS policy on it would break sign-in for anyone
- * with more than one membership. Its authorization is that every query filters by `userId`, which
- * the session establishes. `scripts/check-rls-coverage.mjs` carries that exception explicitly, so
- * a second model cannot acquire it by accident.
+ * `Membership` and `AccessRole` both HAVE a `tenantId` and are still global: both are read to
+ * BUILD a context, before one exists, so an RLS policy would be unsatisfiable exactly when needed.
+ * `check-rls-coverage.mjs` names both, so a third cannot acquire the status by accident.
+ *
+ * `AccessRole`'s replacement is stronger for the risk that matters — a membership being GIVEN
+ * another tenant's role. The composite FK makes that unrepresentable rather than filtered.
  */
 export const GLOBAL_MODELS: ReadonlySet<string> = new Set([
   "User",
@@ -42,6 +43,7 @@ export const GLOBAL_MODELS: ReadonlySet<string> = new Set([
   "ScheduleRun",
   "Tenant",
   "Membership",
+  "AccessRole",
 ]);
 
 /** A tenant-scoped model and the table `@@map` puts it in. */

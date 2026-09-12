@@ -1,4 +1,5 @@
-import { hasCapability } from "@destaworks/domain/constants";
+import { hasCapability, hasModule } from "@destaworks/domain/constants";
+import { UpsellState } from "@destaworks/ui/upsell-state";
 import { dateKeyForOffset, mondayOf } from "@destaworks/domain/daily";
 import { requirePageUser } from "@/lib/page-user";
 import { viewerTzOffset } from "@destaworks/integrations/http/viewer-tz";
@@ -20,12 +21,20 @@ import { WeeklyBriefView } from "./weekly-brief-view";
 export default async function WeeklyBriefPage() {
   const user = await requirePageUser();
 
-  if (!hasCapability(user.role, "viewReports")) {
+  if (!hasModule(user.modules, "ai")) {
+    return (
+      <div className="flex flex-col gap-4 px-8 py-6">
+        <UpsellState feature="AI briefs" />
+      </div>
+    );
+  }
+
+  if (!hasCapability(user, "viewReports")) {
     return (
       <div className="mx-auto flex max-w-4xl flex-col gap-6 p-6 sm:p-8">
         <ErrorState
           title="You don't have access"
-          message="Weekly Brief is limited to leadership roles. Ask an Owner, Director, Manager, or Admin for access."
+          message="The Weekly Brief is limited to roles with reporting access. Ask a workspace administrator."
         />
       </div>
     );

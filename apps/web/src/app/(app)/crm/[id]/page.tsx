@@ -10,12 +10,12 @@ import { ClientDetail } from "./client-detail";
 export default async function ClientDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requirePageUser();
 
-  if (!hasCapability(user.role, "viewCrm")) {
+  if (!hasCapability(user, "viewCrm")) {
     return (
       <div className="mx-auto flex max-w-4xl flex-col gap-6 p-6 sm:p-8">
         <ErrorState
           title="You don't have access"
-          message="CRM is limited to leadership roles. Ask an Owner, Director, Manager, or Admin for client account details."
+          message="CRM is limited to roles with client-account access. Ask a workspace administrator."
         />
       </div>
     );
@@ -33,7 +33,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
   return (
     <ClientDetail
       initial={detail}
-      canConfigurePortal={hasCapability(user.role, "configureClientPortal")}
+      canConfigurePortal={hasCapability(user, "configureClientPortal")}
     />
   );
 }

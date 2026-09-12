@@ -1,4 +1,5 @@
 import "reflect-metadata";
+import { MODULES, ROLE_CAPABILITIES } from "@destaworks/domain/constants";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
 /**
@@ -41,6 +42,8 @@ const user: AuthUser = { id: "u-platform", email: "ops@destaworks.com", name: "O
 const tenant: TenantContext = {
   tenantId: "t1",
   membershipId: "m1",
+  modules: MODULES,
+  capabilities: ROLE_CAPABILITIES.Owner,
   role: "Owner",
   user: { id: "u-owner", email: "owner@acme.example", name: "Acme Owner" },
 };

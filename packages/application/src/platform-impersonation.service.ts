@@ -186,7 +186,7 @@ function toWindowDTO(
 
 /** The gate on both consent writes. Same capability, same message, one place. */
 function requireConsentManagement(ctx: TenantContext): void {
-  if (!hasCapability(ctx.role, "manageUsers")) {
+  if (!hasCapability(ctx, "manageUsers")) {
     throw new AppError("FORBIDDEN", "You don't have permission to do that");
   }
 }

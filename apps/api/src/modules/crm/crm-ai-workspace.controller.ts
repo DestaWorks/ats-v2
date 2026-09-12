@@ -5,6 +5,7 @@ import type { AuthContext } from "@destaworks/auth/guards";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { RateLimit } from "../../common/decorators/rate-limit.decorator";
 import { RequireCapability } from "../../common/decorators/require-capability.decorator";
+import { RequireModule } from "../../common/decorators/require-module.decorator";
 import { CapabilityGuard } from "../../common/guards/capability.guard";
 import { RateLimitGuard } from "../../common/guards/rate-limit.guard";
 import { SessionAuthGuard } from "../../common/guards/session-auth.guard";
@@ -21,6 +22,7 @@ import { CRM_AI_WORKSPACE_SERVICE } from "./crm.tokens";
  */
 @Controller("crm/clients/:id/ai-workspace")
 @UseGuards(SessionAuthGuard, CapabilityGuard, RateLimitGuard)
+@RequireModule("discovery")
 @RequireCapability("viewCrm")
 export class CrmAiWorkspaceController {
   constructor(

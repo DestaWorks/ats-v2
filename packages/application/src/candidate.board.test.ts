@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { MODULES, ROLE_CAPABILITIES } from "@destaworks/domain/constants";
 import type { TenantContext } from "@destaworks/domain/tenant";
 import { decodeCursor } from "@destaworks/contracts/validation/cursor";
 
@@ -60,6 +61,8 @@ import { candidateService } from "./candidate.service";
 const viewer: TenantContext = {
   tenantId: "t1",
   membershipId: "u1-m",
+  modules: MODULES,
+  capabilities: ROLE_CAPABILITIES.Associate,
   user: { id: "u1", email: "u@desta.works", name: "U" },
   role: "Associate",
 };

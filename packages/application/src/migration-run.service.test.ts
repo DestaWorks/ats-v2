@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { MODULES, ROLE_CAPABILITIES } from "@destaworks/domain/constants";
 import type { TenantContext } from "@destaworks/domain/tenant";
 
 /**
@@ -37,12 +38,16 @@ import {
 const owner: TenantContext = {
   tenantId: "t1",
   membershipId: "u1-m",
+  modules: MODULES,
+  capabilities: ROLE_CAPABILITIES.Owner,
   user: { id: "u1", email: "o@desta.works", name: "Owner" },
   role: "Owner",
 };
 const associate: TenantContext = {
   tenantId: "t1",
   membershipId: "u2-m",
+  modules: MODULES,
+  capabilities: ROLE_CAPABILITIES.Associate,
   user: { id: "u2", email: "a@desta.works", name: "A" },
   role: "Associate",
 };
@@ -91,13 +96,23 @@ function actorIs(role: string, tenantId = "t1"): void {
     name: "Owner",
   });
   h.membershipRepo.listActiveForUser.mockResolvedValue([
-    { id: "u1-m", tenantId, tenantSlug: tenantId, tenantName: tenantId, role },
+    {
+      id: "u1-m",
+      tenantId,
+      tenantSlug: tenantId,
+      tenantName: tenantId,
+      role,
+      tenantPlan: "trial",
+      capabilities: [...(ROLE_CAPABILITIES[role as keyof typeof ROLE_CAPABILITIES] ?? [])],
+    },
   ]);
 }
 
 const ctx = {
   tenantId: "t1",
   membershipId: "m1",
+  modules: MODULES,
+  capabilities: ROLE_CAPABILITIES.Owner,
   role: "Owner" as const,
   user: { id: "u1", email: "u@desta.works", name: "U" },
 };
@@ -203,8 +218,40 @@ describe("claim", () => {
     });
     // Owner in the tenant they usually work in, Screener in the one this run belongs to.
     h.membershipRepo.listActiveForUser.mockResolvedValue([
-      { id: "u1-m1", tenantId: "t1", tenantSlug: "t1", tenantName: "t1", role: "Owner" },
-      { id: "u1-m2", tenantId: "t2", tenantSlug: "t2", tenantName: "t2", role: "Screener" },
+      {
+        id: "u1-m1",
+        tenantId: "t1",
+        tenantSlug: "t1",
+        tenantName: "t1",
+        role: "Owner",
+        tenantPlan: "trial",
+        capabilities: [
+          "viewCredentials",
+          "viewReports",
+          "viewAnalytics",
+          "bulkImport",
+          "viewCrm",
+          "viewClientDiscovery",
+          "viewAllNoteTypes",
+          "manageUsers",
+          "manageRoles",
+          "manageAccessRequests",
+          "configureClientPortal",
+          "viewAudit",
+          "purgeCandidate",
+          "deleteOpenRole",
+          "manageAiSettings",
+        ],
+      },
+      {
+        id: "u1-m2",
+        tenantId: "t2",
+        tenantSlug: "t2",
+        tenantName: "t2",
+        role: "Screener",
+        tenantPlan: "trial",
+        capabilities: ["viewCredentials"],
+      },
     ]);
 
     // A Screener holds no `bulkImport`, so picking the run's tenant is what refuses this.

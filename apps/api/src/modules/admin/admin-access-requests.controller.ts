@@ -46,7 +46,7 @@ export class AdminAccessRequestsController {
     @Body(new ZodValidationPipe(approveRequestSchema))
     body: ContractOutput<typeof approveRequestSchema>,
   ): Promise<GeneratedPasswordDTO> {
-    return await this.requests.approve(actor, id, body.role);
+    return await this.requests.approve(actor, id, body.roleId);
   }
 
   @Post(":id/decline")

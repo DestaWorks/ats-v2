@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { MODULES, ROLE_CAPABILITIES } from "@destaworks/domain/constants";
 
 /**
  * Contract parity for `GET /alerts` against `apps/web/src/app/api/alerts/route.ts`.
@@ -100,6 +101,8 @@ describe("GET /alerts", () => {
         controller().forViewer({
           tenantId: "t1",
           membershipId: "u1-m",
+          modules: MODULES,
+          capabilities: ROLE_CAPABILITIES.Associate,
           user: { id: "u1", email: "a@desta.works", name: "A" },
           role: "Associate",
         }),

@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { hasCapability } from "@destaworks/domain/constants";
+import { UpsellState } from "@destaworks/ui/upsell-state";
+import { hasCapability, hasModule } from "@destaworks/domain/constants";
 import { requirePageUser } from "@/lib/page-user";
 import type { CredentialsOverviewDTO } from "@destaworks/contracts/validation/credentials";
 import { apiGet } from "@/lib/api/server";
@@ -22,12 +23,20 @@ import { NlcTracker } from "./nlc-tracker";
 export default async function CredentialsPage() {
   const user = await requirePageUser();
 
-  if (!hasCapability(user.role, "viewCredentials")) {
+  if (!hasModule(user.modules, "compliance")) {
+    return (
+      <div className="flex flex-col gap-4 px-8 py-6">
+        <UpsellState feature="Compliance" />
+      </div>
+    );
+  }
+
+  if (!hasCapability(user, "viewCredentials")) {
     return (
       <div className="mx-auto flex max-w-4xl flex-col gap-6 p-6 sm:p-8">
         <ErrorState
           title="You don't have access"
-          message="Credentials Intelligence is limited to leadership roles. Ask an Owner, Director, Manager, or Admin for access."
+          message="Credentials are limited to roles that may see licence numbers. Ask a workspace administrator."
         />
       </div>
     );

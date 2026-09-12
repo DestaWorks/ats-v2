@@ -80,7 +80,7 @@ export default async function CandidatesPage({
     apiGet<LookupOptionsDTO>("/lookups"),
     // apiGet<GetSavedViewsResponse>(`/saved-views${query({ scope: "candidates" })}`),
   ]);
-  const canEditCredential = hasCapability(user.role, "viewCredentials");
+  const canEditCredential = hasCapability(user, "viewCredentials");
 
   return (
     <div className="flex flex-col gap-5 px-8 py-6">

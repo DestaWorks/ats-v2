@@ -1,4 +1,4 @@
-import { toRole } from "@destaworks/domain/constants";
+import { modulesForPlan, toCapabilities } from "@destaworks/domain/constants";
 import {
   importFormatSchema,
   isMigrationRunStatus,
@@ -177,7 +177,9 @@ export const migrationRunService = {
       tenantId: membership.tenantId,
       membershipId: membership.id,
       user: { id: actorRow.id, email: actorRow.email, name: actorRow.name },
-      role: toRole(membership.role),
+      role: membership.role,
+      capabilities: toCapabilities(membership.capabilities),
+      modules: modulesForPlan(membership.tenantPlan),
     };
     assertCanImport(actor);
 

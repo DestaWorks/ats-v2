@@ -1,4 +1,5 @@
 import { LEAST_PRIVILEGED_ROLE } from "./constants/roles";
+import { CORE_MODULE } from "./constants/modules";
 import type { TenantContext } from "./tenant";
 
 /** The synthetic actor a background job runs as. Not a real user; never a member of anything. */
@@ -10,6 +11,11 @@ export const SYSTEM_ACTOR_ID = "system";
  * A job is enqueued by someone with a context and runs later without one, so the tenant travels in
  * the payload and this rebuilds enough of a context to SCOPE queries with. That is the entire
  * purpose: it exists so a handler can reach a repository, not so it can decide anything.
+ *
+ * `modules` carries `core` alone for the same reason: a job needing a tenant's entitlement must
+ * read that tenant's plan itself.
+ *
+ * `capabilities` is EMPTY, which is what makes a misused job context fail closed.
  *
  * It carries `LEAST_PRIVILEGED_ROLE` deliberately. A job that reached a capability check with this
  * context would be denied rather than granted, so the failure mode of misusing it is a job that
@@ -26,6 +32,8 @@ export function systemContextFor(tenantId: string): TenantContext {
     tenantId,
     membershipId: SYSTEM_ACTOR_ID,
     role: LEAST_PRIVILEGED_ROLE,
+    capabilities: [],
+    modules: [CORE_MODULE],
     user: { id: SYSTEM_ACTOR_ID, email: "", name: "system" },
   };
 }
@@ -39,6 +47,8 @@ export function portalScopeFor(tenantId: string, contactId: string): TenantConte
     tenantId,
     membershipId: SYSTEM_ACTOR_ID,
     role: LEAST_PRIVILEGED_ROLE,
+    capabilities: [],
+    modules: [CORE_MODULE],
     user: { id: contactId, email: "", name: "portal-contact" },
   };
 }

@@ -13,12 +13,12 @@ import { MigrationWizard } from "./migration-wizard";
 export default async function MigrationPage() {
   const user = await requirePageUser();
 
-  if (!hasCapability(user.role, "bulkImport")) {
+  if (!hasCapability(user, "bulkImport")) {
     return (
       <div className="mx-auto flex max-w-4xl flex-col gap-6 p-6 sm:p-8">
         <ErrorState
           title="You don't have access"
-          message="Bulk import is limited to leadership roles. Ask an Owner, Director, Manager, or Admin to run the migration."
+          message="Bulk import is limited to roles that grant it. Ask a workspace administrator to run the migration."
         />
       </div>
     );

@@ -37,7 +37,13 @@ export class MeController {
   /** The current authenticated user — identity and role, nothing else off the session record. */
   @Get()
   me(@CurrentUser() user: AuthContext): SessionUserDTO {
-    return { id: user.user.id, email: user.user.email, name: user.user.name, role: user.role };
+    return {
+      id: user.user.id,
+      email: user.user.email,
+      name: user.user.name,
+      role: user.role,
+      capabilities: [...user.capabilities],
+    };
   }
 
   @Get("preferences")

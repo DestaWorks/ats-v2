@@ -134,6 +134,13 @@ jobs:
       - name: Auth-surface parity
         run: pnpm auth:check
 
+      # `@RequireModule` writes metadata; a guard has to read it. Two guards do, and no other
+      # does — so a module gate under any other guard is a feature sold for free that still reads
+      # as gated. A per-route test asserts what one route does; this asserts what no route may
+      # omit, so it is a source scan like auth:check, with the same floors.
+      - name: Module entitlement gates
+        run: pnpm module:check
+
       # Phase 6.3's done-when, made enforceable: no repository method may query without a
       # TenantContext, the allowlist of repositories that legitimately do is checked against the
       # seam's own GLOBAL_MODELS rather than trusted, and the escape hatches that let un-threaded

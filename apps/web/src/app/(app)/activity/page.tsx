@@ -33,7 +33,7 @@ export default async function ActivityPage({
 }) {
   const user = await requirePageUser();
 
-  if (!hasCapability(user.role, "viewAudit")) {
+  if (!hasCapability(user, "viewAudit")) {
     return (
       <div className="flex flex-col gap-6 px-8 py-6">
         <header>

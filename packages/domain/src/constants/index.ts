@@ -7,6 +7,7 @@
 export * from "./tone";
 export * from "./pipeline-status";
 export * from "./roles";
+export * from "./modules";
 export * from "./candidate";
 export * from "./clients";
 export * from "./documents";

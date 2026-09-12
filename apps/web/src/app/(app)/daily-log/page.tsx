@@ -26,7 +26,7 @@ import { DailyLogView } from "./daily-log-view";
  */
 export default async function DailyLogPage() {
   const user = await requirePageUser();
-  const canViewTeam = hasCapability(user.role, "viewReports");
+  const canViewTeam = hasCapability(user, "viewReports");
 
   const initialTz = await viewerTzOffset();
 

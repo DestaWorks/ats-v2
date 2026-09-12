@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { MODULES, ROLE_CAPABILITIES } from "@destaworks/domain/constants";
 import { MAX_ROWS_CAP } from "@destaworks/db/query-limits";
 import type { TenantContext } from "@destaworks/domain/tenant";
 
@@ -58,12 +59,16 @@ const PAGE_SIZE = 25;
 const associate: TenantContext = {
   tenantId: "t1",
   membershipId: "u1-m",
+  modules: MODULES,
+  capabilities: ROLE_CAPABILITIES.Associate,
   user: { id: "u1", email: "u@desta.works", name: "U" },
   role: "Associate",
 };
 const owner: TenantContext = {
   tenantId: "t1",
   membershipId: "o1-m",
+  modules: MODULES,
+  capabilities: ROLE_CAPABILITIES.Owner,
   user: { id: "o1", email: "o@desta.works", name: "O" },
   role: "Owner",
 };

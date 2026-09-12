@@ -17,7 +17,7 @@ export default async function AddCandidatePage() {
 
   const { clients: clientRows } = await apiGet<LookupOptionsDTO>("/lookups");
   const clients = clientRows.map((c) => ({ id: c.id, name: c.name }));
-  const canEditCredential = hasCapability(user.role, "viewCredentials");
+  const canEditCredential = hasCapability(user, "viewCredentials");
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-5 p-6">

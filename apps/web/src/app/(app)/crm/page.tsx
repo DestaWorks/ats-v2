@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { hasCapability } from "@destaworks/domain/constants";
+import { UpsellState } from "@destaworks/ui/upsell-state";
+import { hasCapability, hasModule } from "@destaworks/domain/constants";
 import { requirePageUser } from "@/lib/page-user";
 import type { GetCrmClientsResponse } from "@destaworks/contracts/http/crm";
 import { apiGet } from "@/lib/api/server";
@@ -16,12 +17,20 @@ import { AddClientButton } from "./add-client-modal";
 export default async function CrmPage() {
   const user = await requirePageUser();
 
-  if (!hasCapability(user.role, "viewCrm")) {
+  if (!hasModule(user.modules, "discovery")) {
+    return (
+      <div className="flex flex-col gap-4 px-8 py-6">
+        <UpsellState feature="CRM" />
+      </div>
+    );
+  }
+
+  if (!hasCapability(user, "viewCrm")) {
     return (
       <div className="mx-auto flex max-w-4xl flex-col gap-6 p-6 sm:p-8">
         <ErrorState
           title="You don't have access"
-          message="CRM is limited to leadership roles. Ask an Owner, Director, Manager, or Admin for client account details."
+          message="CRM is limited to roles with client-account access. Ask a workspace administrator."
         />
       </div>
     );

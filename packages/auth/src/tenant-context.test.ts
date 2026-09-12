@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { ROLE_CAPABILITIES, type Role } from "@destaworks/domain/constants";
 
 /**
  * `resolveTenantContext` — the single place a claim becomes authority, and therefore the single
@@ -54,6 +55,14 @@ function membership(overrides: {
     userId: user.id,
     role: overrides.role ?? "Associate",
     status: overrides.status ?? "active",
+    roleId: `ar_${overrides.role ?? "Associate"}`,
+    accessRole: {
+      id: `ar_${overrides.role ?? "Associate"}`,
+      name: overrides.role ?? "Associate",
+      capabilities: [...(ROLE_CAPABILITIES[(overrides.role ?? "Associate") as Role] ?? [])],
+      templateKey: overrides.role ?? "Associate",
+      isBuiltIn: true,
+    },
     invitedById: null,
     createdAt: new Date("2026-01-01T00:00:00.000Z"),
     tenant: {
@@ -104,12 +113,26 @@ describe("resolveTenantContext — a verified claim", () => {
     expect(resolution.context.user).not.toHaveProperty("role");
   });
 
-  it("collapses an unrecognised membership role to the least privileged one", async () => {
-    h.findByUserAndSlug.mockResolvedValue(membership({ role: "SuperOwner" }));
+  /**
+   * A role NAME is now the workspace's own, so "SuperOwner" is a legitimate label rather than
+   * something to coerce away. Least privilege moved to the capability list, which is narrowed
+   * against the vocabulary this build knows — so an invented permission grants nothing.
+   */
+  it("keeps an unfamiliar role name and grants only capabilities it recognises", async () => {
+    const row = membership({ role: "SuperOwner" });
+    // A stored row is raw strings — the point is that an invented code is dropped, not trusted.
+    row.accessRole.capabilities = [
+      "viewReports",
+      "becomeGod",
+    ] as typeof row.accessRole.capabilities;
+    h.findByUserAndSlug.mockResolvedValue(row);
 
     const resolution = await resolveTenantContext(user, claimFor("acme"));
 
-    expect(resolution).toMatchObject({ outcome: "resolved", context: { role: "Associate" } });
+    expect(resolution).toMatchObject({
+      outcome: "resolved",
+      context: { role: "SuperOwner", capabilities: ["viewReports"] },
+    });
   });
 });
 

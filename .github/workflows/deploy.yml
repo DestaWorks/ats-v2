@@ -300,9 +300,12 @@ jobs:
         run: |
           set -euo pipefail
           conclusions=$(gh api "repos/${{ github.repository }}/commits/${{ inputs.ref }}/check-runs" \
-            --jq '.check_runs[] | select(.name | IN("Commit messages","Static analysis","Tests","Build")) | "\(.name)=\(.conclusion)"')
+            --jq '.check_runs[] | select(.name | IN("Commit messages","Static analysis","Tests","Tenant isolation","Build")) | "\(.name)=\(.conclusion)"')
           echo "${conclusions}"
-          for required in "Commit messages" "Static analysis" "Tests" "Build"; do
+          # `Tenant isolation` is required, not optional. It is the ONLY check that proves tenant A
+          # cannot read tenant B — per table, against a real Postgres — and leaving it out meant a
+          # revision whose cross-tenant proof had FAILED could still ship.
+          for required in "Commit messages" "Static analysis" "Tests" "Tenant isolation" "Build"; do
             if ! printf '%s\n' "${conclusions}" | grep -qx "${required}=success"; then
               echo "::error::Required check '${required}' is not green on ${{ inputs.ref }}."
               exit 1

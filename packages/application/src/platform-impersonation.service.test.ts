@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
+import { MODULES, ROLE_CAPABILITIES, type Role } from "@destaworks/domain/constants";
 
 /**
  * `platformImpersonationService` — consented, time-boxed, audited (Phase 8).
@@ -66,10 +67,14 @@ const tenantOwnerUser: AuthUser = {
 
 const acme = { id: "t1", slug: "acme", name: "Acme Health", status: "active", deletedAt: null };
 
-function ctxWith(role: TenantContext["role"]): TenantContext {
+function ctxWith(role: Role): TenantContext {
   return {
     tenantId: "t1",
     membershipId: "m1",
+    modules: MODULES,
+    // Derived from the role this context is FOR — a fixed set would make every "refuses a member
+    // without manageUsers" assertion pass for the wrong reason.
+    capabilities: ROLE_CAPABILITIES[role],
     role,
     user: { id: "u-owner", email: "owner@acme.example", name: "Acme Owner" },
   };

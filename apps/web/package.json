@@ -41,7 +41,7 @@
     "papaparse": "^5.5.4",
     "pdfjs-dist": "^6.3.289",
     "react-hook-form": "^7.80.0",
-    "recharts": "^3.10.1",
+    "recharts": "catalog:",
     "server-only": "^0.0.1",
     "sonner": "^1.7.4",
     "zod": "catalog:"

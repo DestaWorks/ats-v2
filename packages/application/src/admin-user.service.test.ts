@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { MODULES, ROLE_CAPABILITIES } from "@destaworks/domain/constants";
+import { AppError } from "@destaworks/integrations/http/app-error";
 
 /**
  * `adminUserService` wraps Better Auth's admin plugin (`auth.api.*`) — no repository/Prisma of
@@ -11,7 +13,9 @@ const h = vi.hoisted(() => {
   return {
     fakeTx,
     upsertMembership: vi.fn().mockResolvedValue({ id: "m_new" }),
-    findByTenantAndUser: vi.fn(),
+    listByUser: vi.fn(),
+    findRoleById: vi.fn(),
+    changeRole: vi.fn(),
     listAdminUsersByTenant: vi.fn(),
     createUser: vi.fn(),
     setRole: vi.fn(),
@@ -53,12 +57,17 @@ vi.mock("@destaworks/db/audit", () => ({ writeAudit: h.writeAudit }));
 vi.mock("@destaworks/db/tenancy/membership.repository", () => ({
   membershipRepository: {
     upsertMembership: h.upsertMembership,
-    findByTenantAndUser: h.findByTenantAndUser,
+    listByUser: h.listByUser,
   },
+}));
+vi.mock("@destaworks/db/tenancy/access-role.repository", () => ({
+  accessRoleRepository: { findByIdInTenant: h.findRoleById },
 }));
 vi.mock("@destaworks/db/repositories/user.repository", () => ({
   userRepository: { listAdminUsersByTenant: h.listAdminUsersByTenant },
 }));
+// The authoritative half lives there now; this service resolves, delegates, and syncs.
+vi.mock("./membership.service", () => ({ membershipService: { changeRole: h.changeRole } }));
 const announced: string[] = vi.hoisted(() => []);
 
 vi.mock("@destaworks/db/tenant-transaction", () => ({
@@ -94,20 +103,45 @@ beforeEach(() => {
   h.removeUser.mockReset();
   // `mockClear`, not `mockReset`: the invariant above is the point of this mock.
   h.writeAudit.mockClear();
-  h.findByTenantAndUser.mockReset();
-  h.findByTenantAndUser.mockResolvedValue({ id: "m1", tenantId: "t1", userId: "u1" });
+  h.listByUser.mockReset();
+  // The default target: a member of the acting workspace and of nowhere else.
+  h.listByUser.mockResolvedValue([
+    {
+      id: "m1",
+      tenantId: "t1",
+      userId: "u1",
+      status: "active",
+      roleId: "ar_Associate",
+      accessRole: { id: "ar_Associate", name: "Associate", capabilities: [] },
+    },
+  ]);
+  h.findRoleById.mockImplementation(async (_t: string, id: string) => ({
+    id,
+    name: id.replace("ar_", ""),
+    capabilities: id === "ar_Owner" || id === "ar_Admin" ? ["manageUsers"] : [],
+    templateKey: id.replace("ar_", ""),
+    isBuiltIn: true,
+  }));
 });
 
 const adminCtx = {
   tenantId: "t1",
   membershipId: "m1",
+  modules: MODULES,
+  capabilities: ROLE_CAPABILITIES.Owner,
   role: "Owner" as const,
   user: { id: "actor1", email: "admin@desta.works", name: "Admin" },
 };
 
 describe("adminUserService.list", () => {
   it("reads only THIS workspace's members and maps the DTOs", async () => {
-    h.listAdminUsersByTenant.mockResolvedValue([{ ...baseUser, image: null }]);
+    h.listAdminUsersByTenant.mockResolvedValue([
+      {
+        ...baseUser,
+        image: null,
+        memberships: [{ roleId: "ar_Owner", accessRole: { name: "Owner" } }],
+      },
+    ]);
     const result = await adminUserService.list(adminCtx);
     expect(h.listAdminUsersByTenant).toHaveBeenCalledWith("t1");
     expect(result).toEqual({
@@ -118,6 +152,7 @@ describe("adminUserService.list", () => {
           email: "ann@desta.works",
           image: null,
           role: "Owner",
+          roleId: "ar_Owner",
           banned: false,
           banReason: null,
           banExpires: null,
@@ -137,7 +172,7 @@ describe("adminUserService.create", () => {
     await adminUserService.create(adminCtx, {
       name: "Ann Owner",
       email: "ann@desta.works",
-      role: "Owner",
+      roleId: "ar_Owner",
     });
 
     // This service holds no repository — only Better Auth plus six audit writes into
@@ -151,7 +186,7 @@ describe("adminUserService.create", () => {
     const result = await adminUserService.create(adminCtx, {
       name: "Ann Owner",
       email: "ann@desta.works",
-      role: "Owner",
+      roleId: "ar_Owner",
       password: "supplied-pw-123",
     });
     expect(h.createUser).toHaveBeenCalledWith(
@@ -167,7 +202,7 @@ describe("adminUserService.create", () => {
     const result = await adminUserService.create(adminCtx, {
       name: "Ann Owner",
       email: "ann@desta.works",
-      role: "Owner",
+      roleId: "ar_Owner",
     });
     expect(result.generatedPassword).toBeTruthy();
     expect(h.createUser).toHaveBeenCalledWith(
@@ -182,7 +217,7 @@ describe("adminUserService.create", () => {
     await adminUserService.create(adminCtx, {
       name: "Ann Owner",
       email: "ann@desta.works",
-      role: "Owner",
+      roleId: "ar_Owner",
       password: "supplied-pw-123",
     });
     expect(h.createUser).toHaveBeenCalledWith(
@@ -197,7 +232,7 @@ describe("adminUserService.create", () => {
     await adminUserService.create(adminCtx, {
       name: "Ann Owner",
       email: "ann@desta.works",
-      role: "Owner",
+      roleId: "ar_Owner",
     });
     expect(h.writeAudit).toHaveBeenCalledWith(
       h.fakeTx,
@@ -215,7 +250,7 @@ describe("adminUserService.create", () => {
     await adminUserService.create(adminCtx, {
       name: "New",
       email: "new@desta.works",
-      role: "Associate",
+      roleId: "ar_Associate",
     });
 
     expect(h.upsertMembership).toHaveBeenCalledWith(
@@ -234,7 +269,7 @@ describe("adminUserService.create", () => {
     await adminUserService.create(adminCtx, {
       name: "New",
       email: "new@desta.works",
-      role: "Associate",
+      roleId: "ar_Associate",
     });
 
     const [payload] = h.upsertMembership.mock.calls[0] ?? [];
@@ -247,22 +282,68 @@ describe("adminUserService.create", () => {
 });
 
 describe("adminUserService.setRole", () => {
-  it("calls setRole with userId + role, and audits the change", async () => {
+  beforeEach(() => {
+    h.changeRole.mockReset();
+    h.changeRole.mockResolvedValue({
+      member: { membershipId: "m1", roleId: "ar_Manager", role: "Manager" },
+    });
+  });
+
+  /** The defect this replaced: `auth.api.setRole` writes a column that authorizes nothing. */
+  it("moves the MEMBERSHIP role, which is the one that authorizes anything", async () => {
     h.setRole.mockResolvedValue({ user: { ...baseUser, role: "Manager" } });
-    const result = await adminUserService.setRole(adminCtx, "u1", "Manager");
+
+    await adminUserService.setRole(adminCtx, "u1", "ar_Manager");
+
+    expect(h.changeRole).toHaveBeenCalledWith(adminCtx, "m1", { roleId: "ar_Manager" });
+  });
+
+  /** Better Auth asks one question of the column, so the role is reduced to it via `manageUsers`. */
+  it("reduces the workspace role to the admin/not-admin flag Better Auth understands", async () => {
+    h.setRole.mockResolvedValue({ user: { ...baseUser, role: "Associate" } });
+
+    const result = await adminUserService.setRole(adminCtx, "u1", "ar_Manager");
+
+    // Manager does not grant `manageUsers`, so Better Auth is told the non-admin value.
     expect(h.setRole).toHaveBeenCalledWith(
-      expect.objectContaining({ body: { userId: "u1", role: "Manager" } }),
+      expect.objectContaining({ body: { userId: "u1", role: "Associate" } }),
     );
+    // What the caller sees is the MEMBERSHIP role, not the reduced one.
     expect(result.role).toBe("Manager");
-    expect(h.writeAudit).toHaveBeenCalledWith(
-      h.fakeTx,
-      expect.objectContaining({
-        entity: "user",
-        entityId: "u1",
-        actor: "actor1",
-        action: "setRole",
-      }),
+  });
+
+  it("tells Better Auth the admin value when the new role can administer the workspace", async () => {
+    h.changeRole.mockResolvedValue({
+      member: { membershipId: "m1", roleId: "ar_Owner", role: "Owner" },
+    });
+    h.setRole.mockResolvedValue({ user: { ...baseUser, role: "Owner" } });
+
+    await adminUserService.setRole(adminCtx, "u1", "ar_Owner");
+
+    expect(h.setRole).toHaveBeenCalledWith(
+      expect.objectContaining({ body: { userId: "u1", role: "Owner" } }),
     );
+  });
+
+  it("does not touch Better Auth when the guarded membership change is refused", async () => {
+    h.changeRole.mockRejectedValue(new AppError("CONFLICT", "last administrator"));
+
+    await expect(adminUserService.setRole(adminCtx, "u1", "ar_Associate")).rejects.toMatchObject({
+      code: "CONFLICT",
+    });
+
+    expect(h.setRole).not.toHaveBeenCalled();
+  });
+
+  it("refuses an account that is not a member here, before any write", async () => {
+    h.listByUser.mockResolvedValue([]);
+
+    await expect(adminUserService.setRole(adminCtx, "u1", "ar_Manager")).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
+
+    expect(h.changeRole).not.toHaveBeenCalled();
+    expect(h.setRole).not.toHaveBeenCalled();
   });
 });
 
@@ -345,7 +426,7 @@ describe("adminUserService.remove", () => {
  */
 describe("adminUserService — a target outside the acting workspace", () => {
   beforeEach(() => {
-    h.findByTenantAndUser.mockResolvedValue(null);
+    h.listByUser.mockResolvedValue([]);
   });
 
   it("refuses setRole and never calls Better Auth", async () => {
@@ -379,8 +460,93 @@ describe("adminUserService — a target outside the acting workspace", () => {
     });
   });
 
-  it("looks the target up in the ACTING workspace, not one named by the caller", async () => {
+  it("looks the target up by account, then decides against the ACTING workspace", async () => {
     await expect(adminUserService.remove(adminCtx, "victim")).rejects.toThrow();
-    expect(h.findByTenantAndUser).toHaveBeenCalledWith("t1", "victim");
+    expect(h.listByUser).toHaveBeenCalledWith("victim");
+  });
+});
+
+/**
+ * Scoping the LOOKUP is not scoping the EFFECT. Every mutation here reaches Better Auth, and those
+ * operations are global — `removeUser` deletes the account, `banUser` locks it everywhere,
+ * `setUserPassword` changes the one password it has. A membership check alone would let an
+ * administrator of one workspace delete an account that is also a member of another customer's:
+ * the target is legitimately theirs, the blast radius is not.
+ */
+describe("adminUserService — a target who also belongs to another workspace", () => {
+  beforeEach(() => {
+    h.listByUser.mockResolvedValue([
+      {
+        id: "m1",
+        tenantId: "t1",
+        userId: "u1",
+        status: "active",
+        roleId: "ar_Associate",
+        accessRole: { id: "ar_Associate", name: "Associate", capabilities: [] },
+      },
+      {
+        id: "m2",
+        tenantId: "t2",
+        userId: "u1",
+        status: "active",
+        roleId: "ar_Associate",
+        accessRole: { id: "ar_Associate", name: "Associate", capabilities: [] },
+      },
+    ]);
+  });
+
+  it("refuses to DELETE the account, which would remove them from the other workspace too", async () => {
+    await expect(adminUserService.remove(adminCtx, "u1")).rejects.toMatchObject({
+      code: "CONFLICT",
+    });
+    expect(h.removeUser).not.toHaveBeenCalled();
+  });
+
+  it("refuses to ban, which would lock them out everywhere", async () => {
+    await expect(adminUserService.ban(adminCtx, "u1", { reason: null })).rejects.toMatchObject({
+      code: "CONFLICT",
+    });
+    expect(h.banUser).not.toHaveBeenCalled();
+  });
+
+  it("refuses to reset the password they use in both workspaces", async () => {
+    await expect(adminUserService.resetPassword(adminCtx, "u1")).rejects.toMatchObject({
+      code: "CONFLICT",
+    });
+    expect(h.setUserPassword).not.toHaveBeenCalled();
+  });
+
+  it("refuses to change the role, which is written on the global account", async () => {
+    await expect(adminUserService.setRole(adminCtx, "u1", "Owner")).rejects.toMatchObject({
+      code: "CONFLICT",
+    });
+    expect(h.setRole).not.toHaveBeenCalled();
+  });
+
+  it("says WHY, since the caller may legitimately see this account", async () => {
+    await expect(adminUserService.remove(adminCtx, "u1")).rejects.toThrow(/another workspace/i);
+  });
+
+  it("ignores a membership that was already removed elsewhere", async () => {
+    h.listByUser.mockResolvedValue([
+      {
+        id: "m1",
+        tenantId: "t1",
+        userId: "u1",
+        status: "active",
+        roleId: "ar_Associate",
+        accessRole: { id: "ar_Associate", name: "Associate", capabilities: [] },
+      },
+      {
+        id: "m2",
+        tenantId: "t2",
+        userId: "u1",
+        status: "removed",
+        roleId: "ar_Associate",
+        accessRole: { id: "ar_Associate", name: "Associate", capabilities: [] },
+      },
+    ]);
+    h.removeUser.mockResolvedValue({ success: true });
+    await expect(adminUserService.remove(adminCtx, "u1")).resolves.toBeUndefined();
   });
 });

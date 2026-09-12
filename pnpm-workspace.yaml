@@ -34,6 +34,9 @@ catalog:
   pg-boss: ^12.28.0
   react: ^19.0.0
   react-dom: ^19.0.0
+  # MIT. Shared by `apps/web` and `packages/ui` since the console's charts moved into the shared
+  # component package, so it belongs here rather than being declared twice.
+  recharts: ^3.10.1
   typescript: ^5.7.2
   zod: ^4.4.3
 

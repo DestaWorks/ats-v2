@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { MODULES, ROLE_CAPABILITIES } from "@destaworks/domain/constants";
 
 /**
  * Field-encryption round-trip at the document repository boundary (B1 regression guard). The bug:
@@ -46,6 +47,8 @@ const doc = { originalFilename: "r.pdf", mimeType: "application/pdf" };
 const ctx = {
   tenantId: "t1",
   membershipId: "m1",
+  modules: MODULES,
+  capabilities: ROLE_CAPABILITIES.Owner,
   role: "Owner" as const,
   user: { id: "u1", email: "u@desta.works", name: "U" },
 };

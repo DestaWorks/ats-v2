@@ -198,7 +198,7 @@ describe("GET/POST /admin/users", () => {
   it("creates one and returns the one-time password, attributed to the session actor", async () => {
     h.create.mockResolvedValue({ user: USER, generatedPassword: "pw" });
     const actor = await admitted("create");
-    const body = { name: "Jane", email: "jane@desta.works", role: "Associate" as const };
+    const body = { name: "Jane", email: "jane@desta.works", roleId: "ar_Associate" };
     expect(await controller().create(actor, body)).toEqual({ user: USER, generatedPassword: "pw" });
     expect(h.create).toHaveBeenCalledWith(
       expect.objectContaining({ user: expect.objectContaining({ id: "owner1" }) }),
@@ -210,7 +210,7 @@ describe("GET/POST /admin/users", () => {
     const [pipe] = boundPipes(AdminUsersController, "create");
     expect(pipe).toBeInstanceOf(ZodValidationPipe);
     expect(
-      await renderFailure(() => pipe?.transform({ name: "J", email: "nope", role: "Wizard" })),
+      await renderFailure(() => pipe?.transform({ name: "J", email: "nope", roleId: "ar_Wizard" })),
     ).toMatchObject({ status: 422, body: { error: { code: "BAD_REQUEST" } } });
   });
 });
@@ -240,15 +240,15 @@ describe("the account mutations", () => {
   });
 
   it("sets a role and returns the same envelope shape", async () => {
-    h.setRole.mockResolvedValue({ ...USER, role: "Manager" });
+    h.setRole.mockResolvedValue({ ...USER, roleId: "ar_Manager" });
     const actor = await admitted("setRole");
-    expect(await controller().setRole(actor, "u9", { role: "Manager" })).toEqual({
-      user: { ...USER, role: "Manager" },
+    expect(await controller().setRole(actor, "u9", { roleId: "ar_Manager" })).toEqual({
+      user: { ...USER, roleId: "ar_Manager" },
     });
     expect(h.setRole).toHaveBeenCalledWith(
       expect.objectContaining({ user: expect.objectContaining({ id: "owner1" }) }),
       "u9",
-      "Manager",
+      "ar_Manager",
     );
   });
 

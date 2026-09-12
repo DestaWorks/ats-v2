@@ -103,7 +103,7 @@ export class AdminUsersController {
     @Param("id") id: string,
     @Body(new ZodValidationPipe(setRoleSchema)) body: ContractOutput<typeof setRoleSchema>,
   ): Promise<AdminUserEnvelopeDTO> {
-    return { user: await this.users.setRole(actor, id, body.role) };
+    return { user: await this.users.setRole(actor, id, body.roleId) };
   }
 
   @Post(":id/reset-password")

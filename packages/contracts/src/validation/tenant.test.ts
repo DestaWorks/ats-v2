@@ -36,17 +36,24 @@ describe("the tenancy request schemas", () => {
     expect(switchTenantSchema.safeParse({ tenant: "acme", role: "Owner" }).success).toBe(false);
   });
 
-  it("an invite names an account and a MEMBERSHIP role from the fixed enum", () => {
-    expect(inviteMemberSchema.parse({ email: " John@Desta.Works ", role: "Screener" })).toEqual({
+  /**
+   * The role is named by its ROW id, not by a value from an enum: roles are tenant-owned, so
+   * "Director" is not a stable identifier and a workspace may hold roles no enum could list. The
+   * id is a claim like any other — the service resolves it within the tenant before granting.
+   */
+  it("an invite names an account and one of the workspace's own role rows", () => {
+    expect(
+      inviteMemberSchema.parse({ email: " John@Desta.Works ", roleId: "ar_Screener" }),
+    ).toEqual({
       email: "John@Desta.Works",
-      role: "Screener",
+      roleId: "ar_Screener",
     });
-    expect(inviteMemberSchema.safeParse({ email: "john@desta.works", role: "Root" }).success).toBe(
+    expect(inviteMemberSchema.safeParse({ email: "john@desta.works", roleId: "" }).success).toBe(
       false,
     );
-    expect(inviteMemberSchema.safeParse({ email: "not-an-email", role: "Owner" }).success).toBe(
-      false,
-    );
+    expect(
+      inviteMemberSchema.safeParse({ email: "not-an-email", roleId: "ar_Owner" }).success,
+    ).toBe(false);
   });
 
   it("an invite cannot smuggle a membership status past the schema", () => {

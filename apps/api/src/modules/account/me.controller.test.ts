@@ -163,13 +163,19 @@ describe("the /me routes keep the Next.js verbs, paths and statuses", () => {
 });
 
 describe("GET /me", () => {
-  it("returns the session user's identity and role, and nothing else", async () => {
-    expect(controller().me(await admitted("me", "Owner"))).toEqual({
+  it("returns the session user's identity, role and capabilities, and nothing else", async () => {
+    const response = controller().me(await admitted("me", "Owner"));
+
+    expect(response).toMatchObject({
       id: "u1",
       email: "o@desta.works",
       name: "Owner",
       role: "Owner",
     });
+    // The capability set travels with the identity so the client can hide what a member cannot
+    // use. UX only — every one of those decisions is re-made server-side.
+    expect(response.capabilities).toContain("manageUsers");
+    expect(Object.keys(response).sort()).toEqual(["capabilities", "email", "id", "name", "role"]);
   });
 
   it("401s signed out, with the same envelope the Next.js route returns", async () => {

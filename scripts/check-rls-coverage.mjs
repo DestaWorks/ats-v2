@@ -35,14 +35,22 @@ const UNSCOPED_STORAGE_KEY_BUDGET = 0;
 const STORAGE_MODULE = "packages/integrations/src/storage.ts";
 
 /**
- * The one model that names a tenant and is still global, with the reason.
+ * The models that name a tenant and are still global, each with its reason.
  *
  * `Membership` IS the tenant boundary rather than a thing inside it. Scoping it to the active
  * tenant would make "which tenants may this user switch to" unanswerable, and an RLS policy on it
  * would break sign-in for anyone with more than one membership. Its authorization is that a query
  * always filters by `userId`, which the session establishes.
+ *
+ * `AccessRole` is read to BUILD a context — it is where a membership's capabilities come from — so
+ * an RLS policy would be unsatisfiable exactly when it is needed, and would put a private
+ * transaction on every request's authorization path. Its guarantee is a composite foreign key
+ * instead: `memberships.(roleId, tenantId)` references `access_roles.(id, tenantId)`, so a
+ * membership holding another tenant's role is unrepresentable rather than merely filtered out.
+ *
+ * Adding a THIRD entry here needs the same kind of argument written down, not just an edit.
  */
-const GLOBAL_MODELS_WITH_A_TENANT_ID = new Set(["Membership"]);
+const GLOBAL_MODELS_WITH_A_TENANT_ID = new Set(["Membership", "AccessRole"]);
 
 const failures = [];
 function fail(rule, message) {

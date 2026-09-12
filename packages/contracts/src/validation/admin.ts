@@ -4,7 +4,6 @@
  * these schemas validate OUR route inputs before they're forwarded to `auth.api.*`.
  */
 import { z } from "zod";
-import { ROLES } from "@destaworks/domain/constants";
 
 // --- Users ----------------------------------------------------------------
 
@@ -13,7 +12,11 @@ export interface AdminUserDTO {
   name: string;
   email: string;
   image: string | null;
+  /** The MEMBERSHIP role's display name in this workspace. */
   role: string;
+  /** The role ROW's id — what a role change names. Empty for a mutation response Better Auth
+   *  answered, where only the account is in hand. */
+  roleId: string;
   banned: boolean;
   banReason: string | null;
   banExpires: string | null; // ISO
@@ -44,13 +47,13 @@ export const createUserSchema = z
   .object({
     name: z.string().trim().min(1).max(200),
     email: z.string().trim().email().max(200),
-    role: z.enum(ROLES),
+    roleId: z.string().min(1).max(64),
     password: z.string().min(8).max(200).optional(),
   })
   .strict();
 export type CreateUserInput = z.infer<typeof createUserSchema>;
 
-export const setRoleSchema = z.object({ role: z.enum(ROLES) }).strict();
+export const setRoleSchema = z.object({ roleId: z.string().min(1).max(64) }).strict();
 
 export const banUserSchema = z
   .object({
@@ -84,4 +87,4 @@ export interface AccessRequestListDTO {
 }
 
 /** Approving picks a role — legacy's Admin Panel never had this step (a real improvement). */
-export const approveRequestSchema = z.object({ role: z.enum(ROLES) }).strict();
+export const approveRequestSchema = z.object({ roleId: z.string().min(1).max(64) }).strict();

@@ -7,6 +7,7 @@ import type {
 import type { AuthContext } from "@destaworks/auth/guards";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { RequireCapability } from "../../common/decorators/require-capability.decorator";
+import { RequireModule } from "../../common/decorators/require-module.decorator";
 import { CapabilityGuard } from "../../common/guards/capability.guard";
 import { SessionAuthGuard } from "../../common/guards/session-auth.guard";
 import type { ServiceOf } from "../service-token";
@@ -21,6 +22,7 @@ import { CLIENT_PORTAL_SERVICE } from "../portal/portal.module";
  */
 @Controller("crm/clients/:id/portal")
 @UseGuards(SessionAuthGuard, CapabilityGuard)
+@RequireModule("portal")
 @RequireCapability("configureClientPortal")
 export class CrmClientPortalAdminController {
   constructor(

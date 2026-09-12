@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
+import { ROLE_CAPABILITIES } from "@destaworks/domain/constants";
 
 /**
  * Proves the DTO's PII boundary: `licenseNumber` is returned only to a `viewCredentials`
@@ -59,12 +60,12 @@ const row: CandidateRow = {
 
 describe("toCandidateDTO — licenseNumber PII gate", () => {
   it("includes licenseNumber for a viewCredentials holder", () => {
-    const dto = toCandidateDTO(row, { role: "Owner" });
+    const dto = toCandidateDTO(row, { capabilities: ROLE_CAPABILITIES.Owner });
     expect(dto.licenseNumber).toBe("RN-123456");
   });
 
   it("omits licenseNumber for a viewer without the capability", () => {
-    const dto = toCandidateDTO(row, { role: "Associate" });
+    const dto = toCandidateDTO(row, { capabilities: ROLE_CAPABILITIES.Associate });
     expect("licenseNumber" in dto).toBe(false);
     // non-sensitive fields still pass through
     expect(dto.name).toBe("Jane Prescriber");

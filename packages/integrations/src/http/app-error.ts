@@ -1,6 +1,7 @@
 export type AppErrorCode =
   | "UNAUTHORIZED"
   | "FORBIDDEN"
+  | "PLAN_UPGRADE_REQUIRED"
   | "NOT_FOUND"
   | "BAD_REQUEST"
   | "CONFLICT"
@@ -14,6 +15,11 @@ export type AppErrorCode =
 const DEFAULT_STATUS: Record<AppErrorCode, number> = {
   UNAUTHORIZED: 401,
   FORBIDDEN: 403,
+  // Deliberately NOT 403. "You may not" and "your plan does not include this" are different
+  // answers: the first is an access decision about a person, the second is an upsell about a
+  // purchase. Collapsing them would show a customer an access-denied page for something they
+  // could simply buy, which reads as a bug.
+  PLAN_UPGRADE_REQUIRED: 402,
   NOT_FOUND: 404,
   BAD_REQUEST: 400,
   CONFLICT: 409,

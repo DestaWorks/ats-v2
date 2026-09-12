@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { MODULES, ROLE_CAPABILITIES } from "@destaworks/domain/constants";
 
 /**
  * `briefService` — Wave 5.1. Covers the deterministic save/get persistence paths (upsert-in-a-
@@ -48,6 +49,8 @@ import { briefService } from "./brief.service";
 const actor = {
   tenantId: "t1",
   membershipId: "u1-m",
+  modules: MODULES,
+  capabilities: ROLE_CAPABILITIES.Owner,
   user: { id: "u1", email: "o@desta.works", name: "Owner" },
   role: "Owner" as const,
 };

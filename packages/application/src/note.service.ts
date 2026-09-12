@@ -25,7 +25,7 @@ export type NoteViewer = CapabilityViewer;
  * one-line change — the DTO/route/page never move.
  */
 export function visibleNotes(notes: NoteRow[], viewer: NoteViewer): NoteRow[] {
-  if (hasCapability(viewer.role, "viewAllNoteTypes")) return notes;
+  if (hasCapability(viewer, "viewAllNoteTypes")) return notes;
   return notes.filter((n) => n.noteType === "internal");
 }
 

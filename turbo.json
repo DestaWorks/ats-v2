@@ -125,6 +125,14 @@
         "scripts/check-runtime-manifest.mjs"
       ]
     },
+    "//#app:module-check": {
+      "inputs": [
+        "apps/api/src/modules/**",
+        "apps/api/src/common/guards/**",
+        "apps/api/src/common/decorators/**",
+        "scripts/check-module-gates.mjs"
+      ]
+    },
     "//#app:tenant-check": {
       "inputs": [
         "apps/*/src/**",

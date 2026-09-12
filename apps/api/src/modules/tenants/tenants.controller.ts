@@ -1,11 +1,24 @@
-import { Body, Controller, Delete, Get, Inject, Param, Post, Res, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Inject,
+  Param,
+  Patch,
+  Post,
+  Res,
+  UseGuards,
+} from "@nestjs/common";
 import {
   acceptInvitationSchema,
+  changeMemberRoleSchema,
   inviteMemberSchema,
   switchTenantSchema,
   type DeleteTenantMemberResponse,
   type GetTenantMembersResponse,
   type GetTenantsResponse,
+  type PatchTenantMemberRoleResponse,
   type PostTenantMemberAcceptResponse,
   type PostTenantMemberResponse,
   type PostTenantSwitchResponse,
@@ -124,6 +137,24 @@ export class TenantsController {
     @CurrentTenant() tenant: TenantContext,
   ): Promise<PostTenantMemberResponse> {
     return this.memberships.invite(tenant, body);
+  }
+
+  /**
+   * PATCH /tenants/members/:membershipId/role — change what a member may do here.
+   *
+   * On the membership, not the account: `Membership.role` is what every capability check reads.
+   * The gate is `manageRoles` rather than `manageUsers`, enforced in the service beside the audit
+   * row, like every other member-management rule in this controller.
+   */
+  @Patch("members/:membershipId/role")
+  @UseGuards(SessionAuthGuard, TenantGuard)
+  async changeRole(
+    @Param("membershipId") membershipId: string,
+    @Body(new ZodValidationPipe(changeMemberRoleSchema))
+    body: ContractOutput<typeof changeMemberRoleSchema>,
+    @CurrentTenant() tenant: TenantContext,
+  ): Promise<PatchTenantMemberRoleResponse> {
+    return this.memberships.changeRole(tenant, membershipId, body);
   }
 
   /** DELETE /tenants/members/:membershipId — revoke access, effective on their next request. */

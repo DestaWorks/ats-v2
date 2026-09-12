@@ -13,7 +13,7 @@ export default async function RoleDetailPage({ params }: { params: Promise<{ id:
       matches={matches}
       dormantMatches={dormantMatches}
       clients={clients}
-      canManageWeights={hasCapability(user.role, "viewReports")}
+      canManageWeights={hasCapability(user, "viewReports")}
     />
   );
 }

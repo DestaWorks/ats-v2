@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { stateBoardLink } from "@destaworks/domain/constants";
+import { UpsellState } from "@destaworks/ui/upsell-state";
+import { stateBoardLink, hasModule } from "@destaworks/domain/constants";
 import { requirePageUser } from "@/lib/page-user";
 import type { LicenseVerifyDashboardDTO } from "@destaworks/contracts/validation/license-verify";
 import { apiGet } from "@/lib/api/server";
@@ -15,7 +16,15 @@ import { expiryDaysColor } from "../pipeline/lib/status-style";
  * lives; that's already the `/candidates/:id` License tab. This page only launches into it.
  */
 export default async function LicenseVerifyPage() {
-  await requirePageUser();
+  const user = await requirePageUser();
+
+  if (!hasModule(user.modules, "compliance")) {
+    return (
+      <div className="flex flex-col gap-4 px-8 py-6">
+        <UpsellState feature="Compliance" />
+      </div>
+    );
+  }
   const { queue, timeline, queueTruncated } = await apiGet<LicenseVerifyDashboardDTO>(
     "/license-verify/dashboard",
   );

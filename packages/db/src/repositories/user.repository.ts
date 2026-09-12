@@ -46,10 +46,12 @@ export const userRepository = {
    * The administration screen's roster for one workspace: every account holding a membership here,
    * in any status, with the account-management fields that screen acts on.
    *
-   * Scoped by the same membership predicate as `listByTenant`, and for the same reason. `role` is
-   * the Better Auth `User.role` column rather than `Membership.role` because that is still the
-   * column `setRole` writes through the admin plugin — showing the other one would report a role
-   * this screen cannot change. Retiring that column is SAAS-RESTRUCTURE-PLAN 6.4.
+   * Scoped by the same membership predicate as `listByTenant`, and for the same reason.
+   *
+   * `role` comes from the MEMBERSHIP's role row, not from `User.role`. It used to be the latter,
+   * because that was the only column the screen could write — which was itself the defect: the
+   * column authorizes nothing, so the roster reported one role while the guards enforced another.
+   * Now that the screen changes the membership, the roster reports what it changes.
    */
   listAdminUsersByTenant(tenantId: string, tx?: Prisma.TransactionClient) {
     return db(tx).user.findMany({
@@ -59,11 +61,15 @@ export const userRepository = {
         name: true,
         email: true,
         image: true,
-        role: true,
         banned: true,
         banReason: true,
         banExpires: true,
         createdAt: true,
+        memberships: {
+          where: { tenantId },
+          select: { roleId: true, accessRole: { select: { name: true } } },
+          take: 1,
+        },
       },
       orderBy: { createdAt: "desc" },
       take: REFERENCE_ROWS_CAP,

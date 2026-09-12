@@ -156,7 +156,7 @@ export const dailyService = {
    * through TODAY here, not the full week, since this drives an in-progress "WTD" summary).
    */
   async overview(ctx: TenantContext, date: string, tz: number): Promise<DailyOverviewDTO> {
-    const canSetTargets = hasCapability(ctx.role, SET_TARGETS_CAP);
+    const canSetTargets = hasCapability(ctx, SET_TARGETS_CAP);
     const monday = mondayOf(date);
     const [target, live, actual, clients, users, targetsToday, weekLogs] =
       await withTenantTransaction(ctx, async () =>
@@ -214,7 +214,7 @@ export const dailyService = {
 
   /** Set/replace one associate's targets for a day — LEADERSHIP only (audited). */
   async setTarget(input: SetTargetInput, ctx: TenantContext): Promise<void> {
-    if (!hasCapability(ctx.role, SET_TARGETS_CAP)) {
+    if (!hasCapability(ctx, SET_TARGETS_CAP)) {
       throw new AppError("FORBIDDEN", "Only leadership can set targets");
     }
     const names = await userRepository.namesByIds([input.userId]);
@@ -483,7 +483,7 @@ export const dailyService = {
    * only, same tier as `setTarget` (never Owner/Admin-only `manageUsers`). Audited.
    */
   async addFeedback(input: AddFeedbackInput, ctx: TenantContext): Promise<void> {
-    if (!hasCapability(ctx.role, SET_TARGETS_CAP)) {
+    if (!hasCapability(ctx, SET_TARGETS_CAP)) {
       throw new AppError("FORBIDDEN", "Only leadership can post feedback");
     }
     const names = await userRepository.namesByIds([input.userId]);
@@ -515,7 +515,7 @@ export const dailyService = {
    * live counts, matching legacy's own inputs). LEADERSHIP only, same tier as `setTarget`.
    */
   async teamBreakdown(weekStart: string, ctx: TenantContext): Promise<TeamBreakdownDTO> {
-    if (!hasCapability(ctx.role, SET_TARGETS_CAP)) {
+    if (!hasCapability(ctx, SET_TARGETS_CAP)) {
       throw new AppError("FORBIDDEN", "Only leadership can view the team breakdown");
     }
     const monday = mondayOf(weekStart);

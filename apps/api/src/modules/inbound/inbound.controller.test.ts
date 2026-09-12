@@ -1,4 +1,5 @@
 import "reflect-metadata";
+import { MODULES, ROLE_CAPABILITIES } from "@destaworks/domain/constants";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
 /**
@@ -52,6 +53,8 @@ function controllerWith(methods: Partial<InboundService>): InboundController {
 const USER: AuthContext = {
   tenantId: "t1",
   membershipId: "u1-m",
+  modules: MODULES,
+  capabilities: ROLE_CAPABILITIES.Associate,
   user: { id: "u1", email: "op@desta.works", name: "Operator" },
   role: "Associate",
 };
@@ -70,6 +73,7 @@ describe("InboundController — declared routes", () => {
         route: "POST /inbound/triage",
         guards: [...session, "RateLimitGuard"],
         capability: null,
+        module: null,
         rateLimit: "inbound-triage",
         status: 200,
       },
@@ -77,6 +81,7 @@ describe("InboundController — declared routes", () => {
         route: "POST /inbound/attach",
         guards: session,
         capability: null,
+        module: null,
         rateLimit: null,
         status: 200,
       },
@@ -84,6 +89,7 @@ describe("InboundController — declared routes", () => {
         route: "POST /inbound/save",
         guards: session,
         capability: null,
+        module: null,
         rateLimit: null,
         status: 201,
       },

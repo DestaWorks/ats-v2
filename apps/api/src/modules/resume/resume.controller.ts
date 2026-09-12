@@ -17,6 +17,7 @@ import { SessionAuthGuard } from "../../common/guards/session-auth.guard";
 import { ZodValidationPipe, type ContractOutput } from "../../common/pipes/zod-validation.pipe";
 import type { ServiceOf } from "../service-token";
 import { RESUME_SERVICE } from "./resume.tokens";
+import { RequireModule } from "../../common/decorators/require-module.decorator";
 
 /**
  * The Parse Resume flow: extract structured data from a resume, get a signed URL to upload the raw
@@ -28,6 +29,7 @@ import { RESUME_SERVICE } from "./resume.tokens";
  */
 @Controller("resume")
 @UseGuards(SessionAuthGuard, RateLimitGuard)
+@RequireModule("ai")
 export class ResumeController {
   constructor(@Inject(RESUME_SERVICE) private readonly resumes: ServiceOf<typeof RESUME_SERVICE>) {}
 

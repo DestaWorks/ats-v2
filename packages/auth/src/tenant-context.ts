@@ -3,7 +3,7 @@ import {
   type ResolverMembershipRow as MembershipRow,
 } from "@destaworks/db/memberships";
 import { setLogContext } from "@destaworks/config/logger/request-context";
-import { isRole, type Role } from "@destaworks/domain/constants";
+import { modulesForPlan, toCapabilities } from "@destaworks/domain/constants";
 import type { TenantContext } from "@destaworks/domain/tenant";
 import { AppError } from "@destaworks/integrations/http/app-error";
 import type { AuthUser } from "./guards";
@@ -47,7 +47,7 @@ export interface TenantChoice {
   readonly tenantId: string;
   readonly slug: string;
   readonly name: string;
-  readonly role: Role;
+  readonly role: string;
   /** `active` (switchable) or `invited` (needs accepting first). Removed memberships are omitted. */
   readonly status: "active" | "invited";
 }
@@ -70,15 +70,13 @@ export type TenantResolution =
   | { readonly outcome: "none" };
 
 /**
- * The role a membership grants, narrowed to the fixed enum.
+ * The role NAME a membership carries — for display and the audit trail, never for a decision.
  *
- * An unrecognised value collapses to the least privileged role rather than throwing — identical to
- * how `getCurrentUser` treats a session role. A row written by a future migration, or by hand,
- * must never fail open, and refusing the request outright would take a whole tenant offline over
- * one bad string.
+ * It is read from the joined role row rather than `memberships.role`, so a rename in the role
+ * editor shows up everywhere at once instead of leaving the two columns to drift.
  */
-function roleOf(row: MembershipRow): Role {
-  return isRole(row.role) ? row.role : "Associate";
+function roleNameOf(row: MembershipRow): string {
+  return row.accessRole.name;
 }
 
 /**
@@ -106,7 +104,11 @@ function toContext(user: AuthUser, row: MembershipRow): TenantContext {
     tenantId: row.tenantId,
     membershipId: row.id,
     user: { id: user.id, email: user.email, name: user.name },
-    role: roleOf(row),
+    role: roleNameOf(row),
+    // The authorization input, resolved from the TENANT'S OWN role row rather than from a code
+    // table — which is the whole point of tenant-managed roles. Resolved once, per request.
+    capabilities: toCapabilities(row.accessRole.capabilities),
+    modules: modulesForPlan(row.tenant.plan),
   };
 }
 
@@ -115,7 +117,7 @@ function toChoice(row: MembershipRow): TenantChoice {
     tenantId: row.tenantId,
     slug: row.tenant.slug,
     name: row.tenant.name,
-    role: roleOf(row),
+    role: roleNameOf(row),
     status: row.status === "active" ? "active" : "invited",
   };
 }

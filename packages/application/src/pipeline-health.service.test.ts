@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { MODULES, ROLE_CAPABILITIES } from "@destaworks/domain/constants";
 import type { TenantContext } from "@destaworks/domain/tenant";
 
 /**
@@ -29,6 +30,8 @@ import { pipelineHealthService } from "./pipeline-health.service";
 const actor: TenantContext = {
   tenantId: "t1",
   membershipId: "u1-m",
+  modules: MODULES,
+  capabilities: ROLE_CAPABILITIES.Associate,
   user: { id: "u1", email: "u@desta.works", name: "Test User" },
   role: "Associate",
 };

@@ -134,6 +134,7 @@ describe("PortalRolesController — declared routes", () => {
         route: "POST /portal/roles",
         guards: ["PortalAuthGuard"],
         capability: null,
+        module: null,
         rateLimit: null,
         status: 201,
       },

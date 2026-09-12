@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { MODULES, ROLE_CAPABILITIES } from "@destaworks/domain/constants";
 
 const h = vi.hoisted(() => ({
   list: vi.fn(),
@@ -27,6 +28,8 @@ import { loadCohort, REPORT_ROW_CAP } from "./cohort";
 const ctx = {
   tenantId: "t1",
   membershipId: "m1",
+  modules: MODULES,
+  capabilities: ROLE_CAPABILITIES.Owner,
   role: "Owner" as const,
   user: { id: "u1", email: "o@desta.works", name: "Owner" },
 };

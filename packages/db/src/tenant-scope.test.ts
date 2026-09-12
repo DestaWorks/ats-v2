@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { MODULES, ROLE_CAPABILITIES } from "@destaworks/domain/constants";
 import type { TenantContext } from "@destaworks/domain/tenant";
 
 /**
@@ -146,6 +147,8 @@ const { withTenantTransaction, withTransaction } = await import("./with-transact
 const ctx: TenantContext = {
   tenantId: "tenant_a",
   membershipId: "m1",
+  modules: MODULES,
+  capabilities: ROLE_CAPABILITIES.Owner,
   user: { id: "u1", email: "a@example.com", name: "A" },
   role: "Owner",
 };
@@ -338,6 +341,8 @@ describe("client reuse", () => {
     await db({
       ...ctx,
       membershipId: "m2",
+      modules: MODULES,
+      capabilities: ROLE_CAPABILITIES.Owner,
       user: { id: "u2", email: "b@x", name: "B" },
     }).candidate.findMany({});
     expect(last().args["where"]).toEqual({ tenantId: "tenant_a" });

@@ -3,6 +3,7 @@ import type { CredentialsOverviewDTO } from "@destaworks/contracts/validation/cr
 import type { AuthContext } from "@destaworks/auth/guards";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { RequireCapability } from "../../common/decorators/require-capability.decorator";
+import { RequireModule } from "../../common/decorators/require-module.decorator";
 import { CapabilityGuard } from "../../common/guards/capability.guard";
 import { SessionAuthGuard } from "../../common/guards/session-auth.guard";
 import type { ServiceOf } from "../service-token";
@@ -16,6 +17,7 @@ import { CREDENTIALS_INTELLIGENCE_SERVICE } from "./credentials.tokens";
  */
 @Controller("credentials")
 @UseGuards(SessionAuthGuard, CapabilityGuard)
+@RequireModule("compliance")
 export class CredentialsController {
   constructor(
     @Inject(CREDENTIALS_INTELLIGENCE_SERVICE)

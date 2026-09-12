@@ -12,7 +12,7 @@
  *    user list clears.
  */
 import { z } from "zod";
-import { isTenantSlug, normaliseTenantSlug, ROLES } from "@destaworks/domain/constants";
+import { isTenantSlug, normaliseTenantSlug } from "@destaworks/domain/constants";
 
 /**
  * A tenant slug arriving in a request BODY — the switcher and the accept-invitation call.
@@ -40,17 +40,23 @@ export type AcceptInvitationInput = z.infer<typeof acceptInvitationSchema>;
 /**
  * `POST /tenants/members` — invite an existing account into the active tenant.
  *
- * `role` is the membership's role, which is why it is accepted at all: it is a per-tenant fact,
- * not a property of the person. The invite cannot create an account — see `membership.service.ts`
- * for why account creation stays on one path.
+ * `roleId` names one of the workspace's own role rows, not an enum value: roles are tenant-owned,
+ * so "Director" is not a stable identifier. The service resolves it within the tenant first.
  */
 export const inviteMemberSchema = z
   .object({
     email: z.string().trim().email().max(200),
-    role: z.enum(ROLES),
+    roleId: z.string().min(1).max(64),
   })
   .strict();
 export type InviteMemberInput = z.infer<typeof inviteMemberSchema>;
+
+/**
+ * `PATCH /tenants/members/:membershipId/role`. Not a duplicate of `admin.ts`'s `setRole`: that
+ * writes `User.role`, which Better Auth gates on and which authorizes nothing here.
+ */
+export const changeMemberRoleSchema = z.object({ roleId: z.string().min(1).max(64) }).strict();
+export type ChangeMemberRoleInput = z.infer<typeof changeMemberRoleSchema>;
 
 /** One workspace in the switcher. Names the tenant and this user's standing in it, nothing else. */
 export interface TenantChoiceDTO {
@@ -68,7 +74,10 @@ export interface TenantMemberDTO {
   userId: string;
   name: string;
   email: string;
+  /** Display NAME only — two workspaces' "Director" may grant different things. */
   role: string;
+  /** The role ROW's id — what a role change or a dropdown selection names. */
+  roleId: string;
   status: string;
   createdAt: string; // ISO
 }
@@ -184,6 +193,40 @@ export interface PostTenantMemberResponse {
 
 export interface PostTenantMemberAcceptResponse {
   tenant: TenantChoiceDTO;
+}
+
+/** One role a workspace owns. `capabilities` reaches the client for UI only — the server re-decides. */
+export interface AccessRoleDTO {
+  id: string;
+  name: string;
+  capabilities: string[];
+  /** The built-in this was cloned from, or null for an invented role. */
+  templateKey: string | null;
+  /** Built-ins may be edited but not deleted. */
+  isBuiltIn: boolean;
+  /** How many members hold it — what makes a delete safe or refused. */
+  memberCount: number;
+}
+
+export interface GetTenantRolesResponse {
+  roles: AccessRoleDTO[];
+}
+
+export interface TenantRoleResponse {
+  role: AccessRoleDTO;
+}
+
+/** `capabilities` is validated server-side against `CAPABILITIES`; an unknown code is rejected. */
+export const upsertAccessRoleSchema = z
+  .object({
+    name: z.string().trim().min(1).max(60),
+    capabilities: z.array(z.string().max(64)).max(100),
+  })
+  .strict();
+export type UpsertAccessRoleInput = z.infer<typeof upsertAccessRoleSchema>;
+
+export interface PatchTenantMemberRoleResponse {
+  member: TenantMemberDTO;
 }
 
 export interface DeleteTenantMemberResponse {

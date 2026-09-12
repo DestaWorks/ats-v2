@@ -8,6 +8,7 @@ import type {
 import type { AuthContext } from "@destaworks/auth/guards";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { RequireCapability } from "../../common/decorators/require-capability.decorator";
+import { RequireModule } from "../../common/decorators/require-module.decorator";
 import { CapabilityGuard } from "../../common/guards/capability.guard";
 import { SessionAuthGuard } from "../../common/guards/session-auth.guard";
 import { ZodValidationPipe, type ContractOutput } from "../../common/pipes/zod-validation.pipe";
@@ -22,6 +23,7 @@ import { SAVED_ICP_SERVICE } from "./discover.tokens";
  */
 @Controller("saved-icps")
 @UseGuards(SessionAuthGuard, CapabilityGuard)
+@RequireModule("discovery")
 @RequireCapability("viewClientDiscovery")
 export class SavedIcpsController {
   constructor(

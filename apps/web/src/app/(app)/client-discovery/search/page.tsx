@@ -24,12 +24,12 @@ export default async function ClientDiscoverySearchPage({
 }) {
   const user = await requirePageUser();
 
-  if (!hasCapability(user.role, "viewClientDiscovery")) {
+  if (!hasCapability(user, "viewClientDiscovery")) {
     return (
       <div className="mx-auto flex max-w-4xl flex-col gap-6 p-6 sm:p-8">
         <ErrorState
           title="You don't have access"
-          message="Client Discovery is limited to leadership roles. Ask an Owner, Director, Manager, or Admin for access."
+          message="Client Discovery is limited to roles that grant it. Ask a workspace administrator."
         />
       </div>
     );

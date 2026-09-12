@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { accessRoleService } from "@destaworks/application/access-role.service";
 import { membershipService } from "@destaworks/application/membership.service";
 import { platformAdminService } from "@destaworks/application/platform-admin.service";
 import { platformImpersonationService } from "@destaworks/application/platform-impersonation.service";
@@ -8,8 +9,10 @@ import { provideService } from "../service-token";
 import { PlatformImpersonationController } from "./platform-impersonation.controller";
 import { PlatformMetricsController } from "./platform-metrics.controller";
 import { PlatformTenantsController } from "./platform-tenants.controller";
+import { AccessRolesController } from "./access-roles.controller";
 import { TenantsController } from "./tenants.controller";
 import {
+  ACCESS_ROLE_SERVICE,
   MEMBERSHIP_SERVICE,
   PLATFORM_ADMIN_SERVICE,
   PLATFORM_IMPERSONATION_SERVICE,
@@ -18,6 +21,7 @@ import {
 } from "./tenants.tokens";
 
 export {
+  ACCESS_ROLE_SERVICE,
   MEMBERSHIP_SERVICE,
   PLATFORM_ADMIN_SERVICE,
   PLATFORM_IMPERSONATION_SERVICE,
@@ -36,12 +40,14 @@ export {
 @Module({
   controllers: [
     TenantsController,
+    AccessRolesController,
     PlatformTenantsController,
     PlatformImpersonationController,
     PlatformMetricsController,
   ],
   providers: [
     provideService(MEMBERSHIP_SERVICE, membershipService),
+    provideService(ACCESS_ROLE_SERVICE, accessRoleService),
     provideService(PLATFORM_ADMIN_SERVICE, platformAdminService),
     provideService(PLATFORM_IMPERSONATION_SERVICE, platformImpersonationService),
     provideService(PLATFORM_METRICS_SERVICE, platformMetricsService),
@@ -49,6 +55,7 @@ export {
   ],
   exports: [
     MEMBERSHIP_SERVICE,
+    ACCESS_ROLE_SERVICE,
     PLATFORM_ADMIN_SERVICE,
     PLATFORM_IMPERSONATION_SERVICE,
     PLATFORM_METRICS_SERVICE,

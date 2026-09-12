@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { toLegacyStatusLabel } from "@destaworks/domain/constants";
+import { toLegacyStatusLabel, MODULES, ROLE_CAPABILITIES } from "@destaworks/domain/constants";
 import type { TenantContext } from "@destaworks/domain/tenant";
 
 /**
@@ -42,12 +42,16 @@ import { migrationService } from "./migration.service";
 const owner: TenantContext = {
   tenantId: "t1",
   membershipId: "u1-m",
+  modules: MODULES,
+  capabilities: ROLE_CAPABILITIES.Owner,
   user: { id: "u1", email: "o@desta.works", name: "Owner" },
   role: "Owner",
 };
 const associate: TenantContext = {
   tenantId: "t1",
   membershipId: "u2-m",
+  modules: MODULES,
+  capabilities: ROLE_CAPABILITIES.Associate,
   user: { id: "u2", email: "a@desta.works", name: "Assoc" },
   role: "Associate",
 };

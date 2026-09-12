@@ -1,4 +1,5 @@
 import "reflect-metadata";
+import { MODULES, ROLE_CAPABILITIES } from "@destaworks/domain/constants";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
 /**
@@ -35,6 +36,8 @@ function userRequest(id: string): AuthenticatedRequest {
     user: {
       tenantId: "t1",
       membershipId: `${id}-m`,
+      modules: MODULES,
+      capabilities: ROLE_CAPABILITIES.Associate,
       user: { id, email: `${id}@desta.works`, name: "Test User" },
       role: "Associate",
     },

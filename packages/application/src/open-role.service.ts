@@ -441,7 +441,7 @@ export const openRoleService = {
     input: SaveMatchProfileInput,
     ctx: TenantContext,
   ): Promise<ClientMatchProfileDTO> {
-    if (!hasCapability(ctx.role, MATCH_PROFILE_CAP)) {
+    if (!hasCapability(ctx, MATCH_PROFILE_CAP)) {
       throw new AppError("FORBIDDEN", "Only leadership can retune client matching weights");
     }
     const row = await withTenantTransaction(ctx, async (tx) => {
@@ -465,7 +465,7 @@ export const openRoleService = {
 
   /** Leadership-only: reset a client to the system default weights. */
   async deleteMatchProfile(clientId: string, ctx: TenantContext): Promise<ClientMatchProfileDTO> {
-    if (!hasCapability(ctx.role, MATCH_PROFILE_CAP)) {
+    if (!hasCapability(ctx, MATCH_PROFILE_CAP)) {
       throw new AppError("FORBIDDEN", "Only leadership can retune client matching weights");
     }
     const existing = await clientMatchProfileRepository.findByClientId(ctx, clientId);

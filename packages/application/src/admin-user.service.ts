@@ -5,6 +5,8 @@ import { toIso, isoOrNull } from "@destaworks/domain/utils/iso";
 import { writeAudit } from "@destaworks/db/audit";
 import { membershipRepository } from "@destaworks/db/tenancy/membership.repository";
 import { userRepository } from "@destaworks/db/repositories/user.repository";
+import { accessRoleRepository } from "@destaworks/db/tenancy/access-role.repository";
+import { membershipService } from "./membership.service";
 import { AppError } from "@destaworks/integrations/http/app-error";
 import { withAnnouncedTenant } from "@destaworks/db/tenant-transaction";
 import type { TenantContext } from "@destaworks/domain/tenant";
@@ -39,13 +41,21 @@ interface BetterAuthUser {
   createdAt: Date;
 }
 
-function toDTO(user: BetterAuthUser): AdminUserDTO {
+/**
+ * The account fields, plus the workspace role the caller already knows.
+ *
+ * `role` is passed in rather than read off `user.role`: the Better Auth column is now a reduced
+ * admin/not-admin flag (see `betterAuthRoleFor`), so rendering it would report "Associate" for a
+ * Director. The membership's role is the one that means anything, and every caller here has it.
+ */
+function toDTO(user: BetterAuthUser, role: { id: string; name: string }): AdminUserDTO {
   return {
     id: user.id,
     name: user.name,
     email: user.email,
     image: user.image ?? null,
-    role: Array.isArray(user.role) ? (user.role[0] ?? "Associate") : (user.role ?? "Associate"),
+    role: role.name,
+    roleId: role.id,
     banned: user.banned ?? false,
     banReason: user.banReason ?? null,
     banExpires: isoOrNull(user.banExpires),
@@ -79,21 +89,67 @@ function toDTO(user: BetterAuthUser): AdminUserDTO {
  * the target are two questions; this file has to answer both.
  */
 /**
- * Refuse a target that holds no membership in the acting workspace.
+ * Refuse a target that is not this workspace's to act on.
  *
- * `NOT_FOUND`, not `FORBIDDEN`: a distinguishable "forbidden" would confirm that the id names a
- * real account somewhere on the installation, turning every mutation into an oracle for probing
- * other customers' user ids.
+ * Two conditions, because scoping the LOOKUP is not the same as scoping the EFFECT. Every mutation
+ * below reaches Better Auth, and those operations are GLOBAL: `removeUser` deletes the account
+ * outright, `banUser` locks it everywhere, `setUserPassword` changes the one password it has. A
+ * membership check alone would let an administrator of one workspace delete or lock an account
+ * that is also a member of another customer's — the target is legitimately theirs, the blast
+ * radius is not.
+ *
+ * So: the account must be a member HERE, and must belong to no other live workspace. Removing
+ * someone from a workspace they share with another is `membershipService.removeMember`, which
+ * ends the membership and leaves the account alone — the operation this screen actually wants.
+ *
+ * `NOT_FOUND`, not `FORBIDDEN`, for the first case: a distinguishable "forbidden" would confirm
+ * that the id names a real account somewhere on the installation, turning every mutation into an
+ * oracle for probing other customers' user ids. The second case is `CONFLICT` and explicit,
+ * because by then the caller has already proven they may see this account.
  */
-async function requireMemberOfTenant(ctx: TenantContext, userId: string): Promise<void> {
-  const membership = await membershipRepository.findByTenantAndUser(ctx.tenantId, userId);
-  if (membership === null) throw new AppError("NOT_FOUND", "No such user in this workspace");
+async function requireAccountBelongsToTenant(
+  ctx: TenantContext,
+  userId: string,
+): Promise<{ membershipId: string; role: { id: string; name: string } }> {
+  const memberships = await membershipRepository.listByUser(userId);
+
+  const here = memberships.find((m) => m.tenantId === ctx.tenantId);
+  if (here === undefined) throw new AppError("NOT_FOUND", "No such user in this workspace");
+
+  const elsewhere = memberships.filter(
+    (m) => m.tenantId !== ctx.tenantId && m.status !== "removed",
+  );
+  if (elsewhere.length > 0) {
+    throw new AppError(
+      "CONFLICT",
+      "That account also belongs to another workspace, so it cannot be changed from here. " +
+        "Remove them from this workspace instead.",
+    );
+  }
+
+  return { membershipId: here.id, role: { id: here.roleId, name: here.accessRole.name } };
+}
+
+/**
+ * Better Auth's admin plugin gates on `adminRoles: ["Owner", "Admin"]` and knows no other names, so
+ * a tenant's own role name would fail every `auth.api.*` call. Reduced to the one question it asks.
+ */
+function betterAuthRoleFor(role: { capabilities: string[] }): Role {
+  return role.capabilities.includes("manageUsers") ? "Owner" : "Associate";
 }
 
 export const adminUserService = {
   async list(ctx: TenantContext): Promise<AdminUserListDTO> {
     const users = await userRepository.listAdminUsersByTenant(ctx.tenantId);
-    return { users: users.map((u) => toDTO(u)), total: users.length };
+    return {
+      users: users.map(({ memberships, ...user }) =>
+        toDTO(user, {
+          id: memberships[0]?.roleId ?? "",
+          name: memberships[0]?.accessRole.name ?? "",
+        }),
+      ),
+      total: users.length,
+    };
   },
 
   /**
@@ -106,6 +162,9 @@ export const adminUserService = {
    * blocking the "sign in with either Google or password" flow entirely.
    */
   async create(ctx: TenantContext, input: CreateUserInput): Promise<GeneratedPasswordDTO> {
+    const role = await accessRoleRepository.findByIdInTenant(ctx.tenantId, input.roleId);
+    if (role === null) throw new AppError("NOT_FOUND", "No such role in this workspace");
+
     const password = input.password ?? generatePassword();
     const generatedPassword = input.password ? null : password;
     const result = await auth.api.createUser({
@@ -113,7 +172,7 @@ export const adminUserService = {
       body: {
         name: input.name,
         email: input.email,
-        role: input.role,
+        role: betterAuthRoleFor(role),
         password,
         data: { emailVerified: true },
       },
@@ -127,7 +186,8 @@ export const adminUserService = {
         {
           tenantId: ctx.tenantId,
           userId: result.user.id,
-          role: input.role,
+          roleId: role.id,
+          role: role.name,
           invitedById: ctx.user.id,
           status: "active",
         },
@@ -139,7 +199,7 @@ export const adminUserService = {
         actor: ctx.user.id,
         action: "create",
         tenantId: ctx.tenantId,
-        after: { email: result.user.email, role: input.role },
+        after: { email: result.user.email, role: role.name },
       });
       await writeAudit(tx, {
         entity: "membership",
@@ -147,33 +207,36 @@ export const adminUserService = {
         actor: ctx.user.id,
         action: "create",
         tenantId: ctx.tenantId,
-        after: { userId: result.user.id, role: input.role, status: "active" },
+        after: { userId: result.user.id, role: role.name, status: "active" },
       });
     });
-    return { user: toDTO(result.user), generatedPassword };
+    return { user: toDTO(result.user, { id: role.id, name: role.name }), generatedPassword };
   },
 
-  async setRole(ctx: TenantContext, userId: string, role: Role): Promise<AdminUserDTO> {
-    await requireMemberOfTenant(ctx, userId);
+  /**
+   * Delegates the authoritative write to `membershipService.changeRole`, which owns the guards.
+   * This used to call `auth.api.setRole` alone, writing `User.role` — a column that authorizes
+   * nothing, so a demotion looked successful and changed nothing.
+   *
+   * `User.role` is still synced afterwards because Better Auth gates its own endpoints on it. That
+   * is safe only because `requireAccountBelongsToTenant` has already refused accounts living in a
+   * second workspace. Membership moves first, so a failed sync leaves authorization correct.
+   */
+  async setRole(ctx: TenantContext, userId: string, roleId: string): Promise<AdminUserDTO> {
+    const { membershipId } = await requireAccountBelongsToTenant(ctx, userId);
+
+    const { member } = await membershipService.changeRole(ctx, membershipId, { roleId });
+
+    const role = await accessRoleRepository.findByIdInTenant(ctx.tenantId, member.roleId);
     const result = await auth.api.setRole({
       headers: await requestContext().headers(),
-      body: { userId, role },
+      body: { userId, role: betterAuthRoleFor(role ?? { capabilities: [] }) },
     });
-    await withAnnouncedTenant(ctx.tenantId, (tx) =>
-      writeAudit(tx, {
-        entity: "user",
-        entityId: userId,
-        actor: ctx.user.id,
-        action: "setRole",
-        tenantId: ctx.tenantId,
-        after: { role },
-      }),
-    );
-    return toDTO(result.user);
+    return toDTO(result.user, { id: member.roleId, name: member.role });
   },
 
   async ban(ctx: TenantContext, userId: string, input: BanUserInput): Promise<AdminUserDTO> {
-    await requireMemberOfTenant(ctx, userId);
+    const { role } = await requireAccountBelongsToTenant(ctx, userId);
     const result = await auth.api.banUser({
       headers: await requestContext().headers(),
       body: {
@@ -192,11 +255,11 @@ export const adminUserService = {
         after: { banReason: input.reason ?? null, expiresInDays: input.expiresInDays ?? null },
       }),
     );
-    return toDTO(result.user);
+    return toDTO(result.user, role);
   },
 
   async unban(ctx: TenantContext, userId: string): Promise<AdminUserDTO> {
-    await requireMemberOfTenant(ctx, userId);
+    const { role } = await requireAccountBelongsToTenant(ctx, userId);
     const result = await auth.api.unbanUser({
       headers: await requestContext().headers(),
       body: { userId },
@@ -210,13 +273,13 @@ export const adminUserService = {
         tenantId: ctx.tenantId,
       }),
     );
-    return toDTO(result.user);
+    return toDTO(result.user, role);
   },
 
   /** Generates + returns a new password once (never persisted in plaintext — the audit row
    *  records that a reset happened, never the password itself). */
   async resetPassword(ctx: TenantContext, userId: string): Promise<{ generatedPassword: string }> {
-    await requireMemberOfTenant(ctx, userId);
+    await requireAccountBelongsToTenant(ctx, userId);
     const generatedPassword = generatePassword();
     await auth.api.setUserPassword({
       headers: await requestContext().headers(),
@@ -235,7 +298,7 @@ export const adminUserService = {
   },
 
   async remove(ctx: TenantContext, userId: string): Promise<void> {
-    await requireMemberOfTenant(ctx, userId);
+    await requireAccountBelongsToTenant(ctx, userId);
     await auth.api.removeUser({ headers: await requestContext().headers(), body: { userId } });
     await withAnnouncedTenant(ctx.tenantId, (tx) =>
       writeAudit(tx, {

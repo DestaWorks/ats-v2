@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { MODULES, ROLE_CAPABILITIES } from "@destaworks/domain/constants";
 
 /**
  * `membershipService` — the invitation lifecycle and the tenant switch.
@@ -14,9 +15,11 @@ const h = vi.hoisted(() => ({
   findByTenantAndUser: vi.fn(),
   findByIdInTenant: vi.fn(),
   listByTenant: vi.fn(),
-  countActiveByRole: vi.fn(),
+  countActiveWithCapability: vi.fn(),
+  findRoleById: vi.fn(),
   upsertMembership: vi.fn(),
   updateStatus: vi.fn(),
+  updateRole: vi.fn(),
   namesByIds: vi.fn(),
   emailsByIds: vi.fn(),
   findByEmail: vi.fn(),
@@ -33,9 +36,15 @@ vi.mock("@destaworks/db/tenancy/membership.repository", () => ({
     findByTenantAndUser: h.findByTenantAndUser,
     findByIdInTenant: h.findByIdInTenant,
     listByTenant: h.listByTenant,
-    countActiveByRole: h.countActiveByRole,
     upsertMembership: h.upsertMembership,
     updateStatus: h.updateStatus,
+    updateRole: h.updateRole,
+  },
+}));
+vi.mock("@destaworks/db/tenancy/access-role.repository", () => ({
+  accessRoleRepository: {
+    findByIdInTenant: h.findRoleById,
+    countActiveWithCapability: h.countActiveWithCapability,
   },
 }));
 vi.mock("@destaworks/db/repositories/user.repository", () => ({
@@ -69,7 +78,7 @@ vi.mock("@destaworks/auth/tenant-context", () => ({
 import { membershipService } from "./membership.service";
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { AuthUser } from "@destaworks/auth/guards";
-import type { Role } from "@destaworks/domain/constants";
+import { isRole, type Role } from "@destaworks/domain/constants";
 
 const user: AuthUser = { id: "u1", email: "jane@desta.works", name: "Jane Doe" };
 
@@ -77,17 +86,30 @@ function contextWith(role: Role): TenantContext {
   return {
     tenantId: "t1",
     membershipId: "m1",
+    modules: MODULES,
+    capabilities: ROLE_CAPABILITIES[role],
     user: { id: "u1", email: "jane@desta.works", name: "Jane Doe" },
     role,
   };
 }
 
+/** A membership joined to its role row, derived from the role name so a test varies one value. */
 function membership(overrides: { id?: string; role?: string; status?: string; userId?: string }) {
+  const roleName = overrides.role ?? "Associate";
+  const template = isRole(roleName) ? ROLE_CAPABILITIES[roleName] : [];
   return {
     id: overrides.id ?? "m2",
     tenantId: "t1",
     userId: overrides.userId ?? "u2",
-    role: overrides.role ?? "Associate",
+    role: roleName,
+    roleId: `ar_${roleName}`,
+    accessRole: {
+      id: `ar_${roleName}`,
+      name: roleName,
+      capabilities: [...template],
+      templateKey: isRole(roleName) ? roleName : null,
+      isBuiltIn: isRole(roleName),
+    },
     status: overrides.status ?? "active",
     invitedById: null,
     createdAt: new Date("2026-01-01T00:00:00.000Z"),
@@ -103,6 +125,17 @@ function membership(overrides: { id?: string; role?: string; status?: string; us
 
 beforeEach(() => {
   vi.clearAllMocks();
+  h.findRoleById.mockImplementation(async (_tenantId: string, id: string) => {
+    const name = id.replace("ar_", "");
+    if (!isRole(name)) return null;
+    return {
+      id,
+      name,
+      capabilities: [...ROLE_CAPABILITIES[name]],
+      templateKey: name,
+      isBuiltIn: true,
+    };
+  });
   h.namesByIds.mockResolvedValue(new Map([["u2", "John Roe"]]));
   h.emailsByIds.mockResolvedValue(new Map([["u2", "john@desta.works"]]));
   h.writeAudit.mockResolvedValue(undefined);
@@ -167,7 +200,7 @@ describe("member management is gated on a capability, not a role name", () => {
       await expect(
         membershipService.invite(contextWith(role), {
           email: "john@desta.works",
-          role: "Associate",
+          roleId: "ar_Associate",
         }),
       ).rejects.toMatchObject({ code: "FORBIDDEN" });
       await expect(membershipService.listMembers(contextWith(role))).rejects.toMatchObject({
@@ -206,11 +239,18 @@ describe("invite", () => {
 
     const result = await membershipService.invite(contextWith("Admin"), {
       email: "john@desta.works",
-      role: "Screener",
+      roleId: "ar_Screener",
     });
 
     expect(h.upsertMembership).toHaveBeenCalledWith(
-      { tenantId: "t1", userId: "u2", role: "Screener", invitedById: "u1", status: "invited" },
+      {
+        tenantId: "t1",
+        userId: "u2",
+        roleId: "ar_Screener",
+        role: "Screener",
+        invitedById: "u1",
+        status: "invited",
+      },
       { tx: true },
     );
     expect(result.member.status).toBe("invited");
@@ -231,7 +271,7 @@ describe("invite", () => {
     await expect(
       membershipService.invite(contextWith("Owner"), {
         email: "nobody@desta.works",
-        role: "Associate",
+        roleId: "ar_Associate",
       }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect(h.upsertMembership).not.toHaveBeenCalled();
@@ -249,7 +289,7 @@ describe("invite", () => {
     await expect(
       membershipService.invite(contextWith("Owner"), {
         email: "john@desta.works",
-        role: "Owner",
+        roleId: "ar_Owner",
       }),
     ).rejects.toMatchObject({ code: "CONFLICT" });
     expect(h.upsertMembership).not.toHaveBeenCalled();
@@ -346,7 +386,7 @@ describe("remove", () => {
 
   it("refuses to remove the last member who can administer the workspace", async () => {
     h.findByIdInTenant.mockResolvedValue(membership({ role: "Owner", status: "active" }));
-    h.countActiveByRole.mockResolvedValue(1);
+    h.countActiveWithCapability.mockResolvedValue(1);
 
     await expect(membershipService.remove(contextWith("Owner"), "m2")).rejects.toMatchObject({
       code: "CONFLICT",
@@ -356,11 +396,11 @@ describe("remove", () => {
 
   it("counts administrators by CAPABILITY, so Owner and Admin both count and Director does not", async () => {
     h.findByIdInTenant.mockResolvedValue(membership({ role: "Owner", status: "active" }));
-    h.countActiveByRole.mockResolvedValue(2);
+    h.countActiveWithCapability.mockResolvedValue(2);
 
     await membershipService.remove(contextWith("Owner"), "m2");
 
-    expect(h.countActiveByRole).toHaveBeenCalledWith("t1", ["Owner", "Admin"]);
+    expect(h.countActiveWithCapability).toHaveBeenCalledWith("t1", "manageUsers");
   });
 
   it("does not run the last-administrator check for a member who cannot administer", async () => {
@@ -369,7 +409,7 @@ describe("remove", () => {
 
     await membershipService.remove(contextWith("Owner"), "m2");
 
-    expect(h.countActiveByRole).not.toHaveBeenCalled();
+    expect(h.countActiveWithCapability).not.toHaveBeenCalled();
   });
 
   it("refuses a second removal rather than writing a second audit row", async () => {
@@ -393,5 +433,174 @@ describe("listForUser", () => {
         { tenantId: "t1", slug: "acme", name: "Acme Health", role: "Owner", status: "active" },
       ],
     });
+  });
+});
+
+/**
+ * The invite guard has to live in the WRITE, not before it.
+ *
+ * `invite` reads for an existing active membership and then upserts — two statements. An accept
+ * landing between them would be overwritten, silently demoting someone who had just joined back
+ * to `invited`. The repository's upsert now carries `status: { not: "active" }` in its `where`, so
+ * the guard is part of the same statement; this asserts the service still passes the shape that
+ * makes that hold, since a future refactor could drop it without any test noticing.
+ */
+describe("invite — the demotion guard travels with the write", () => {
+  it("asks for an invited status, which is what the repository's where-clause keys off", async () => {
+    h.findByEmail.mockResolvedValue({ id: "u9" });
+    h.findActorById.mockResolvedValue({ id: "u9", email: "a@b.test", name: "A" });
+    h.findByTenantAndUser.mockResolvedValue(null);
+    h.upsertMembership.mockResolvedValue({
+      id: "m9",
+      tenantId: "t1",
+      userId: "u9",
+      role: "Associate",
+      roleId: "ar_Associate",
+      accessRole: {
+        id: "ar_Associate",
+        name: "Associate",
+        capabilities: [],
+        templateKey: "Associate",
+        isBuiltIn: true,
+      },
+      status: "invited",
+      invitedById: "u1",
+      createdAt: new Date(),
+      tenant: { id: "t1", slug: "t", name: "T", status: "active", deletedAt: null },
+    });
+
+    await membershipService.invite(contextWith("Owner"), {
+      email: "a@b.test",
+      roleId: "ar_Associate",
+    });
+
+    const [payload] = h.upsertMembership.mock.calls[0] ?? [];
+    expect(payload).toMatchObject({ status: "invited", tenantId: "t1", userId: "u9" });
+  });
+});
+
+describe("changeRole — the write that actually moves a member's permissions", () => {
+  beforeEach(() => {
+    h.findByIdInTenant.mockResolvedValue(membership({ role: "Associate" }));
+    h.updateRole.mockImplementation(async (id: string, role: { id: string; name: string }) =>
+      membership({ id, role: role.name }),
+    );
+    h.countActiveWithCapability.mockResolvedValue(3);
+  });
+
+  it("moves the role on the MEMBERSHIP, which is what capability checks read", async () => {
+    const result = await membershipService.changeRole(contextWith("Owner"), "m2", {
+      roleId: "ar_Director",
+    });
+
+    expect(h.updateRole).toHaveBeenCalledWith(
+      "m2",
+      { id: "ar_Director", name: "Director" },
+      { tx: true },
+    );
+    expect(result.member.role).toBe("Director");
+  });
+
+  it("audits the change with both the old role and the new one", async () => {
+    await membershipService.changeRole(contextWith("Owner"), "m2", { roleId: "ar_Manager" });
+
+    expect(h.writeAudit).toHaveBeenCalledWith(
+      { tx: true },
+      expect.objectContaining({
+        entity: "membership",
+        action: "change_member_role",
+        actor: "u1",
+        before: { roleId: "ar_Associate", role: "Associate" },
+        after: { roleId: "ar_Manager", role: "Manager" },
+      }),
+    );
+  });
+
+  it("needs manageRoles, not manageUsers — a Director may manage nobody's role", async () => {
+    await expect(
+      membershipService.changeRole(contextWith("Director"), "m2", { roleId: "ar_Manager" }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN", status: 403 });
+
+    expect(h.updateRole).not.toHaveBeenCalled();
+  });
+
+  it("refuses a member who was already removed", async () => {
+    h.findByIdInTenant.mockResolvedValue(membership({ status: "removed" }));
+
+    await expect(
+      membershipService.changeRole(contextWith("Owner"), "m2", { roleId: "ar_Manager" }),
+    ).rejects.toMatchObject({ code: "CONFLICT", status: 409 });
+  });
+
+  it("refuses an unknown membership rather than reporting success", async () => {
+    h.findByIdInTenant.mockResolvedValue(null);
+
+    await expect(
+      membershipService.changeRole(contextWith("Owner"), "nope", { roleId: "ar_Manager" }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND", status: 404 });
+  });
+
+  it("re-roles an INVITED member, so an invitation can be corrected before it is accepted", async () => {
+    h.findByIdInTenant.mockResolvedValue(membership({ status: "invited", role: "Associate" }));
+
+    await membershipService.changeRole(contextWith("Owner"), "m2", { roleId: "ar_Screener" });
+
+    expect(h.updateRole).toHaveBeenCalledWith(
+      "m2",
+      { id: "ar_Screener", name: "Screener" },
+      { tx: true },
+    );
+    // An invited member is not an administrator anywhere, so the count is never consulted.
+    expect(h.countActiveWithCapability).not.toHaveBeenCalled();
+  });
+
+  it("writes nothing when the role is unchanged, so the audit trail stays meaningful", async () => {
+    h.findByIdInTenant.mockResolvedValue(membership({ role: "Manager" }));
+
+    const result = await membershipService.changeRole(contextWith("Owner"), "m2", {
+      roleId: "ar_Manager",
+    });
+
+    expect(result.member.role).toBe("Manager");
+    expect(h.updateRole).not.toHaveBeenCalled();
+    expect(h.writeAudit).not.toHaveBeenCalled();
+  });
+
+  /** The same rule as `remove`, by the other door. */
+  it("refuses to demote the last member who can administer the workspace", async () => {
+    h.findByIdInTenant.mockResolvedValue(membership({ role: "Owner" }));
+    h.countActiveWithCapability.mockResolvedValue(1);
+
+    await expect(
+      membershipService.changeRole(contextWith("Owner"), "m2", { roleId: "ar_Director" }),
+    ).rejects.toMatchObject({ code: "CONFLICT", status: 409 });
+
+    expect(h.updateRole).not.toHaveBeenCalled();
+  });
+
+  it("allows the demotion once a second administrator exists", async () => {
+    h.findByIdInTenant.mockResolvedValue(membership({ role: "Owner" }));
+    h.countActiveWithCapability.mockResolvedValue(2);
+
+    await membershipService.changeRole(contextWith("Owner"), "m2", { roleId: "ar_Director" });
+
+    expect(h.updateRole).toHaveBeenCalledWith(
+      "m2",
+      { id: "ar_Director", name: "Director" },
+      { tx: true },
+    );
+  });
+
+  it("does not consult the count when the change keeps administration", async () => {
+    h.findByIdInTenant.mockResolvedValue(membership({ role: "Owner" }));
+
+    await membershipService.changeRole(contextWith("Owner"), "m2", { roleId: "ar_Admin" });
+
+    expect(h.countActiveWithCapability).not.toHaveBeenCalled();
+    expect(h.updateRole).toHaveBeenCalledWith(
+      "m2",
+      { id: "ar_Admin", name: "Admin" },
+      { tx: true },
+    );
   });
 });

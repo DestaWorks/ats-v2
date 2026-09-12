@@ -372,6 +372,12 @@ const INHERENTLY_UNSCOPED = {
     "The tenancy plane. `Membership` and `Tenant` are GLOBAL models and this file PRODUCES the " +
     "context every other repository demands — `findActiveByUserAndSlug` is the query that decides " +
     "which tenant a request may be in, so requiring a context here would be circular.",
+  "packages/db/src/tenancy/access-role.repository.ts":
+    "The same plane. A role row is where a membership's capabilities come from, so it is read to " +
+    "BUILD the context every other repository demands — a scoped client could not answer the " +
+    "question before the answer exists. Every method takes `tenantId` and puts it in the " +
+    "predicate, and the composite FK on `memberships.(roleId, tenantId)` makes a cross-tenant " +
+    "role assignment unrepresentable rather than merely filtered.",
   "packages/db/src/memberships.ts":
     "The same plane: resolves a user's memberships before any tenant is known.",
   "packages/db/src/tenant-scope.ts":

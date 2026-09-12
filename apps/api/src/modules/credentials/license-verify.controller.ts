@@ -5,6 +5,7 @@ import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { SessionAuthGuard } from "../../common/guards/session-auth.guard";
 import type { ServiceOf } from "../service-token";
 import { LICENSE_VERIFY_SERVICE } from "./credentials.tokens";
+import { RequireModule } from "../../common/decorators/require-module.decorator";
 
 /**
  * License Verify — the verification queue and the expiry timeline behind `/license-verify`.
@@ -18,6 +19,7 @@ import { LICENSE_VERIFY_SERVICE } from "./credentials.tokens";
  */
 @Controller("license-verify")
 @UseGuards(SessionAuthGuard)
+@RequireModule("compliance")
 export class LicenseVerifyController {
   constructor(
     @Inject(LICENSE_VERIFY_SERVICE)

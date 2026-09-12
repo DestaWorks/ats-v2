@@ -1,4 +1,6 @@
-import type { Role } from "./constants/roles";
+import type { Capability } from "./constants/roles";
+import type { Module } from "./constants/modules";
+import type { CapabilityHolder } from "./constants/roles";
 
 /**
  * Who is asking, and on whose behalf — resolved once per request by a guard and threaded down.
@@ -16,18 +18,33 @@ export interface TenantContext {
   readonly membershipId: string;
   /** Identity only. Deliberately carries no role: that is a per-tenant fact, above. */
   readonly user: { readonly id: string; readonly email: string; readonly name: string };
-  readonly role: Role;
+  /**
+   * The role's NAME, for display and the audit trail — never what anything authorizes on. Two
+   * workspaces can both have a "Director" that grants different things. A plain string, because
+   * a tenant may invent its own names.
+   */
+  readonly role: string;
+  /**
+   * The authorization input, resolved once per request from the tenant's role row. Never cached
+   * beyond one request, or a revoked permission outlives its revocation.
+   */
+  readonly capabilities: readonly Capability[];
+  /** What the TENANT bought, as against what this PERSON may do. A gate needs both to pass. */
+  readonly modules: readonly Module[];
 }
 
 /**
- * The minimum a capability decision needs — a role, which is always a role *in a tenant*.
+ * The minimum a capability decision needs — a resolved capability set.
  *
  * Every `TenantContext` is one, so a gate written against this takes the request's context
  * directly. It stays structural, and narrower than the context, so the pure PII-gating and
- * note-visibility functions can be exercised with a role and nothing else, and so a future
- * viewer that is not a tenant member (a client-portal contact) can be admitted by widening one
- * type rather than every signature that gates on a capability.
+ * note-visibility functions can be exercised with a capability list and nothing else, and so a
+ * viewer who is not a tenant member (a client-portal contact) can be admitted by widening one type
+ * rather than every signature that gates on a capability.
  */
-export interface CapabilityViewer {
-  readonly role: Role;
+export type CapabilityViewer = CapabilityHolder;
+
+/** The minimum an ENTITLEMENT decision needs. Every `TenantContext` is one. */
+export interface ModuleViewer {
+  readonly modules: readonly Module[];
 }

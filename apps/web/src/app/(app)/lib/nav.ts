@@ -1,8 +1,9 @@
 /**
  * App-shell navigation model — a pure, isomorphic helper shared by the server layout (which builds
- * the capability-gated item list) and the client nav (which highlights the active item). Kept free
- * of React/`next` imports so the active-link logic is unit-testable in the node-only Vitest runner.
+ * the gated item list) and the client nav (which highlights the active item). Kept free of
+ * React/`next` imports so the active-link logic is unit-testable in the node-only Vitest runner.
  */
+import type { Module } from "@destaworks/domain/constants";
 
 /**
  * Icon key per nav item — a plain string, not a component, so this file stays framework-agnostic
@@ -35,6 +36,8 @@ export type NavIconKey =
 export interface NavItem {
   href: string;
   label: string;
+  /** The module this item belongs to. The layout drops it when the tenant has not bought that. */
+  module?: Module;
   /** Section header this item renders under (e.g. "Recruiting"). Omitted → renders as a plain,
    *  headerless link in its array position (used for anchors like Overview/Admin that shouldn't
    *  live inside a collapsible section). */
@@ -57,11 +60,23 @@ export const BASE_NAV_ITEMS: readonly NavItem[] = [
 
   { href: "/daily-log", label: "Daily Log", group: "Home", icon: "clipboard" },
 
-  { href: "/sourcing", label: "Sourcing", group: "Recruiting", icon: "search" },
+  { href: "/sourcing", label: "Sourcing", group: "Recruiting", icon: "search", module: "sourcing" },
   { href: "/pipeline", label: "Pipeline", group: "Recruiting", icon: "board" },
-  { href: "/discover", label: "Discover", group: "Recruiting", icon: "sparkles" },
+  {
+    href: "/discover",
+    label: "Discover",
+    group: "Recruiting",
+    icon: "sparkles",
+    module: "discovery",
+  },
   { href: "/screening", label: "Screening", group: "Recruiting", icon: "check" },
-  { href: "/license-verify", label: "License Verify", group: "Recruiting", icon: "shield" },
+  {
+    href: "/license-verify",
+    label: "License Verify",
+    group: "Recruiting",
+    icon: "shield",
+    module: "compliance",
+  },
   { href: "/candidates", label: "Candidates", group: "Recruiting", icon: "users" },
   { href: "/roles", label: "Open Roles", group: "Recruiting", icon: "briefcase" },
 
@@ -119,4 +134,13 @@ export function activeNavHref(pathname: string, hrefs: readonly string[]): strin
     }
   }
   return best;
+}
+
+/**
+ * Drop items whose module the tenant has not bought.
+ *
+ * UX only — the server answers 402 either way. A link that always fails is worse than no link.
+ */
+export function navForModules(items: readonly NavItem[], modules: readonly Module[]): NavItem[] {
+  return items.filter((item) => item.module === undefined || modules.includes(item.module));
 }

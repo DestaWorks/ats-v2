@@ -15,7 +15,7 @@ export default async function TrashPage() {
   const user = await requirePageUser();
 
   const { items } = await apiGet<CandidateTrashDTO>("/candidates/trash");
-  const canPurge = hasCapability(user.role, "purgeCandidate");
+  const canPurge = hasCapability(user, "purgeCandidate");
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-5 p-6">

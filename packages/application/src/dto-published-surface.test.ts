@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
+import { ROLE_CAPABILITIES } from "@destaworks/domain/constants";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
@@ -106,7 +107,7 @@ describe("Candidate published surface", () => {
 
   it("emits exactly the published + gated fields for a viewCredentials holder", () => {
     const dto = toCandidateDTO(rowFromSchema("Candidate") as unknown as CandidateRow, {
-      role: "Owner",
+      capabilities: ROLE_CAPABILITIES.Owner,
     });
     expect(sorted(Object.keys(dto))).toEqual(
       sorted([...CANDIDATE_PUBLISHED_FIELDS, ...CANDIDATE_GATED_FIELDS]),
@@ -115,7 +116,7 @@ describe("Candidate published surface", () => {
 
   it("emits exactly the published fields for a viewer without the capability", () => {
     const dto = toCandidateDTO(rowFromSchema("Candidate") as unknown as CandidateRow, {
-      role: "Associate",
+      capabilities: ROLE_CAPABILITIES.Associate,
     });
     expect(sorted(Object.keys(dto))).toEqual(sorted(CANDIDATE_PUBLISHED_FIELDS));
     // Absent, not null — an unauthorized viewer must not be able to infer the field exists.
@@ -125,7 +126,9 @@ describe("Candidate published surface", () => {
   it("drops a column the whitelist does not name, for every role", () => {
     const row = rowFromSchema("Candidate", ["ssn", "diagnosisNotes"]);
     for (const role of ["Owner", "Associate"] as const) {
-      const dto = toCandidateDTO(row as unknown as CandidateRow, { role });
+      const dto = toCandidateDTO(row as unknown as CandidateRow, {
+        capabilities: ROLE_CAPABILITIES[role],
+      });
       expect(Object.keys(dto)).not.toContain("ssn");
       expect(Object.keys(dto)).not.toContain("diagnosisNotes");
     }
@@ -157,7 +160,7 @@ describe("Document published surface", () => {
 
   it("emits exactly the published + gated fields for a viewCredentials holder", () => {
     const dto = toDocumentDTO(rowFromSchema("Document") as unknown as DocumentRow, {
-      role: "Owner",
+      capabilities: ROLE_CAPABILITIES.Owner,
     });
     expect(sorted(Object.keys(dto))).toEqual(
       sorted([...DOCUMENT_PUBLISHED_FIELDS, ...DOCUMENT_GATED_FIELDS]),
@@ -167,7 +170,7 @@ describe("Document published surface", () => {
 
   it("emits exactly the published fields for a viewer without the capability", () => {
     const dto = toDocumentDTO(rowFromSchema("Document") as unknown as DocumentRow, {
-      role: "Associate",
+      capabilities: ROLE_CAPABILITIES.Associate,
     });
     expect(sorted(Object.keys(dto))).toEqual(sorted(DOCUMENT_PUBLISHED_FIELDS));
     expect(Object.hasOwn(dto, "extractedText")).toBe(false);
@@ -177,7 +180,9 @@ describe("Document published surface", () => {
   it("drops a column the whitelist does not name, for every role", () => {
     const row = rowFromSchema("Document", ["ocrRawPayload"]);
     for (const role of ["Owner", "Associate"] as const) {
-      const dto = toDocumentDTO(row as unknown as DocumentRow, { role });
+      const dto = toDocumentDTO(row as unknown as DocumentRow, {
+        capabilities: ROLE_CAPABILITIES[role],
+      });
       expect(Object.keys(dto)).not.toContain("ocrRawPayload");
     }
   });
