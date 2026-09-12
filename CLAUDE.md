@@ -94,6 +94,8 @@ read them as a record of what was built, not as instructions for new work.
 | `docs/IMPLEMENTATION-PLAN.md` | _Historical_ — the Wave 0–6 build guide: per-module tasks (schema→API→client→tests) + done-when. A record of what was built, not instructions for new work |
 | `docs/MIGRATION-CHEATSHEET.md` | _Superseded_ — which app to use month by month during the rebuild. Every domain is ported; only the data import is left |
 | `docs/ARCHITECTURE-PROPOSAL.md` | **The architecture decision: multi-tenant SaaS on a monorepo, with the reasoning and trade-offs** |
+| `docs/design/module-entitlements.md` | **Selling by module: entitlements vs permissions, the module split, and the four guards on tenant-managed roles** |
+| `docs/design/commercial-model.md` | **How firms buy: annual, per-seat, Starter/Growth/Scale, subdomain routing — decisions taken, and what is still open for Biruh** |
 | `docs/REMAINING-WORK.md` | **LIVE — everything outstanding, prioritised P0–P3, audited 2026-09-01** |
 | `docs/DOCKER.md` | **Running the app in containers — plain-language guide to the `pnpm docker:*` commands** |
 | `docs/MIGRATION-GAP-ANALYSIS.md` | Legacy Sheet → Postgres: migrate/derive/drop per tab + restructuring blockers |
