@@ -36,8 +36,9 @@ test("surfaces the two invite failure branches", async ({ page, request }) => {
   // server's real "No account with that email address" message, so this test starts failing the
   // moment someone fixes `messageForFailure` and needs updating alongside that fix.
   const nonexistentEmail = `e2e-no-such-account-${Date.now()}@example.com`;
+  await page.getByRole("button", { name: "Invite member", exact: true }).click();
   await page.getByLabel("Email").fill(nonexistentEmail);
-  await page.getByRole("button", { name: "Invite", exact: true }).click();
+  await page.getByRole("button", { name: "Send invitation", exact: true }).click();
   await expect(page.getByText("This candidate no longer exists.")).toBeVisible();
 
   // An email that already has an active membership in this workspace (any fixture user does,
@@ -50,8 +51,9 @@ test("surfaces the two invite failure branches", async ({ page, request }) => {
     "Associate",
     "E2eExisting123!",
   );
+  // The modal stays open on a refusal, so the second branch reuses it rather than reopening.
   await page.getByLabel("Email").fill(memberEmail);
-  await page.getByRole("button", { name: "Invite", exact: true }).click();
+  await page.getByRole("button", { name: "Send invitation", exact: true }).click();
   await expect(page.getByText("That account is already a member of this workspace")).toBeVisible();
 });
 

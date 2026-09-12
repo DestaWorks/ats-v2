@@ -26,7 +26,7 @@ async function signInFresh(
   email: string,
   password: string,
 ): Promise<{ context: Awaited<ReturnType<Browser["newContext"]>>; page: Page }> {
-  const context = await browser.newContext({ storageState: undefined });
+  const context = await browser.newContext({});
   const page = await context.newPage();
   await page.goto("/sign-in");
   await page.getByLabel("Email").fill(email);
@@ -54,8 +54,9 @@ test("invites across tenants, accepts via the header switcher, and resolves the 
   const ownerB = await signInFresh(browser, TENANT_B_OWNER_EMAIL, TENANT_B_OWNER_PASSWORD);
   await expect(ownerB.page).toHaveURL(/\/dashboard/);
   await ownerB.page.goto("/workspace");
+  await ownerB.page.getByRole("button", { name: "Invite member", exact: true }).click();
   await ownerB.page.getByLabel("Email").fill(inviteeEmail);
-  await ownerB.page.getByRole("button", { name: "Invite", exact: true }).click();
+  await ownerB.page.getByRole("button", { name: "Send invitation", exact: true }).click();
   await expect(ownerB.page.getByText(`Invited ${inviteeEmail}`)).toBeVisible();
   await ownerB.context.close();
 

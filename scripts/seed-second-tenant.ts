@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { auth } from "@destaworks/auth/auth";
 import { prisma } from "@destaworks/db/prisma";
+import { ROLES, ROLE_CAPABILITIES } from "@destaworks/domain/constants";
 
 /**
  * Seed a SECOND workspace and its own Owner — `seed-owner.ts`'s twin, not a rewrite of it.
@@ -30,6 +31,21 @@ async function main() {
     (await prisma.tenant.findUnique({ where: { slug } })) ??
     (await prisma.tenant.create({ data: { slug, name: tenantName, status: "active" } }));
   console.log(`✓ Workspace: ${tenant.name} (${tenant.slug})`);
+
+  // Roles are rows a workspace owns, so a workspace with none cannot hold a member at all.
+  await prisma.accessRole.createMany({
+    data: ROLES.map((roleName) => ({
+      tenantId: tenant.id,
+      name: roleName,
+      capabilities: [...ROLE_CAPABILITIES[roleName]],
+      templateKey: roleName,
+      isBuiltIn: true,
+    })),
+    skipDuplicates: true,
+  });
+  const ownerRole = await prisma.accessRole.findUniqueOrThrow({
+    where: { tenantId_name: { tenantId: tenant.id, name: "Owner" } },
+  });
 
   const existing = await prisma.user.findUnique({ where: { email } });
   const user =
@@ -61,7 +77,13 @@ async function main() {
     return;
   }
   await prisma.membership.create({
-    data: { tenantId: tenant.id, userId: user.id, role: "Owner", status: "active" },
+    data: {
+      tenantId: tenant.id,
+      userId: user.id,
+      roleId: ownerRole.id,
+      role: ownerRole.name,
+      status: "active",
+    },
   });
   console.log(`✓ Owner membership in ${tenant.slug}`);
 }
