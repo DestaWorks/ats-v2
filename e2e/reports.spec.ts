@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { gotoReady } from "./fixtures/navigate";
 
 /**
  * Reports (Wave 5.2) — leadership-gated `viewReports`, 10 server-computed report tabs sharing
@@ -10,7 +11,7 @@ import { test, expect } from "@playwright/test";
  * switching re-fetches rather than reusing stale Executive data.
  */
 test("renders the Executive report and switches to Pipeline Funnel", async ({ page }) => {
-  await page.goto("/reports");
+  await gotoReady(page, "/reports");
 
   await expect(page.getByRole("heading", { name: "Reports", exact: true })).toBeVisible();
 

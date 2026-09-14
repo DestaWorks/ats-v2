@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { gotoReady } from "./fixtures/navigate";
 
 /**
  * Roles tab (`apps/web/src/app/(app)/admin/roles-tab.tsx`) — role membership cards and the
@@ -10,8 +11,8 @@ import { test, expect } from "@playwright/test";
  * since other specs create fixture accounts and this suite doesn't reset the database between runs.
  */
 test("shows role membership counts and the permission matrix", async ({ page }) => {
-  await page.goto("/admin");
-  await page.getByRole("tab", { name: "Roles" }).click();
+  await gotoReady(page, "/admin");
+  await page.getByRole("button", { name: /\d+ Roles$/ }).click();
 
   await expect(page.getByRole("heading", { name: "Role Management" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Permission Matrix" })).toBeVisible();
@@ -23,17 +24,23 @@ test("shows role membership counts and the permission matrix", async ({ page }) 
   await expect(ownerCard).toBeVisible();
   await expect(ownerCard.getByText(/\d+ users?/)).toBeVisible();
 
-  // manageUsers: an admin-only capability — granted to Owner/Admin, not Associate.
-  const manageUsersRow = page.getByRole("row", { name: "manageUsers" });
-  await expect(manageUsersRow.locator("td").nth(1)).toHaveText("✓"); // Owner
-  await expect(manageUsersRow.locator("td").nth(6)).toHaveText("✓"); // Admin
-  await expect(manageUsersRow.locator("td").nth(4)).toHaveText("—"); // Screener
-  await expect(manageUsersRow.locator("td").nth(5)).toHaveText("—"); // Associate
+  // Columns come from the workspace's OWN `access_roles` rows, so their order is whatever the
+  // API returns — resolve each role's column by its header rather than pinning an index.
+  const grant = async (capability: string, role: string) => {
+    const headers = page.locator("thead th");
+    const names = await headers.allTextContents();
+    const column = names.findIndex((name) => name.trim() === role);
+    expect(column, `no column headed "${role}"`).toBeGreaterThan(0);
+    return page.getByRole("row", { name: capability }).locator("td").nth(column);
+  };
 
-  // viewReports: a leadership capability — granted to Director/Manager too, not Screener/Associate.
-  const viewReportsRow = page.getByRole("row", { name: "viewReports" });
-  await expect(viewReportsRow.locator("td").nth(2)).toHaveText("✓"); // Director
-  await expect(viewReportsRow.locator("td").nth(3)).toHaveText("✓"); // Manager
-  await expect(viewReportsRow.locator("td").nth(4)).toHaveText("—"); // Screener
-  await expect(viewReportsRow.locator("td").nth(5)).toHaveText("—"); // Associate
+  await expect(await grant("manageUsers", "Owner")).toHaveText("✓");
+  await expect(await grant("manageUsers", "Admin")).toHaveText("✓");
+  await expect(await grant("manageUsers", "Screener")).toHaveText("—");
+  await expect(await grant("manageUsers", "Associate")).toHaveText("—");
+
+  await expect(await grant("viewReports", "Director")).toHaveText("✓");
+  await expect(await grant("viewReports", "Manager")).toHaveText("✓");
+  await expect(await grant("viewReports", "Screener")).toHaveText("—");
+  await expect(await grant("viewReports", "Associate")).toHaveText("—");
 });

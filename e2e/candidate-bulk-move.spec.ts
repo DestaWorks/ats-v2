@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { gotoReady } from "./fixtures/navigate";
 import { createCandidate } from "./fixtures/api";
 
 /**
@@ -16,7 +17,7 @@ test("bulk-moves two candidates to a new stage", async ({ page, request }) => {
 
   // Both fixture names share this timestamp suffix — searching it alone matches both rows
   // without needing an exact/prefix match on the full "E2E Bulk A/B …" name.
-  await page.goto(`/candidates?search=${suffix}`);
+  await gotoReady(page, `/candidates?search=${suffix}`);
   await page.getByLabel(`Select ${nameA}`).check();
   await page.getByLabel(`Select ${nameB}`).check();
 

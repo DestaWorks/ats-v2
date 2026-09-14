@@ -1,4 +1,5 @@
 import { test, expect, type Route } from "@playwright/test";
+import { gotoReady } from "./fixtures/navigate";
 import type { ParsedJdDTO } from "@destaworks/contracts/validation/open-role";
 import { createClient } from "./fixtures/api";
 
@@ -54,17 +55,17 @@ test("autofills the add-role form from a pasted job description", async ({ page,
     });
   });
 
-  await page.goto("/roles");
+  await gotoReady(page, "/roles");
   await page.getByRole("button", { name: "+ Add role" }).click();
   await page.getByLabel("Paste a job description (optional)").fill(SAMPLE_JD_TEXT);
   await page.getByRole("button", { name: "✨ Autofill from JD" }).click();
 
-  await expect(page.getByLabel("Title", { exact: true })).toHaveValue(MOCK_PARSED_JD.title ?? "");
+  await expect(page.getByLabel(/^Title\*?$/)).toHaveValue(MOCK_PARSED_JD.title ?? "");
   await expect(page.getByLabel("Credential")).toHaveValue("PMHNP");
   await expect(page.getByLabel("City")).toHaveValue("Columbus");
   await expect(page.getByLabel("Rate")).toHaveValue("$110-130/hr");
   await expect(page.getByLabel("Priority")).toHaveValue("P1");
-  await expect(page.getByLabel("Description")).toHaveValue(MOCK_PARSED_JD.description ?? "");
+  await expect(page.getByLabel(/^Description$/)).toHaveValue(MOCK_PARSED_JD.description ?? "");
 
   // "Ohio" isn't a member of `US_STATES` (which holds two-letter codes) — `handleAutofill`'s
   // membership check must skip it rather than crash the Select on an unmatched value.

@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { gotoReady } from "./fixtures/navigate";
 
 /**
  * Admin — add a user (`apps/web/src/app/(app)/admin/users-tab.tsx`). Password is left blank
@@ -7,12 +8,11 @@ import { test, expect } from "@playwright/test";
 test("adds a user from the admin panel", async ({ page }) => {
   const email = `e2e-user-${Date.now()}@example.com`;
 
-  await page.goto("/admin");
-  await page.getByRole("tab", { name: "Users" }).click();
+  await gotoReady(page, "/admin");
   await page.getByRole("button", { name: "+ Add User" }).click();
-  await page.getByLabel("Name", { exact: true }).fill(`E2E User ${Date.now()}`);
-  await page.getByLabel("Email", { exact: true }).fill(email);
+  await page.getByLabel(/^Name\*?$/).fill(`E2E User ${Date.now()}`);
+  await page.getByLabel(/^Email\*?$/).fill(email);
   await page.getByRole("button", { name: "Add User", exact: true }).click();
 
-  await expect(page.getByText(email)).toBeVisible();
+  await expect(page.getByText(email).first()).toBeVisible();
 });

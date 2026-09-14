@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { gotoReady } from "./fixtures/navigate";
 import { createClient, createClientContact, generatePortalLink } from "./fixtures/api";
 
 /**
@@ -32,7 +33,7 @@ test("exchanges a portal link and posts a role as the client contact", async ({
   ]);
   const page = await context.newPage();
 
-  await page.goto(`/portal/access?token=${encodeURIComponent(token)}`);
+  await gotoReady(page, `/portal/access?token=${encodeURIComponent(token)}`);
   await expect(page).toHaveURL(/\/portal$/);
   await expect(page.getByRole("heading", { name: clientName, level: 1 })).toBeVisible();
   await expect(page.getByText(`Welcome, ${contactName}.`)).toBeVisible();
@@ -41,7 +42,7 @@ test("exchanges a portal link and posts a role as the client contact", async ({
   await page.getByRole("button", { name: "+ Post a role" }).click();
 
   const roleTitle = `E2E Portal Role ${Date.now()}`;
-  await page.getByLabel("Title", { exact: true }).fill(roleTitle);
+  await page.getByLabel(/^Title\*?$/).fill(roleTitle);
   await page.getByRole("button", { name: "Post Role" }).click();
 
   await expect(page.getByText(roleTitle)).toBeVisible();

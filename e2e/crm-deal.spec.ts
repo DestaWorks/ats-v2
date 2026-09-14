@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { gotoReady } from "./fixtures/navigate";
 import { createClient } from "./fixtures/api";
 
 /**
@@ -12,10 +13,10 @@ test("creates a deal, moves its stage, and closes it won", async ({ page, reques
   const clientId = await createClient(request, `E2E Deal Client ${Date.now()}`);
   const dealName = `E2E Deal ${Date.now()}`;
 
-  await page.goto(`/crm/${clientId}`);
+  await gotoReady(page, `/crm/${clientId}`);
   await page.getByRole("tab", { name: "Deals" }).click();
   await page.getByRole("button", { name: "+ Add Deal" }).click();
-  await page.getByLabel("Name", { exact: true }).fill(dealName);
+  await page.getByLabel(/^Name\*?$/).fill(dealName);
   await page.getByRole("button", { name: "Add Deal", exact: true }).click();
 
   await page.getByRole("button", { name: new RegExp(dealName) }).click();
@@ -32,8 +33,8 @@ test("creates a deal, moves its stage, and closes it won", async ({ page, reques
   await dialog.getByLabel("Reason").fill("Signed after a strong final call");
   await dialog.getByRole("button", { name: "Mark Won" }).click();
 
-  await dialog.getByRole("button", { name: "Close" }).click();
+  await dialog.getByRole("button", { name: "Close" }).first().click();
   await expect(page.getByText("Closed Deals")).toBeVisible();
   await expect(page.getByText(dealName)).toBeVisible();
-  await expect(page.getByText("Won")).toBeVisible();
+  await expect(page.getByText("Won").first()).toBeVisible();
 });

@@ -64,6 +64,9 @@ export default defineConfig({
       command: "pnpm dev:web",
       url: "http://localhost:3007/sign-in",
       reuseExistingServer: !process.env.CI,
+      // The suite signs in as six different accounts well inside Better Auth's 60s window, and the
+      // sixth would be refused — raised HERE so the ceiling itself stays 5 everywhere else.
+      env: { E2E_SIGNIN_RATE_MAX: "100" },
       // A cold `tsx watch`/`next dev` first compile of this monorepo comfortably exceeds 60s —
       // measured ~90s for the API alone on a cold cache.
       timeout: 180_000,

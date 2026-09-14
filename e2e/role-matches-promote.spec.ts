@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { gotoReady } from "./fixtures/navigate";
 import { createClient, createLead, createRole } from "./fixtures/api";
 
 /**
@@ -20,7 +21,7 @@ test("shows a matched lead on the role detail page and promotes it via Fill role
   const leadName = `E2E Match Lead ${Date.now()}`;
   await createLead(request, leadName, clientId);
 
-  await page.goto(`/roles/${roleId}`);
+  await gotoReady(page, `/roles/${roleId}`);
   await expect(page.getByRole("heading", { name: roleTitle, level: 1 })).toBeVisible();
 
   const matchesTab = page.getByRole("tab", { name: /^Matches/ });

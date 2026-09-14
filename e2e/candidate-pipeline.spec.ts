@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { gotoReady } from "./fixtures/navigate";
 
 /**
  * Add/move candidate — one of the four critical flows (docs/CONVENTIONS.md §10).
@@ -14,7 +15,7 @@ import { test, expect } from "@playwright/test";
 test("adds a candidate and moves it to the next pipeline stage", async ({ page }) => {
   const name = `E2E Candidate ${Date.now()}`;
 
-  await page.goto("/candidates/new");
+  await gotoReady(page, "/candidates/new");
   await page.getByLabel("Full Name").fill(name);
   await page.getByLabel("Track").selectOption("Operations");
   await page.getByLabel("Email").fill(`e2e-${Date.now()}@example.com`);
@@ -25,7 +26,7 @@ test("adds a candidate and moves it to the next pipeline stage", async ({ page }
   // Success redirects to the new candidate's detail page (an intercepted route/modal).
   await expect(page.getByRole("heading", { name, level: 1 })).toBeVisible();
 
-  await page.goto(`/pipeline?search=${encodeURIComponent(name)}`);
+  await gotoReady(page, `/pipeline?search=${encodeURIComponent(name)}`);
   // Not `getByRole("listitem")`: Tailwind's preflight sets `list-style: none` on every `<ul>`,
   // which strips the implicit `list`/`listitem` roles in Chromium — the tag selector is reliable
   // regardless of that CSS reset.
@@ -35,6 +36,9 @@ test("adds a candidate and moves it to the next pipeline stage", async ({ page }
   await card.getByLabel(`Move ${name} to a different stage`).selectOption("QUALIFIED_PRESCREEN");
 
   await expect(
-    page.getByRole("group", { name: /Qualified \(Pre-Screen\)/ }).getByText(name),
+    page
+      .getByRole("group", { name: /Qualified \(Pre-Screen\)/ })
+      .getByText(name)
+      .first(),
   ).toBeVisible();
 });

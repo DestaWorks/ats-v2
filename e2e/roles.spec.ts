@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { gotoReady } from "./fixtures/navigate";
 import { createClient } from "./fixtures/api";
 
 /**
@@ -12,16 +13,16 @@ test("creates a role and edits its title", async ({ page, request }) => {
   const title = `E2E Role ${Date.now()}`;
   const updatedTitle = `${title} (Updated)`;
 
-  await page.goto("/roles");
+  await gotoReady(page, "/roles");
   await page.getByRole("button", { name: "+ Add role" }).click();
   await page.getByLabel("Target client").selectOption({ label: clientName });
-  await page.getByLabel("Title", { exact: true }).fill(title);
+  await page.getByLabel(/^Title\*?$/).fill(title);
   await page.getByRole("button", { name: "Add Role", exact: true }).click();
 
   await expect(page.getByRole("heading", { name: title, level: 1 })).toBeVisible();
 
   await page.getByRole("button", { name: "Edit", exact: true }).click();
-  await page.getByLabel("Title", { exact: true }).fill(updatedTitle);
+  await page.getByLabel(/^Title\*?$/).fill(updatedTitle);
   await page.getByRole("button", { name: "Save", exact: true }).click();
 
   await expect(page.getByRole("heading", { name: updatedTitle, level: 1 })).toBeVisible();

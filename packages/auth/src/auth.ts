@@ -33,6 +33,12 @@ export const googleEnabled = Boolean(googleClientId && googleClientSecret);
  *   account-management surface; see the plan's Phase 6.4 entry for what the column drop still needs.
  * - `nextCookies()` must be the LAST plugin (lets Server Actions set auth cookies).
  */
+/** The `/sign-in/email` ceiling. 5 unless the E2E harness raises it; never read in production. */
+function signInMax(): number {
+  const raw = Number(process.env["E2E_SIGNIN_RATE_MAX"]);
+  return Number.isInteger(raw) && raw > 0 ? raw : 5;
+}
+
 export const auth = betterAuth({
   database: prismaAdapter(prisma, { provider: "postgresql" }),
   emailAndPassword: {
@@ -79,7 +85,11 @@ export const auth = betterAuth({
     window: 60, // seconds
     max: 100, // global default per window
     customRules: {
-      "/sign-in/email": { window: 60, max: 5 },
+      // `E2E_SIGNIN_RATE_MAX` exists because the end-to-end suite signs in as six different
+      // accounts inside one window and the sixth gets a 429 — a silent stay-on-/sign-in that reads
+      // as a broken app rather than a working limiter. It is set only by `playwright.config.ts`;
+      // unset (every real deployment) this stays 5.
+      "/sign-in/email": { window: 60, max: signInMax() },
       "/sign-in/social": { window: 60, max: 10 },
       "/request-password-reset": { window: 60, max: 5 },
     },

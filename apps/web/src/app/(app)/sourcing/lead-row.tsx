@@ -163,6 +163,11 @@ export function LeadRow({
       const result = await postPromote(lead.id);
       if (result.ok) {
         toast.success(`${lead.name} promoted to a candidate`);
+        // The inventory is CLIENT state, so a server refresh does not replace it — every other
+        // mutation here hands the fresh lead back through `onUpdated`. Promote's response carries
+        // only the new candidate's id, so the two fields the row renders are applied directly;
+        // without this the row keeps offering "Promote" on a lead that is already promoted.
+        onUpdated({ ...lead, status: "Promoted", promotedCandidateId: result.data.candidateId });
         close();
         router.push(`/candidates/${result.data.candidateId}`);
       } else {

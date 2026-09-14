@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { gotoReady } from "./fixtures/navigate";
 
 /**
  * CRM client lifecycle: create → edit a field → add a contact
@@ -9,10 +10,10 @@ import { test, expect } from "@playwright/test";
 test("creates a client, edits a field, and adds a contact", async ({ page }) => {
   const name = `E2E Client ${Date.now()}`;
 
-  await page.goto("/crm");
+  await gotoReady(page, "/crm");
   // exact: true — CRM's own "+ Add client" trigger button substring-matches "Add Client" too.
   await page.getByRole("button", { name: "+ Add client" }).click();
-  await page.getByLabel("Name", { exact: true }).fill(name);
+  await page.getByLabel(/^Name\*?$/).fill(name);
   await page.getByRole("button", { name: "Add Client", exact: true }).click();
 
   await expect(page.getByRole("heading", { name, level: 1 })).toBeVisible();

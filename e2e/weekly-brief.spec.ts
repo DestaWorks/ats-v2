@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { gotoReady } from "./fixtures/navigate";
 
 /**
  * Weekly Brief (`weekly-brief-view.tsx`) — leadership-gated `viewReports`. "Generate"/"Find
@@ -9,7 +10,7 @@ import { test, expect } from "@playwright/test";
  * drives the fetch (`refresh()` in `weekly-brief-view.tsx`).
  */
 test("shows the empty state for a week with no saved brief", async ({ page }) => {
-  await page.goto("/weekly-brief");
+  await gotoReady(page, "/weekly-brief");
 
   await expect(page.getByRole("heading", { name: "Weekly Brief", level: 1 })).toBeVisible();
 

@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { gotoReady } from "./fixtures/navigate";
 import { createCandidate, moveCandidateStatus } from "./fixtures/api";
 
 /**
@@ -21,7 +22,7 @@ test("scores a candidate and saves the scorecard", async ({ page, request }) => 
   );
   await moveCandidateStatus(request, candidateId, "QUALIFIED_PRESCREEN");
 
-  await page.goto("/screening");
+  await gotoReady(page, "/screening");
 
   await page.getByLabel("Search candidates to screen").fill(name);
   await expect(page.getByRole("button", { name: new RegExp(name) })).toBeVisible();

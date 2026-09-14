@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { gotoReady } from "./fixtures/navigate";
 import { createCandidate, deleteCandidate } from "./fixtures/api";
 
 /**
@@ -12,7 +13,7 @@ test("restores a soft-deleted candidate", async ({ page, request }) => {
   const candidateId = await createCandidate(request, name);
   await deleteCandidate(request, candidateId);
 
-  await page.goto("/trash");
+  await gotoReady(page, "/trash");
   const row = page.getByRole("row").filter({ hasText: name });
   await expect(row).toBeVisible();
 

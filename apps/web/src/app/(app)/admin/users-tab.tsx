@@ -13,7 +13,7 @@ import {
 } from "@destaworks/contracts/validation/admin";
 import type { AcknowledgedIdDTO as DeleteAdminUserResponse } from "@destaworks/contracts/api";
 import { useApiForm } from "@/lib/forms/use-api-form";
-import { emptyToNull } from "@/lib/forms/empty-to-null";
+import { emptyToNull, emptyToUndefined } from "@/lib/forms/empty-to-null";
 import { deleteJson, messageForFailure, patchJson, postJson } from "@/lib/api/client";
 import { Badge } from "@destaworks/ui/badge";
 import { Button } from "@destaworks/ui/button";
@@ -300,7 +300,7 @@ function AddUserForm({
           id="au-password"
           type="text"
           placeholder="Leave blank to auto-generate"
-          {...form.register("password", { setValueAs: emptyToNull })}
+          {...form.register("password", { setValueAs: emptyToUndefined })}
         />
       </Field>
       <div className="flex items-center justify-end gap-2 border-t border-black/5 pt-4">

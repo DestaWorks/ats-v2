@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { gotoReady } from "./fixtures/navigate";
 import { createLead } from "./fixtures/api";
 
 /**
@@ -11,7 +12,7 @@ test("promotes a lead into the candidate pipeline", async ({ page, request }) =>
   const name = `E2E Lead ${Date.now()}`;
   await createLead(request, name);
 
-  await page.goto(`/sourcing?search=${encodeURIComponent(name)}`);
+  await gotoReady(page, `/sourcing?search=${encodeURIComponent(name)}`);
   const row = page.getByRole("row").filter({ hasText: name });
   await expect(row).toBeVisible();
 

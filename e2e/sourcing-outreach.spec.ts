@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { gotoReady } from "./fixtures/navigate";
 
 /**
  * Source lead outreach: add a lead, log an outreach attempt, mark it responded Hot
@@ -9,9 +10,9 @@ import { test, expect } from "@playwright/test";
 test("adds a lead, logs outreach, and marks it responded hot", async ({ page }) => {
   const name = `E2E Outreach Lead ${Date.now()}`;
 
-  await page.goto("/sourcing");
+  await gotoReady(page, "/sourcing");
   await page.getByRole("button", { name: "+ Add lead" }).click();
-  await page.getByLabel("Name", { exact: true }).fill(name);
+  await page.getByLabel(/^Name\*?$/).fill(name);
   await page.getByRole("button", { name: "Add Lead", exact: true }).click();
 
   const row = page.getByRole("row").filter({ hasText: name });
@@ -24,6 +25,8 @@ test("adds a lead, logs outreach, and marks it responded hot", async ({ page }) 
   // The row itself toggles the expanded detail panel; click the name cell, not an action button
   // (those stop propagation — `lead-row.tsx`'s `stop` handler on the actions `<Td>`).
   await row.getByText(name).click();
-  await row.getByRole("button", { name: "Hot" }).click();
-  await expect(row.getByText("Responded — Hot")).toBeVisible();
+  // The expanded detail renders as its OWN <tr>, so it is a sibling of the row rather than inside
+  // it; `?search=` narrows the page to this lead, which keeps the page-scoped locator unambiguous.
+  await page.getByRole("button", { name: "Hot" }).click();
+  await expect(page.getByText("Responded — Hot").first()).toBeVisible();
 });

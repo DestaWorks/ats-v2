@@ -1,4 +1,5 @@
 import { test, expect, type Route } from "@playwright/test";
+import { gotoReady } from "./fixtures/navigate";
 import type { ExtractResumeResponse } from "@destaworks/contracts/validation/resume";
 
 const WEB_ORIGIN = "http://localhost:3007";
@@ -72,7 +73,7 @@ test("parses a resume and saves it as a new candidate", async ({ page }) => {
     });
   });
 
-  await page.goto("/resume");
+  await gotoReady(page, "/resume");
   await page.getByRole("radio", { name: "Operations" }).click();
   await page.getByLabel("Or paste resume text").fill(SAMPLE_RESUME_TEXT);
   await page.getByRole("button", { name: "Extract & Convert" }).click();

@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { gotoReady } from "./fixtures/navigate";
 import { createUser } from "./fixtures/api";
 
 /**
@@ -18,16 +19,16 @@ test("blocks a non-admin role from the admin console", async ({ request, browser
   const password = "E2eAssociate123!";
   await createUser(request, `E2E Associate ${Date.now()}`, email, "Associate", password);
 
-  const context = await browser.newContext({});
+  const context = await browser.newContext({ storageState: { cookies: [], origins: [] } });
   const page = await context.newPage();
 
-  await page.goto("/sign-in");
+  await gotoReady(page, "/sign-in");
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Sign In", exact: true }).click();
   await expect(page).toHaveURL(/\/dashboard/);
 
-  await page.goto("/admin");
+  await gotoReady(page, "/admin");
   await expect(page.getByText("You don't have access")).toBeVisible();
   await expect(page.getByRole("tab", { name: "Users" })).not.toBeVisible();
 

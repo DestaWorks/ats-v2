@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { gotoReady } from "./fixtures/navigate";
 
 /**
  * The sign-in critical flow. Runs in the `unauthenticated` project (no storageState) — every
@@ -8,7 +9,7 @@ test("signs in with the seeded Owner's credentials and reaches the dashboard", a
   const email = process.env.SEED_OWNER_EMAIL ?? "owner@desta.local";
   const password = process.env.SEED_OWNER_PASSWORD ?? "ChangeMe123!";
 
-  await page.goto("/sign-in");
+  await gotoReady(page, "/sign-in");
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Sign In", exact: true }).click();
@@ -19,7 +20,7 @@ test("signs in with the seeded Owner's credentials and reaches the dashboard", a
 test("rejects the wrong password", async ({ page }) => {
   const email = process.env.SEED_OWNER_EMAIL ?? "owner@desta.local";
 
-  await page.goto("/sign-in");
+  await gotoReady(page, "/sign-in");
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password", { exact: true }).fill("definitely-wrong-password");
   await page.getByRole("button", { name: "Sign In", exact: true }).click();

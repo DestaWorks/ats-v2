@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { gotoReady } from "./fixtures/navigate";
 import { createCandidate } from "./fixtures/api";
 
 /**
@@ -15,7 +16,7 @@ test("verifies a license, adds a note, and logs outreach", async ({ page, reques
     "Clinical",
   );
 
-  await page.goto(`/candidates/${candidateId}`);
+  await gotoReady(page, `/candidates/${candidateId}`);
 
   await page.getByRole("tab", { name: "License" }).click();
   await page.getByRole("button", { name: "Verify license" }).click();

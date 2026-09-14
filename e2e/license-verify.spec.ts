@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { gotoReady } from "./fixtures/navigate";
 import { createCandidate, verifyLicense } from "./fixtures/api";
 
 /**
@@ -18,7 +19,7 @@ test("shows a verified candidate's license on the expiry timeline", async ({ pag
   const candidateId = await createCandidate(request, name, "Clinical");
   await verifyLicense(request, candidateId, "Active", "2020-01-01");
 
-  await page.goto("/license-verify");
+  await gotoReady(page, "/license-verify");
 
   const link = page.getByRole("link", { name });
   await expect(link).toBeVisible();

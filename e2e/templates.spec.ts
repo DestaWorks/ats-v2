@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { gotoReady } from "./fixtures/navigate";
 import { createLead } from "./fixtures/api";
 
 /**
@@ -15,7 +16,7 @@ test("picks a template, sends to a sourced lead, and logs the outreach", async (
   const name = `E2E Template Lead ${Date.now()}`;
   await createLead(request, name);
 
-  await page.goto("/templates");
+  await gotoReady(page, "/templates");
 
   await page.getByRole("button", { name: "Sourced Lead" }).click();
   await page.getByPlaceholder("Search sourced lead by name...").fill(name);
@@ -25,7 +26,7 @@ test("picks a template, sends to a sourced lead, and logs the outreach", async (
   await page.getByRole("button", { name: "Copy All" }).click();
   await expect(page.getByRole("button", { name: "Copied!" })).toBeVisible();
 
-  await page.goto("/sourcing");
+  await gotoReady(page, "/sourcing");
   const row = page.getByRole("row").filter({ hasText: name });
   await expect(row.getByText("Outreach 1")).toBeVisible();
 });

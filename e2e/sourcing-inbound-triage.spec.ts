@@ -1,4 +1,5 @@
 import { test, expect, type Route } from "@playwright/test";
+import { gotoReady } from "./fixtures/navigate";
 import type { TriageResultDTO } from "@destaworks/contracts/validation/inbound";
 import type { LeadEnvelope } from "@destaworks/contracts/validation/lead";
 
@@ -102,7 +103,7 @@ test("triages a pasted reply with AI and saves it as a new Sourced lead", async 
     });
   });
 
-  await page.goto("/sourcing/inbound");
+  await gotoReady(page, "/sourcing/inbound");
   await page.getByLabel("Pasted message").fill(SAMPLE_MESSAGE);
   await page.getByRole("button", { name: "✨ Triage with AI" }).click();
 

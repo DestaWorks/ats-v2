@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { gotoReady } from "./fixtures/navigate";
 
 /**
  * Client Discovery prospecting: add a prospect, change its status
@@ -8,7 +9,7 @@ import { test, expect } from "@playwright/test";
 test("adds a prospect and changes its status", async ({ page }) => {
   const practiceName = `E2E Prospect ${Date.now()}`;
 
-  await page.goto("/client-discovery");
+  await gotoReady(page, "/client-discovery");
   await page.getByRole("button", { name: "+ Add prospect" }).click();
   await page.getByLabel("Practice name").fill(practiceName);
   // exact: true — "+ Add prospect" (the trigger) substring-matches "Add Prospect" too.

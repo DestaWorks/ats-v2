@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { gotoReady } from "./fixtures/navigate";
 
 const ADMIN_BASE_URL = `http://localhost:${process.env["ADMIN_PORT"] ?? "3008"}`;
 
@@ -22,7 +23,7 @@ const TENANT_B_SLUG = process.env["SEED_TENANT_B_SLUG"] ?? "e2e-tenant-b";
 const TENANT_B_NAME = process.env["SEED_TENANT_B_NAME"] ?? "E2E Second Workspace";
 
 test("lists both tenants and shows a workspace's detail", async ({ page }) => {
-  await page.goto(`${ADMIN_BASE_URL}/tenants`);
+  await gotoReady(page, `${ADMIN_BASE_URL}/tenants`);
   await expect(page.getByRole("heading", { name: "Tenants" })).toBeVisible();
 
   const table = page.getByRole("table", { name: "Tenants on this installation" });

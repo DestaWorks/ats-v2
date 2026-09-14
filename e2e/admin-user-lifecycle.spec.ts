@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { gotoReady } from "./fixtures/navigate";
 import { createUser } from "./fixtures/api";
 
 /**
@@ -20,14 +21,14 @@ test("changes a user's role, blocks/unblocks, resets their password, and removes
 
   page.on("dialog", (dialog) => void dialog.accept());
 
-  await page.goto("/admin");
-  await page.getByRole("tab", { name: "Users" }).click();
+  await gotoReady(page, "/admin");
   const row = page.getByRole("row").filter({ hasText: email });
 
   // Role change
   await row.getByRole("combobox").selectOption("Manager");
   await expect(page.getByText(`is now Manager`)).toBeVisible();
-  await expect(row.getByRole("combobox")).toHaveValue("Manager");
+  // Option VALUES are `access_roles` ids now, not role names — assert the selected label.
+  await expect(row.getByRole("combobox").locator("option:checked")).toHaveText("Manager");
 
   // Block
   await row.getByRole("button", { name: "Block", exact: true }).click();
@@ -57,8 +58,7 @@ test("changes a user's role, blocks/unblocks, resets their password, and removes
 test("disables blocking and removing your own account", async ({ page }) => {
   const ownerEmail = process.env["SEED_OWNER_EMAIL"] ?? "owner@desta.local";
 
-  await page.goto("/admin");
-  await page.getByRole("tab", { name: "Users" }).click();
+  await gotoReady(page, "/admin");
   const row = page.getByRole("row").filter({ hasText: ownerEmail });
 
   await expect(row.getByRole("button", { name: "Block", exact: true })).toBeDisabled();

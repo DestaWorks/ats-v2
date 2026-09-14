@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { gotoReady } from "./fixtures/navigate";
 import { createUser } from "./fixtures/api";
 
 /**
@@ -17,7 +18,7 @@ import { createUser } from "./fixtures/api";
 test("shows the acting Owner in the roster with no self-remove option", async ({ page }) => {
   const ownerEmail = process.env["SEED_OWNER_EMAIL"] ?? "owner@desta.local";
 
-  await page.goto("/workspace");
+  await gotoReady(page, "/workspace");
   const row = page.getByRole("row").filter({ hasText: ownerEmail });
 
   await expect(row.getByText("you", { exact: true })).toBeVisible();
@@ -26,7 +27,7 @@ test("shows the acting Owner in the roster with no self-remove option", async ({
 });
 
 test("surfaces the two invite failure branches", async ({ page, request }) => {
-  await page.goto("/workspace");
+  await gotoReady(page, "/workspace");
 
   // No account anywhere on the installation with this email.
   // NOTE: `messageForFailure` (`apps/web/src/lib/api/client.ts`) hardcodes its `NOT_FOUND` branch
@@ -59,19 +60,20 @@ test("surfaces the two invite failure branches", async ({ page, request }) => {
 
 test("removes a member from the workspace", async ({ page, request }) => {
   const email = `e2e-remove-member-${Date.now()}@example.com`;
-  await createUser(request, `E2E Remove Member ${Date.now()}`, email, "Associate", "E2eRemove123!");
+  const memberName = `E2E Remove Member ${Date.now()}`;
+  await createUser(request, memberName, email, "Associate", "E2eRemove123!");
 
   // The roster is fetched server-side at page load, so the fixture user created above needs a
   // fresh navigation to appear — reloading after `createUser` resolves isn't enough on its own if
   // this ever runs `page.goto` before the POST settles, which is why `createUser` is awaited first.
-  await page.goto("/workspace");
+  await gotoReady(page, "/workspace");
   const row = page.getByRole("row").filter({ hasText: email });
   await expect(row).toBeVisible();
   await expect(row.getByText("active", { exact: true })).toBeVisible();
 
   await row.getByRole("button", { name: "Remove", exact: true }).click();
 
-  await expect(page.getByText(`Removed E2E Remove Member`)).toBeVisible();
+  await expect(page.getByText(`${memberName} removed`)).toBeVisible();
   await expect(row.getByText("removed", { exact: true })).toBeVisible();
   await expect(row.getByRole("button", { name: "Remove", exact: true })).toHaveCount(0);
 });

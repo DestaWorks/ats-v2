@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { gotoReady } from "./fixtures/navigate";
 import { createClient } from "./fixtures/api";
 
 /**
@@ -10,7 +11,7 @@ test("adds a task, toggles it done, and logs a meeting", async ({ page, request 
   const clientId = await createClient(request, `E2E Task Client ${Date.now()}`);
   const taskTitle = `E2E Task ${Date.now()}`;
 
-  await page.goto(`/crm/${clientId}`);
+  await gotoReady(page, `/crm/${clientId}`);
   await page.getByRole("tab", { name: "Tasks" }).click();
   await page.getByRole("button", { name: "+ Add Task" }).click();
   await page.getByLabel("Title").fill(taskTitle);
@@ -19,7 +20,18 @@ test("adds a task, toggles it done, and logs a meeting", async ({ page, request 
   const taskRow = page.locator("li").filter({ hasText: taskTitle });
   await expect(taskRow).toBeVisible();
   await taskRow.getByRole("button", { name: "Mark as done" }).click();
-  await expect(taskRow.getByRole("button", { name: "Mark as open" })).toBeVisible();
+
+  // A completed task moves into the "N completed tasks" <details>, which is collapsed — its
+  // contents are outside the accessibility tree until the summary is opened, so the toggled
+  // button is unreachable by role until then.
+  await page
+    .getByRole("group")
+    .filter({ hasText: /completed task/ })
+    .getByText(/completed task/)
+    .click();
+  await expect(
+    page.locator("li").filter({ hasText: taskTitle }).getByRole("button", { name: "Mark as open" }),
+  ).toBeVisible();
 
   await page.getByRole("tab", { name: "Meetings" }).click();
   await page.getByRole("button", { name: "+ Log Meeting" }).click();

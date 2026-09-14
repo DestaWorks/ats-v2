@@ -70,8 +70,8 @@ export function AddCandidateForm({
       // page this form is mounted on (list/dashboard/etc.) stays mounted underneath, so without
       // this the "Add candidate" dialog stays open behind the new candidate's detail modal.
       onCancel?.();
-      router.push(`/candidates/${data.id}`);
       router.refresh();
+      router.push(`/candidates/${data.id}`);
     },
     onFailure: setServerError,
   });

@@ -1,4 +1,5 @@
 import { test, expect, type Browser, type Page } from "@playwright/test";
+import { gotoReady } from "./fixtures/navigate";
 import { createUser } from "./fixtures/api";
 
 /**
@@ -26,9 +27,9 @@ async function signInFresh(
   email: string,
   password: string,
 ): Promise<{ context: Awaited<ReturnType<Browser["newContext"]>>; page: Page }> {
-  const context = await browser.newContext({});
+  const context = await browser.newContext({ storageState: { cookies: [], origins: [] } });
   const page = await context.newPage();
-  await page.goto("/sign-in");
+  await gotoReady(page, "/sign-in");
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Sign In", exact: true }).click();
@@ -64,18 +65,17 @@ test("invites across tenants, accepts via the header switcher, and resolves the 
   // the pending invitation as a badge on the header switcher, not as a workspace pick.
   const invitee = await signInFresh(browser, inviteeEmail, inviteePassword);
   await expect(invitee.page).toHaveURL(/\/dashboard/);
-  const switcherButton = invitee.page.locator('button[aria-haspopup="menu"]');
+  const switcherButton = invitee.page.locator('button[aria-haspopup="menu"]').first();
   await expect(switcherButton).toContainText("1"); // one pending invitation
   await switcherButton.click();
   await invitee.page.getByRole("menuitem", { name: new RegExp(TENANT_B_NAME) }).click();
   await expect(invitee.page.getByText(`Now working in ${TENANT_B_NAME}`)).toBeVisible();
 
-  // Accepting made a SECOND active membership real with no tenant claim in this session (accept
-  // sets no cookie — only `/tenants/switch` does), so `router.refresh()` re-renders the (app)
-  // layout's guard straight into AMBIGUOUS: it redirects to the picker in this same session,
-  // without a fresh sign-in.
-  await expect(invitee.page).toHaveURL(/\/choose-workspace/);
-  await invitee.page.getByRole("button", { name: new RegExp(TENANT_B_NAME) }).click();
+  // Accepting makes a SECOND active membership real, which would leave the session with two
+  // memberships and no claim — AMBIGUOUS, and a bounce to the picker. `POST /tenants/members/accept`
+  // now writes `dw_tenant` for the workspace it just verified, exactly as `/tenants/switch` does,
+  // so the invitee stays put in the workspace they just joined.
   await expect(invitee.page).toHaveURL(/\/dashboard/);
+  await expect(switcherButton).toContainText(TENANT_B_NAME);
   await invitee.context.close();
 });
