@@ -1,12 +1,14 @@
 import { writeAudit } from "@destaworks/db/audit";
 import {
   membershipRepository,
+  type AccessRoleRow,
   type MembershipRow,
 } from "@destaworks/db/tenancy/membership.repository";
+import { accessRoleRepository } from "@destaworks/db/tenancy/access-role.repository";
 import { userRepository } from "@destaworks/db/repositories/user.repository";
 import { withTenantTransaction } from "@destaworks/db/with-transaction";
 import { withAnnouncedTenant } from "@destaworks/db/tenant-transaction";
-import { hasCapability, isRole, ROLES, type Role } from "@destaworks/domain/constants";
+import { hasCapability, toCapabilities, type Capability } from "@destaworks/domain/constants";
 import type { TenantContext } from "@destaworks/domain/tenant";
 import { toIso } from "@destaworks/domain/utils/iso";
 import type { AuthUser } from "@destaworks/auth/guards";
@@ -21,7 +23,9 @@ import type {
   DeleteTenantMemberResponse,
   GetTenantMembersResponse,
   GetTenantsResponse,
+  ChangeMemberRoleInput,
   InviteMemberInput,
+  PatchTenantMemberRoleResponse,
   PostTenantMemberAcceptResponse,
   PostTenantMemberResponse,
   PostTenantSwitchResponse,
@@ -45,20 +49,18 @@ import type {
  *
  * ── Capabilities, never role names ─────────────────────────────────────────────────────────────
  *
- * Every gate below reads `hasCapability(ctx.role, …)`, and `ctx.role` comes from the MEMBERSHIP.
+ * Every gate below reads `hasCapability(ctx, …)`, and `ctx.role` comes from the MEMBERSHIP.
  * There is no role name in this file except as a value of the `Role` enum being tested for a
- * capability — `ADMINISTRATIVE_ROLES` is derived from the capability table, not written out, so
- * adding a role that can manage users does not silently exempt it from the last-administrator
- * check below.
+ * capability — the last-administrator check counts members who HOLD `manageUsers`, queried
+ * against each tenant's own role rows, so a custom role that can administer is counted like any
+ * other instead of silently escaping the check.
  */
 
 /**
- * The roles that can manage a tenant's members, DERIVED from the capability model rather than
- * listed. Used only to count how many such members remain, never to authorize anything.
+ * The last-administrator check counts members who HOLD this, not members whose role NAME is in a
+ * list — a firm may rename "Owner", or build a custom role that administers.
  */
-const ADMINISTRATIVE_ROLES: readonly Role[] = ROLES.filter((role) =>
-  hasCapability(role, "manageUsers"),
-);
+const ADMINISTRATIVE_CAPABILITY = "manageUsers";
 
 function toChoiceDTO(choice: TenantChoice): TenantChoiceDTO {
   return {
@@ -70,8 +72,9 @@ function toChoiceDTO(choice: TenantChoice): TenantChoiceDTO {
   };
 }
 
-function roleOf(row: MembershipRow): Role {
-  return isRole(row.role) ? row.role : "Associate";
+/** What a membership's role row actually grants, narrowed to the vocabulary this build knows. */
+function capabilitiesOf(row: MembershipRow): { capabilities: readonly Capability[] } {
+  return { capabilities: toCapabilities(row.accessRole.capabilities) };
 }
 
 function toMemberDTO(row: MembershipRow, name: string, email: string): TenantMemberDTO {
@@ -80,7 +83,8 @@ function toMemberDTO(row: MembershipRow, name: string, email: string): TenantMem
     userId: row.userId,
     name,
     email,
-    role: roleOf(row),
+    role: row.accessRole.name,
+    roleId: row.roleId,
     status: row.status,
     createdAt: toIso(row.createdAt),
   };
@@ -88,9 +92,36 @@ function toMemberDTO(row: MembershipRow, name: string, email: string): TenantMem
 
 /** The gate on every member-management call. One line, one place, capability-only. */
 function requireMemberManagement(ctx: TenantContext): void {
-  if (!hasCapability(ctx.role, "manageUsers")) {
+  if (!hasCapability(ctx, "manageUsers")) {
     throw new AppError("FORBIDDEN", "You don't have permission to do that");
   }
+}
+
+/** `manageRoles`, not `manageUsers`: this is the file's only privilege-escalation surface. */
+function requireRoleManagement(ctx: TenantContext): void {
+  if (!hasCapability(ctx, "manageRoles")) {
+    throw new AppError("FORBIDDEN", "You don't have permission to do that");
+  }
+}
+
+/**
+ * Nobody may grant access they do not hold. Vacuous while only all-powerful roles hold
+ * `manageRoles` — `roles.test.ts` pins that, so this becomes load-bearing the moment it changes.
+ */
+function requireMayGrant(ctx: TenantContext, role: AccessRoleRow): void {
+  const granted = toCapabilities(role.capabilities);
+  const beyond = granted.filter((capability) => !ctx.capabilities.includes(capability));
+  if (beyond.length > 0) {
+    throw new AppError("FORBIDDEN", "You can't grant access that you don't have yourself");
+  }
+}
+
+/** A role id is a client claim: constraining by `tenantId` means another workspace's id resolves
+ *  to nothing. The composite FK would refuse the write even if this were wrong. */
+async function requireRoleInTenant(ctx: TenantContext, roleId: string): Promise<AccessRoleRow> {
+  const role = await accessRoleRepository.findByIdInTenant(ctx.tenantId, roleId);
+  if (role === null) throw new AppError("NOT_FOUND", "No such role in this workspace");
+  return role;
 }
 
 export const membershipService = {
@@ -160,13 +191,18 @@ export const membershipService = {
       throw new AppError("CONFLICT", "That account is already a member of this workspace");
     }
 
+    const role = await requireRoleInTenant(ctx, input.roleId);
+    requireMayGrant(ctx, role);
+
     const row = await withTenantTransaction(ctx, async (tx) => {
-      const created = await membershipRepository.upsertInvitation(
+      const created = await membershipRepository.upsertMembership(
         {
           tenantId: ctx.tenantId,
           userId: found.id,
-          role: input.role,
+          roleId: role.id,
+          role: role.name,
           invitedById: ctx.user.id,
+          status: "invited",
         },
         tx,
       );
@@ -229,7 +265,7 @@ export const membershipService = {
         tenantId: accepted.tenantId,
         slug: accepted.tenant.slug,
         name: accepted.tenant.name,
-        role: roleOf(accepted),
+        role: accepted.accessRole.name,
         status: "active",
       },
     };
@@ -243,6 +279,89 @@ export const membershipService = {
    * invite one either, so the tenant would be permanently unadministerable — recoverable only from
    * the platform plane, which is not a place routine mistakes should have to be fixed from.
    */
+  /**
+   * Change an existing member's role. Takes effect on their next request, like removal.
+   *
+   * Three guards, ordered by how informative the refusal is: `manageRoles`, then no-granting-
+   * above-yourself, then the last-administrator count. The third is `remove`'s rule reached by the
+   * other door — demoting the last Owner strands a workspace exactly as removing them would.
+   */
+  async changeRole(
+    ctx: TenantContext,
+    membershipId: string,
+    input: ChangeMemberRoleInput,
+  ): Promise<PatchTenantMemberRoleResponse> {
+    requireRoleManagement(ctx);
+
+    const role = await requireRoleInTenant(ctx, input.roleId);
+    requireMayGrant(ctx, role);
+
+    const row = await membershipRepository.findByIdInTenant(ctx.tenantId, membershipId);
+    if (row === null) throw new AppError("NOT_FOUND", "No such member");
+    if (row.status === "removed") {
+      throw new AppError("CONFLICT", "That member was removed — invite them again instead");
+    }
+
+    const current = row.accessRole;
+    if (current.id === role.id) {
+      const [names, emails] = await Promise.all([
+        userRepository.namesByIds([row.userId]),
+        userRepository.emailsByIds([row.userId]),
+      ]);
+      return {
+        member: toMemberDTO(row, names.get(row.userId) ?? "Unknown", emails.get(row.userId) ?? ""),
+      };
+    }
+
+    // Only a demotion OUT of administration can strand a workspace, so the count is paid for then.
+    const losesAdministration =
+      row.status === "active" &&
+      current.capabilities.includes(ADMINISTRATIVE_CAPABILITY) &&
+      !role.capabilities.includes(ADMINISTRATIVE_CAPABILITY);
+    if (losesAdministration) {
+      const administrators = await accessRoleRepository.countActiveWithCapability(
+        ctx.tenantId,
+        ADMINISTRATIVE_CAPABILITY,
+      );
+      if (administrators <= 1) {
+        throw new AppError(
+          "CONFLICT",
+          "A workspace must keep at least one member who can manage it",
+        );
+      }
+    }
+
+    const updated = await withTenantTransaction(ctx, async (tx) => {
+      const changed = await membershipRepository.updateRole(
+        row.id,
+        { id: role.id, name: role.name },
+        tx,
+      );
+      await writeAudit(tx, {
+        entity: "membership",
+        entityId: changed.id,
+        actor: ctx.user.id,
+        action: "change_member_role",
+        tenantId: ctx.tenantId,
+        before: { roleId: current.id, role: current.name },
+        after: { roleId: changed.roleId, role: changed.role },
+      });
+      return changed;
+    });
+
+    const [names, emails] = await Promise.all([
+      userRepository.namesByIds([updated.userId]),
+      userRepository.emailsByIds([updated.userId]),
+    ]);
+    return {
+      member: toMemberDTO(
+        updated,
+        names.get(updated.userId) ?? "Unknown",
+        emails.get(updated.userId) ?? "",
+      ),
+    };
+  },
+
   async remove(ctx: TenantContext, membershipId: string): Promise<DeleteTenantMemberResponse> {
     requireMemberManagement(ctx);
 
@@ -250,10 +369,10 @@ export const membershipService = {
     if (row === null) throw new AppError("NOT_FOUND", "No such member");
     if (row.status === "removed") throw new AppError("CONFLICT", "That member was already removed");
 
-    if (row.status === "active" && hasCapability(roleOf(row), "manageUsers")) {
-      const administrators = await membershipRepository.countActiveByRole(
+    if (row.status === "active" && hasCapability(capabilitiesOf(row), ADMINISTRATIVE_CAPABILITY)) {
+      const administrators = await accessRoleRepository.countActiveWithCapability(
         ctx.tenantId,
-        ADMINISTRATIVE_ROLES,
+        ADMINISTRATIVE_CAPABILITY,
       );
       if (administrators <= 1) {
         throw new AppError(

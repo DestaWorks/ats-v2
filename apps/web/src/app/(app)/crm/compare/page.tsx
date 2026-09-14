@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { hasCapability } from "@destaworks/domain/constants";
 import type { ClientHealthTier } from "@destaworks/domain/rules/client-health";
-import { getVerifiedUser } from "@destaworks/auth/guards";
+import { requirePageUser } from "@/lib/page-user";
 import type { GetCrmCompareResponse } from "@destaworks/contracts/http/crm";
 import { apiGet } from "@/lib/api/server";
 import { Badge, type BadgeTone } from "@destaworks/ui/badge";
@@ -22,14 +22,14 @@ const TIER_TONE: Record<ClientHealthTier, BadgeTone> = {
  * health score every client detail page shows, never a cheaper re-approximation.
  */
 export default async function ComparePage() {
-  const user = await getVerifiedUser();
+  const user = await requirePageUser();
 
-  if (!hasCapability(user.role, "viewCrm")) {
+  if (!hasCapability(user, "viewCrm")) {
     return (
       <div className="mx-auto flex max-w-4xl flex-col gap-6 p-6 sm:p-8">
         <ErrorState
           title="You don't have access"
-          message="CRM is limited to leadership roles. Ask an Owner, Director, Manager, or Admin for client account details."
+          message="CRM is limited to roles with client-account access. Ask a workspace administrator."
         />
       </div>
     );

@@ -1,4 +1,5 @@
 import "reflect-metadata";
+import { MODULES, ROLE_CAPABILITIES } from "@destaworks/domain/constants";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
 /**
@@ -18,6 +19,7 @@ const h = vi.hoisted(() => ({
     acceptInvitation: vi.fn(),
     listMembers: vi.fn(),
     invite: vi.fn(),
+    changeRole: vi.fn(),
     remove: vi.fn(),
   },
 }));
@@ -113,6 +115,8 @@ describe("the member routes forward the resolved context, not a client-supplied 
   const tenant = {
     tenantId: "t1",
     membershipId: "m1",
+    modules: MODULES,
+    capabilities: ROLE_CAPABILITIES.Owner,
     user: { id: "u1", email: "jane@desta.works", name: "Jane Doe" },
     role: "Owner" as const,
   };
@@ -120,12 +124,20 @@ describe("the member routes forward the resolved context, not a client-supplied 
   it("invite passes the TenantContext through", async () => {
     h.memberships.invite.mockResolvedValue({ member: {} });
 
-    await controller.invite({ email: "john@desta.works", role: "Associate" }, tenant);
+    await controller.invite({ email: "john@desta.works", roleId: "ar_Associate" }, tenant);
 
     expect(h.memberships.invite).toHaveBeenCalledWith(tenant, {
       email: "john@desta.works",
-      role: "Associate",
+      roleId: "ar_Associate",
     });
+  });
+
+  it("changeRole passes the TenantContext, the path id and the validated body", async () => {
+    h.memberships.changeRole.mockResolvedValue({ member: {} });
+
+    await controller.changeRole("m2", { roleId: "ar_Manager" }, tenant);
+
+    expect(h.memberships.changeRole).toHaveBeenCalledWith(tenant, "m2", { roleId: "ar_Manager" });
   });
 
   it("remove passes the TenantContext and the path id, and nothing else", async () => {

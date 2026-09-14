@@ -57,8 +57,9 @@ export const EXPORT_BUCKET = "exports";
  *  1. Reads are unaffected. `getSignedDownloadUrl` takes the wider `PersistedStorageKey`, which
  *     `persistedStorageKey()` mints from whatever string a row already holds. Every existing
  *     `Document.storageKey` and `ReportExport.storageKey` keeps resolving byte-for-byte.
- *  2. Writes gain the prefix as soon as their call site can name a tenant — see
- *     `unscopedStorageKey` below for the two that cannot yet, and why.
+ *  2. Every write names an owner. There is no un-owned constructor left: the two sites that could
+ *     not name a tenant while 6.5 was outstanding — the resume upload and the report export — now
+ *     both do, so the only way to write a key is through `tenantStorageKey` or `userStorageKey`.
  *  3. Backfill, once 6.2 has given every row a tenant (Phase 7 work, not this phase): for each
  *     row holding an un-prefixed key, S3 `CopyObject` to `t/<tenantId>/<old key>`, UPDATE the row
  *     to the new key, then `DeleteObject` on the old one. In that order — a crash between any two
@@ -118,36 +119,6 @@ export function tenantStorageKey(tenantId: string, ...segments: string[]): Scope
  *  means avatars and nothing else. */
 export function userStorageKey(userId: string, ...segments: string[]): ScopedStorageKey {
   return buildKey("u", userId, segments);
-}
-
-/**
- * The two write sites that cannot name a tenant yet.
- *
- * Resume uploads and report exports are tenant data and belong under `t/<tenantId>/`. Neither call
- * site can build that today: the tenant is resolved from the session in 6.5, and until that lands
- * there is no tenant to name. Writing a wrong or invented one would be worse than writing none.
- *
- * So this is the same device as `dbUnscoped` in `@destaworks/db` — an explicit, greppable,
- * COUNTED exception rather than a silent gap. The reason is a literal union, so a third caller
- * cannot appear without editing this type, and `scripts/check-rls-coverage.mjs` fails the build if
- * the number of uses grows. Each remaining use is a one-line change once 6.5 supplies a tenant.
- */
-export type UnscopedKeyReason =
-  "resume-upload-awaiting-6.5-tenant-resolution" | "report-export-awaiting-6.5-tenant-resolution";
-
-/** The same two, at runtime, so the exception cannot be widened by a cast or a stray `as`. */
-const PERMITTED_UNSCOPED_REASONS: ReadonlySet<string> = new Set<UnscopedKeyReason>([
-  "resume-upload-awaiting-6.5-tenant-resolution",
-  "report-export-awaiting-6.5-tenant-resolution",
-]);
-
-export function unscopedStorageKey(key: string, reason: UnscopedKeyReason): ScopedStorageKey {
-  if (!PERMITTED_UNSCOPED_REASONS.has(reason)) {
-    throw new AppError("BAD_REQUEST", "Unrecognised reason for an un-scoped storage key");
-  }
-  // Branding a key with no owner in it, which is exactly what the reason above documents. Deleting
-  // both call sites deletes this function.
-  return key as ScopedStorageKey;
 }
 
 /**

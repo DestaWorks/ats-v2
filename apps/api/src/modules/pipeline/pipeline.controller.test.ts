@@ -1,4 +1,5 @@
 import "reflect-metadata";
+import { MODULES, ROLE_CAPABILITIES } from "@destaworks/domain/constants";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
 /**
@@ -45,6 +46,8 @@ installNestRequestContext();
 const actor: AuthContext = {
   tenantId: "t1",
   membershipId: "m1",
+  modules: MODULES,
+  capabilities: ROLE_CAPABILITIES.Screener,
   user: { id: "u7", email: "op@desta.works", name: "Operator" },
   role: "Screener",
 };
@@ -67,6 +70,7 @@ describe("PipelineController — declared routes", () => {
         route: "POST /pipeline/health",
         guards: ["SessionAuthGuard", "RateLimitGuard"],
         capability: null,
+        module: null,
         rateLimit: "pipeline-health",
         status: 200,
       },

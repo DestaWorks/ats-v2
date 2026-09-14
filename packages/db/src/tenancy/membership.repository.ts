@@ -26,13 +26,17 @@ import { MAX_ROWS_CAP, REFERENCE_ROWS_CAP } from "../query-limits";
  * Cross-tenant reach belongs to the platform plane (6.8) and is audited there, never here.
  */
 
-/** Columns of the joined tenant a resolution needs; nothing about the tenant's contents. */
+/**
+ * Columns of the joined tenant a resolution needs. `plan` is here because it became an
+ * AUTHORIZATION input — `TenantContext` carries resolved modules. The rest stay in the registry.
+ */
 const TENANT_SELECT = {
   id: true,
   slug: true,
   name: true,
   status: true,
   deletedAt: true,
+  plan: true,
 } as const;
 
 /**
@@ -41,15 +45,23 @@ const TENANT_SELECT = {
  * Deliberately a second select rather than a wider first one. `TENANT_SELECT` is joined onto every
  * membership read, which is the hot path that authorizes every request in the application; the
  * platform plane's health view (6.8) is a handful of calls a day by a handful of operators. Paying
- * for `plan`, `seatLimit` and `trialEndsAt` on the former to serve the latter is the wrong way
- * round, and it would put the platform's vocabulary on the row type `auth` resolves contexts from.
+ * for `seatLimit` and `trialEndsAt` on the former to serve the latter is the wrong way round, and
+ * it would put the platform's billing vocabulary on the row type `auth` resolves contexts from.
  */
 export const TENANT_REGISTRY_SELECT = {
   ...TENANT_SELECT,
-  plan: true,
   seatLimit: true,
   trialEndsAt: true,
   createdAt: true,
+} as const;
+
+/** The role row a membership resolves its capabilities from. Joined on the authorization path. */
+const ACCESS_ROLE_SELECT = {
+  id: true,
+  name: true,
+  capabilities: true,
+  templateKey: true,
+  isBuiltIn: true,
 } as const;
 
 const MEMBERSHIP_SELECT = {
@@ -57,10 +69,12 @@ const MEMBERSHIP_SELECT = {
   tenantId: true,
   userId: true,
   role: true,
+  roleId: true,
   status: true,
   invitedById: true,
   createdAt: true,
   tenant: { select: TENANT_SELECT },
+  accessRole: { select: ACCESS_ROLE_SELECT },
 } as const;
 
 /** The tenant facts a membership row carries. `status`/`role` stay raw strings — the vocabulary
@@ -71,6 +85,8 @@ export interface MembershipTenantRow {
   name: string;
   status: string;
   deletedAt: Date | null;
+  /** The raw stored plan. Callers narrow it with `toPlan`/`modulesForPlan` — never trusted verbatim. */
+  plan: string;
 }
 
 /**
@@ -81,22 +97,34 @@ export interface MembershipTenantRow {
  * the narrower type, which is why this widens rather than replaces.
  */
 export interface TenantRegistryRow extends MembershipTenantRow {
-  plan: string;
   seatLimit: number | null;
   trialEndsAt: Date | null;
   createdAt: Date;
 }
 
-/** One membership, joined to its tenant. The shape every tenancy read returns. */
+/** One tenant-owned role, as the authorization path reads it. */
+export interface AccessRoleRow {
+  id: string;
+  name: string;
+  /** Raw stored codes. Narrowed with `toCapabilities` — a row is never trusted verbatim. */
+  capabilities: string[];
+  templateKey: string | null;
+  isBuiltIn: boolean;
+}
+
+/** One membership, joined to its tenant and to the role row it draws capabilities from. */
 export interface MembershipRow {
   id: string;
   tenantId: string;
   userId: string;
+  /** The role's display NAME. `accessRole` is what actually grants anything. */
   role: string;
+  roleId: string;
   status: string;
   invitedById: string | null;
   createdAt: Date;
   tenant: MembershipTenantRow;
+  accessRole: AccessRoleRow;
 }
 
 export const membershipRepository = {
@@ -156,13 +184,6 @@ export const membershipRepository = {
     });
   },
 
-  /** How many members currently hold a given role in a tenant — the last-administrator check. */
-  countActiveByRole(tenantId: string, roles: readonly string[], tx?: AnyTx): Promise<number> {
-    return dbUnscoped(tx).membership.count({
-      where: { tenantId, status: "active", role: { in: [...roles] } },
-    });
-  },
-
   /**
    * Active member counts for several tenants at once, as `Map<tenantId, count>`.
    *
@@ -190,32 +211,71 @@ export const membershipRepository = {
   },
 
   /**
-   * Create an invitation, or re-invite someone previously removed.
+   * Grant a membership, or revive one previously removed.
    *
    * An upsert rather than a create because `@@unique([tenantId, userId])` means a removed member
-   * still occupies the row: re-inviting them has to revive it, not collide with it. The update
-   * branch is narrow on purpose — it never touches an `active` row's role (that would be a silent
-   * privilege change dressed up as an invitation), which the service enforces before calling.
+   * still occupies the row: re-granting has to revive it, not collide with it. The update branch
+   * is narrow on purpose — it never touches an `active` row's role (that would be a silent
+   * privilege change), which the service enforces before calling.
+   *
+   * `status` is the caller's, because the two ways in differ: an account that already exists is
+   * `invited` and must accept, while an account an administrator CREATES is `active` — they set
+   * the password and hand it over, so there is nobody left to accept and an invitation would
+   * leave the person able to sign in and reach nothing.
    */
-  upsertInvitation(
+  upsertMembership(
     input: {
       tenantId: string;
       userId: string;
+      /** The role ROW being granted. `role` below is its name, denormalised for display. */
+      roleId: string;
       role: string;
       invitedById: string;
+      status: "invited" | "active";
     },
     tx?: AnyTx,
   ): Promise<MembershipRow> {
     return dbUnscoped(tx).membership.upsert({
-      where: { tenantId_userId: { tenantId: input.tenantId, userId: input.userId } },
+      where: {
+        tenantId_userId: { tenantId: input.tenantId, userId: input.userId },
+        // The guard is HERE, not in the caller. The service checks for an existing active
+        // membership before inviting, but that read and this write are two statements: an accept
+        // landing between them would be overwritten, silently demoting a member who had just
+        // joined back to `invited`. Prisma treats an unmatched `where` on an upsert as "create",
+        // which the unique constraint then rejects — a refused invitation rather than a lost
+        // membership, which is the right way for this to fail.
+        ...(input.status === "invited" && { status: { not: "active" } }),
+      },
       create: {
         tenantId: input.tenantId,
         userId: input.userId,
+        roleId: input.roleId,
         role: input.role,
-        status: "invited",
+        status: input.status,
         invitedById: input.invitedById,
       },
-      update: { role: input.role, status: "invited", invitedById: input.invitedById },
+      update: {
+        roleId: input.roleId,
+        role: input.role,
+        status: input.status,
+        invitedById: input.invitedById,
+      },
+      select: MEMBERSHIP_SELECT,
+    });
+  },
+
+  /**
+   * The only write that changes what a member MAY DO. Separate from `upsertMembership`, which is
+   * about existence and refuses to touch an active row's role — so re-inviting cannot promote.
+   */
+  updateRole(
+    membershipId: string,
+    role: { id: string; name: string },
+    tx?: AnyTx,
+  ): Promise<MembershipRow> {
+    return dbUnscoped(tx).membership.update({
+      where: { id: membershipId },
+      data: { roleId: role.id, role: role.name },
       select: MEMBERSHIP_SELECT,
     });
   },

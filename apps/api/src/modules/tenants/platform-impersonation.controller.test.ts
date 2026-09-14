@@ -1,4 +1,5 @@
 import "reflect-metadata";
+import { MODULES, ROLE_CAPABILITIES } from "@destaworks/domain/constants";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
 /**
@@ -41,6 +42,8 @@ const user: AuthUser = { id: "u-platform", email: "ops@destaworks.com", name: "O
 const tenant: TenantContext = {
   tenantId: "t1",
   membershipId: "m1",
+  modules: MODULES,
+  capabilities: ROLE_CAPABILITIES.Owner,
   role: "Owner",
   user: { id: "u-owner", email: "owner@acme.example", name: "Acme Owner" },
 };
@@ -123,11 +126,11 @@ describe("the guards match the axis of each route", () => {
     }
   });
 
-  it("puts the crossing behind PlatformAuthGuard alone", () => {
+  it("puts the crossing behind IdentityAuthGuard alone", () => {
     const match = source.match(/@UseGuards\(([^)]*)\)\s*\n\s*async activity\b/);
 
     // Not SessionAuthGuard: that resolves a tenant and 401s a platform admin who is in none.
-    expect(match?.[1]).toContain("PlatformAuthGuard");
+    expect(match?.[1]).toContain("IdentityAuthGuard");
     expect(match?.[1]).not.toContain("TenantGuard");
     expect(match?.[1]).not.toContain("SessionAuthGuard");
   });

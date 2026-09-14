@@ -1,4 +1,5 @@
 import "reflect-metadata";
+import { MODULES, ROLE_CAPABILITIES } from "@destaworks/domain/constants";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
 /**
@@ -57,6 +58,8 @@ function controllerWith(methods: Partial<LeadService>): LeadsController {
 const USER: AuthContext = {
   tenantId: "t1",
   membershipId: "u1-m",
+  modules: MODULES,
+  capabilities: ROLE_CAPABILITIES.Associate,
   user: { id: "u1", email: "op@desta.works", name: "Operator" },
   role: "Associate",
 };
@@ -72,12 +75,27 @@ describe("LeadsController — declared routes", () => {
   it("matches the Next.js route table it replaces, verb for verb and guard for guard", () => {
     const session = ["SessionAuthGuard"];
     expect(describeRoutes(LeadsController)).toEqual([
-      { route: "POST /leads", guards: session, capability: null, rateLimit: null, status: 201 },
-      { route: "GET /leads/list", guards: session, capability: null, rateLimit: null, status: 200 },
+      {
+        route: "POST /leads",
+        guards: session,
+        capability: null,
+        module: "sourcing",
+        rateLimit: null,
+        status: 201,
+      },
+      {
+        route: "GET /leads/list",
+        guards: session,
+        capability: null,
+        module: "sourcing",
+        rateLimit: null,
+        status: 200,
+      },
       {
         route: "POST /leads/bulk",
         guards: session,
         capability: null,
+        module: "sourcing",
         rateLimit: null,
         status: 200,
       },
@@ -85,14 +103,23 @@ describe("LeadsController — declared routes", () => {
         route: "POST /leads/import",
         guards: session,
         capability: null,
+        module: "sourcing",
         rateLimit: null,
         status: 200,
       },
-      { route: "GET /leads/:id", guards: session, capability: null, rateLimit: null, status: 200 },
+      {
+        route: "GET /leads/:id",
+        guards: session,
+        capability: null,
+        module: "sourcing",
+        rateLimit: null,
+        status: 200,
+      },
       {
         route: "DELETE /leads/:id",
         guards: session,
         capability: null,
+        module: "sourcing",
         rateLimit: null,
         status: 200,
       },
@@ -100,6 +127,7 @@ describe("LeadsController — declared routes", () => {
         route: "POST /leads/:id/promote",
         guards: session,
         capability: null,
+        module: "sourcing",
         rateLimit: null,
         status: 200,
       },
@@ -107,6 +135,7 @@ describe("LeadsController — declared routes", () => {
         route: "POST /leads/:id/respond",
         guards: session,
         capability: null,
+        module: "sourcing",
         rateLimit: null,
         status: 200,
       },
@@ -114,6 +143,7 @@ describe("LeadsController — declared routes", () => {
         route: "POST /leads/:id/snooze",
         guards: session,
         capability: null,
+        module: "sourcing",
         rateLimit: null,
         status: 200,
       },
@@ -121,6 +151,7 @@ describe("LeadsController — declared routes", () => {
         route: "POST /leads/:id/restore",
         guards: session,
         capability: null,
+        module: "sourcing",
         rateLimit: null,
         status: 200,
       },
@@ -128,6 +159,7 @@ describe("LeadsController — declared routes", () => {
         route: "POST /leads/:id/outreach",
         guards: session,
         capability: null,
+        module: "sourcing",
         rateLimit: null,
         status: 200,
       },
@@ -135,6 +167,7 @@ describe("LeadsController — declared routes", () => {
         route: "PATCH /leads/:id/outreach/:attemptId",
         guards: session,
         capability: null,
+        module: "sourcing",
         rateLimit: null,
         status: 200,
       },
@@ -142,6 +175,7 @@ describe("LeadsController — declared routes", () => {
         route: "DELETE /leads/:id/outreach/:attemptId",
         guards: session,
         capability: null,
+        module: "sourcing",
         rateLimit: null,
         status: 200,
       },

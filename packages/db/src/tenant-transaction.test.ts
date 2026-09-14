@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import { MODULES, ROLE_CAPABILITIES } from "@destaworks/domain/constants";
 
 /**
  * The raw-call escape. `withTenantTransaction` hands its callback a scoped CLIENT, and the tenant
@@ -48,6 +49,8 @@ const { withTenantTransaction } = await import("./tenant-transaction");
 const ctx = {
   tenantId: "tenant_a",
   membershipId: "m1",
+  modules: MODULES,
+  capabilities: ROLE_CAPABILITIES.Owner,
   role: "Owner" as const,
   user: { id: "u1", email: "u@desta.works", name: "U" },
 };

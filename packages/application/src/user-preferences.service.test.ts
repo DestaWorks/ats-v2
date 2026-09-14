@@ -13,6 +13,8 @@ const h = vi.hoisted(() => ({
     membershipId: "u1-m",
     user: { id: "u1", email: "u@desta.works", name: "Test User" },
     role: "Associate" as const,
+    capabilities: [] as const,
+    modules: ["core", "sourcing", "discovery", "reports", "ai", "portal", "compliance"] as const,
   },
   userRepo: { findPreferences: vi.fn(), updatePreferences: vi.fn() },
   uploadPublic: vi.fn(),

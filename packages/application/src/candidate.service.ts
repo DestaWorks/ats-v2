@@ -43,6 +43,7 @@ import type { JourneyDTO, JourneyEventDTO } from "@destaworks/contracts/validati
 import { requireUser } from "@destaworks/auth/guards";
 import type { TenantContext } from "@destaworks/domain/tenant";
 import { writeAudit } from "@destaworks/db/audit";
+import { MAX_ROWS_CAP } from "@destaworks/db/query-limits";
 import { withTenantTransaction } from "@destaworks/db/with-transaction";
 import type { ScopedTx, SeamWrite } from "@destaworks/db/tenant-scope";
 import {
@@ -544,7 +545,7 @@ export const candidateService = {
    * record is gone — never echo PII).
    */
   async purge(id: string, ctx: TenantContext) {
-    if (!hasCapability(ctx.role, "purgeCandidate")) {
+    if (!hasCapability(ctx, "purgeCandidate")) {
       throw new AppError("FORBIDDEN", "You don't have permission to purge candidates");
     }
     const existing = await candidateRepository.findById(ctx, id, { includeDeleted: true });
@@ -656,7 +657,7 @@ export const candidateService = {
       notes: visibleNotes(notes, viewer).map(toNoteDTO),
       stageHistory: history.slice(0, 10).map(toStageEventDTO),
       outreach,
-      canVerifyCredentials: hasCapability(viewer.role, "viewCredentials"),
+      canVerifyCredentials: hasCapability(viewer, "viewCredentials"),
       scoring,
     };
   },
@@ -915,15 +916,17 @@ export const candidateService = {
           dqFor(row, rulesByClient, now),
         ),
       );
-      return { candidates, ...meta };
+      return { candidates, capped: false, ...meta };
     }
 
     // Score path — Hot and/or fit need the computed score across the WHOLE filtered set. The
     // name/rules lookup doesn't depend on the rows either, so it runs alongside them too.
+    // Bounded by `MAX_ROWS_CAP`: a truncated ranking is wrong at the top, so `capped` says so.
     const [[clientNames, rulesRows], allRows] = await Promise.all([
       namesAndRules,
       candidateRepository.listCards(viewer, { ...repoFilters, orderBy: baseOrder, now }),
     ]);
+    const capped = allRows.length === MAX_ROWS_CAP;
     const rulesByClient = buildRulesMap(clientNames, rulesRows);
     let scored = allRows.map((row) => ({ row, score: scoreFor(row, rulesByClient, now) }));
     if (hot) scored = scored.filter((s) => s.score !== null && s.score >= HOT_SCORE);
@@ -933,7 +936,7 @@ export const candidateService = {
     const candidates = pageRows.map((s) =>
       toListItem(s.row, clientNames, now, s.score, dqFor(s.row, rulesByClient, now)),
     );
-    return { candidates, ...meta };
+    return { candidates, capped, ...meta };
   },
 
   /**

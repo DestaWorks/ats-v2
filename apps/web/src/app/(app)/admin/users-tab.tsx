@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { ROLES } from "@destaworks/domain/constants";
+import type { AccessRoleDTO } from "@destaworks/contracts/validation/tenant";
 import {
   banUserSchema,
   createUserSchema,
@@ -52,6 +52,7 @@ export function GeneratedPasswordBanner({
 
 export function UsersTab({
   users,
+  roles,
   currentUserId,
   onChanged,
   onRemoved,
@@ -59,6 +60,8 @@ export function UsersTab({
   emptyMessage = "No users yet.",
 }: {
   users: AdminUserDTO[];
+  /** The workspace's OWN roles — what a change or an add may choose from. */
+  roles: AccessRoleDTO[];
   currentUserId: string;
   onChanged: (user: AdminUserDTO) => void;
   onRemoved: (id: string) => void;
@@ -69,14 +72,15 @@ export function UsersTab({
   const [banTarget, setBanTarget] = useState<AdminUserDTO | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  async function handleRoleChange(user: AdminUserDTO, role: string) {
+  async function handleRoleChange(user: AdminUserDTO, roleId: string) {
+    const name = roles.find((r) => r.id === roleId)?.name ?? roleId;
     setBusyId(user.id);
     const res = await patchJson<AdminUserEnvelopeDTO>(`/api/admin/users/${user.id}/role`, {
-      role,
+      roleId,
     });
     setBusyId(null);
     if (res.ok) {
-      toast.success(`${user.name} is now ${role}`);
+      toast.success(`${user.name} is now ${name}`);
       onChanged(res.data.user);
     } else {
       toast.error(messageForFailure(res.failure));
@@ -147,14 +151,14 @@ export function UsersTab({
               <Td>{u.email}</Td>
               <Td>
                 <Select
-                  value={u.role}
+                  value={u.roleId}
                   disabled={busyId === u.id}
                   onChange={(e) => void handleRoleChange(u, e.target.value)}
                   className="h-8 text-xs"
                 >
-                  {ROLES.map((r) => (
-                    <option key={r} value={r}>
-                      {r}
+                  {roles.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.name}
                     </option>
                   ))}
                 </Select>
@@ -222,6 +226,7 @@ export function UsersTab({
       <Modal open={addOpen} onClose={() => setAddOpen(false)} title="Add user">
         {addOpen ? (
           <AddUserForm
+            roles={roles}
             onSaved={(result) => {
               onChanged(result.user);
               onPassword(result.user.email, result);
@@ -249,15 +254,17 @@ export function UsersTab({
 }
 
 function AddUserForm({
+  roles,
   onSaved,
   onCancel,
 }: {
+  roles: AccessRoleDTO[];
   onSaved: (result: PostAdminUserResponse) => void;
   onCancel: () => void;
 }) {
   const [serverError, setServerError] = useState<string | null>(null);
   const { form, pending, onSubmit } = useApiForm(createUserSchema, {
-    defaultValues: { name: "", email: "", role: "Associate" },
+    defaultValues: { name: "", email: "", roleId: roles[0]?.id ?? "" },
     submit: (values) => postJson<PostAdminUserResponse>("/api/admin/users", values),
     onSuccess: (data) => {
       toast.success("User added");
@@ -275,11 +282,11 @@ function AddUserForm({
       <Field label="Email" htmlFor="au-email" {...fieldErrorProps(form, "email")} required>
         <Input id="au-email" type="email" {...form.register("email")} />
       </Field>
-      <Field label="Role" htmlFor="au-role" {...fieldErrorProps(form, "role")} required>
-        <Select id="au-role" {...form.register("role")}>
-          {ROLES.map((r) => (
-            <option key={r} value={r}>
-              {r}
+      <Field label="Role" htmlFor="au-role" {...fieldErrorProps(form, "roleId")} required>
+        <Select id="au-role" {...form.register("roleId")}>
+          {roles.map((r) => (
+            <option key={r.id} value={r.id}>
+              {r.name}
             </option>
           ))}
         </Select>

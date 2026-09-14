@@ -2,8 +2,13 @@ import { cache } from "react";
 import { auth } from "./auth";
 import { requestContext } from "@destaworks/config/request-context";
 import { AppError } from "@destaworks/integrations/http/app-error";
-import { hasCapability, type Capability } from "@destaworks/domain/constants";
-import type { TenantContext } from "@destaworks/domain/tenant";
+import {
+  hasCapability,
+  hasModule,
+  type Capability,
+  type Module,
+} from "@destaworks/domain/constants";
+import type { TenantContext, CapabilityViewer, ModuleViewer } from "@destaworks/domain/tenant";
 import { setLogContext } from "@destaworks/config/logger/request-context";
 import { resolveTenantContext } from "./tenant-context";
 import { readTenantClaim } from "./tenant-claim";
@@ -128,8 +133,34 @@ export async function getVerifiedUser(): Promise<AuthContext> {
  */
 export async function requireCapability(capability: Capability): Promise<AuthContext> {
   const context = await requireUser();
-  if (!hasCapability(context.role, capability)) {
+  assertCapability(context, capability);
+  return context;
+}
+
+/** Pure, on an already-resolved context, so a guard resolves once and asserts both gates. */
+export function assertCapability(context: CapabilityViewer, capability: Capability): void {
+  if (!hasCapability(context, capability)) {
     throw new AppError("FORBIDDEN", "You don't have permission to do that");
   }
+}
+
+/**
+ * The ENTITLEMENT gate (402), never a substitute for `requireCapability`: this asks what the FIRM
+ * bought, that one what the PERSON may do. The module runs first, so a tenant without Reports is
+ * told to upgrade rather than told they lack a permission their role does grant.
+ */
+export async function requireModule(module: Module): Promise<AuthContext> {
+  const context = await requireUser();
+  assertModule(context, module);
   return context;
+}
+
+/** The entitlement decision itself, pure and on an already-resolved context. */
+export function assertModule(context: ModuleViewer, module: Module): void {
+  if (!hasModule(context.modules, module)) {
+    throw new AppError(
+      "PLAN_UPGRADE_REQUIRED",
+      "Your plan doesn't include this. Talk to your workspace owner about adding it.",
+    );
+  }
 }

@@ -1,7 +1,12 @@
 import type { ApiErrorBody, ApiFailure } from "@destaworks/contracts/api";
+import type { GetPlatformMetricsResponse } from "@destaworks/contracts/validation/platform-metrics";
+import type { GetImpersonatedActivityResponse } from "@destaworks/contracts/validation/platform-impersonation";
 import type {
   GetPlatformTenantResponse,
   GetPlatformTenantsResponse,
+  PostPlatformTenantSuspendResponse,
+  PostPlatformTenantRestoreResponse,
+  TenantSuspensionReason,
 } from "@destaworks/contracts/validation/tenant";
 import { requestContext } from "@destaworks/config/request-context";
 
@@ -87,6 +92,36 @@ async function platformGet<T>(path: string): Promise<PlatformApiResult<T>> {
   }
 }
 
+/**
+ * A POST against the platform API, with this request's session forwarded.
+ *
+ * Same cookie pass-through and the same reason as `platformGet`: the console holds no credential
+ * of its own, so `apps/api` authenticates the original operator and audits the act against them.
+ */
+async function platformPost<T>(path: string, body: unknown): Promise<PlatformApiResult<T>> {
+  const url = platformApiUrl(path, process.env[API_BASE_URL_ENV]);
+  if (url === null) return { ok: false, failure: CONFIG_FAILURE };
+
+  const cookie = (await requestContext().headers()).get("cookie");
+
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      cache: "no-store",
+      headers: {
+        accept: "application/json",
+        "content-type": "application/json",
+        ...(cookie !== null && { cookie }),
+      },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) return { ok: false, failure: await readFailure(res) };
+    return { ok: true, data: (await res.json()) as T };
+  } catch {
+    return { ok: false, failure: NETWORK_FAILURE };
+  }
+}
+
 /** `GET /platform/tenants` — the tenant registry. Operational metadata only. */
 export function listPlatformTenants(): Promise<PlatformApiResult<GetPlatformTenantsResponse>> {
   return platformGet<GetPlatformTenantsResponse>("/platform/tenants");
@@ -97,4 +132,54 @@ export function readPlatformTenant(
   slug: string,
 ): Promise<PlatformApiResult<GetPlatformTenantResponse>> {
   return platformGet<GetPlatformTenantResponse>(`/platform/tenants/${encodeURIComponent(slug)}`);
+}
+
+/** `GET /platform/metrics` — installation-wide counts. No tenant contents. */
+export function readPlatformMetrics(
+  days?: number,
+): Promise<PlatformApiResult<GetPlatformMetricsResponse>> {
+  const query = days === undefined ? "" : `?days=${String(days)}`;
+  return platformGet<GetPlatformMetricsResponse>(`/platform/metrics${query}`);
+}
+
+/**
+ * `GET /platform/impersonation/:slug/activity` — what support DID inside a workspace.
+ *
+ * Read-only here on purpose. Granting a support window is `POST .../consent`, which the TENANT
+ * calls from their own workspace: consent is theirs to give, so the console can show what was
+ * done with it and never take it.
+ */
+export function readImpersonatedActivity(
+  slug: string,
+): Promise<PlatformApiResult<GetImpersonatedActivityResponse>> {
+  return platformGet<GetImpersonatedActivityResponse>(
+    `/platform/impersonation/${encodeURIComponent(slug)}/activity`,
+  );
+}
+
+/**
+ * `POST /platform/tenants/:slug/suspend` — refuse every member of a workspace until restored.
+ *
+ * The reason is a closed vocabulary because it is written into the SUSPENDED TENANT'S OWN activity
+ * log, where their auditors read it; free text there would be an open channel into a customer's
+ * audit trail.
+ */
+export function suspendPlatformTenant(
+  slug: string,
+  reason: TenantSuspensionReason,
+): Promise<PlatformApiResult<PostPlatformTenantSuspendResponse>> {
+  return platformPost<PostPlatformTenantSuspendResponse>(
+    `/platform/tenants/${encodeURIComponent(slug)}/suspend`,
+    { reason },
+  );
+}
+
+/** `POST /platform/tenants/:slug/restore` — lift a suspension. Destroys nothing either way. */
+export function restorePlatformTenant(
+  slug: string,
+): Promise<PlatformApiResult<PostPlatformTenantRestoreResponse>> {
+  return platformPost<PostPlatformTenantRestoreResponse>(
+    `/platform/tenants/${encodeURIComponent(slug)}/restore`,
+    {},
+  );
 }

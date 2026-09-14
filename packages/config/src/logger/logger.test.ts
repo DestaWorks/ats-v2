@@ -97,7 +97,7 @@ describe("console logger (Edge/browser adapter)", () => {
 
   it("merges child bindings into every subsequent line", () => {
     const { lines, log } = capture();
-    log.child({ requestId: "r-2" }).warn("rate_limit.upstash.unavailable");
+    log.child({ requestId: "r-2" }).warn("rate_limit.redis.unavailable");
     const parsed = JSON.parse(lines[0]!) as Record<string, unknown>;
     expect(parsed.requestId).toBe("r-2");
     expect(parsed.level).toBe("warn");

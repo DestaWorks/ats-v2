@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { ROLE_CAPABILITIES } from "@destaworks/domain/constants";
 import type { TenantContext } from "@destaworks/domain/tenant";
 
 /**
@@ -17,17 +18,21 @@ const h = vi.hoisted(() => ({
     membershipId: "u1-m",
     user: { id: "u1", email: "u@desta.works", name: "Test User" },
     role: "Associate" as const,
+    capabilities: [] as const,
+    modules: ["core", "sourcing", "discovery", "reports", "ai", "portal", "compliance"] as const,
   },
   owner: {
     tenantId: "t1",
     membershipId: "o1-m",
     user: { id: "o1", email: "o@desta.works", name: "Owner" },
     role: "Owner" as const,
+    capabilities: ["viewAllNoteTypes"] as const,
+    modules: ["core", "sourcing", "discovery", "reports", "ai", "portal", "compliance"] as const,
   },
   candidateRepo: { findById: vi.fn() },
   noteRepo: { create: vi.fn(), listByCandidate: vi.fn() },
   mentionRepo: { createMany: vi.fn() },
-  userRepo: { list: vi.fn(), emailsByIds: vi.fn() },
+  userRepo: { listByTenant: vi.fn(), emailsByIds: vi.fn() },
   writeAudit: vi.fn(),
   sendEmail: vi.fn(),
 }));
@@ -73,8 +78,8 @@ beforeEach(() => {
   h.noteRepo.listByCandidate.mockReset();
   h.mentionRepo.createMany.mockReset();
   h.mentionRepo.createMany.mockResolvedValue(0);
-  h.userRepo.list.mockReset();
-  h.userRepo.list.mockResolvedValue([]);
+  h.userRepo.listByTenant.mockReset();
+  h.userRepo.listByTenant.mockResolvedValue([]);
   h.userRepo.emailsByIds.mockReset();
   h.userRepo.emailsByIds.mockResolvedValue(new Map());
   h.writeAudit.mockReset();
@@ -128,7 +133,7 @@ describe("noteService.add", () => {
     h.candidateRepo.findById.mockResolvedValue({ id: "c1" });
     h.noteRepo.create.mockResolvedValue(noteRow({ body: "@Biruh @Test see this" }));
     // Author (Test User) mentions himself + Biruh — only Biruh gets a mention row.
-    h.userRepo.list.mockResolvedValue([
+    h.userRepo.listByTenant.mockResolvedValue([
       { id: "u1", name: "Test User" },
       { id: "u2", name: "Biruh Desta" },
     ]);
@@ -162,7 +167,7 @@ describe("noteService.add", () => {
   it("emails a mentioned recipient with a resolvable address, in addition to the in-app mention", async () => {
     h.candidateRepo.findById.mockResolvedValue({ id: "c1", name: "Jane Doe" });
     h.noteRepo.create.mockResolvedValue(noteRow({ body: "@Biruh see this" }));
-    h.userRepo.list.mockResolvedValue([{ id: "u2", name: "Biruh Desta" }]);
+    h.userRepo.listByTenant.mockResolvedValue([{ id: "u2", name: "Biruh Desta" }]);
     h.userRepo.emailsByIds.mockResolvedValue(new Map([["u2", "biruh@desta.works"]]));
 
     await noteService.add(h.user as TenantContext, "c1", {
@@ -181,7 +186,7 @@ describe("noteService.add", () => {
   it("skips a recipient with no resolvable email — never calls sendEmail for them", async () => {
     h.candidateRepo.findById.mockResolvedValue({ id: "c1", name: "Jane Doe" });
     h.noteRepo.create.mockResolvedValue(noteRow({ body: "@Biruh see this" }));
-    h.userRepo.list.mockResolvedValue([{ id: "u2", name: "Biruh Desta" }]);
+    h.userRepo.listByTenant.mockResolvedValue([{ id: "u2", name: "Biruh Desta" }]);
     h.userRepo.emailsByIds.mockResolvedValue(new Map()); // no email on file
 
     await noteService.add(h.user as TenantContext, "c1", {
@@ -208,7 +213,7 @@ describe("noteService.add", () => {
   it("a failed send never fails the note-add (best-effort)", async () => {
     h.candidateRepo.findById.mockResolvedValue({ id: "c1", name: "Jane Doe" });
     h.noteRepo.create.mockResolvedValue(noteRow({ body: "@Biruh see this" }));
-    h.userRepo.list.mockResolvedValue([{ id: "u2", name: "Biruh Desta" }]);
+    h.userRepo.listByTenant.mockResolvedValue([{ id: "u2", name: "Biruh Desta" }]);
     h.userRepo.emailsByIds.mockResolvedValue(new Map([["u2", "biruh@desta.works"]]));
     h.sendEmail.mockRejectedValue(new Error("SMTP down"));
 
@@ -255,19 +260,19 @@ describe("visibleNotes (server-authoritative)", () => {
 
   it("a viewAllNoteTypes holder (Owner/Admin tier) sees all 5 types", () => {
     expect(visibleNotes(notes, h.owner).map((n) => n.id)).toEqual(["n1", "n2", "n3", "n4", "n5"]);
-    expect(visibleNotes(notes, { role: "Admin" }).map((n) => n.id)).toEqual([
-      "n1",
-      "n2",
-      "n3",
-      "n4",
-      "n5",
-    ]);
+    expect(visibleNotes(notes, { capabilities: ROLE_CAPABILITIES.Admin }).map((n) => n.id)).toEqual(
+      ["n1", "n2", "n3", "n4", "n5"],
+    );
   });
 
   it("non-holders (incl. Director/Manager — legacy parity) see ONLY internal", () => {
     expect(visibleNotes(notes, h.user).map((n) => n.id)).toEqual(["n1"]);
-    expect(visibleNotes(notes, { role: "Director" }).map((n) => n.id)).toEqual(["n1"]);
-    expect(visibleNotes(notes, { role: "Manager" }).map((n) => n.id)).toEqual(["n1"]);
+    expect(
+      visibleNotes(notes, { capabilities: ROLE_CAPABILITIES.Director }).map((n) => n.id),
+    ).toEqual(["n1"]);
+    expect(
+      visibleNotes(notes, { capabilities: ROLE_CAPABILITIES.Manager }).map((n) => n.id),
+    ).toEqual(["n1"]);
   });
 });
 

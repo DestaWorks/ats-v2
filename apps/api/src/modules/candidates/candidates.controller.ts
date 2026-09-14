@@ -396,7 +396,7 @@ export class CandidatesController {
     verb: "set" | "edit",
   ): void {
     if (licenseNumber === undefined) return;
-    if (hasCapability(user.role, "viewCredentials")) return;
+    if (hasCapability(user, "viewCredentials")) return;
     throw new AppError("FORBIDDEN", `You don't have permission to ${verb} the license number`);
   }
 

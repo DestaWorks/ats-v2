@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { MODULES, ROLE_CAPABILITIES } from "@destaworks/domain/constants";
 
 /**
  * `pipelineReportsService.pipelineFunnel` — Wave 5.2. Proves the core fix end-to-end: a candidate
@@ -59,6 +60,8 @@ beforeEach(() => {
 const ctx = {
   tenantId: "t1",
   membershipId: "m1",
+  modules: MODULES,
+  capabilities: ROLE_CAPABILITIES.Owner,
   role: "Owner" as const,
   user: { id: "u1", email: "u@desta.works", name: "U" },
 };
@@ -84,5 +87,35 @@ describe("pipelineReportsService.pipelineFunnel", () => {
     const dto = await pipelineReportsService.pipelineFunnel(ctx, {});
     const newCandidateStage = dto.stages.find((s) => s.status === "NEW_CANDIDATE");
     expect(newCandidateStage?.reachedCount).toBe(2);
+  });
+});
+
+describe("truncation reaches the DTO", () => {
+  it("pipelineFunnel carries capped through from the cohort", async () => {
+    h.loadCohort.mockResolvedValue({
+      candidates: [],
+      clientNames: new Map(),
+      userNames: new Map(),
+      rulesByClient: new Map(),
+      capped: true,
+    });
+    h.maxStageOrderAsOf.mockResolvedValue(new Map());
+    await expect(pipelineReportsService.pipelineFunnel(ctx, {})).resolves.toMatchObject({
+      capped: true,
+    });
+  });
+
+  it("executiveSummary carries capped through from the cohort", async () => {
+    h.loadCohort.mockResolvedValue({
+      candidates: [],
+      clientNames: new Map(),
+      userNames: new Map(),
+      rulesByClient: new Map(),
+      capped: true,
+    });
+    h.maxStageOrderAsOf.mockResolvedValue(new Map());
+    await expect(pipelineReportsService.executiveSummary(ctx, {})).resolves.toMatchObject({
+      capped: true,
+    });
   });
 });

@@ -48,7 +48,7 @@ async function main() {
 
   console.log(
     res.count > 0
-      ? `✓ Password reset for ${email} (role=${user.role})`
+      ? `✓ Password reset for ${email}`
       : `⚠ ${email} has no credential account — no password to reset`,
   );
 }

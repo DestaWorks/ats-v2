@@ -1,6 +1,7 @@
-import { getVerifiedUser } from "@destaworks/auth/guards";
+import { requirePageUser } from "@/lib/page-user";
 import { InboundTriage } from "./inbound-triage";
-import { cachedClientList } from "@destaworks/integrations/http/request-cache";
+import type { LookupOptionsDTO } from "@destaworks/contracts/validation/lookups";
+import { apiGet } from "@/lib/api/server";
 
 /**
  * Inbound Triage (Wave 2.8, RSC shell) — replaces legacy `inbound_triage`. Server-guards the route
@@ -9,8 +10,8 @@ import { cachedClientList } from "@destaworks/integrations/http/request-cache";
  * so the reviewer can edit before anything is written.
  */
 export default async function InboundTriagePage() {
-  const user = await getVerifiedUser();
-  const clientRows = await cachedClientList(user);
+  await requirePageUser();
+  const { clients: clientRows } = await apiGet<LookupOptionsDTO>("/lookups");
   const clients = clientRows.map((c) => ({ id: c.id, name: c.name }));
 
   return (

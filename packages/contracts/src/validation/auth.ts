@@ -1,5 +1,4 @@
 import { z } from "zod";
-import type { Role } from "@destaworks/domain/constants";
 
 /**
  * Auth input schemas (shared client ↔ server). Used by the sign-in form (client)
@@ -16,7 +15,10 @@ export interface SessionUserDTO {
   id: string;
   email: string;
   name: string;
-  role: Role;
+  /** The role's display NAME in the active workspace. A tenant may invent its own, so not an enum. */
+  role: string;
+  /** What this member may actually do here — what the client hides UI on. The server re-decides. */
+  capabilities: string[];
 }
 
 export const signInSchema = z.object({

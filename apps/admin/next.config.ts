@@ -27,6 +27,8 @@ const SECURITY_HEADERS = [
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  // Opt-in, matching apps/web: `standalone` emits the self-contained server the container copies.
+  ...(process.env.NEXT_OUTPUT_STANDALONE === "1" && { output: "standalone" as const }),
   // `@destaworks/db` is listed although `apps/admin` may not import it: `@destaworks/auth` does,
   // and Next has to compile the whole reachable TypeScript graph. Being compilable is not an
   // edge in the dependency law — scripts/check-architecture.mjs reads import specifiers and

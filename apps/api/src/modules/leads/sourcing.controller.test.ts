@@ -1,4 +1,5 @@
 import "reflect-metadata";
+import { MODULES, ROLE_CAPABILITIES } from "@destaworks/domain/constants";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
 /**
@@ -49,6 +50,8 @@ function controllerWith(methods: Partial<SimilarityService>): SourcingController
 const USER: AuthContext = {
   tenantId: "t1",
   membershipId: "u1-m",
+  modules: MODULES,
+  capabilities: ROLE_CAPABILITIES.Associate,
   user: { id: "u1", email: "op@desta.works", name: "Operator" },
   role: "Associate",
 };
@@ -64,6 +67,7 @@ describe("SourcingController — declared routes", () => {
         route: "POST /sourcing/similar",
         guards: ["SessionAuthGuard"],
         capability: null,
+        module: "sourcing",
         rateLimit: null,
         status: 200,
       },

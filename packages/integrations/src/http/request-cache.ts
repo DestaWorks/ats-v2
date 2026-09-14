@@ -1,4 +1,4 @@
-import { cache } from "react";
+import { requestMemo } from "@destaworks/config/request-cache";
 import { systemContextFor } from "@destaworks/domain/system-context";
 import type { TenantContext } from "@destaworks/domain/tenant";
 import { clientRepository } from "@destaworks/db/repositories/client.repository";
@@ -19,19 +19,21 @@ import { userRepository } from "@destaworks/db/repositories/user.repository";
  * mutation-adjacent caller keeps using the raw, uncached repository method.
  *
  * Lives here rather than in the repositories so that data access carries no framework
- * dependency. `cache()` is a React render-scoped mechanism; when the backend moves behind a
- * long-running process this module is the single place that changes.
+ * dependency. It was React's `cache()` until the backend moved behind a long-running process,
+ * which is exactly the change this comment anticipated: `cache()` only memoizes inside a render,
+ * so in NestJS and the worker it did nothing at all. `requestMemo` is scoped by
+ * `AsyncLocalStorage` instead and works in both.
  */
 
 /**
  * Keyed by tenant ID, not the context object: `cache()` memoizes on argument identity, so a fresh
  * context per call would miss every time and undo the memo.
  */
-const clientListFor = cache((tenantId: string) =>
+const clientListFor = requestMemo("clientList", (tenantId: string) =>
   clientRepository.list(systemContextFor(tenantId)),
 );
 
-const clientRulesListFor = cache((tenantId: string) =>
+const clientRulesListFor = requestMemo("clientRulesList", (tenantId: string) =>
   clientRulesRepository.list(systemContextFor(tenantId)),
 );
 
@@ -45,5 +47,15 @@ export const cachedClientNameMap = async (ctx: TenantContext): Promise<Map<strin
 
 export const cachedClientRulesList = (ctx: TenantContext) => clientRulesListFor(ctx.tenantId);
 
-/** `User` is a GLOBAL model — one human, many tenants — so this one carries no tenant at all. */
-export const cachedUserList = cache(() => userRepository.list());
+/**
+ * This workspace's operators.
+ *
+ * `User` is a GLOBAL model — one human, many tenants — which is exactly why this takes a tenant:
+ * the enforcement seam cannot scope the table, so the caller must, and every screen this feeds is
+ * tenant-scoped. It reads through `listByTenant`, whose membership predicate IS the scope.
+ */
+const userListFor = requestMemo("userList", (tenantId: string) =>
+  userRepository.listByTenant(tenantId),
+);
+
+export const cachedUserList = (ctx: TenantContext) => userListFor(ctx.tenantId);

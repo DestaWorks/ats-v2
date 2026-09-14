@@ -122,6 +122,7 @@ export const massJourneyReport = {
     });
 
     return {
+      capped: cohort.capped,
       windowStart: windowStart.toISOString().slice(0, 10),
       windowEnd: now.toISOString().slice(0, 10),
       totalCandidates: cohort.candidates.length,

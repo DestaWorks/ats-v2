@@ -17,15 +17,20 @@ export const googleEnabled = Boolean(googleClientId && googleClientSecret);
  * Better Auth server instance (DECISIONS D3).
  * - Email/password enabled; **public self-registration disabled** — accounts come from an
  *   invite / approved access request (or the seed). Google added when configured.
- * - `role` is a server-controlled field on the user (`input: false` → clients can't set it);
- *   our own capability model (`lib/constants` + `server/auth/guards`) governs feature access.
+ * - **This app declares no `role` field on the user.** Authority is the `Membership` in the active
+ *   workspace, read by `getCurrentUser` (SAAS-RESTRUCTURE-PLAN 6.4) — one person can be Owner of
+ *   one workspace and Associate of another, so an identity-level role would answer the wrong
+ *   question in the second.
  * - The Better Auth **admin** plugin (Wave 5.3) provides user management (create/list/set-role/
- *   ban/unban/reset-password/remove) with server-hashed passwords and DB-enforced bans. Its
- *   `roles`/`adminRoles` are a SEPARATE authZ check from this app's own `hasCapability` — every
- *   `/api/admin/*` route still gates with `requireCapability(...)` first (the one authoritative
- *   system); this config just remaps the plugin's own built-in role definitions (`adminAc`/
- *   `userAc`) onto our 6 real role names so a legitimately-authorized Owner/Admin isn't ALSO
- *   rejected by the plugin's inner check.
+ *   ban/unban/reset-password/remove) with server-hashed passwords and DB-enforced bans. It
+ *   declares `user.role` in its OWN schema, writes it on every create, and gates each of its
+ *   endpoints on `session.user.role`; that inner check is a SEPARATE authZ system from this app's
+ *   `hasCapability`, and it is not the authoritative one — every `/api/admin/*` route gates with
+ *   `requireCapability(...)` against the membership first, so the plugin's check can only refuse
+ *   what we already allowed, never grant what we refused. The config below remaps the plugin's
+ *   built-in role definitions (`adminAc`/`userAc`) onto our 6 role names so a legitimately
+ *   authorized Owner/Admin is not ALSO rejected by it. Removing the remap 403s the whole
+ *   account-management surface; see the plan's Phase 6.4 entry for what the column drop still needs.
  * - `nextCookies()` must be the LAST plugin (lets Server Actions set auth cookies).
  */
 export const auth = betterAuth({
@@ -54,13 +59,9 @@ export const auth = betterAuth({
         },
       }
     : {}),
-  user: {
-    additionalFields: {
-      role: { type: "string", required: false, defaultValue: "Associate", input: false },
-    },
-  },
-  // Trusts a signed cookie instead of hitting Postgres on every request. Trade-off: a role change
-  // can take up to maxAge to take effect.
+  // Trusts a signed cookie instead of hitting Postgres on every request. The cookie caches the
+  // IDENTITY only — the role is re-read from the membership on every request by `getCurrentUser`,
+  // so a role change takes effect immediately rather than after maxAge.
   session: {
     cookieCache: { enabled: true, maxAge: 60 },
   },

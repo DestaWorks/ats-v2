@@ -1,0 +1,37 @@
+# Anything not needed to BUILD. Keeping this tight matters more than usual here: the build
+# context is sent to the daemon before any layer runs, so a stray `node_modules` or `.next`
+# costs on every build even though the Dockerfile never copies it.
+node_modules
+**/node_modules
+.next
+**/.next
+dist
+**/dist
+.turbo
+**/.turbo
+coverage
+**/coverage
+
+# Never let a real secret into an image layer. `.env.example` is deliberately NOT ignored.
+.env
+.env.*
+!.env.example
+
+# Local-only and irrelevant to a build
+.git
+.github
+.husky
+.claude
+.vscode
+.idea
+legacy
+docs
+*.log
+.DS_Store
+**/.DS_Store
+
+# The generated Prisma client is rebuilt inside the image (`pnpm db:generate`) so it matches the
+# image's platform — copying a host-generated one ships the wrong query engine binary.
+packages/db/src/generated
+
+# apps/api/runtime{,-migrate} are COMMITTED build inputs (npm ci) — never ignore them.

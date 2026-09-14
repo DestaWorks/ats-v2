@@ -1,6 +1,7 @@
-import { hasCapability } from "@destaworks/domain/constants";
+import { hasCapability, hasModule } from "@destaworks/domain/constants";
+import { UpsellState } from "@destaworks/ui/upsell-state";
 import { dateKeyForOffset, mondayOf } from "@destaworks/domain/daily";
-import { getVerifiedUser } from "@destaworks/auth/guards";
+import { requirePageUser } from "@/lib/page-user";
 import { viewerTzOffset } from "@destaworks/integrations/http/viewer-tz";
 import type { WeeklyBriefDTO } from "@destaworks/contracts/validation/briefs";
 import { ErrorState } from "@destaworks/ui/error-state";
@@ -18,14 +19,22 @@ import { WeeklyBriefView } from "./weekly-brief-view";
  * its redundant first client fetch.
  */
 export default async function WeeklyBriefPage() {
-  const user = await getVerifiedUser();
+  const user = await requirePageUser();
 
-  if (!hasCapability(user.role, "viewReports")) {
+  if (!hasModule(user.modules, "ai")) {
+    return (
+      <div className="flex flex-col gap-4 px-8 py-6">
+        <UpsellState feature="AI briefs" />
+      </div>
+    );
+  }
+
+  if (!hasCapability(user, "viewReports")) {
     return (
       <div className="mx-auto flex max-w-4xl flex-col gap-6 p-6 sm:p-8">
         <ErrorState
           title="You don't have access"
-          message="Weekly Brief is limited to leadership roles. Ask an Owner, Director, Manager, or Admin for access."
+          message="The Weekly Brief is limited to roles with reporting access. Ask a workspace administrator."
         />
       </div>
     );

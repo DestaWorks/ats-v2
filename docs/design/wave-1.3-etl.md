@@ -28,7 +28,7 @@ importer they run).
 | **E-2** | **Reuse, don't rebuild.** `fromLegacyStatusLabel` (status), the `lib/constants` vocab + `BASE_CLIENTS`, `candidateRepository.upsertByLegacyId`/`findByLegacyId` (idempotency key), `documentRepository`, `withTransaction`, `writeAudit`, `apiHandler`, `requireCapability("bulkImport")`. The ETL adds a **pure transform** + a thin **orchestration service** — no new data-access primitives except one small `documentRepository.upsertByLegacyId` (§2.4 gap). |
 | **E-3** | **Unknown client → FLAG, do NOT auto-create.** Match `Client` free-text against seeded clients (case-insensitive name / `legacyId`); an unknown non-empty name → `clientId = null` + row flagged `unknown-client`. Auto-creating spawns junk client rows and pollutes the FK. (Owner-vetoable allowlist to auto-create — §3.) |
 | **E-4** | **Idempotency = `legacy_id` upsert. Email-dupes = surface + flag, never auto-merge.** Two *different* legacy rows sharing an email → both imported (each keyed by its own `legacy_id`, no data lost), the group is reported, and every row in it gets a **`Needs Review` tag**; keep-newest (by `UpdatedAt`) names the *primary*. No row is silently deleted or overwritten (DECISIONS D8). §4. |
-| **E-5** | **This ETL does NOT run the fuzzy résumé matcher.** The identity key here is `legacy_id` (+ email for the dupe report). The Wave-1.2 confidence-gated résumé→candidate match is a *different* flow (interactive upload). The §1.3 plan line "résumé→profile match" is clarified as: legacy-keyed bulk import, so `ResumeFileID/URL/Filename` attach **deterministically by `legacy_id`** to their own candidate row — no fuzzy matching, no wrong-person risk. §5. |
+| **E-5** | **This ETL does NOT run the fuzzy resume matcher.** The identity key here is `legacy_id` (+ email for the dupe report). The Wave-1.2 confidence-gated resume→candidate match is a *different* flow (interactive upload). The §1.3 plan line "resume→profile match" is clarified as: legacy-keyed bulk import, so `ResumeFileID/URL/Filename` attach **deterministically by `legacy_id`** to their own candidate row — no fuzzy matching, no wrong-person risk. §5. |
 | **E-6** | **Unrecognized status → ERROR (row excluded from commit), never guessed.** Status drives `stageOrder`, gates and funnels — guessing a stage is unsafe. Unmapped vocab (credential/population/setting/source/licenseStatus) → `null` + a **note** (non-blocking). §2. |
 | **E-7** | **prepare→commit is stateless: the client re-uploads the same file to commit.** No parsed batch is parked server-side (that's a needless PII surface; 1.2 avoided the same). A `sha256` checksum passed prepare→commit lets commit *advise* if the file changed — non-blocking, because `legacy_id` upsert makes re-parse safe. §7. |
 | **E-8** | **No new tables.** `legacy_id` (idempotency) + `activity_log` (audit) suffice. Commit writes one summary `activity_log` row (`entity:"import_batch"`) + a per-candidate audit row. An `import_batch` model is explicitly deferred (§8). |
@@ -65,7 +65,7 @@ export function parseSheetExport(
   trimmed). Missing any → the whole file is rejected before any row transform (`AppError("BAD_REQUEST")`).
   Unknown extra headers are ignored with a note. Header lookup is case-insensitive so a slightly re-cased
   export still maps.
-- **Size guard:** text only (no base64/ZIP — résumé *bytes* are out of scope, only the URL/ID metadata is
+- **Size guard:** text only (no base64/ZIP — resume *bytes* are out of scope, only the URL/ID metadata is
   carried). Cap the POST body at ~10 MB and warn; historical candidates are recruiter-scale (low thousands
   of rows), so this is generous.
 
@@ -205,9 +205,9 @@ posture. (OQ-5 — confirm whether a legacy value should ever overwrite a newer 
 
 ---
 
-## 5. Résumé handling — deterministic, no fuzzy match (E-5)
+## 5. Resume handling — deterministic, no fuzzy match (E-5)
 
-The résumé trio maps to a **`documents`** row (Wave 1.2 table) keyed by `ResumeFileID → documents.legacyId`:
+The resume trio maps to a **`documents`** row (Wave 1.2 table) keyed by `ResumeFileID → documents.legacyId`:
 ```ts
 interface DocumentUpsertPlan {
   legacyId: string;            // ResumeFileID  (idempotency key)
@@ -218,12 +218,12 @@ interface DocumentUpsertPlan {
   mimeType: "application/pdf"; // assumed (OQ-6); no bytes/text stored at ETL
 }
 ```
-- **No fuzzy matching.** The candidate identity is `legacy_id`; the résumé attaches to *its own* candidate
+- **No fuzzy matching.** The candidate identity is `legacy_id`; the resume attaches to *its own* candidate
   row deterministically. The Wave-1.2 `matchResumeToCandidate` confidence flow (email-exact→auto /
   name-fuzzy→confirm / none→new) is the **interactive upload path** and is **not invoked here** — so there
   is zero wrong-person-PII risk from the bulk import. This clarifies/closes the §1.3 plan phrase
-  "résumé→profile match confidence threshold" for the bulk-import context.
-- **No résumé bytes or LLM extraction at ETL.** Consistent with 1.2 S-2, the ETL stores only metadata +
+  "resume→profile match confidence threshold" for the bulk-import context.
+- **No resume bytes or LLM extraction at ETL.** Consistent with 1.2 S-2, the ETL stores only metadata +
   `legacyUrl` (the historical Drive link); `storageKey`/`extractedText`/`extractedData` stay null. The
   legacy Module-20 "AI parse + Drive upload on commit" is **intentionally dropped** — extraction is the
   interactive 1.2 flow, not the migration.
@@ -231,29 +231,29 @@ interface DocumentUpsertPlan {
   needs `documentRepository.upsertByLegacyId(legacyId, data)` (+ `findByLegacyId`), mirroring the candidate
   repo. `Document.legacyId` is already `@unique` (1.2). Add these two small methods in this wave.
 
-### 5.1. Addendum (2026-07-29): the Indrasur bulk-résumé flow — a separate, later, safer addition
+### 5.1. Addendum (2026-07-29): the Indrasur bulk-resume flow — a separate, later, safer addition
 
 E-5 above still fully governs the *original* Sheet→Postgres historical-migration path (legacy_id-keyed,
-no fuzzy matching, no LLM). Separately, `migrationService` now ALSO supports an optional résumé-ZIP +
+no fuzzy matching, no LLM). Separately, `migrationService` now ALSO supports an optional resume-ZIP +
 AI-extraction capability for the **Indrasur** bulk-import case (a recurring, smaller-batch external-data
 ingestion — distinct from the one-shot Sheet cutover). This mirrors legacy's own "Bulk Import from
 Indrasur" feature, but fixes three confirmed legacy bugs rather than porting them:
 
 - **Filename collisions never silently overwrite** — legacy's `forEach` let the last-iterated file win
   with zero warning; here, ANY collision (>1 file for one name, or >1 row sharing a name) marks every
-  affected row `"ambiguous"` and attaches no résumé.
-- **A row with no matched résumé still imports** — legacy's commit UI hard-required a `matchedFile`,
-  silently excluding resume-less rows from ever being written at all. Here résumé matching is purely
+  affected row `"ambiguous"` and attaches no resume.
+- **A row with no matched resume still imports** — legacy's commit UI hard-required a `matchedFile`,
+  silently excluding resume-less rows from ever being written at all. Here resume matching is purely
   additive: `resumeMatch: "none"` rows commit exactly as they would with no ZIP uploaded.
 - **AI extraction reuses Wave 1.2's real, correct schema** (`parseResume`/`resumeSchemaFor`), not
   legacy's own broken field-harvesting (which read flattened top-level keys — `licenseNumber`,
   `yearsExperience` — that its own Gemini schema never actually produced, silently swallowed by a
   triple-nested try/catch so the bug went unnoticed). Extraction is opt-in (`extractWithAi`, default
-  off — a paid, rate-limited LLM call per matched résumé) and any failure marks the row
+  off — a paid, rate-limited LLM call per matched resume) and any failure marks the row
   `"ai-extraction-failed"` rather than silently succeeding with blank fields.
 
-Résumés are still never stored as bytes — the client unzips + pdf.js-extracts text exactly like the
-single-résumé flow (`resume/lib/pdf-extract.ts`), and only `extractedText`/`extractedData` persist
+Resumes are still never stored as bytes — the client unzips + pdf.js-extracts text exactly like the
+single-resume flow (`resume/lib/pdf-extract.ts`), and only `extractedText`/`extractedData` persist
 (`Document.storageKey` stays null, same as everywhere else in the app pending Wave 6 object storage).
 See `src/lib/validation/migration.ts` (`importResumeSchema`, `resumeMatch`, `unmatchedResumeFiles`) and
 `src/server/services/migration.service.ts` (`matchResumes`, `attachResumeWithAi`).
@@ -266,7 +266,7 @@ A legacy row with a non-empty `DeletedAt` is imported **soft-deleted**: `deleted
 the columns, `action: "softDelete"` in the report. It lands in Trash, not the active pipeline — the
 repository's default `deletedAt IS NULL` exclusion keeps it out of every list/board automatically. The
 candidate is still fully upserted (name, status, stageOrder, etc.) so restore works and re-run stays
-idempotent (`upsertByLegacyId` is delete-agnostic). Its résumé document (if any) is created but likewise
+idempotent (`upsertByLegacyId` is delete-agnostic). Its resume document (if any) is created but likewise
 filtered by the documents soft-delete default when listed through the candidate.
 
 ---
@@ -391,8 +391,8 @@ for the row report; recommend adding it to `components/ui` (reused by later repo
   focus-trapped `Dialog` (Radix) with a labeled destructive-style confirm.
 
 **Behavior deltas from legacy (fixed, not ported):** the legacy inspect-modal "include" checkbox that
-always reduced to `true`, and legacy's silent-drop of résumé-less rows, are both corrected — here every row's
-disposition is explicit in the report, and résumé-less rows import normally (résumé is optional metadata).
+always reduced to `true`, and legacy's silent-drop of resume-less rows, are both corrected — here every row's
+disposition is explicit in the report, and resume-less rows import normally (resume is optional metadata).
 
 ---
 
@@ -407,7 +407,7 @@ Pure transform + dedupe are the core; the DB/route layer is mocked.
 - **unrecognized `Status` → `error` (`unrecognized-status`), excluded from commit — not guessed** (E-6).
 - unmapped credential/population/setting/source/licenseStatus → `null` + a note (not an error).
 - missing `ID` / missing `Name` → `error`.
-- résumé trio present → a `DocumentUpsertPlan` keyed by `ResumeFileID` with `legacyUrl` preserved; absent → none.
+- resume trio present → a `DocumentUpsertPlan` keyed by `ResumeFileID` with `legacyUrl` preserved; absent → none.
 - date/int/bool parse helpers incl. unparseable → null + note.
 
 **`dedupeByEmail` (pure):**
@@ -455,8 +455,8 @@ unknown non-empty → null + `unknown-client` flag (no auto-create, E-3).
 - **OQ-5 (re-run overwrite policy):** on re-import, should a legacy value ever overwrite a newer human edit?
   Default: **no** — update refreshes non-null fields but is not destructive; align with the 1.2 fill-empty
   posture. Confirm.
-- **OQ-6 (résumé mime/type):** ETL assumes `application/pdf` for the résumé document (bytes/text not stored,
-  1.2 S-2). Confirm legacy résumés are all PDFs, or store `mimeType` null.
+- **OQ-6 (resume mime/type):** ETL assumes `application/pdf` for the resume document (bytes/text not stored,
+  1.2 S-2). Confirm legacy resumes are all PDFs, or store `mimeType` null.
 - **OQ-7 (`import_batch` table):** deferred (E-8) — `activity_log` covers audit. Confirm no persisted,
   browsable import-history UI is required for v1.
 - **Backend assumption (legacy):** the 32-column shape + `"N - Label"` status encoding are treated as ground

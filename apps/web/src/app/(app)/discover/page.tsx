@@ -1,5 +1,7 @@
 import { discoverSearchQuerySchema } from "@destaworks/contracts/validation/discover";
-import { getVerifiedUser } from "@destaworks/auth/guards";
+import { UpsellState } from "@destaworks/ui/upsell-state";
+import { hasModule } from "@destaworks/domain/constants";
+import { requirePageUser } from "@/lib/page-user";
 import type {
   GetDiscoverSearchResponse,
   GetDiscoverCoverageGapsResponse,
@@ -23,7 +25,15 @@ export default async function DiscoverPage({
 }: {
   searchParams: Promise<RawSearchParams>;
 }) {
-  await getVerifiedUser();
+  const user = await requirePageUser();
+
+  if (!hasModule(user.modules, "discovery")) {
+    return (
+      <div className="flex flex-col gap-4 px-8 py-6">
+        <UpsellState feature="Discovery" />
+      </div>
+    );
+  }
 
   const q = readSearchParams(await searchParams);
 

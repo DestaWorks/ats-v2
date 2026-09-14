@@ -297,4 +297,6 @@ export const UNSCOPED_CONTEXT: TenantContext = Object.freeze({
   membershipId: "",
   user: Object.freeze({ id: "", email: "", name: "" }),
   role: "Associate",
+  capabilities: Object.freeze([]),
+  modules: Object.freeze([]),
 });

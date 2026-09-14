@@ -1,6 +1,6 @@
 import { hasCapability } from "@destaworks/domain/constants";
 import { dateKeyForOffset } from "@destaworks/domain/daily";
-import { getVerifiedUser } from "@destaworks/auth/guards";
+import { requirePageUser } from "@/lib/page-user";
 import { viewerTzOffset } from "@destaworks/integrations/http/viewer-tz";
 import type { DailyLogViewDTO } from "@destaworks/contracts/validation/daily";
 import { apiGet, query } from "@/lib/api/server";
@@ -25,8 +25,8 @@ import { DailyLogView } from "./daily-log-view";
  * empty/hidden tab.
  */
 export default async function DailyLogPage() {
-  const user = await getVerifiedUser();
-  const canViewTeam = hasCapability(user.role, "viewReports");
+  const user = await requirePageUser();
+  const canViewTeam = hasCapability(user, "viewReports");
 
   const initialTz = await viewerTzOffset();
 

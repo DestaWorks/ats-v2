@@ -21,6 +21,7 @@ import { logger } from "@destaworks/config/logger";
 import { reportExportJob } from "@destaworks/jobs/definitions/report-export.job";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { RequireCapability } from "../../common/decorators/require-capability.decorator";
+import { RequireModule } from "../../common/decorators/require-module.decorator";
 import { CapabilityGuard } from "../../common/guards/capability.guard";
 import { ZodValidationPipe } from "../../common/pipes/zod-validation.pipe";
 import { JOB_QUEUE } from "../jobs/jobs.tokens";
@@ -63,6 +64,7 @@ const Filters = (): ParameterDecorator => Query(reportFiltersPipe);
  */
 @Controller("reports")
 @UseGuards(CapabilityGuard)
+@RequireModule("reports")
 @RequireCapability("viewReports")
 export class ReportsController {
   constructor(

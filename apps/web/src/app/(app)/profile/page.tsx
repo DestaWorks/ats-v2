@@ -1,4 +1,4 @@
-import { getVerifiedUser } from "@destaworks/auth/guards";
+import { requirePageUser } from "@/lib/page-user";
 import type { UserPreferencesDTO } from "@destaworks/contracts/validation/user-preferences";
 import { apiGet } from "@/lib/api/server";
 import { ProfileView } from "./profile-view";
@@ -8,7 +8,7 @@ import { ProfileView } from "./profile-view";
  * location/signature/password, self-service. Open to any signed-in user (own record only).
  */
 export default async function ProfilePage() {
-  const user = await getVerifiedUser();
+  const user = await requirePageUser();
 
   const preferences = await apiGet<UserPreferencesDTO>("/me/preferences");
 

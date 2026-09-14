@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { hasCapability } from "@destaworks/domain/constants";
-import { getVerifiedUser } from "@destaworks/auth/guards";
+import { requirePageUser } from "@/lib/page-user";
 import type { GetCrmClientResponse } from "@destaworks/contracts/http/crm";
 import { AppError } from "@destaworks/integrations/http/app-error";
 import { ErrorState } from "@destaworks/ui/error-state";
@@ -8,14 +8,14 @@ import { apiGet } from "@/lib/api/server";
 import { ClientDetail } from "./client-detail";
 
 export default async function ClientDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const user = await getVerifiedUser();
+  const user = await requirePageUser();
 
-  if (!hasCapability(user.role, "viewCrm")) {
+  if (!hasCapability(user, "viewCrm")) {
     return (
       <div className="mx-auto flex max-w-4xl flex-col gap-6 p-6 sm:p-8">
         <ErrorState
           title="You don't have access"
-          message="CRM is limited to leadership roles. Ask an Owner, Director, Manager, or Admin for client account details."
+          message="CRM is limited to roles with client-account access. Ask a workspace administrator."
         />
       </div>
     );
@@ -33,7 +33,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
   return (
     <ClientDetail
       initial={detail}
-      canConfigurePortal={hasCapability(user.role, "configureClientPortal")}
+      canConfigurePortal={hasCapability(user, "configureClientPortal")}
     />
   );
 }

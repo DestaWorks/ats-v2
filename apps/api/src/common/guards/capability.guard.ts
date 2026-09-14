@@ -1,10 +1,11 @@
 import { Injectable, type CanActivate, type ExecutionContext } from "@nestjs/common";
 import { Reflector } from "@nestjs/core";
-import { requireCapability } from "@destaworks/auth/guards";
+import { assertCapability, requireUser } from "@destaworks/auth/guards";
 import { AppError } from "@destaworks/integrations/http/app-error";
 import { logger } from "@destaworks/config/logger";
 import type { Capability } from "@destaworks/domain/constants";
 import { CAPABILITY_METADATA } from "../decorators/require-capability.decorator";
+import { enforceDeclaredModule } from "./module-entitlement";
 import { runWithRequestContext } from "../request-context/nest-request-context";
 import type { AuthenticatedRequest } from "./authenticated-request";
 
@@ -22,6 +23,9 @@ import type { AuthenticatedRequest } from "./authenticated-request";
  * Attach it per route or per controller, never as a global `APP_GUARD`: a handler reached through
  * this guard without a declared capability is a misconfiguration on an authorization path, and is
  * refused rather than waved through. That makes a missing decorator fail visibly and closed.
+ *
+ * It also enforces `@RequireModule` (shared with `SessionAuthGuard`) — what the TENANT bought, not
+ * what this MEMBER may do. The module runs first, so the refusal names the right reason.
  */
 @Injectable()
 export class CapabilityGuard implements CanActivate {
@@ -40,7 +44,12 @@ export class CapabilityGuard implements CanActivate {
       throw new AppError("FORBIDDEN", "You don't have permission to do that");
     }
     const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
-    request.user = await runWithRequestContext(request, () => requireCapability(capability));
+    request.user = await runWithRequestContext(request, async () => {
+      const user = await requireUser();
+      enforceDeclaredModule(this.reflector, context, user);
+      assertCapability(user, capability);
+      return user;
+    });
     return true;
   }
 }

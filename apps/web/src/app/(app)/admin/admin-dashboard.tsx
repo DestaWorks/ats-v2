@@ -7,6 +7,7 @@ import type { PortalAccessRequestDTO } from "@destaworks/contracts/validation/po
 import type { AiSettingsDTO, AiUsageOverviewDTO } from "@destaworks/contracts/validation/ai-ops";
 import { cn } from "@destaworks/domain/utils/cn";
 import { DetailTabs, type TabDef } from "@destaworks/ui/tabs";
+import type { AccessRoleDTO } from "@destaworks/contracts/validation/tenant";
 import { GeneratedPasswordBanner, UsersTab } from "./users-tab";
 import { AccessRequestsTab } from "./access-requests-tab";
 import { RolesTab } from "./roles-tab";
@@ -50,6 +51,10 @@ function StatCard({
 
 export function AdminDashboard({
   initialUsers,
+  roles,
+  canManageRoles,
+  ownedModules,
+  grantable,
   initialRequests,
   currentUserId,
   canConfigurePortal,
@@ -60,6 +65,14 @@ export function AdminDashboard({
   aiUsage,
 }: {
   initialUsers: AdminUserDTO[];
+  /** The workspace's OWN roles — what the add-user and approve forms offer. */
+  roles: AccessRoleDTO[];
+  /** `manageRoles`. Without it the Roles tab is a read-only answer to "who can do what". */
+  canManageRoles: boolean;
+  /** What the workspace has bought — the editor MARKS unowned modules, it does not hide them. */
+  ownedModules: readonly string[];
+  /** What this member holds. The editor greys the rest; the server refuses it regardless. */
+  grantable: readonly string[];
   initialRequests: AccessRequestDTO[];
   currentUserId: string;
   canConfigurePortal: boolean;
@@ -102,6 +115,7 @@ export function AdminDashboard({
       panel: (
         <UsersTab
           users={users}
+          roles={roles}
           currentUserId={currentUserId}
           onChanged={upsertUser}
           onRemoved={(id) => setUsers((prev) => prev.filter((u) => u.id !== id))}
@@ -114,6 +128,7 @@ export function AdminDashboard({
       label: `Access Requests (${pendingRequests.length})`,
       panel: (
         <AccessRequestsTab
+          roles={roles}
           pending={pendingRequests}
           resolved={resolvedRequests}
           onResolved={(req) => setRequests((prev) => prev.map((r) => (r.id === req.id ? req : r)))}
@@ -121,13 +136,26 @@ export function AdminDashboard({
         />
       ),
     },
-    { key: "roles", label: "Roles", panel: <RolesTab users={users} /> },
+    {
+      key: "roles",
+      label: "Roles",
+      panel: (
+        <RolesTab
+          users={users}
+          roles={roles}
+          canManageRoles={canManageRoles}
+          ownedModules={ownedModules}
+          grantable={grantable}
+        />
+      ),
+    },
     {
       key: "blocked",
       label: `Blocked (${blocked.length})`,
       panel: (
         <UsersTab
           users={blocked}
+          roles={roles}
           currentUserId={currentUserId}
           onChanged={upsertUser}
           onRemoved={(id) => setUsers((prev) => prev.filter((u) => u.id !== id))}

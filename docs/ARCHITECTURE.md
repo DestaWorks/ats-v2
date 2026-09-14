@@ -1,12 +1,17 @@
 # Architecture — DestaHealth ATS
 
-Two parts: **current** (what exists) and **target** (what we are migrating to). The migration
-sequence lives in `docs/IMPLEMENTATION-PLAN.md` + `docs/ESTIMATE.md`; **`docs/DECISIONS.md` is
-authoritative** where anything here conflicts.
+Two parts: **§1 legacy** (what we came from) and **§2 the system as built**. The migration sequence
+is recorded in `docs/IMPLEMENTATION-PLAN.md` + `docs/ESTIMATE.md`.
+**[`docs/SAAS-RESTRUCTURE-PLAN.md`](./SAAS-RESTRUCTURE-PLAN.md) is the base document and wins**
+where anything here conflicts; `docs/DECISIONS.md` is authoritative below it.
 
 ---
 
-## 1. Current architecture (as-is)
+## 1. Legacy architecture (what we came from)
+
+> **Not "current" any more.** This section describes the single-file Google Apps Script app the
+> rebuild replaced. It is kept because parity questions still get answered from it — but the
+> running system is §2, and `legacy/` is gitignored, local-only, and unmaintained.
 
 ```
 ┌──────────────────────── Browser ────────────────────────┐
@@ -48,7 +53,9 @@ authoritative** where anything here conflicts.
   / `isLeadership` are computed in the browser. **This is not a security boundary.**
 - **Hardcoded config.** Backend URL and Google OAuth client ID are literals in the HTML.
 
-### Backend characteristics (inferred — source not in repo)
+### Backend characteristics
+*(Originally inferred from client calls; `Code.gs` was later obtained and is the authority. It is
+local-only and gitignored, so a fresh clone will not have it.)*
 - A single Apps Script endpoint multiplexing **~90 operations** via an `event` string
   (see `docs/API-CONTRACT.md`).
 - Google Sheet tabs act as tables; rows are records. No relational integrity, no migrations,
@@ -106,7 +113,7 @@ server-enforced authorization — reached **incrementally**, running beside the 
 **Stack in one line:** pnpm/Turborepo monorepo · Next.js (App Router) + TS · Tailwind v4 + Sonner ·
 NestJS controllers → application services → repositories → Prisma · PostgreSQL (Supabase) · Better
 Auth (6 fixed roles → capability groups) · Zod · RSC + typed fetch helpers (no client cache
-library) · provider-agnostic LLM via the Vercel AI SDK · `apps/web` on Vercel, `apps/api` on Render.
+library) · provider-agnostic LLM via the Vercel AI SDK · `apps/api` runs as a container (`Dockerfile`).
 → **Full detail: `docs/STACK-ARCHITECTURE.md`. The package graph and its CI checks:
 `docs/SAAS-RESTRUCTURE-PLAN.md`. Locked decisions: `docs/DECISIONS.md`.**
 

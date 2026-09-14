@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { MODULES, ROLE_CAPABILITIES } from "@destaworks/domain/constants";
 
 /**
  * `clientPortalService` — Wave 4.3. The two most security-critical behaviors to prove: generating
@@ -56,6 +57,8 @@ import { clientPortalService } from "./client-portal.service";
 const actor = {
   tenantId: "t1",
   membershipId: "u1-m",
+  modules: MODULES,
+  capabilities: ROLE_CAPABILITIES.Owner,
   user: { id: "u1", email: "o@desta.works", name: "Owner" },
   role: "Owner" as const,
 };

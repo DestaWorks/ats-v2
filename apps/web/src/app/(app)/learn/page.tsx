@@ -1,4 +1,4 @@
-import { getVerifiedUser } from "@destaworks/auth/guards";
+import { requirePageUser } from "@/lib/page-user";
 import { LEARN_CHAPTERS } from "@destaworks/contracts/validation/learn";
 import type { LearnProgressDTO } from "@destaworks/contracts/validation/learn";
 import { apiGet } from "@/lib/api/server";
@@ -9,7 +9,7 @@ import { LearnView } from "./learn-view";
  * links, and real per-user progress (`User.learnProgress`, not legacy's unscoped localStorage).
  */
 export default async function LearnPage() {
-  await getVerifiedUser();
+  await requirePageUser();
 
   const progress = await apiGet<LearnProgressDTO>("/me/learn-progress");
 

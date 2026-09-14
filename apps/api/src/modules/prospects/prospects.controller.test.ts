@@ -1,4 +1,5 @@
 import "reflect-metadata";
+import { MODULES, ROLE_CAPABILITIES } from "@destaworks/domain/constants";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
 /**
@@ -17,6 +18,7 @@ vi.mock("server-only", () => ({}));
 
 const h = vi.hoisted(() => ({
   session: null as { user: { id: string; email: string; name: string; role?: string } } | null,
+  plan: "trial",
 }));
 
 vi.mock("@destaworks/auth/auth", () => ({
@@ -25,7 +27,11 @@ vi.mock("@destaworks/auth/auth", () => ({
 vi.mock("@destaworks/db/memberships", async () => ({
   membershipReader: (
     await import("@destaworks/auth/testing/membership-double")
-  ).singleTenantMembershipReader(() => h.session),
+  ).singleTenantMembershipReader(
+    () => h.session,
+    "t1",
+    () => h.plan,
+  ),
 }));
 vi.mock("@destaworks/application/prospect.service", () => ({ prospectService: {} }));
 
@@ -50,6 +56,8 @@ function controllerWith(methods: Partial<ProspectService>): ProspectsController 
 const USER: AuthContext = {
   tenantId: "t1",
   membershipId: "u1-m",
+  modules: MODULES,
+  capabilities: ROLE_CAPABILITIES.Director,
   user: { id: "u1", email: "lead@desta.works", name: "Director" },
   role: "Director",
 };
@@ -61,12 +69,18 @@ function signInAs(role: string): void {
 
 beforeEach(() => {
   h.session = null;
+  h.plan = "trial";
 });
 
 describe("ProspectsController — declared routes", () => {
   it("matches the Next.js route table it replaces, verb for verb and status for status", () => {
     const guards = ["CapabilityGuard"];
-    const gate = { guards, capability: "viewClientDiscovery", rateLimit: null };
+    const gate = {
+      guards,
+      capability: "viewClientDiscovery",
+      module: "discovery",
+      rateLimit: null,
+    };
     expect(describeRoutes(ProspectsController)).toEqual([
       { route: "POST /prospects", ...gate, status: 201 },
       { route: "GET /prospects/list", ...gate, status: 200 },
@@ -252,6 +266,61 @@ describe("ProspectsController — authorization", () => {
     ).rejects.toMatchObject({ code: "FORBIDDEN", status: 403 });
 
     expect(detail).not.toHaveBeenCalled();
+  });
+
+  it("refuses a workspace whose plan excludes Discovery with 402, not 403", async () => {
+    signInAs("Director");
+    h.plan = "growth"; // core + compliance + sourcing + reports — everything but Discovery
+    const detail = vi.fn();
+
+    await expect(
+      throughGuards({
+        controller: ProspectsController,
+        method: "detail",
+        guards: [new CapabilityGuard()],
+        request: { headers: {} },
+        invoke: () => controllerWith({ detail }).detail("pros_1", USER),
+      }),
+    ).rejects.toMatchObject({ code: "PLAN_UPGRADE_REQUIRED", status: 402 });
+
+    expect(detail).not.toHaveBeenCalled();
+  });
+
+  /**
+   * The point of the two axes: an Owner holds every capability there is, so if the entitlement
+   * gate could be satisfied by permission this would pass, and the module would be unsellable.
+   */
+  it("cannot be satisfied by capability alone — an Owner is refused just the same", async () => {
+    signInAs("Owner");
+    h.plan = "starter";
+    const detail = vi.fn();
+
+    await expect(
+      throughGuards({
+        controller: ProspectsController,
+        method: "detail",
+        guards: [new CapabilityGuard()],
+        request: { headers: {} },
+        invoke: () => controllerWith({ detail }).detail("pros_1", USER),
+      }),
+    ).rejects.toMatchObject({ code: "PLAN_UPGRADE_REQUIRED", status: 402 });
+
+    expect(detail).not.toHaveBeenCalled();
+  });
+
+  it("reports the entitlement before the permission, so the caller is told to upgrade", async () => {
+    signInAs("Screener"); // lacks viewClientDiscovery AND the plan lacks the module
+    h.plan = "starter";
+
+    await expect(
+      throughGuards({
+        controller: ProspectsController,
+        method: "detail",
+        guards: [new CapabilityGuard()],
+        request: { headers: {} },
+        invoke: () => controllerWith({ detail: vi.fn() }).detail("pros_1", USER),
+      }),
+    ).rejects.toMatchObject({ code: "PLAN_UPGRADE_REQUIRED", status: 402 });
   });
 
   it("admits leadership", async () => {

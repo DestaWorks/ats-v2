@@ -50,8 +50,8 @@ export class AdminUsersController {
 
   @Get()
   @RequireCapability("manageUsers")
-  async list(): Promise<AdminUserListDTO> {
-    return await this.users.list();
+  async list(@CurrentUser() actor: AuthContext): Promise<AdminUserListDTO> {
+    return await this.users.list(actor);
   }
 
   /** 201: this creates an account, and returns its one-time password exactly once. */
@@ -103,7 +103,7 @@ export class AdminUsersController {
     @Param("id") id: string,
     @Body(new ZodValidationPipe(setRoleSchema)) body: ContractOutput<typeof setRoleSchema>,
   ): Promise<AdminUserEnvelopeDTO> {
-    return { user: await this.users.setRole(actor, id, body.role) };
+    return { user: await this.users.setRole(actor, id, body.roleId) };
   }
 
   @Post(":id/reset-password")

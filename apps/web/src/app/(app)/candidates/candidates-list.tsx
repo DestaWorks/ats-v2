@@ -78,7 +78,7 @@ export function CandidatesList({
   list: CandidateListDTO;
   searchParams: RawSearchParams;
 }) {
-  const { candidates, total, page, pageSize, totalPages, hasPrev, hasNext } = list;
+  const { candidates, total, page, pageSize, totalPages, hasPrev, hasNext, capped } = list;
   const router = useRouter();
 
   // Bulk-move selection — page-local. Prune stale ids whenever the visible rows change
@@ -269,115 +269,129 @@ export function CandidatesList({
     ) : undefined;
 
   return (
-    <Table
-      caption="Candidates"
-      toolbar={bulkBar}
-      footer={footer}
-      columns={[
-        selectHeader,
-        "Name",
-        "Credential",
-        "Track",
-        "Client",
-        scoreHeader,
-        "Status",
-        "License",
-        "Days in stage",
-        "Flags",
-        createdHeader,
-      ]}
-    >
-      {candidates.map((c) => {
-        const track = TRACK_BADGE[c.track as Track];
-        return (
-          <tr
-            key={c.id}
-            className={cn(
-              "transition hover:bg-black/[0.03]",
-              selected.has(c.id) && "bg-navy/[0.04]",
-            )}
-          >
-            <Td>
-              <input
-                type="checkbox"
-                checked={selected.has(c.id)}
-                onChange={() => toggleRow(c.id)}
-                aria-label={`Select ${c.name}`}
-                className="h-4 w-4 accent-navy"
-              />
-            </Td>
-            <Td>
-              <Link
-                href={`/candidates/${c.id}`}
-                className="font-semibold text-navy hover:underline focus-visible:ring-2 focus-visible:ring-navy focus-visible:outline-none"
-              >
-                {c.name}
-              </Link>
-            </Td>
-            <Td>{c.credential ?? <span className="text-gray">—</span>}</Td>
-            <Td>
-              {track ? (
-                <span
-                  className={cn(
-                    "inline-block rounded px-1.5 py-0.5 text-[10px] font-bold tracking-wide",
-                    track.className,
-                  )}
-                >
-                  {track.label}
-                </span>
-              ) : (
-                <span className="text-gray">{c.track}</span>
+    <>
+      {capped && (
+        <p
+          role="status"
+          className="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+        >
+          <strong className="font-semibold">Ranked on the first {total} candidates.</strong> More
+          match these filters than this ranking could score at once, so a better-fitting candidate
+          may not appear here. Narrow the filters for a complete ranking.
+        </p>
+      )}
+      <Table
+        caption="Candidates"
+        toolbar={bulkBar}
+        footer={footer}
+        columns={[
+          selectHeader,
+          "Name",
+          "Credential",
+          "Track",
+          "Client",
+          scoreHeader,
+          "Status",
+          "License",
+          "Days in stage",
+          "Flags",
+          createdHeader,
+        ]}
+      >
+        {candidates.map((c) => {
+          const track = TRACK_BADGE[c.track as Track];
+          return (
+            <tr
+              key={c.id}
+              className={cn(
+                "transition hover:bg-black/[0.03]",
+                selected.has(c.id) && "bg-navy/[0.04]",
               )}
-            </Td>
-            <Td>{c.clientName ?? <span className="text-gray italic">Unassigned</span>}</Td>
-            <Td>
-              <ScoreBadge score={c.score} />
-            </Td>
-            <Td>
-              {/* Stage rail — a stage-colored tick + label; same code→color the board reads. */}
-              <span className="inline-flex items-center gap-2 whitespace-nowrap">
-                <span
-                  aria-hidden
-                  className={cn(
-                    "h-4 w-1 shrink-0 rounded-full",
-                    STATUS_BG[c.status as CandidateStatus] ?? "bg-gray",
-                  )}
+            >
+              <Td>
+                <input
+                  type="checkbox"
+                  checked={selected.has(c.id)}
+                  onChange={() => toggleRow(c.id)}
+                  aria-label={`Select ${c.name}`}
+                  className="h-4 w-4 accent-navy"
                 />
-                <span className="text-charcoal">{c.statusLabel}</span>
-              </span>
-            </Td>
-            <Td>
-              {/* Dot (a state) — deliberately not a bar, so license never reads as a stage. */}
-              <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
-                <span
-                  aria-hidden
-                  className={cn(
-                    "h-2 w-2 shrink-0 rounded-full",
-                    licenseDotClass(c.licenseStatus as LicenseStatus),
-                  )}
-                />
-                <span className="text-charcoal">{c.licenseStatus}</span>
-              </span>
-            </Td>
-            <Td className="text-gray tabular-nums">{c.daysInStage}d</Td>
-            <Td>
-              {/* Advisory auto-DQ count (legacy ⚠ column) — reasons in the tooltip; display-only. */}
-              {c.dqFlags.length > 0 ? (
-                <span
-                  className="font-semibold text-red"
-                  title={c.dqFlags.join(" · ")}
-                  aria-label={`${c.dqFlags.length} disqualify ${c.dqFlags.length === 1 ? "flag" : "flags"}: ${c.dqFlags.join("; ")}`}
+              </Td>
+              <Td>
+                <Link
+                  href={`/candidates/${c.id}`}
+                  className="font-semibold text-navy hover:underline focus-visible:ring-2 focus-visible:ring-navy focus-visible:outline-none"
                 >
-                  ⚠ {c.dqFlags.length}
+                  {c.name}
+                </Link>
+              </Td>
+              <Td>{c.credential ?? <span className="text-gray">—</span>}</Td>
+              <Td>
+                {track ? (
+                  <span
+                    className={cn(
+                      "inline-block rounded px-1.5 py-0.5 text-[10px] font-bold tracking-wide",
+                      track.className,
+                    )}
+                  >
+                    {track.label}
+                  </span>
+                ) : (
+                  <span className="text-gray">{c.track}</span>
+                )}
+              </Td>
+              <Td>{c.clientName ?? <span className="text-gray italic">Unassigned</span>}</Td>
+              <Td>
+                <ScoreBadge score={c.score} />
+              </Td>
+              <Td>
+                {/* Stage rail — a stage-colored tick + label; same code→color the board reads. */}
+                <span className="inline-flex items-center gap-2 whitespace-nowrap">
+                  <span
+                    aria-hidden
+                    className={cn(
+                      "h-4 w-1 shrink-0 rounded-full",
+                      STATUS_BG[c.status as CandidateStatus] ?? "bg-gray",
+                    )}
+                  />
+                  <span className="text-charcoal">{c.statusLabel}</span>
                 </span>
-              ) : (
-                <span className="text-gray">—</span>
-              )}
-            </Td>
-            <Td className="whitespace-nowrap text-gray tabular-nums">{formatDate(c.createdAt)}</Td>
-          </tr>
-        );
-      })}
-    </Table>
+              </Td>
+              <Td>
+                {/* Dot (a state) — deliberately not a bar, so license never reads as a stage. */}
+                <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+                  <span
+                    aria-hidden
+                    className={cn(
+                      "h-2 w-2 shrink-0 rounded-full",
+                      licenseDotClass(c.licenseStatus as LicenseStatus),
+                    )}
+                  />
+                  <span className="text-charcoal">{c.licenseStatus}</span>
+                </span>
+              </Td>
+              <Td className="text-gray tabular-nums">{c.daysInStage}d</Td>
+              <Td>
+                {/* Advisory auto-DQ count (legacy ⚠ column) — reasons in the tooltip; display-only. */}
+                {c.dqFlags.length > 0 ? (
+                  <span
+                    className="font-semibold text-red"
+                    title={c.dqFlags.join(" · ")}
+                    aria-label={`${c.dqFlags.length} disqualify ${c.dqFlags.length === 1 ? "flag" : "flags"}: ${c.dqFlags.join("; ")}`}
+                  >
+                    ⚠ {c.dqFlags.length}
+                  </span>
+                ) : (
+                  <span className="text-gray">—</span>
+                )}
+              </Td>
+              <Td className="whitespace-nowrap text-gray tabular-nums">
+                {formatDate(c.createdAt)}
+              </Td>
+            </tr>
+          );
+        })}
+      </Table>
+    </>
   );
 }

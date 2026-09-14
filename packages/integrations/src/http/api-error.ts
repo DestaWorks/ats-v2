@@ -101,15 +101,17 @@ export function frameworkError(status: number): ClassifiedError {
       ? "UNAUTHORIZED"
       : status === 403
         ? "FORBIDDEN"
-        : status === 404
-          ? "NOT_FOUND"
-          : status === 409
-            ? "CONFLICT"
-            : status === 429
-              ? "RATE_LIMITED"
-              : status >= 500
-                ? "INTERNAL"
-                : "BAD_REQUEST";
+        : status === 402
+          ? "PLAN_UPGRADE_REQUIRED"
+          : status === 404
+            ? "NOT_FOUND"
+            : status === 409
+              ? "CONFLICT"
+              : status === 429
+                ? "RATE_LIMITED"
+                : status >= 500
+                  ? "INTERNAL"
+                  : "BAD_REQUEST";
   return { kind: "app", status, code, message: FRAMEWORK_MESSAGES[code] };
 }
 
@@ -117,6 +119,7 @@ export function frameworkError(status: number): ClassifiedError {
 const FRAMEWORK_MESSAGES: Record<AppErrorCode, string> = {
   UNAUTHORIZED: "Sign in required",
   FORBIDDEN: "You do not have permission to do that",
+  PLAN_UPGRADE_REQUIRED: "Your plan does not include this",
   NOT_FOUND: "Not found",
   CONFLICT: "That conflicts with the current state",
   RATE_LIMITED: "Too many requests",

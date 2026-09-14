@@ -42,6 +42,7 @@ import { SessionAuthGuard } from "../../common/guards/session-auth.guard";
 import { ZodValidationPipe, type ContractOutput } from "../../common/pipes/zod-validation.pipe";
 import type { ServiceOf } from "../service-token";
 import { LEAD_SERVICE } from "./leads.tokens";
+import { RequireModule } from "../../common/decorators/require-module.decorator";
 
 /**
  * Source Leads — the pre-pipeline sourcing lifecycle, ported from `apps/web/src/app/api/leads/**`.
@@ -58,6 +59,7 @@ import { LEAD_SERVICE } from "./leads.tokens";
  */
 @Controller("leads")
 @UseGuards(SessionAuthGuard)
+@RequireModule("sourcing")
 export class LeadsController {
   constructor(@Inject(LEAD_SERVICE) private readonly leads: ServiceOf<typeof LEAD_SERVICE>) {}
 

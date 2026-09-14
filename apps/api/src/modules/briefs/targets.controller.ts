@@ -7,6 +7,7 @@ import type { AuthContext } from "@destaworks/auth/guards";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { RateLimit } from "../../common/decorators/rate-limit.decorator";
 import { RequireCapability } from "../../common/decorators/require-capability.decorator";
+import { RequireModule } from "../../common/decorators/require-module.decorator";
 import { CapabilityGuard } from "../../common/guards/capability.guard";
 import { RateLimitGuard } from "../../common/guards/rate-limit.guard";
 import { ZodValidationPipe, type ContractOutput } from "../../common/pipes/zod-validation.pipe";
@@ -26,6 +27,7 @@ const suggestTargetsPipe = new ZodValidationPipe(suggestTargetsSchema);
  */
 @Controller("targets")
 @UseGuards(CapabilityGuard, RateLimitGuard)
+@RequireModule("reports")
 @RequireCapability("viewReports")
 export class TargetsController {
   constructor(@Inject(BRIEF_SERVICE) private readonly briefs: ServiceOf<typeof BRIEF_SERVICE>) {}

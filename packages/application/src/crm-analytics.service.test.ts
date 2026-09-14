@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { MODULES, ROLE_CAPABILITIES } from "@destaworks/domain/constants";
 import { fixedClock } from "@destaworks/domain/clock";
 
 /**
@@ -56,6 +57,8 @@ import { crmAnalyticsService } from "./crm-analytics.service";
 const ctx: TenantContext = {
   tenantId: "t1",
   membershipId: "u1-m",
+  modules: MODULES,
+  capabilities: ROLE_CAPABILITIES.Owner,
   user: { id: "u1", email: "u@desta.works", name: "Test User" },
   role: "Owner",
 };

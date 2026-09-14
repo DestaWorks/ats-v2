@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { ROLES } from "@destaworks/domain/constants";
+import type { AccessRoleDTO } from "@destaworks/contracts/validation/tenant";
 import {
   approveRequestSchema,
   type AccessRequestDTO,
@@ -21,11 +21,14 @@ import { Select } from "@destaworks/ui/select";
 import { fieldErrorProps } from "../lib/field-error-props";
 
 export function AccessRequestsTab({
+  roles,
   pending,
   resolved,
   onResolved,
   onPassword,
 }: {
+  /** The workspace's OWN roles — what an approval may assign. */
+  roles: AccessRoleDTO[];
   pending: AccessRequestDTO[];
   resolved: AccessRequestDTO[];
   onResolved: (request: AccessRequestDTO) => void;
@@ -117,6 +120,7 @@ export function AccessRequestsTab({
         {approving ? (
           <ApproveForm
             request={approving}
+            roles={roles}
             onSaved={(request, result) => {
               onResolved(request);
               onPassword(request.email, result);
@@ -132,16 +136,18 @@ export function AccessRequestsTab({
 
 function ApproveForm({
   request,
+  roles,
   onSaved,
   onCancel,
 }: {
   request: AccessRequestDTO;
+  roles: AccessRoleDTO[];
   onSaved: (request: AccessRequestDTO, result: PostAdminAccessRequestApproveResponse) => void;
   onCancel: () => void;
 }) {
   const [serverError, setServerError] = useState<string | null>(null);
   const { form, pending, onSubmit } = useApiForm(approveRequestSchema, {
-    defaultValues: { role: "Associate" },
+    defaultValues: { roleId: roles[0]?.id ?? "" },
     submit: (values) =>
       postJson<PostAdminAccessRequestApproveResponse>(
         `/api/admin/access-requests/${request.id}/approve`,
@@ -161,11 +167,11 @@ function ApproveForm({
         Creates an account for <span className="font-semibold text-charcoal">{request.email}</span>{" "}
         with the role below and generates a one-time password.
       </p>
-      <Field label="Role" htmlFor="ar-role" {...fieldErrorProps(form, "role")} required>
-        <Select id="ar-role" {...form.register("role")}>
-          {ROLES.map((r) => (
-            <option key={r} value={r}>
-              {r}
+      <Field label="Role" htmlFor="ar-role" {...fieldErrorProps(form, "roleId")} required>
+        <Select id="ar-role" {...form.register("roleId")}>
+          {roles.map((r) => (
+            <option key={r.id} value={r.id}>
+              {r.name}
             </option>
           ))}
         </Select>

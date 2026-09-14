@@ -112,7 +112,7 @@ function matchResumes(plans: ImportRowPlan[], resumes: ImportResume[] | undefine
 /** Exported so the run service gates staging and status reads on the SAME capability, rather than
  *  growing a second copy of the check that could drift from this one. */
 export function assertCanImport(ctx: TenantContext): void {
-  if (!hasCapability(ctx.role, "bulkImport")) {
+  if (!hasCapability(ctx, "bulkImport")) {
     throw new AppError("FORBIDDEN", "You don't have permission to import");
   }
 }

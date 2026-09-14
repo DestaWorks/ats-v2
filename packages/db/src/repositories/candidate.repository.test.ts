@@ -39,7 +39,12 @@ import {
   STUCK_DAYS,
 } from "./candidate.repository";
 import { MAX_ROWS_CAP } from "../query-limits";
-import { statusSlaDays, ACTIVE_STATUS_CODES } from "@destaworks/domain/constants";
+import {
+  statusSlaDays,
+  ACTIVE_STATUS_CODES,
+  MODULES,
+  ROLE_CAPABILITIES,
+} from "@destaworks/domain/constants";
 import { isStuck } from "@destaworks/domain/rules/stage-timing";
 
 const NOW = new Date("2026-07-01T00:00:00.000Z");
@@ -55,6 +60,8 @@ beforeEach(() => {
 const ctx = {
   tenantId: "t1",
   membershipId: "m1",
+  modules: MODULES,
+  capabilities: ROLE_CAPABILITIES.Owner,
   role: "Owner" as const,
   user: { id: "u1", email: "u@desta.works", name: "U" },
 };

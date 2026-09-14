@@ -1,4 +1,6 @@
-import { getVerifiedUser } from "@destaworks/auth/guards";
+import { requirePageUser } from "@/lib/page-user";
+import { UpsellState } from "@destaworks/ui/upsell-state";
+import { hasModule } from "@destaworks/domain/constants";
 import { isAiAvailable } from "@destaworks/integrations/ai/shared";
 import { storageEnabled } from "@destaworks/integrations/storage";
 import { ResumeFlow } from "./resume-flow";
@@ -11,7 +13,15 @@ import { ResumeFlow } from "./resume-flow";
  * client flow may NOT.
  */
 export default async function ResumePage() {
-  const user = await getVerifiedUser();
+  const user = await requirePageUser();
+
+  if (!hasModule(user.modules, "ai")) {
+    return (
+      <div className="flex flex-col gap-4 px-8 py-6">
+        <UpsellState feature="AI resume parsing" />
+      </div>
+    );
+  }
   const resumeExtractionEnabled = await isAiAvailable(user.tenantId);
 
   return (

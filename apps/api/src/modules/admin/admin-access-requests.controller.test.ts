@@ -93,6 +93,24 @@ const ACTOR = {
   tenantId: "t1",
   membershipId: "m1",
   role: "Owner" as const,
+  capabilities: [
+    "viewCredentials",
+    "viewReports",
+    "viewAnalytics",
+    "bulkImport",
+    "viewCrm",
+    "viewClientDiscovery",
+    "viewAllNoteTypes",
+    "manageUsers",
+    "manageRoles",
+    "manageAccessRequests",
+    "configureClientPortal",
+    "viewAudit",
+    "purgeCandidate",
+    "deleteOpenRole",
+    "manageAiSettings",
+  ] as const,
+  modules: ["core", "sourcing", "discovery", "reports", "ai", "portal", "compliance"] as const,
   user: { id: "owner1", email: "o@desta.works", name: "Owner" },
 } as never;
 
@@ -156,21 +174,26 @@ describe("the queue and its transitions", () => {
   it("approves with the chosen role, attributed to the session actor", async () => {
     h.approve.mockResolvedValue({ user: { id: "u9" }, generatedPassword: "pw" });
     const actor = await admitted("approve");
-    expect(await controller().approve(actor, "r1", { role: "Screener" })).toEqual({
+    expect(await controller().approve(actor, "r1", { roleId: "ar_Screener" })).toEqual({
       user: { id: "u9" },
       generatedPassword: "pw",
     });
     expect(h.approve).toHaveBeenCalledWith(
       expect.objectContaining({ user: expect.objectContaining({ id: "owner1" }) }),
       "r1",
-      "Screener",
+      "ar_Screener",
     );
   });
 
-  it("validates the approve body with the contract schema — an unknown role is 422", async () => {
+  /**
+   * A role is named by its ROW id now, so the schema can no longer reject an unknown NAME — the
+   * workspace may legitimately have invented one. It still rejects a body that names no role at
+   * all; the service is what proves the id belongs to this tenant.
+   */
+  it("validates the approve body with the contract schema — a missing role is 422", async () => {
     const [pipe] = boundPipes(AdminAccessRequestsController, "approve");
     expect(pipe).toBeInstanceOf(ZodValidationPipe);
-    expect(await renderFailure(() => pipe?.transform({ role: "Wizard" }))).toMatchObject({
+    expect(await renderFailure(() => pipe?.transform({ roleId: "" }))).toMatchObject({
       status: 422,
       body: { error: { code: "BAD_REQUEST", message: "Validation failed" } },
     });

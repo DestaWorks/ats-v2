@@ -1,9 +1,15 @@
 import { logger } from "@destaworks/config/logger";
+import { requireServerEnv } from "@destaworks/config/env";
 import { installNodeLogger } from "@destaworks/config/logger/install";
 import { shutdownApplication } from "@destaworks/application/lifecycle";
 import { logJobHealth } from "@destaworks/jobs/observability";
 import { REGISTERED_JOBS } from "@destaworks/jobs/registered-jobs";
 import { createJobWorker, type JobWorker } from "@destaworks/jobs/runtime/worker";
+import { jobQueue } from "@destaworks/jobs/runtime";
+import { Scheduler } from "@destaworks/jobs/scheduler";
+import { SCHEDULES, prismaScheduleClaimStore } from "@destaworks/jobs/schedules";
+import { initSentry } from "./instrumentation";
+import { installJobRuntime } from "./jobs-runtime";
 
 /**
  * The job worker's entry point — a **separate process from the API**, deployed from the same
@@ -22,7 +28,11 @@ import { createJobWorker, type JobWorker } from "@destaworks/jobs/runtime/worker
  * install, the same signal handling — because those are properties of a process, not of a server.
  */
 async function bootstrap(): Promise<void> {
+  // Same reason as `main.ts`, and it matters more here: a worker with a bad DIRECT_URL has no
+  // request to fail, so without this it starts, consumes nothing, and looks healthy.
+  requireServerEnv();
   installNodeLogger();
+  initSentry();
 
   if (REGISTERED_JOBS.length === 0) {
     // Not an error: the runtime lands before the handlers do, and a worker that refused to start
@@ -31,12 +41,23 @@ async function bootstrap(): Promise<void> {
     logger.warn("worker.no_jobs_registered");
   }
 
+  // The worker enqueues as well as consumes: the scheduler puts due occurrences on the queue.
+  const queue = installJobRuntime();
+
   const worker = createJobWorker();
   await worker.start();
   logger.info("worker.listening", { jobs: REGISTERED_JOBS.length });
 
+  // Empty registry today; without this the first schedule anyone registers would never fire.
+  const scheduler = new Scheduler({
+    schedules: SCHEDULES,
+    queue: jobQueue,
+    claims: prismaScheduleClaimStore,
+  });
+  scheduler.start();
+
   startHeartbeat(worker);
-  installShutdownHandlers(worker);
+  installShutdownHandlers(worker, scheduler, queue);
 }
 
 /** How often the worker reports queue depth and dead-letter counts. */
@@ -75,7 +96,15 @@ function startHeartbeat(worker: JobWorker): void {
  * sends SIGTERM twice, and re-entering this closes the pool underneath jobs that are still
  * draining.
  */
-function installShutdownHandlers(worker: JobWorker): void {
+interface StoppableQueue {
+  stop(): Promise<void>;
+}
+
+function installShutdownHandlers(
+  worker: JobWorker,
+  scheduler: Scheduler,
+  queue: StoppableQueue,
+): void {
   let stopping = false;
 
   for (const signal of ["SIGTERM", "SIGINT"] as const) {
@@ -84,8 +113,12 @@ function installShutdownHandlers(worker: JobWorker): void {
       stopping = true;
       logger.info("worker.shutting_down", { signal });
 
+      // Stop creating work before draining what exists.
+      scheduler.stop();
+
       void worker
         .stop()
+        .then(() => queue.stop())
         .then(() => shutdownApplication())
         .then(() => {
           logger.info("worker.stopped", { signal });

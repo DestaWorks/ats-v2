@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { auth } from "@destaworks/auth/auth";
 import { prisma } from "@destaworks/db/prisma";
+import { ROLES, ROLE_CAPABILITIES } from "@destaworks/domain/constants";
 
 /**
  * Seed the first workspace and its Owner. Public signup is disabled (DECISIONS D3), so both are
@@ -9,8 +10,12 @@ import { prisma } from "@destaworks/db/prisma";
  *
  * The MEMBERSHIP is what makes the account usable. Since Phase 6, `getCurrentUser()` resolves the
  * active tenant and reads the role from that membership — a user row alone resolves to no tenant
- * and every guarded page answers 401. `User.role` is still written because Better Auth's admin
- * plugin owns that column and caches it in the session cookie; it is not what authorizes anything.
+ * and every guarded page answers 401. `User.role` authorizes nothing here.
+ *
+ * It is still written for one reason: Better Auth's admin plugin gates each of its own endpoints
+ * on `session.user.role`, so a seeded Owner with a null column would be refused by the plugin on
+ * the admin screen even though the membership grants `manageUsers`. Seeding it is what keeps that
+ * surface usable until those endpoints are replaced (SAAS-RESTRUCTURE-PLAN 6.4).
  *
  * Idempotent on both halves, so re-running it against a seeded database is a no-op.
  *
@@ -30,6 +35,23 @@ async function main() {
     (await prisma.tenant.findUnique({ where: { slug } })) ??
     (await prisma.tenant.create({ data: { slug, name: tenantName, status: "active" } }));
   console.log(`✓ Workspace: ${tenant.name} (${tenant.slug})`);
+
+  // Roles are rows a workspace owns, so a workspace with none cannot hold a member at all.
+  // Idempotent, so re-seeding an existing tenant adds only what is missing.
+  await prisma.accessRole.createMany({
+    data: ROLES.map((roleName) => ({
+      tenantId: tenant.id,
+      name: roleName,
+      capabilities: [...ROLE_CAPABILITIES[roleName]],
+      templateKey: roleName,
+      isBuiltIn: true,
+    })),
+    skipDuplicates: true,
+  });
+  const ownerRole = await prisma.accessRole.findUniqueOrThrow({
+    where: { tenantId_name: { tenantId: tenant.id, name: "Owner" } },
+  });
+  console.log(`✓ Seeded ${ROLES.length} built-in roles`);
 
   const existing = await prisma.user.findUnique({ where: { email } });
   const user =
@@ -61,7 +83,13 @@ async function main() {
     return;
   }
   await prisma.membership.create({
-    data: { tenantId: tenant.id, userId: user.id, role: "Owner", status: "active" },
+    data: {
+      tenantId: tenant.id,
+      userId: user.id,
+      roleId: ownerRole.id,
+      role: ownerRole.name,
+      status: "active",
+    },
   });
   console.log(`✓ Owner membership in ${tenant.slug}`);
 }

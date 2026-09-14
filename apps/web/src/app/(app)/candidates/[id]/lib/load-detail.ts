@@ -1,6 +1,6 @@
 import "server-only";
 import { notFound } from "next/navigation";
-import { getVerifiedUser } from "@destaworks/auth/guards";
+import { requirePageUser } from "@/lib/page-user";
 import type { GetCandidateDetailPageResponse } from "@destaworks/contracts/validation/candidate";
 import { AppError } from "@destaworks/integrations/http/app-error";
 import { apiGet } from "@/lib/api/server";
@@ -17,7 +17,7 @@ import { apiGet } from "@/lib/api/server";
  * endpoint, not N round trips).
  */
 export async function loadCandidateDetail(id: string) {
-  await getVerifiedUser();
+  await requirePageUser();
 
   try {
     return await apiGet<GetCandidateDetailPageResponse>(

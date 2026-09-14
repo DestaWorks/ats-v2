@@ -35,6 +35,10 @@ export interface MembershipRow {
   readonly tenantName: string;
   /** The raw stored value. Callers narrow it with `toRole` — never trusted verbatim. */
   readonly role: string;
+  /** The raw stored plan. Callers narrow it with `modulesForPlan` — never trusted verbatim. */
+  readonly tenantPlan: string;
+  /** The raw capability codes on the tenant's role row. Narrowed with `toCapabilities`. */
+  readonly capabilities: readonly string[];
 }
 
 export const membershipReader = {
@@ -72,7 +76,8 @@ export const membershipReader = {
         id: true,
         tenantId: true,
         role: true,
-        tenant: { select: { slug: true, name: true } },
+        tenant: { select: { slug: true, name: true, plan: true } },
+        accessRole: { select: { name: true, capabilities: true } },
       },
       orderBy: { createdAt: "asc" },
     });
@@ -81,7 +86,9 @@ export const membershipReader = {
       tenantId: row.tenantId,
       tenantSlug: row.tenant.slug,
       tenantName: row.tenant.name,
-      role: row.role,
+      role: row.accessRole.name,
+      tenantPlan: row.tenant.plan,
+      capabilities: row.accessRole.capabilities,
     }));
   },
 };

@@ -25,7 +25,7 @@ export type NoteViewer = CapabilityViewer;
  * one-line change — the DTO/route/page never move.
  */
 export function visibleNotes(notes: NoteRow[], viewer: NoteViewer): NoteRow[] {
-  if (hasCapability(viewer.role, "viewAllNoteTypes")) return notes;
+  if (hasCapability(viewer, "viewAllNoteTypes")) return notes;
   return notes.filter((n) => n.noteType === "internal");
 }
 
@@ -97,7 +97,7 @@ export const noteService = {
   async add(ctx: TenantContext, candidateId: string, input: AddNoteServiceInput): Promise<NoteDTO> {
     const candidate = await candidateRepository.findById(ctx, candidateId);
     if (!candidate) throw new AppError("NOT_FOUND", "Candidate not found");
-    const users = await userRepository.list();
+    const users = await userRepository.listByTenant(ctx.tenantId);
     const recipients = resolveMentions(input.body, users).filter((u) => u.id !== ctx.user.id);
 
     const created = await withTenantTransaction(ctx, async (tx) => {

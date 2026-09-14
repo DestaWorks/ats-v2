@@ -1,12 +1,19 @@
 # Architecture Decision — Structure for a Multi-Tenant SaaS
 
 **For:** Desta Works leadership and the engineering team
-**Status:** Decision required on one question.
+**Status:** **Decided and executed.** Kept for the reasoning.
+
+> The question below was answered: **restructure into a monorepo first.** That work is largely
+> done — `apps/{web,api,admin}` over nine `@destaworks/*` packages, with the dependency law
+> enforced in CI. The executable plan and its phase-by-phase status live in
+> [`SAAS-RESTRUCTURE-PLAN.md`](./SAAS-RESTRUCTURE-PLAN.md), which is the base document. Read this
+> document for **why** that call was made and what the alternative would have cost — the options
+> weighed below are no longer live options.
 
 **Settled:** the ATS becomes a multi-tenant SaaS product sold to other staffing agencies.
 
-**Open:** do we build that on the current single-tree codebase, refactoring it in place, or do we
-restructure into a monorepo first and build it there?
+**The question this document answered:** do we build that on the then-current single-tree
+codebase, refactoring it in place, or do we restructure into a monorepo first and build it there?
 
 Both options deliver the same product. They differ in what foundation it sits on, what it costs to
 get there, and what it costs to live with afterwards. Every number quoted was counted against the

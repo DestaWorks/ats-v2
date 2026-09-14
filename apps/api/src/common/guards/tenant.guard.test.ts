@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { MODULES, ROLE_CAPABILITIES, type Role } from "@destaworks/domain/constants";
 
 /**
  * `TenantGuard` — the transport half of tenant resolution.
@@ -40,6 +41,8 @@ const user: AuthContext = {
   user: identity,
   tenantId: "t-hint",
   membershipId: "m-hint",
+  modules: MODULES,
+  capabilities: ROLE_CAPABILITIES.Associate,
   role: "Associate",
 };
 
@@ -50,6 +53,14 @@ function membership(slug: string, overrides: { role?: string; status?: string } 
     userId: "u1",
     role: overrides.role ?? "Associate",
     status: overrides.status ?? "active",
+    roleId: `ar_${overrides.role ?? "Associate"}`,
+    accessRole: {
+      id: `ar_${overrides.role ?? "Associate"}`,
+      name: overrides.role ?? "Associate",
+      capabilities: [...(ROLE_CAPABILITIES[(overrides.role ?? "Associate") as Role] ?? [])],
+      templateKey: overrides.role ?? "Associate",
+      isBuiltIn: true,
+    },
     invitedById: null,
     createdAt: new Date("2026-01-01T00:00:00.000Z"),
     tenant: {

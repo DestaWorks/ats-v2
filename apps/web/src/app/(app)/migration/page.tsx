@@ -1,4 +1,4 @@
-import { getVerifiedUser } from "@destaworks/auth/guards";
+import { requirePageUser } from "@/lib/page-user";
 import { hasCapability } from "@destaworks/domain/constants";
 import { storageEnabled } from "@destaworks/integrations/storage";
 import { ErrorState } from "@destaworks/ui/error-state";
@@ -11,14 +11,14 @@ import { MigrationWizard } from "./migration-wizard";
  * gate is defence-in-depth + a friendly no-access screen rather than the wizard shell.
  */
 export default async function MigrationPage() {
-  const user = await getVerifiedUser();
+  const user = await requirePageUser();
 
-  if (!hasCapability(user.role, "bulkImport")) {
+  if (!hasCapability(user, "bulkImport")) {
     return (
       <div className="mx-auto flex max-w-4xl flex-col gap-6 p-6 sm:p-8">
         <ErrorState
           title="You don't have access"
-          message="Bulk import is limited to leadership roles. Ask an Owner, Director, Manager, or Admin to run the migration."
+          message="Bulk import is limited to roles that grant it. Ask a workspace administrator to run the migration."
         />
       </div>
     );

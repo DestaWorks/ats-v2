@@ -149,7 +149,7 @@ export const briefService = {
       priorityClient,
       yesterdayRow,
     ] = await Promise.all([
-      cachedUserList(),
+      cachedUserList(scope),
       dailyRepository.sourcedCountsByRange(scope, w),
       dailyRepository.outreachCountsByRange(scope, w),
       topClientsByActiveCandidates(scope),
@@ -291,7 +291,7 @@ export const briefService = {
     const lastW = weekWindow(lastWeekStart, input.tz);
 
     const [users, thisTotals, lastTotals, clientCards, lastWeekRow] = await Promise.all([
-      cachedUserList(),
+      cachedUserList(scope),
       weekTotals(thisW, scope),
       weekTotals(lastW, scope),
       topClientsByActiveCandidates(scope),

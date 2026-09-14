@@ -8,6 +8,7 @@ import {
 } from "@nestjs/common/constants";
 import { RATE_LIMIT_METADATA, type RateLimitRule } from "../decorators/rate-limit.decorator";
 import { CAPABILITY_METADATA } from "../decorators/require-capability.decorator";
+import { MODULE_METADATA } from "../decorators/require-module.decorator";
 import { executionContextFor } from "../guards/testing/execution-context.fixture";
 
 /**
@@ -41,6 +42,8 @@ export interface RouteDescriptor {
   readonly guards: readonly string[];
   /** The capability `CapabilityGuard` will demand, method metadata overriding class metadata. */
   readonly capability: string | null;
+  /** The module the tenant must have bought, or `null` when the route is unconditional. */
+  readonly module: string | null;
   /** The rate-limit bucket name, or `null` when the handler declares no rule. */
   readonly rateLimit: string | null;
   /** The status a success answers with, including Nest's 201-for-POST default. */
@@ -90,6 +93,11 @@ function capabilityOf(handler: object, controller: object): string | null {
   return typeof own === "string" ? own : null;
 }
 
+function moduleOf(handler: object, controller: object): string | null {
+  const own = metadata(MODULE_METADATA, handler) ?? metadata(MODULE_METADATA, controller);
+  return typeof own === "string" ? own : null;
+}
+
 function rateLimitOf(handler: object, controller: object): string | null {
   const rule = metadata(RATE_LIMIT_METADATA, handler) ?? metadata(RATE_LIMIT_METADATA, controller);
   if (rule === null || typeof rule !== "object") return null;
@@ -124,6 +132,7 @@ export function describeRoutes(controller: ControllerClass): RouteDescriptor[] {
       route: `${verb} ${joinPath(base, pathSegment(metadata(PATH_METADATA, handler)))}`,
       guards: [...classGuards, ...guardNames(metadata(GUARDS_METADATA, handler))],
       capability: capabilityOf(handler, controller),
+      module: moduleOf(handler, controller),
       rateLimit: rateLimitOf(handler, controller),
       status: statusOf(handler, verb),
     });

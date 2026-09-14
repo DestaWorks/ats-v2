@@ -1,5 +1,6 @@
-import { hasCapability } from "@destaworks/domain/constants";
-import { getVerifiedUser } from "@destaworks/auth/guards";
+import { hasCapability, hasModule } from "@destaworks/domain/constants";
+import { UpsellState } from "@destaworks/ui/upsell-state";
+import { requirePageUser } from "@/lib/page-user";
 import type { GetReportsFilterOptionsResponse } from "@destaworks/contracts/reports/filter-options";
 import type { ExecutiveSummaryDTO } from "@destaworks/contracts/validation/reports";
 import { apiGet } from "@/lib/api/server";
@@ -13,14 +14,22 @@ import { ReportsView } from "./reports-view";
  * gates consistently on `viewReports`, matching the nav.
  */
 export default async function ReportsPage() {
-  const user = await getVerifiedUser();
+  const user = await requirePageUser();
 
-  if (!hasCapability(user.role, "viewReports")) {
+  if (!hasModule(user.modules, "reports")) {
+    return (
+      <div className="flex flex-col gap-4 px-8 py-6">
+        <UpsellState feature="Reports" />
+      </div>
+    );
+  }
+
+  if (!hasCapability(user, "viewReports")) {
     return (
       <div className="mx-auto flex max-w-4xl flex-col gap-6 p-6 sm:p-8">
         <ErrorState
           title="You don't have access"
-          message="Reports is limited to leadership roles. Ask an Owner, Director, Manager, or Admin for access."
+          message="Reports is limited to roles with reporting access. Ask a workspace administrator."
         />
       </div>
     );

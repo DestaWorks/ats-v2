@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { MODULES, ROLE_CAPABILITIES } from "@destaworks/domain/constants";
 
 /**
  * `accessRequestService.approve` fixes a confirmed legacy bug (`approve_request` had no backend
@@ -54,6 +55,8 @@ beforeEach(() => {
 const adminCtx = {
   tenantId: "t1",
   membershipId: "m1",
+  modules: MODULES,
+  capabilities: ROLE_CAPABILITIES.Owner,
   role: "Owner" as const,
   user: { id: "actor1", email: "admin@desta.works", name: "Admin" },
 };
@@ -61,6 +64,8 @@ const adminCtx = {
 const ctx = {
   tenantId: "t1",
   membershipId: "m1",
+  modules: MODULES,
+  capabilities: ROLE_CAPABILITIES.Owner,
   role: "Owner" as const,
   user: { id: "u1", email: "u@desta.works", name: "U" },
 };
@@ -123,11 +128,11 @@ describe("accessRequestService.approve", () => {
       generatedPassword: "abc123",
     });
     h.sendEmail.mockResolvedValue({ previewUrl: null });
-    const result = await accessRequestService.approve(adminCtx, "r1", "Associate");
+    const result = await accessRequestService.approve(adminCtx, "r1", "ar_Associate");
     expect(h.adminCreate).toHaveBeenCalledWith(adminCtx, {
       name: "Jane Doe",
       email: "jane@example.com",
-      role: "Associate",
+      roleId: "ar_Associate",
     });
     expect(h.updateStatus).toHaveBeenCalledWith(
       expect.objectContaining({ tenantId: expect.any(String) }),
@@ -148,7 +153,7 @@ describe("accessRequestService.approve", () => {
       generatedPassword: "abc123",
     });
     h.sendEmail.mockResolvedValue({ previewUrl: null });
-    await accessRequestService.approve(adminCtx, "r1", "Associate");
+    await accessRequestService.approve(adminCtx, "r1", "ar_Associate");
     expect(h.sendEmail).toHaveBeenCalledWith(
       expect.objectContaining({
         to: "jane@example.com",
@@ -166,7 +171,7 @@ describe("accessRequestService.approve", () => {
       generatedPassword: "abc123",
     });
     h.sendEmail.mockRejectedValue(new Error("SMTP down"));
-    const result = await accessRequestService.approve(adminCtx, "r1", "Associate");
+    const result = await accessRequestService.approve(adminCtx, "r1", "ar_Associate");
     expect(result.generatedPassword).toBe("abc123");
     expect(h.updateStatus).toHaveBeenCalledWith(
       expect.objectContaining({ tenantId: expect.any(String) }),
@@ -178,7 +183,7 @@ describe("accessRequestService.approve", () => {
   it("404s when the request doesn't exist", async () => {
     h.findById.mockResolvedValue(null);
     await expect(
-      accessRequestService.approve(adminCtx, "missing", "Associate"),
+      accessRequestService.approve(adminCtx, "missing", "ar_Associate"),
     ).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
@@ -187,7 +192,9 @@ describe("accessRequestService.approve", () => {
 
   it("409s when the request was already resolved", async () => {
     h.findById.mockResolvedValue({ ...pendingRequest, status: "approved" });
-    await expect(accessRequestService.approve(adminCtx, "r1", "Associate")).rejects.toMatchObject({
+    await expect(
+      accessRequestService.approve(adminCtx, "r1", "ar_Associate"),
+    ).rejects.toMatchObject({
       code: "CONFLICT",
     });
     expect(h.adminCreate).not.toHaveBeenCalled();
@@ -199,7 +206,9 @@ describe("accessRequestService.approve", () => {
   it("409s with a clear message when an account for this email already exists", async () => {
     h.findById.mockResolvedValue(pendingRequest);
     h.findUserByEmail.mockResolvedValue({ id: "existing-user-1" });
-    await expect(accessRequestService.approve(adminCtx, "r1", "Associate")).rejects.toMatchObject({
+    await expect(
+      accessRequestService.approve(adminCtx, "r1", "ar_Associate"),
+    ).rejects.toMatchObject({
       code: "CONFLICT",
       message: expect.stringContaining("already exists"),
     });

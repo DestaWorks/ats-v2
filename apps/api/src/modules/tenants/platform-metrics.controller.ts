@@ -5,7 +5,7 @@ import {
 } from "@destaworks/contracts/validation/platform-metrics";
 import type { AuthUser } from "@destaworks/auth/guards";
 import { CurrentIdentity } from "../../common/decorators/current-identity.decorator";
-import { PlatformAuthGuard } from "../../common/guards/platform-auth.guard";
+import { IdentityAuthGuard } from "../../common/guards/identity-auth.guard";
 import { ZodValidationPipe, type ContractOutput } from "../../common/pipes/zod-validation.pipe";
 import type { ServiceOf } from "../service-token";
 import { PLATFORM_METRICS_SERVICE } from "./tenants.tokens";
@@ -32,7 +32,7 @@ import { PLATFORM_METRICS_SERVICE } from "./tenants.tokens";
  * through, and returns what the service composed. It holds no repository and no query.
  */
 @Controller("platform/metrics")
-@UseGuards(PlatformAuthGuard)
+@UseGuards(IdentityAuthGuard)
 export class PlatformMetricsController {
   constructor(
     @Inject(PLATFORM_METRICS_SERVICE)

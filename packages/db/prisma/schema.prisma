@@ -121,14 +121,13 @@ model AccessRequest {
   status       String   @default("pending") // pending | approved | declined
   createdAt    DateTime @default(now())
 
-  @@index([status])
-  @@map("access_request")
-
   /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
+  @@index([status])
   @@index([tenantId])
+  @@map("access_request")
 }
 
 // --- Audit trail (Wave 0.5) ---
@@ -146,6 +145,10 @@ model ActivityLog {
   after    Json?
   at       DateTime @default(now())
 
+  /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
   @@index([entity, entityId])
   @@index([actor, at])
   // Wave 2.5 Activity Log (AL-2): the whole-log `at desc` sort + date-range scans, and the
@@ -155,11 +158,6 @@ model ActivityLog {
   @@index([tenantId, at, id])
   @@index([tenantId, action, at, id])
   @@map("activity_log")
-
-  /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
-  tenantId String
-  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
 }
 
 model AiUsageEvent {
@@ -178,15 +176,14 @@ model AiUsageEvent {
 
   createdAt DateTime @default(now())
 
-  @@index([operation, createdAt])
-  @@index([createdAt])
-  @@map("ai_usage_event")
-
   /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
+  @@index([operation, createdAt])
+  @@index([createdAt])
   @@index([tenantId])
+  @@map("ai_usage_event")
 }
 
 // Global AI kill switch — single row (id="singleton"), checked on every AI call. Lets an admin
@@ -198,13 +195,12 @@ model AiSettings {
   updatedAt      DateTime @updatedAt
   updatedBy      String?
 
-  @@map("ai_settings")
-
   /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
+  @@map("ai_settings")
 }
 
 // One asynchronous run of the legacy Sheet -> Postgres ETL commit (Phase 5). The row is three
@@ -246,15 +242,14 @@ model MigrationRun {
   startedAt   DateTime?
   finishedAt  DateTime?
 
-  @@index([status, createdAt])
-  @@index([startedById, createdAt])
-  @@map("migration_runs")
-
   /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
+  @@index([status, createdAt])
+  @@index([startedById, createdAt])
   @@index([tenantId])
+  @@map("migration_runs")
 }
 
 // --- Recruiting pipeline (Wave 1.1) ---
@@ -307,15 +302,14 @@ model Client {
   deals        Deal[] // Wave 4.2 slice 3 — CRM sales opportunities
   notes        ClientNote[] // Wave 4.2 (Health Score slice) — manual communication log
 
-  @@index([deletedAt])
-  @@unique([tenantId, legacyId])
-  @@map("clients")
-
   /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
+  @@unique([tenantId, legacyId])
+  @@index([deletedAt])
   @@index([tenantId])
+  @@map("clients")
 }
 
 /// Wave 4.2 (CRM) — a person tracked at a client (legacy "Contacts" tab, `ATS_ClientContacts`).
@@ -350,14 +344,13 @@ model ClientContact {
   portalTokens  ClientPortalToken[]
   postedRoles   OpenRole[]          @relation("PortalPostedRoles")
 
-  @@index([clientId])
-  @@map("client_contacts")
-
   /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
+  @@index([clientId])
   @@index([tenantId])
+  @@map("client_contacts")
 }
 
 /// Wave 4.3 (Client Portal) — a magic-link credential scoped to one `ClientContact`. Only the
@@ -377,14 +370,13 @@ model ClientPortalToken {
   lastUsedAt  DateTime?
   revokedAt   DateTime?
 
-  @@index([contactId])
-  @@map("client_portal_tokens")
-
   /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
+  @@index([contactId])
   @@index([tenantId])
+  @@map("client_portal_tokens")
 }
 
 /// Wave 4.3 (Client Portal) — an external, unauthenticated visitor asking for portal access.
@@ -400,14 +392,13 @@ model PortalAccessRequest {
   status              String   @default("pending") // pending | approved | declined
   createdAt           DateTime @default(now())
 
-  @@index([status])
-  @@map("portal_access_requests")
-
   /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
+  @@index([status])
   @@index([tenantId])
+  @@map("portal_access_requests")
 }
 
 /// Wave 4.2 slice 2 (CRM) — a follow-up task for a client (legacy "Tasks" tab). Legacy has no real
@@ -430,14 +421,13 @@ model ClientTask {
   deletedAt    DateTime?
   deletedById  String?
 
-  @@index([clientId])
-  @@map("client_tasks")
-
   /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
+  @@index([clientId])
   @@index([tenantId, deletedAt]) // ditto
+  @@map("client_tasks")
 }
 
 /// Wave 4.2 slice 2 (CRM) — a logged meeting for a client (legacy "Meetings" tab). Genuinely
@@ -457,14 +447,13 @@ model ClientMeeting {
   deletedAt   DateTime?
   deletedById String?
 
-  @@index([clientId])
-  @@map("client_meetings")
-
   /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
+  @@index([clientId])
   @@index([tenantId])
+  @@map("client_meetings")
 }
 
 /// Wave 4.2 (CRM, Health Score slice) — a manual call/note log entry (legacy `crm_note`). Fills
@@ -481,14 +470,13 @@ model ClientNote {
   deletedAt   DateTime?
   deletedById String?
 
-  @@index([clientId])
-  @@map("client_notes")
-
   /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
+  @@index([clientId])
   @@index([tenantId, deletedAt]) // ditto
+  @@map("client_notes")
 }
 
 /// Wave 4.2 slice 3 (CRM) — a sales opportunity for a client (legacy "Deals" tab, DROP 76).
@@ -516,14 +504,13 @@ model Deal {
   deletedById         String?
   blockers            DealBlocker[]
 
-  @@index([clientId])
-  @@map("deals")
-
   /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
+  @@index([clientId])
   @@index([tenantId])
+  @@map("deals")
 }
 
 /// Wave 4.2 slice 3 (CRM) — a real table (legacy's `Deal.Blockers` is a JSON-string blob, not a
@@ -539,14 +526,13 @@ model DealBlocker {
   resolvedAt DateTime?
   createdAt  DateTime  @default(now())
 
-  @@index([dealId])
-  @@map("deal_blockers")
-
   /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
+  @@index([dealId])
   @@index([tenantId])
+  @@map("deal_blockers")
 }
 
 /// Per-client scoring/matching rules — DATA, not code (DECISIONS: scoring rules live in a table,
@@ -568,14 +554,13 @@ model ClientRules {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  @@index([clientId])
-  @@map("client_rules")
-
   /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
+  @@index([clientId])
   @@index([tenantId])
+  @@map("client_rules")
 }
 
 model Candidate {
@@ -636,6 +621,20 @@ model Candidate {
   promotedFromLead    SourceLead?          @relation("LeadPromotion")
   outreachLog         OutreachAttempt[]
 
+  /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Perf audit 2026-08-03: candidate.repository.ts's search does `name`/`email` `contains`
+  // (case-insensitive) — a plain btree (the `email` index above) can only accelerate PREFIX
+  // matches, never substring search, so every keystroke was a sequential scan of the whole table.
+  // Fixed with two pg_trgm GIN indexes (candidates_name_trgm_idx, candidates_email_trgm_idx) —
+  // hand-written raw SQL in prisma/migrations/…_add_pg_trgm_candidate_search_indexes/, NOT
+  // declared here: this DB (Supabase-managed) already has extensions Prisma never tracked
+  // (pgcrypto, uuid-ossp, …) — turning on the `postgresqlExtensions` preview feature to declare
+  // `pg_trgm` in the datasource block makes Prisma try to reconcile ALL of them against migration
+  // history, which it can only do via a full schema reset. Not worth that risk for one extension.
+  @@unique([tenantId, legacyId])
   @@index([status])
   @@index([clientId])
   @@index([filledFromRoleId])
@@ -649,22 +648,7 @@ model Candidate {
   @@index([tenantId, status, deletedAt, createdAt, id]) // board per-column keyset (status + createdAt desc, id)
   @@index([tenantId, status, deletedAt, stageEnteredAt]) // stuck/overdue thresholds + listStaleActive
   @@index([tenantId, clientId]) // per-client rosters and client reports
-  // Perf audit 2026-08-03: candidate.repository.ts's search does `name`/`email` `contains`
-  // (case-insensitive) — a plain btree (the `email` index above) can only accelerate PREFIX
-  // matches, never substring search, so every keystroke was a sequential scan of the whole table.
-  // Fixed with two pg_trgm GIN indexes (candidates_name_trgm_idx, candidates_email_trgm_idx) —
-  // hand-written raw SQL in prisma/migrations/…_add_pg_trgm_candidate_search_indexes/, NOT
-  // declared here: this DB (Supabase-managed) already has extensions Prisma never tracked
-  // (pgcrypto, uuid-ossp, …) — turning on the `postgresqlExtensions` preview feature to declare
-  // `pg_trgm` in the datasource block makes Prisma try to reconcile ALL of them against migration
-  // history, which it can only do via a full schema reset. Not worth that risk for one extension.
-  @@unique([tenantId, legacyId])
   @@map("candidates")
-
-  /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
-  tenantId String
-  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
 }
 
 // Uploaded documents (resumes today; licenses/other later). Wave 1.2 (design S-1/S-2):
@@ -701,17 +685,16 @@ model Document {
   deletedAt    DateTime?
   deletedById  String?
 
-  @@index([candidateId])
-  @@index([deletedAt])
-  @@index([type])
-  @@unique([tenantId, legacyId])
-  @@map("documents")
-
   /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
+  @@unique([tenantId, legacyId])
+  @@index([candidateId])
+  @@index([deletedAt])
+  @@index([type])
   @@index([tenantId, deletedAt]) // every document list excludes soft-deleted rows
+  @@map("documents")
 }
 
 // Candidate notes (Wave 2.2). Body is user text — stored RAW and rendered as escaped plain text
@@ -721,7 +704,7 @@ model Document {
 // so a hard purge takes its notes with it.
 model CandidateNote {
   id          String    @id @default(cuid())
-  legacyId    String?   // deferred ETL backfill (idempotent upsert)
+  legacyId    String? // deferred ETL backfill (idempotent upsert)
   candidateId String
   candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
 
@@ -737,17 +720,16 @@ model CandidateNote {
 
   mentions Mention[]
 
-  @@index([candidateId])
-  @@index([candidateId, createdAt])
-  @@index([deletedAt])
-  @@unique([tenantId, legacyId])
-  @@map("candidate_notes")
-
   /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
+  @@unique([tenantId, legacyId])
+  @@index([candidateId])
+  @@index([candidateId, createdAt])
+  @@index([deletedAt])
   @@index([tenantId])
+  @@map("candidate_notes")
 }
 
 // One @mention notification: note author tagged `recipient` in a candidate note. Created
@@ -765,14 +747,13 @@ model Mention {
   createdAt   DateTime  @default(now())
   readAt      DateTime?
 
-  @@index([recipientId, readAt])
-  @@map("mentions")
-
   /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
+  @@index([recipientId, readAt])
   @@index([tenantId])
+  @@map("mentions")
 }
 
 model StageHistory {
@@ -786,6 +767,10 @@ model StageHistory {
   enteredAt      DateTime  @default(now())
   actorId        String
 
+  /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
   @@index([candidateId])
   @@index([candidateId, enteredAt])
   // Perf audit 2026-08-03: maxStageOrderAsOf (5 report endpoints) filters enteredAt/toStageOrder
@@ -793,13 +778,8 @@ model StageHistory {
   // leading (a per-candidate lookup shape) and don't help a cross-candidate scan. This one covers
   // the WHERE + the grouped column, enabling an index-only scan.
   @@index([enteredAt, toStageOrder, candidateId])
-  @@map("stage_history")
-
-  /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
-  tenantId String
-  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
   @@index([tenantId])
+  @@map("stage_history")
 }
 
 /// Screening scorecard (Wave 3.3, legacy/index.html:6689-6928). One row PER SCORING EVENT
@@ -835,14 +815,13 @@ model ScreeningScorecard {
   scoredById String
   scoredAt   DateTime @default(now())
 
-  @@index([candidateId, scoredAt])
-  @@map("screening_scorecards")
-
   /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
+  @@index([candidateId, scoredAt])
   @@index([tenantId])
+  @@map("screening_scorecards")
 }
 
 // --- Sourcing (Wave 2.6) ---
@@ -898,21 +877,20 @@ model SourceLead {
 
   outreachAttempts OutreachAttempt[]
 
+  /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, legacyId])
+  @@unique([tenantId, npi])
+  @@unique([tenantId, promotedCandidateId])
   @@index([status])
   @@index([deletedAt])
   @@index([email]) // dedupe/search
   @@index([clientId])
   @@index([tenantId, deletedAt, createdAt, id]) // keyset list (createdAt_desc, id tiebreak)
   @@index([tenantId, status]) // sourcing pipeline filters on lifecycle status
-  @@unique([tenantId, legacyId])
-  @@unique([tenantId, npi])
-  @@unique([tenantId, promotedCandidateId])
   @@map("source_leads")
-
-  /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
-  tenantId String
-  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
 }
 
 // ONE table for BOTH lead and candidate outreach (L-3). This slice writes leadId only; candidateId
@@ -944,6 +922,11 @@ model OutreachAttempt {
 
   createdAt DateTime @default(now())
 
+  /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, legacyId])
   @@index([leadId])
   @@index([candidateId])
   @@index([actorId, at]) // DECISIONS: outreach_attempts(actor, day) — the CRM/daily-log perf index
@@ -954,14 +937,8 @@ model OutreachAttempt {
   @@index([at, actorId])
   @@index([respondedAt, actorId])
   @@index([templateId])
-  @@unique([tenantId, legacyId])
-  @@map("outreach_attempts")
-
-  /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
-  tenantId String
-  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
   @@index([tenantId])
+  @@map("outreach_attempts")
 }
 
 // --- Daily accountability loop (Wave 3.1) ---
@@ -993,15 +970,14 @@ model DailyTarget {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([userId, date])
-  @@index([date])
-  @@map("daily_targets")
-
   /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
+  @@unique([userId, date])
+  @@index([date])
   @@index([tenantId])
+  @@map("daily_targets")
 }
 
 /// End-of-shift self-confirmed actuals (legacy ATS_DailyActuals; pre-filled from live counts).
@@ -1024,15 +1000,14 @@ model DailyActual {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([userId, date])
-  @@index([date])
-  @@map("daily_actuals")
-
   /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
+  @@unique([userId, date])
+  @@index([date])
   @@index([tenantId])
+  @@map("daily_actuals")
 }
 
 /// Daily Log self-report (legacy `ats_log` action "daily_log" — JSON in Details). One per user/day.
@@ -1060,15 +1035,14 @@ model DailyLog {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([userId, date])
-  @@index([date])
-  @@map("daily_logs")
-
   /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
+  @@unique([userId, date])
+  @@index([date])
   @@index([tenantId])
+  @@map("daily_logs")
 }
 
 /// Journal free-text note (legacy `journal_entry` activity rows).
@@ -1080,14 +1054,13 @@ model JournalEntry {
   text      String
   createdAt DateTime @default(now())
 
-  @@index([userId, date])
-  @@map("journal_entries")
-
   /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
+  @@index([userId, date])
   @@index([tenantId])
+  @@map("journal_entries")
 }
 
 /// Weekly goal (legacy `journal_goal` rows — which APPENDED a duplicate on toggle; here `done`
@@ -1101,14 +1074,13 @@ model JournalGoal {
   done      Boolean  @default(false)
   createdAt DateTime @default(now())
 
-  @@index([userId, weekStart])
-  @@map("journal_goals")
-
   /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
+  @@index([userId, weekStart])
   @@index([tenantId])
+  @@map("journal_goals")
 }
 
 /// Manager → associate feedback note on the Daily Log page (Wave 3.1 backlog, legacy `mgr_feedback`
@@ -1125,14 +1097,13 @@ model ManagerFeedback {
   body         String
   createdAt    DateTime @default(now())
 
-  @@index([targetUserId, createdAt])
-  @@map("manager_feedback")
-
   /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
+  @@index([targetUserId, createdAt])
   @@index([tenantId])
+  @@map("manager_feedback")
 }
 
 // Per-user saved filter/view (Wave 2.1 closeout; DECISIONS: shareable filters/saved-views → URL
@@ -1155,15 +1126,14 @@ model SavedView {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([userId, scope, name])
-  @@index([userId, scope])
-  @@map("saved_views")
-
   /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
+  @@unique([userId, scope, name])
+  @@index([userId, scope])
   @@index([tenantId])
+  @@map("saved_views")
 }
 
 // --- Open Roles (Wave 3.5, legacy `ATS_OpenRoles` / `ATS_RoleNotes` / `ATS_ClientMatchProfiles`) ---
@@ -1211,18 +1181,17 @@ model OpenRole {
   notes            RoleNote[]
   filledCandidates Candidate[]
 
-  @@index([clientId])
-  @@index([status])
-  @@index([status, priority])
-  @@unique([tenantId, legacyId])
-  @@map("open_roles")
-
   /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
+  @@unique([tenantId, legacyId])
+  @@index([clientId])
+  @@index([status])
+  @@index([status, priority])
   @@index([tenantId])
   @@index([tenantId, status]) // triage and open-role listings filter on status
+  @@map("open_roles")
 }
 
 /// Role-scoped note (legacy `ATS_RoleNotes`) — same soft-delete append-only shape as candidate/lead
@@ -1241,15 +1210,14 @@ model RoleNote {
   deletedAt   DateTime?
   deletedById String?
 
-  @@index([roleId])
-  @@index([roleId, createdAt])
-  @@map("role_notes")
-
   /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
+  @@index([roleId])
+  @@index([roleId, createdAt])
   @@index([tenantId])
+  @@map("role_notes")
 }
 
 /// Per-client weight overrides for the ACTIVE lead→role matcher (legacy `ATS_ClientMatchProfiles`,
@@ -1274,13 +1242,12 @@ model ClientMatchProfile {
   updatedById String?
   updatedAt   DateTime @updatedAt
 
-  @@map("client_match_profiles")
-
   /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
+  @@map("client_match_profiles")
 }
 
 // --- Briefs (Wave 5.1, legacy `Daily_Briefs`/`Weekly_Briefs` sheets) ---
@@ -1318,14 +1285,13 @@ model DailyBrief {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
-  @@unique([tenantId, date])
-  @@map("daily_briefs")
-
   /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
+  @@unique([tenantId, date])
   @@index([tenantId])
+  @@map("daily_briefs")
 }
 
 /// Weekly Brief (legacy `weekly_brief_generate`/`weekly_brief_save`). Patterns are generate-only,
@@ -1356,14 +1322,13 @@ model WeeklyBrief {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
-  @@unique([tenantId, weekStart])
-  @@map("weekly_briefs")
-
   /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
+  @@unique([tenantId, weekStart])
   @@index([tenantId])
+  @@map("weekly_briefs")
 }
 
 // --- Client Discovery (new domain, core slice — perf/security audit branch predates this;
@@ -1401,17 +1366,16 @@ model Prospect {
 
   contacts ProspectContact[]
 
-  @@index([status])
-  @@index([deletedAt])
-  @@index([ownerId])
-  @@index([tenantId, deletedAt, createdAt, id]) // keyset list (createdAt_desc, id tiebreak)
-  @@unique([tenantId, npi])
-  @@map("prospects")
-
   /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
+  @@unique([tenantId, npi])
+  @@index([status])
+  @@index([deletedAt])
+  @@index([ownerId])
+  @@index([tenantId, deletedAt, createdAt, id]) // keyset list (createdAt_desc, id tiebreak)
+  @@map("prospects")
 }
 
 model ProspectContact {
@@ -1432,14 +1396,13 @@ model ProspectContact {
   createdAt DateTime  @default(now())
   deletedAt DateTime?
 
-  @@index([prospectId])
-  @@map("prospect_contacts")
-
   /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
+  @@index([prospectId])
   @@index([tenantId])
+  @@map("prospect_contacts")
 }
 
 // A reusable, structured NPPES search — deliberately NOT the generic SavedView mechanism, whose
@@ -1462,15 +1425,14 @@ model SavedIcp {
 
   prospects Prospect[]
 
-  @@unique([userId, name])
-  @@index([userId])
-  @@map("saved_icps")
-
   /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
+  @@unique([userId, name])
+  @@index([userId])
   @@index([tenantId])
+  @@map("saved_icps")
 }
 
 // --- Background jobs (Phase 5) ---
@@ -1514,14 +1476,13 @@ model ReportExport {
   createdAt DateTime  @default(now())
   readyAt   DateTime?
 
-  @@index([requestedById, createdAt(sort: Desc)])
-  @@map("report_exports")
-
   /// Tenant scope. NOT NULL since `20260829112500_tenants_contract`.
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
+  @@index([requestedById, createdAt(sort: Desc)])
   @@index([tenantId])
+  @@map("report_exports")
 }
 
 /// A customer of the platform. Every tenant-scoped row hangs off exactly one of these, and the
@@ -1549,52 +1510,92 @@ model Tenant {
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
 
-  members Membership[]
-  accessRequests          AccessRequest[]
-  activityLogs            ActivityLog[]
-  aiSettingss             AiSettings[]
-  aiUsageEvents           AiUsageEvent[]
-  candidates              Candidate[]
-  candidateNotes          CandidateNote[]
-  clients                 Client[]
-  clientContacts          ClientContact[]
-  clientMatchProfiles     ClientMatchProfile[]
-  clientMeetings          ClientMeeting[]
-  clientNotes             ClientNote[]
-  clientPortalTokens      ClientPortalToken[]
-  clientRuless            ClientRules[]
-  clientTasks             ClientTask[]
-  dailyActuals            DailyActual[]
-  dailyBriefs             DailyBrief[]
-  dailyLogs               DailyLog[]
-  dailyTargets            DailyTarget[]
-  deals                   Deal[]
-  dealBlockers            DealBlocker[]
-  documents               Document[]
-  journalEntrys           JournalEntry[]
-  journalGoals            JournalGoal[]
-  managerFeedbacks        ManagerFeedback[]
-  mentions                Mention[]
-  migrationRuns           MigrationRun[]
-  openRoles               OpenRole[]
-  outreachAttempts        OutreachAttempt[]
-  portalAccessRequests    PortalAccessRequest[]
-  prospects               Prospect[]
-  prospectContacts        ProspectContact[]
-  reportExports           ReportExport[]
-  roleNotes               RoleNote[]
-  savedIcps               SavedIcp[]
-  savedViews              SavedView[]
-  screeningScorecards     ScreeningScorecard[]
-  sourceLeads             SourceLead[]
-  stageHistorys           StageHistory[]
-  weeklyBriefs            WeeklyBrief[]
+  members              Membership[]
+  accessRoles          AccessRole[]
+  accessRequests       AccessRequest[]
+  activityLogs         ActivityLog[]
+  aiSettingss          AiSettings[]
+  aiUsageEvents        AiUsageEvent[]
+  candidates           Candidate[]
+  candidateNotes       CandidateNote[]
+  clients              Client[]
+  clientContacts       ClientContact[]
+  clientMatchProfiles  ClientMatchProfile[]
+  clientMeetings       ClientMeeting[]
+  clientNotes          ClientNote[]
+  clientPortalTokens   ClientPortalToken[]
+  clientRuless         ClientRules[]
+  clientTasks          ClientTask[]
+  dailyActuals         DailyActual[]
+  dailyBriefs          DailyBrief[]
+  dailyLogs            DailyLog[]
+  dailyTargets         DailyTarget[]
+  deals                Deal[]
+  dealBlockers         DealBlocker[]
+  documents            Document[]
+  journalEntrys        JournalEntry[]
+  journalGoals         JournalGoal[]
+  managerFeedbacks     ManagerFeedback[]
+  mentions             Mention[]
+  migrationRuns        MigrationRun[]
+  openRoles            OpenRole[]
+  outreachAttempts     OutreachAttempt[]
+  portalAccessRequests PortalAccessRequest[]
+  prospects            Prospect[]
+  prospectContacts     ProspectContact[]
+  reportExports        ReportExport[]
+  roleNotes            RoleNote[]
+  savedIcps            SavedIcp[]
+  savedViews           SavedView[]
+  screeningScorecards  ScreeningScorecard[]
+  sourceLeads          SourceLead[]
+  stageHistorys        StageHistory[]
+  weeklyBriefs         WeeklyBrief[]
 
   @@map("tenants")
 }
 
 /// One person's place in one tenant. Role lives HERE, not on `User`: the same human may be Owner
 /// of one tenant and Associate of another, which a column on the user cannot express.
+/// A role as a TENANT owns it: a name plus the capabilities it grants.
+///
+/// Roles used to be a fixed code constant, which made them unsellable and unconfigurable — a firm
+/// could not call their tier "Recruiter" or decide that theirs may see licence numbers. Each
+/// tenant now gets its own rows, seeded by cloning the six built-in templates in
+/// `domain/constants/roles.ts`. That constant is still the source of the DEFAULTS; it is no longer
+/// the runtime answer.
+///
+/// `templateKey` records which built-in a row was cloned from, so a migration that adds a
+/// capability can backfill it into every tenant's copy of "Owner" without touching custom roles.
+///
+/// GLOBAL rather than tenant-scoped, for the same reason `Membership` is: it is read to BUILD a
+/// tenant context, before one exists, so an RLS policy would be unsatisfiable at exactly the
+/// moment it is needed. The guarantee that replaces RLS here is stronger for the risk that
+/// matters — see the composite relation on `Membership.accessRole`.
+model AccessRole {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  name         String
+  /// Capability codes from `domain/constants/roles.ts`. Validated in code, never trusted from a row.
+  capabilities String[]
+  /// The built-in this was cloned from (`Owner`, `Director`, …), or null for a custom role.
+  templateKey  String?
+  isBuiltIn    Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  memberships Membership[]
+
+  @@unique([tenantId, name])
+  /// Not redundant with the primary key: it is what lets `Membership` reference (id, tenantId)
+  /// together, which is what makes a cross-tenant role assignment impossible to express.
+  @@unique([id, tenantId])
+  @@map("access_roles")
+}
+
 model Membership {
   id       String @id @default(cuid())
   tenantId String
@@ -1602,14 +1603,27 @@ model Membership {
   userId   String
   user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  /// The role NAME, kept as the display label and the migration bridge. Authority moved to
+  /// `roleId`; this is what a roster renders and what the backfill read.
   role   String @default("Associate")
   /// active | invited | removed
   status String @default("active")
+
+  /// The tenant's own role row — where a capability decision actually comes from.
+  ///
+  /// The relation is on (roleId, tenantId), not roleId alone. That is the point: the database
+  /// itself refuses a membership pointing at a role belonging to a different tenant, so the one
+  /// cross-tenant mistake this table could make cannot be written at all. `onDelete: Restrict`
+  /// because deleting a role out from under its holders would silently strip their access — the
+  /// role editor has to reassign them first.
+  roleId     String
+  accessRole AccessRole @relation(fields: [roleId, tenantId], references: [id, tenantId], onDelete: Restrict)
 
   invitedById String?
   createdAt   DateTime @default(now())
 
   @@unique([tenantId, userId])
   @@index([userId])
+  @@index([roleId])
   @@map("memberships")
 }

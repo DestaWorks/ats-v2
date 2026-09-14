@@ -87,7 +87,7 @@ export function toDocumentDTO(row: DocumentRow, viewer: DtoViewer): DocumentDTO 
     deletedAt: row.deletedAt,
     deletedById: row.deletedById,
   };
-  if (hasCapability(viewer.role, "viewCredentials")) {
+  if (hasCapability(viewer, "viewCredentials")) {
     dto.extractedText = row.extractedText;
     dto.extractedData = row.extractedData;
   }

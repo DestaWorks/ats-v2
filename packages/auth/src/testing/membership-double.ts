@@ -1,3 +1,4 @@
+import { isRole, ROLE_CAPABILITIES } from "@destaworks/domain/constants";
 import type { MembershipRow, ResolverMembershipRow } from "@destaworks/db/memberships";
 
 /** The minimum of a Better Auth session these doubles read: who, and with what stored role. */
@@ -21,10 +22,16 @@ interface SessionLike {
  * Multi-tenant behaviour is deliberately NOT expressible here: a test that cares which tenant it
  * is in is testing resolution itself and should stub the reader directly, so that the shape of
  * this default cannot quietly become the definition of correct.
+ *
+ * `plan` defaults to `trial`, which entitles every module, so that adding a module gate to a route
+ * cannot silently start failing the suites that are asserting its CAPABILITY decision. A test of
+ * the entitlement gate itself passes a narrower plan — as a function when it varies per case,
+ * since the reader is installed once by a hoisted `vi.mock` and read on every request after.
  */
 export function singleTenantMembershipReader(
   session: () => SessionLike | null,
   tenantId = "t1",
+  plan: string | (() => string) = "trial",
 ): {
   listActiveForUser: (userId: string) => Promise<MembershipRow[]>;
   listAllForUser: (userId: string) => Promise<ResolverMembershipRow[]>;
@@ -36,15 +43,48 @@ export function singleTenantMembershipReader(
    * active in a live tenant; a suite testing a denial reason stubs the reader directly, which is
    * the boundary this double deliberately refuses to blur.
    */
+  const planNow = (): string => (typeof plan === "function" ? plan() : plan);
+
+  /**
+   * The role ROW capabilities come from, cloned from the session role's template so a suite still
+   * varies one value. A forged or absent name yields an empty set.
+   */
+  const roleRow = (): {
+    id: string;
+    name: string;
+    capabilities: string[];
+    templateKey: string | null;
+    isBuiltIn: boolean;
+  } => {
+    const name = session()?.user?.role ?? "";
+    const template = isRole(name) ? ROLE_CAPABILITIES[name] : [];
+    return {
+      id: `ar_${name || "unknown"}`,
+      name,
+      capabilities: [...template],
+      templateKey: isRole(name) ? name : null,
+      isBuiltIn: isRole(name),
+    };
+  };
+
   const resolverRow = (userId: string): ResolverMembershipRow => ({
     id: `${userId}-m`,
     tenantId,
     userId,
     role: session()?.user?.role ?? "",
+    roleId: roleRow().id,
+    accessRole: roleRow(),
     status: "active",
     invitedById: null,
     createdAt: new Date(0),
-    tenant: { id: tenantId, slug: tenantId, name: tenantId, status: "active", deletedAt: null },
+    tenant: {
+      id: tenantId,
+      slug: tenantId,
+      name: tenantId,
+      status: "active",
+      deletedAt: null,
+      plan: planNow(),
+    },
   });
 
   return {
@@ -61,6 +101,8 @@ export function singleTenantMembershipReader(
           tenantSlug: tenantId,
           tenantName: tenantId,
           role: user.role ?? "",
+          tenantPlan: planNow(),
+          capabilities: roleRow().capabilities,
         },
       ];
     },

@@ -1,4 +1,4 @@
-import { getVerifiedUser } from "@destaworks/auth/guards";
+import { requirePageUser } from "@/lib/page-user";
 import { hasCapability } from "@destaworks/domain/constants";
 import type { LookupOptionsDTO } from "@destaworks/contracts/validation/lookups";
 import type { UserPreferencesDTO } from "@destaworks/contracts/validation/user-preferences";
@@ -14,7 +14,7 @@ import { TemplatesWorkspace } from "./templates-workspace";
  * signature/sticky note.
  */
 export default async function TemplatesPage() {
-  const user = await getVerifiedUser();
+  const user = await requirePageUser();
 
   const [{ clients }, preferences] = await Promise.all([
     apiGet<LookupOptionsDTO>("/lookups"),
@@ -35,7 +35,7 @@ export default async function TemplatesPage() {
       <TemplatesWorkspace
         clients={clients}
         recruiterName={user.user.name}
-        canViewPerformance={hasCapability(user.role, "viewAnalytics")}
+        canViewPerformance={hasCapability(user, "viewAnalytics")}
         initialSignature={preferences.emailSignature}
       />
     </div>

@@ -7,6 +7,7 @@ import type {
 import type { AuthContext } from "@destaworks/auth/guards";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { RequireCapability } from "../../common/decorators/require-capability.decorator";
+import { RequireModule } from "../../common/decorators/require-module.decorator";
 import { CapabilityGuard } from "../../common/guards/capability.guard";
 import { SessionAuthGuard } from "../../common/guards/session-auth.guard";
 import { ZodValidationPipe, type ContractOutput } from "../../common/pipes/zod-validation.pipe";
@@ -19,6 +20,7 @@ import { CLIENT_NOTE_SERVICE } from "./crm.tokens";
  */
 @Controller("crm/clients/:id/notes")
 @UseGuards(SessionAuthGuard, CapabilityGuard)
+@RequireModule("discovery")
 @RequireCapability("viewCrm")
 export class CrmClientNotesController {
   constructor(

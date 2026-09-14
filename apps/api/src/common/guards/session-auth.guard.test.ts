@@ -73,6 +73,24 @@ describe("SessionAuthGuard", () => {
       membershipId: "u1-m",
       user: { id: "u1", email: "u@desta.works" },
       role: "Owner",
+      capabilities: [
+        "viewCredentials",
+        "viewReports",
+        "viewAnalytics",
+        "bulkImport",
+        "viewCrm",
+        "viewClientDiscovery",
+        "viewAllNoteTypes",
+        "manageUsers",
+        "manageRoles",
+        "manageAccessRequests",
+        "configureClientPortal",
+        "viewAudit",
+        "purgeCandidate",
+        "deleteOpenRole",
+        "manageAiSettings",
+      ] as const,
+      modules: ["core", "sourcing", "discovery", "reports", "ai", "portal", "compliance"] as const,
     });
   });
 
@@ -85,14 +103,18 @@ describe("SessionAuthGuard", () => {
     expect(seenHeaders?.get("cookie")).toBe("better-auth.session_token=xyz");
   });
 
-  it("never trusts a forged role — an unknown one is downgraded, not honoured", async () => {
+  /**
+   * A role NAME is the workspace's own since roles became tenant-owned rows, so "Superuser" is a
+   * label to render, not something to coerce. What is never trusted is the CAPABILITY list: an
+   * unrecognised code is dropped, so a forged role grants nothing regardless of what it is called.
+   */
+  it("never trusts a forged role — it grants nothing, whatever it is named", async () => {
     signInAs("Superuser");
     const request: AuthenticatedRequest = { headers: {} };
 
     await guard.canActivate(executionContextFor({ request }));
 
-    expect(request.user?.role).not.toBe("Superuser");
-    expect(request.user?.role).toBe("Associate");
+    expect(request.user?.capabilities).toEqual([]);
   });
 
   it("refuses — never admits — when no RequestContext adapter is installed", async () => {

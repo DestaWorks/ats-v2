@@ -142,6 +142,8 @@ export interface CandidateListItemDTO {
  */
 export interface CandidateListDTO extends PageMeta {
   candidates: CandidateListItemDTO[];
+  /** Fit/Hot only: the in-memory ranking hit its row cap, so it is partial and `total` understates. */
+  capped: boolean;
 }
 
 /**

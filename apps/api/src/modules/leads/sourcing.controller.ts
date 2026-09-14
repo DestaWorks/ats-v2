@@ -9,6 +9,7 @@ import { SessionAuthGuard } from "../../common/guards/session-auth.guard";
 import { ZodValidationPipe, type ContractOutput } from "../../common/pipes/zod-validation.pipe";
 import { SIMILARITY_SERVICE } from "../candidates/candidates.module";
 import type { ServiceOf } from "../service-token";
+import { RequireModule } from "../../common/decorators/require-module.decorator";
 
 /**
  * Smarter Sourcing's "find providers like this" — ported from
@@ -23,6 +24,7 @@ import type { ServiceOf } from "../service-token";
  */
 @Controller("sourcing")
 @UseGuards(SessionAuthGuard)
+@RequireModule("sourcing")
 export class SourcingController {
   constructor(
     @Inject(SIMILARITY_SERVICE) private readonly similarity: ServiceOf<typeof SIMILARITY_SERVICE>,

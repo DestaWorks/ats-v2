@@ -143,6 +143,20 @@ for (const [key, nx] of next) {
   if (a !== b) note(`capability changed: ${key} — Next [${a || "none"}] -> Nest [${b || "none"}]`);
 }
 
+/**
+ * The routes that authenticate an identity WITHOUT a tenant, and are not on the platform axis.
+ *
+ * Named rather than pattern-matched, because "this route needs no tenant" is exactly the claim
+ * that must not spread by accident. Each one runs BEFORE a tenant can exist for the caller:
+ * someone with two memberships and no claim resolves `ambiguous`, so requiring a resolved tenant
+ * here would mean the endpoint that lists your workspaces is the one refusing you.
+ */
+const PRE_TENANT_ENDPOINTS = new Map([
+  ["GET /tenants", "lists the workspaces you may enter — cannot require being in one"],
+  ["POST /tenants/switch", "chooses the workspace; the server sets the cookie it just verified"],
+  ["POST /tenants/members/accept", "accepts an invitation, which grants the membership itself"],
+]);
+
 // 2. Every endpoint sits behind the correct guard.
 let classified = 0;
 for (const [key, hit] of nest) {
@@ -158,11 +172,12 @@ for (const [key, hit] of nest) {
   // service, in the same call that writes the audit row — never a tenant capability, which is
   // why a `/platform/*` route carrying one is an error rather than an omission.
   const isPlatform = / \/platform\//.test(key) || key.endsWith(" /platform");
-  const hasPlatformGuard = /PlatformAuthGuard/.test(g);
+  const hasIdentityGuard = /IdentityAuthGuard/.test(g);
 
-  if (isPlatform && hasPlatformGuard && hit.caps.length)
+  if (isPlatform && hasIdentityGuard && hit.caps.length)
     note(`${key}: platform route declares a tenant capability [${hit.caps}]`);
-  if (!isPlatform && hasPlatformGuard) note(`${key}: non-platform route carries PlatformAuthGuard`);
+  if (!isPlatform && hasIdentityGuard && !PRE_TENANT_ENDPOINTS.has(key))
+    note(`${key}: carries IdentityAuthGuard but is neither a platform nor a pre-tenant route`);
   if (isPortal && hasSession) note(`${key}: portal route carries SessionAuthGuard`);
   if (isPortal && !hasPortal) note(`${key}: portal route missing PortalAuthGuard`);
   if (!isPortal && hasPortal) note(`${key}: non-portal route carries PortalAuthGuard`);
@@ -174,7 +189,7 @@ for (const [key, hit] of nest) {
   // CapabilityGuard delegates to requireCapability(), which authenticates AND authorizes in one
   // step, so it is itself an auth guard whenever a capability is attached.
   const authenticated =
-    hasSession || hasPortal || hasPlatformGuard || (hasCapGuard && hit.caps.length > 0);
+    hasSession || hasPortal || hasIdentityGuard || (hasCapGuard && hit.caps.length > 0);
   if (!isPublic && !authenticated) note(`${key}: no auth guard (${hit.file})`);
   if (isPublic && authenticated)
     note(`${key}: listed as deliberately public but carries an auth guard — the list is stale`);

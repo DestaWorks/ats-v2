@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { toLegacyStatusLabel } from "@destaworks/domain/constants";
+import { toLegacyStatusLabel, MODULES, ROLE_CAPABILITIES } from "@destaworks/domain/constants";
 import type { ImportReport } from "@destaworks/contracts/validation/migration";
 import type { JobContext } from "../queue";
 
@@ -57,19 +57,25 @@ const h = vi.hoisted(() => ({
   fakeTx: { __tx: true },
   /** The one tenant this fixture runs in — the run's, and the actor's membership's. */
   tenant: "t1",
-  actor: {
-    id: "u1",
-    email: "owner@desta.works",
-    name: "Owner",
-    role: "Owner" as string,
-  } as { id: string; email: string; name: string; role: string } | null,
+  actor: { id: "u1", email: "owner@desta.works", name: "Owner" } as {
+    id: string;
+    email: string;
+    name: string;
+  } | null,
   /**
    * The actor's membership in the run's tenant, which is where `claim` now reads their role.
    * Held apart from `actor` so a test can revoke the membership without deleting the user.
    */
-  membership: { tenantId: "t1", role: "Owner" as string } as {
+  membership: {
+    tenantId: "t1",
+    role: "Owner" as string,
+    // What the role ROW grants, since that is what a capability check reads now. Spelled out
+    // because `vi.hoisted` runs before imports, so the constant is not reachable here.
+    capabilities: ["bulkImport"] as string[],
+  } as {
     tenantId: string;
     role: string;
+    capabilities: string[];
   } | null,
 }));
 
@@ -119,6 +125,8 @@ vi.mock("@destaworks/db/memberships", () => ({
                 tenantSlug: h.membership.tenantId,
                 tenantName: h.membership.tenantId,
                 role: h.membership.role,
+                tenantPlan: "trial",
+                capabilities: h.membership.capabilities,
               },
             ],
       ),
@@ -223,6 +231,8 @@ import { handleMigrationCommit, migrationCommitJob } from "./migration-commit.jo
 const OWNER = {
   tenantId: "t1",
   membershipId: "u1-m",
+  modules: MODULES,
+  capabilities: ROLE_CAPABILITIES.Owner,
   user: { id: "u1", email: "owner@desta.works", name: "Owner" },
   role: "Owner" as const,
 };
@@ -282,8 +292,8 @@ beforeEach(() => {
   store.runs.clear();
   store.upserts = [];
   store.seq = 0;
-  h.actor = { id: "u1", email: "owner@desta.works", name: "Owner", role: "Owner" };
-  h.membership = { tenantId: h.tenant, role: "Owner" };
+  h.actor = { id: "u1", email: "owner@desta.works", name: "Owner" };
+  h.membership = { tenantId: h.tenant, role: "Owner", capabilities: ["bulkImport"] };
   clearMigrationCommitEnqueuer();
 });
 
@@ -432,7 +442,7 @@ describe("failure", () => {
     const runId = await stage(2);
     // Demoted in the tenant the run belongs to. The user row is untouched, which is the point:
     // `claim` reads the membership, so a demotion there is what stops the resumed import.
-    h.membership = { tenantId: h.tenant, role: "Associate" };
+    h.membership = { tenantId: h.tenant, role: "Associate", capabilities: [] };
 
     await expect(handleMigrationCommit(fakeCtx(runId, 1).ctx)).rejects.toThrow(/permission/i);
     expect(store.candidates.size).toBe(0);

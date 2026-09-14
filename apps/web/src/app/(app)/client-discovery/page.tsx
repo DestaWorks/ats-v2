@@ -1,5 +1,6 @@
-import { hasCapability, isProspectStatus } from "@destaworks/domain/constants";
-import { getVerifiedUser } from "@destaworks/auth/guards";
+import { hasCapability, isProspectStatus, hasModule } from "@destaworks/domain/constants";
+import { UpsellState } from "@destaworks/ui/upsell-state";
+import { requirePageUser } from "@/lib/page-user";
 import type { GetProspectListResponse } from "@destaworks/contracts/validation/prospect";
 import type { LookupOptionsDTO } from "@destaworks/contracts/validation/lookups";
 import { ErrorState } from "@destaworks/ui/error-state";
@@ -21,14 +22,22 @@ export default async function ClientDiscoveryPage({
 }: {
   searchParams: Promise<RawSearchParams>;
 }) {
-  const user = await getVerifiedUser();
+  const user = await requirePageUser();
 
-  if (!hasCapability(user.role, "viewClientDiscovery")) {
+  if (!hasModule(user.modules, "discovery")) {
+    return (
+      <div className="flex flex-col gap-4 px-8 py-6">
+        <UpsellState feature="Client Discovery" />
+      </div>
+    );
+  }
+
+  if (!hasCapability(user, "viewClientDiscovery")) {
     return (
       <div className="mx-auto flex max-w-4xl flex-col gap-6 p-6 sm:p-8">
         <ErrorState
           title="You don't have access"
-          message="Client Discovery is limited to leadership roles. Ask an Owner, Director, Manager, or Admin for access."
+          message="Client Discovery is limited to roles that grant it. Ask a workspace administrator."
         />
       </div>
     );

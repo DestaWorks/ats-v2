@@ -1,4 +1,5 @@
 import "reflect-metadata";
+import { MODULES, ROLE_CAPABILITIES } from "@destaworks/domain/constants";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
 /**
@@ -54,6 +55,8 @@ function controllerWith(methods: Partial<OpenRoleService>): RolesController {
 const USER: AuthContext = {
   tenantId: "t1",
   membershipId: "u1-m",
+  modules: MODULES,
+  capabilities: ROLE_CAPABILITIES.Associate,
   user: { id: "u1", email: "op@desta.works", name: "Operator" },
   role: "Associate",
 };
@@ -71,7 +74,7 @@ beforeEach(() => {
 describe("RolesController — declared routes", () => {
   it("matches the Next.js route table, including the one route with a capability gate", () => {
     const session = ["SessionAuthGuard"];
-    const open = { guards: session, capability: null, rateLimit: null, status: 200 };
+    const open = { guards: session, capability: null, module: null, rateLimit: null, status: 200 };
     expect(describeRoutes(RolesController)).toEqual([
       { ...open, route: "POST /roles", status: 201 },
       { ...open, route: "GET /roles" },
@@ -80,6 +83,7 @@ describe("RolesController — declared routes", () => {
         route: "POST /roles/parse-jd",
         guards: [...session, "RateLimitGuard"],
         capability: null,
+        module: null,
         rateLimit: "roles-parse-jd",
         status: 200,
       },
@@ -89,6 +93,7 @@ describe("RolesController — declared routes", () => {
         route: "DELETE /roles/:id",
         guards: [...session, "CapabilityGuard"],
         capability: "deleteOpenRole",
+        module: null,
         rateLimit: null,
         status: 200,
       },

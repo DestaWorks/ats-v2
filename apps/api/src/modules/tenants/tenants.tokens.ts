@@ -1,3 +1,4 @@
+import { accessRoleService } from "@destaworks/application/access-role.service";
 import { membershipService } from "@destaworks/application/membership.service";
 import { platformAdminService } from "@destaworks/application/platform-admin.service";
 import { platformImpersonationService } from "@destaworks/application/platform-impersonation.service";
@@ -15,6 +16,7 @@ import { serviceToken } from "../service-token";
  * guard, and the whole point of 6.8 is that these two authorities never meet.
  */
 export const MEMBERSHIP_SERVICE = serviceToken<typeof membershipService>("MEMBERSHIP_SERVICE");
+export const ACCESS_ROLE_SERVICE = serviceToken<typeof accessRoleService>("ACCESS_ROLE_SERVICE");
 export const PLATFORM_ADMIN_SERVICE =
   serviceToken<typeof platformAdminService>("PLATFORM_ADMIN_SERVICE");
 export const PLATFORM_IMPERSONATION_SERVICE = serviceToken<typeof platformImpersonationService>(

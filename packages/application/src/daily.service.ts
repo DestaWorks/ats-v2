@@ -41,11 +41,31 @@ import {
 } from "@destaworks/db/repositories/daily.repository";
 import { clientRepository } from "@destaworks/db/repositories/client.repository";
 import { userRepository } from "@destaworks/db/repositories/user.repository";
+import { membershipRepository } from "@destaworks/db/tenancy/membership.repository";
 import { AppError } from "@destaworks/integrations/http/app-error";
 import { cachedUserList } from "@destaworks/integrations/http/request-cache";
 
 /** The capability that gates target-setting (leadership; legacy: the Daily Brief manager modal). */
 const SET_TARGETS_CAP = "viewReports" as const;
+
+/**
+ * The Associate roster this workspace's leadership sets targets for and sends feedback to.
+ *
+ * Read from the active tenant's MEMBERSHIPS, not from a role on the user row: the same person can
+ * be an Associate here and an Owner elsewhere, and a `User.role` lookup would both answer with the
+ * wrong workspace's role and return people who are not members of this one at all.
+ */
+async function associateRoster(ctx: TenantContext): Promise<{ id: string; name: string }[]> {
+  const [rows, users] = await Promise.all([
+    membershipRepository.listByTenant(ctx.tenantId),
+    cachedUserList(ctx),
+  ]);
+  const names = new Map(users.map((u) => [u.id, u.name]));
+  return rows
+    .filter((row) => row.status === "active" && row.role === "Associate")
+    .map((row) => ({ id: row.userId, name: names.get(row.userId) ?? "Unknown" }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
 
 /** Legacy Daily Log excluded these 2 non-recruiting placeholder clients from the per-client
  *  sourcing breakdown (not real targets); the EOS modal did NOT apply this exclusion — both
@@ -136,7 +156,7 @@ export const dailyService = {
    * through TODAY here, not the full week, since this drives an in-progress "WTD" summary).
    */
   async overview(ctx: TenantContext, date: string, tz: number): Promise<DailyOverviewDTO> {
-    const canSetTargets = hasCapability(ctx.role, SET_TARGETS_CAP);
+    const canSetTargets = hasCapability(ctx, SET_TARGETS_CAP);
     const monday = mondayOf(date);
     const [target, live, actual, clients, users, targetsToday, weekLogs] =
       await withTenantTransaction(ctx, async () =>
@@ -146,7 +166,7 @@ export const dailyService = {
           this.liveActuals(ctx.user.id, date, tz, ctx),
           dailyRepository.actualFor(ctx, ctx.user.id, date),
           clientRepository.list(ctx),
-          canSetTargets ? userRepository.listByRole("Associate") : Promise.resolve(undefined),
+          canSetTargets ? associateRoster(ctx) : Promise.resolve(undefined),
           canSetTargets ? dailyRepository.targetsForDate(ctx, date) : Promise.resolve(undefined),
           canSetTargets
             ? dailyRepository.logsForDateRange(ctx, monday, date)
@@ -194,7 +214,7 @@ export const dailyService = {
 
   /** Set/replace one associate's targets for a day — LEADERSHIP only (audited). */
   async setTarget(input: SetTargetInput, ctx: TenantContext): Promise<void> {
-    if (!hasCapability(ctx.role, SET_TARGETS_CAP)) {
+    if (!hasCapability(ctx, SET_TARGETS_CAP)) {
       throw new AppError("FORBIDDEN", "Only leadership can set targets");
     }
     const names = await userRepository.namesByIds([input.userId]);
@@ -463,7 +483,7 @@ export const dailyService = {
    * only, same tier as `setTarget` (never Owner/Admin-only `manageUsers`). Audited.
    */
   async addFeedback(input: AddFeedbackInput, ctx: TenantContext): Promise<void> {
-    if (!hasCapability(ctx.role, SET_TARGETS_CAP)) {
+    if (!hasCapability(ctx, SET_TARGETS_CAP)) {
       throw new AppError("FORBIDDEN", "Only leadership can post feedback");
     }
     const names = await userRepository.namesByIds([input.userId]);
@@ -495,7 +515,7 @@ export const dailyService = {
    * live counts, matching legacy's own inputs). LEADERSHIP only, same tier as `setTarget`.
    */
   async teamBreakdown(weekStart: string, ctx: TenantContext): Promise<TeamBreakdownDTO> {
-    if (!hasCapability(ctx.role, SET_TARGETS_CAP)) {
+    if (!hasCapability(ctx, SET_TARGETS_CAP)) {
       throw new AppError("FORBIDDEN", "Only leadership can view the team breakdown");
     }
     const monday = mondayOf(weekStart);
@@ -506,8 +526,8 @@ export const dailyService = {
     // populations are deliberately different, so this fetches both rather than filtering one.
     const [logs, users, associates] = await Promise.all([
       dailyRepository.logsForDateRange(ctx, monday, weekEnd),
-      cachedUserList(),
-      userRepository.listByRole("Associate"),
+      cachedUserList(ctx),
+      associateRoster(ctx),
     ]);
     const names = new Map(users.map((u) => [u.id, u.name]));
     const byUser = new Map<string, TeamBreakdownDTO["rows"][number]>();

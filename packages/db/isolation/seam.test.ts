@@ -1,4 +1,5 @@
 import { Client } from "pg";
+import { MODULES, ROLE_CAPABILITIES } from "@destaworks/domain/constants";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { TenantContext } from "@destaworks/domain/tenant";
 import { db, dbUnscoped, scopedWrite } from "../src/tenant-scope";
@@ -25,6 +26,8 @@ function context(tenantId: string): TenantContext {
   return {
     tenantId,
     membershipId: `membership_${tenantId}`,
+    modules: MODULES,
+    capabilities: ROLE_CAPABILITIES.Owner,
     user: { id: `user_${tenantId}`, email: `${tenantId}@seam.test`, name: "Seam" },
     role: "Owner",
   };

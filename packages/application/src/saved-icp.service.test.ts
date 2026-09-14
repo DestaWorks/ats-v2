@@ -15,12 +15,16 @@ const h = vi.hoisted(() => ({
     membershipId: "u1-m",
     user: { id: "u1", email: "u@desta.works", name: "Test User" },
     role: "Associate" as const,
+    capabilities: [] as const,
+    modules: ["core", "sourcing", "discovery", "reports", "ai", "portal", "compliance"] as const,
   },
   other: {
     tenantId: "t1",
     membershipId: "u2-m",
     user: { id: "u2", email: "other@desta.works", name: "Other User" },
     role: "Associate" as const,
+    capabilities: [] as const,
+    modules: ["core", "sourcing", "discovery", "reports", "ai", "portal", "compliance"] as const,
   },
   repo: {
     listByUser: vi.fn(),

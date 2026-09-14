@@ -27,7 +27,7 @@ export const teamReportsService = {
     const [cohort, historyMax, users] = await Promise.all([
       loadCohort(ctx, filters),
       stageHistoryRepository.maxStageOrderAsOf(ctx, now),
-      userRepository.list(),
+      userRepository.listByTenant(ctx.tenantId),
     ]);
 
     const byUser = new Map<string, typeof cohort.candidates>();
@@ -65,7 +65,7 @@ export const teamReportsService = {
         };
       });
 
-    return { rows };
+    return { capped: cohort.capped, rows };
   },
 
   /** Source ROI — per-source funnel (legacy `index.html:8532-8571`). */
@@ -113,6 +113,6 @@ export const teamReportsService = {
         };
       });
 
-    return { rows };
+    return { capped: cohort.capped, rows };
   },
 };

@@ -15,6 +15,8 @@ let mockSession: { user: { id: string; email: string; name: string; role?: strin
 // Controllable memberships for the mocked reader, plus the active-tenant hint on the request.
 let mockMemberships: {
   id: string;
+  plan: string;
+  capabilities: string[];
   tenantId: string;
   tenantSlug: string;
   tenantName: string;
@@ -38,6 +40,14 @@ const asResolverRow = (m: (typeof mockMemberships)[number]) => ({
   userId: "u1",
   role: m.role,
   status: "active",
+  roleId: `ar_${m.role}`,
+  accessRole: {
+    id: `ar_${m.role}`,
+    name: m.role,
+    capabilities: m.capabilities,
+    templateKey: m.role,
+    isBuiltIn: true,
+  },
   invitedById: null,
   createdAt: new Date(0),
   tenant: {
@@ -46,6 +56,7 @@ const asResolverRow = (m: (typeof mockMemberships)[number]) => ({
     name: m.tenantName,
     status: "active",
     deletedAt: null,
+    plan: m.plan,
   },
 });
 
@@ -67,8 +78,16 @@ import {
   requireSignedInIdentity,
   requireUser,
   requireCapability,
+  requireModule,
 } from "./guards";
 import { TENANT_COOKIE as ACTIVE_TENANT_COOKIE } from "@destaworks/domain/constants/tenancy";
+import {
+  MODULES,
+  PLAN_MODULES,
+  FALLBACK_PLAN,
+  ROLE_CAPABILITIES,
+  type Role,
+} from "@destaworks/domain/constants";
 
 installRequestContext({
   headers: async () => new Headers(),
@@ -87,14 +106,18 @@ function signInAs(role?: string): void {
   };
 }
 
-/** One membership per tenant, so a test names a tenant and the role it holds there. */
-function memberOf(...tenants: { tenantId: string; role: string }[]): void {
-  mockMemberships = tenants.map(({ tenantId, role }) => ({
+/** One membership per tenant, so a test names a tenant, the role it holds, and what it pays for. */
+function memberOf(
+  ...tenants: { tenantId: string; role: string; plan?: string; capabilities?: string[] }[]
+): void {
+  mockMemberships = tenants.map(({ tenantId, role, plan, capabilities }) => ({
     id: `m-${tenantId}`,
     tenantId,
     tenantSlug: tenantId,
     tenantName: tenantId.toUpperCase(),
     role,
+    plan: plan ?? "trial",
+    capabilities: capabilities ?? [...(ROLE_CAPABILITIES[role as Role] ?? [])],
   }));
 }
 
@@ -140,16 +163,37 @@ describe("auth guards — server-side authorization", () => {
     await expect(requireSignedInIdentity()).rejects.toMatchObject({ code: "UNAUTHORIZED" });
   });
 
-  it("coerces an unknown/forged membership role to Associate (role is never trusted verbatim)", async () => {
+  /**
+   * Least privilege moved, it did not go away.
+   *
+   * A role NAME is now whatever the workspace called its role, so coercing it to "Associate" would
+   * be wrong — a firm's "Superuser" is a legitimate name. What must never be trusted is the
+   * CAPABILITY list, and `toCapabilities` drops every code this build does not know. So a row full
+   * of invented permissions grants nothing, which is the same guarantee by the only route that
+   * still makes sense.
+   */
+  it("keeps an unfamiliar role NAME but grants nothing it does not recognise", async () => {
     signInAs();
-    memberOf({ tenantId: "t1", role: "Superuser" }); // not a member of the fixed Role enum
-    expect((await getCurrentUser())?.role).toBe("Associate");
+    memberOf({
+      tenantId: "t1",
+      role: "Superuser",
+      capabilities: ["rule-the-world", "viewReports"],
+    });
+
+    const context = await getCurrentUser();
+
+    expect(context?.role).toBe("Superuser");
+    expect(context?.capabilities).toEqual(["viewReports"]);
   });
 
-  it("defaults a membership with no usable role to Associate", async () => {
+  it("grants nothing at all when a role row carries no recognisable capability", async () => {
     signInAs();
-    memberOf({ tenantId: "t1", role: "" });
-    expect((await getCurrentUser())?.role).toBe("Associate");
+    memberOf({ tenantId: "t1", role: "", capabilities: ["nonsense"] });
+
+    const context = await getCurrentUser();
+
+    expect(context?.capabilities).toEqual([]);
+    await expect(requireCapability("viewReports")).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
   it("blocks a non-leadership role from a leadership capability", async () => {
@@ -172,7 +216,34 @@ describe("auth guards — server-side authorization", () => {
       membershipId: "m-t1",
       user: { id: "u1", email: "u@desta.works", name: "Test User", image: null },
       role: "Owner",
+      modules: MODULES,
+      capabilities: ROLE_CAPABILITIES.Owner,
     });
+  });
+
+  it("resolves the tenant's modules from its plan, independently of role", async () => {
+    signInAs();
+    memberOf({ tenantId: "t1", role: "Owner", plan: "starter" });
+    const context = await requireUser();
+    expect(context.role).toBe("Owner");
+    expect(context.modules).toEqual(PLAN_MODULES.starter);
+    expect(context.modules).not.toContain("reports");
+  });
+
+  it("falls back to the least entitled plan when the stored value is unrecognised", async () => {
+    signInAs();
+    memberOf({ tenantId: "t1", role: "Owner", plan: "enterprise-platinum" });
+    expect((await requireUser()).modules).toEqual(PLAN_MODULES[FALLBACK_PLAN]);
+  });
+
+  it("refuses a module the plan excludes, even for an Owner", async () => {
+    signInAs();
+    memberOf({ tenantId: "t1", role: "Owner", plan: "starter" });
+    await expect(requireModule("reports")).rejects.toMatchObject({
+      code: "PLAN_UPGRADE_REQUIRED",
+      status: 402,
+    });
+    await expect(requireModule("compliance")).resolves.toMatchObject({ role: "Owner" });
   });
 });
 

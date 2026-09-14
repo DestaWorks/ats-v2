@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { MODULES, ROLE_CAPABILITIES } from "@destaworks/domain/constants";
 import type { TenantContext } from "@destaworks/domain/tenant";
 import type { ClinicalResume } from "@destaworks/contracts/validation/resume";
 
@@ -16,6 +17,8 @@ const h = vi.hoisted(() => ({
     membershipId: "u1-m",
     user: { id: "u1", email: "u@desta.works", name: "Test User" },
     role: "Associate" as const,
+    capabilities: [] as const,
+    modules: ["core", "sourcing", "discovery", "reports", "ai", "portal", "compliance"] as const,
   },
   parseResume: vi.fn(),
   candidateRepo: {
@@ -139,6 +142,8 @@ function assertNoPiiLogged() {
 const ctx = {
   tenantId: "t1",
   membershipId: "m1",
+  modules: MODULES,
+  capabilities: ROLE_CAPABILITIES.Owner,
   role: "Owner" as const,
   user: { id: "u1", email: "u@desta.works", name: "U" },
 };

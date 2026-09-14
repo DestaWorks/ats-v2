@@ -4,7 +4,7 @@ import {
   isRolePriority,
   isRoleStatus,
 } from "@destaworks/domain/constants";
-import { getVerifiedUser } from "@destaworks/auth/guards";
+import { requirePageUser } from "@/lib/page-user";
 import type {
   GetRoleListResponse,
   GetRoleTriageResponse,
@@ -37,7 +37,7 @@ export default async function RolesPage({
   const search = q.text("search");
   const page = q.page();
 
-  await getVerifiedUser();
+  await requirePageUser();
   const [list, { roles: triage }, { clients }] = await Promise.all([
     apiGet<GetRoleListResponse>(`/roles${query({ clientId, status, priority, search, page })}`),
     apiGet<GetRoleTriageResponse>("/roles/triage"),

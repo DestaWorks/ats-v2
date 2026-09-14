@@ -17,6 +17,7 @@ import { ZodValidationPipe, type ContractOutput } from "../../common/pipes/zod-v
 import { flatQuery } from "../../common/query-params";
 import type { ServiceOf } from "../service-token";
 import { DISCOVER_SERVICE } from "./discover.tokens";
+import { RequireModule } from "../../common/decorators/require-module.decorator";
 
 /**
  * Discover (NPPES) over HTTP: the registry search and the coverage-gap widget the `/discover` page
@@ -29,6 +30,7 @@ import { DISCOVER_SERVICE } from "./discover.tokens";
  */
 @Controller("discover")
 @UseGuards(SessionAuthGuard)
+@RequireModule("discovery")
 export class DiscoverController {
   constructor(
     @Inject(DISCOVER_SERVICE)

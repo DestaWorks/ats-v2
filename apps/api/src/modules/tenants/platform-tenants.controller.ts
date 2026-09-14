@@ -8,7 +8,7 @@ import {
 } from "@destaworks/contracts/validation/tenant";
 import type { AuthUser } from "@destaworks/auth/guards";
 import { CurrentIdentity } from "../../common/decorators/current-identity.decorator";
-import { PlatformAuthGuard } from "../../common/guards/platform-auth.guard";
+import { IdentityAuthGuard } from "../../common/guards/identity-auth.guard";
 import { ZodValidationPipe, type ContractOutput } from "../../common/pipes/zod-validation.pipe";
 import type { ServiceOf } from "../service-token";
 import { PLATFORM_ADMIN_SERVICE } from "./tenants.tokens";
@@ -29,7 +29,7 @@ import { PLATFORM_ADMIN_SERVICE } from "./tenants.tokens";
  * audit row — so an authorized crossing and its record cannot come apart.
  */
 @Controller("platform/tenants")
-@UseGuards(PlatformAuthGuard)
+@UseGuards(IdentityAuthGuard)
 export class PlatformTenantsController {
   constructor(
     @Inject(PLATFORM_ADMIN_SERVICE)

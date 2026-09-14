@@ -71,7 +71,17 @@ export const pipelineReportsService = {
       .sort((a, b) => b.scorePct - a.scorePct)
       .slice(0, TOP_CANDIDATES_LIMIT);
 
-    return { total, placed, inReview, atClient, overdue, flagged, distribution, topCandidates };
+    return {
+      capped: cohort.capped,
+      total,
+      placed,
+      inReview,
+      atClient,
+      overdue,
+      flagged,
+      distribution,
+      topCandidates,
+    };
   },
 
   /**
@@ -105,6 +115,6 @@ export const pipelineReportsService = {
       };
     });
 
-    return { stages };
+    return { capped: cohort.capped, stages };
   },
 };

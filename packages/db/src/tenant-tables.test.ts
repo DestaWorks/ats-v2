@@ -7,6 +7,7 @@ import {
   TENANT_SCOPED_TABLES,
   TENANT_SCOPED_TABLE_BY_DELEGATE,
 } from "./tenant-tables";
+import { GLOBAL_MODELS } from "./tenant-models";
 
 /**
  * The hand-maintained list in `tenant-tables.ts` is only useful if it cannot drift from the schema
@@ -24,21 +25,16 @@ const SCHEMA = readFileSync(
 );
 
 /**
- * Models the seam exempts from tenant scoping — mirrors `GLOBAL_MODELS` in `tenant-scope.ts`.
+ * Models the seam exempts from tenant scoping.
  *
- * `Membership` is the one to read twice: it HAS a `tenantId` column and is still global, because a
- * query filtered by the active tenant could never answer "which tenants may this user switch to".
- * So membership of this set, not the presence of the column, is what decides.
+ * IMPORTED rather than restated. It used to be a second copy of the list with a comment saying it
+ * mirrored the first, which is precisely the drift this file exists to catch: a model added to one
+ * and forgotten in the other would make the test agree with itself and disagree with the seam.
+ *
+ * `Membership` and `AccessRole` are the two to read twice — both HAVE a `tenantId` column and are
+ * still global, because both are read to BUILD a tenant context, before one exists. Membership of
+ * this set, not the presence of the column, is what decides.
  */
-const GLOBAL_MODELS: ReadonlySet<string> = new Set([
-  "User",
-  "Session",
-  "Account",
-  "Verification",
-  "ScheduleRun",
-  "Tenant",
-  "Membership",
-]);
 
 function modelBlocks(): { model: string; table: string; hasTenantId: boolean }[] {
   return [...SCHEMA.matchAll(/^model\s+(\w+)\s*\{([\s\S]*?)^\}/gm)].map((match) => {

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { MODULES, ROLE_CAPABILITIES } from "@destaworks/domain/constants";
 
 /**
  * The property the fan-out batching depends on: a scoped query issued inside `withTenantTransaction`
@@ -64,6 +65,8 @@ const { withTenantTransaction } = await import("./tenant-transaction");
 const ctx = {
   tenantId: "t1",
   membershipId: "m1",
+  modules: MODULES,
+  capabilities: ROLE_CAPABILITIES.Owner,
   role: "Owner" as const,
   user: { id: "u1", email: "u@desta.works", name: "U" },
 };

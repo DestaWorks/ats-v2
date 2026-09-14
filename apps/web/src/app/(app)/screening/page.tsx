@@ -1,4 +1,4 @@
-import { getVerifiedUser } from "@destaworks/auth/guards";
+import { requirePageUser } from "@/lib/page-user";
 import type { ScreeningCandidateListEnvelope } from "@destaworks/contracts/validation/envelopes";
 import { apiGet } from "@/lib/api/server";
 import { ScreeningView } from "./screening-view";
@@ -10,7 +10,7 @@ import { ScreeningView } from "./screening-view";
  * named "Screener"), SSR-renders the initial picker list.
  */
 export default async function ScreeningPage() {
-  await getVerifiedUser();
+  await requirePageUser();
   const { candidates } = await apiGet<ScreeningCandidateListEnvelope>("/screening/candidates");
 
   return (

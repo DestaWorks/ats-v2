@@ -14,9 +14,10 @@ export function middleware(request: NextRequest) {
 }
 
 /** Denylist, not an allowlist — protects every route except the public `(auth)` pages, the
- *  client `/portal/**` (its own token cookie, not a staff session), `/api/**`, and static assets. */
+ *  client `/portal/**` (its own token cookie, not a staff session), `/api/**`, and static assets.
+ *  Segment-anchored (`(?:/|$)`): a bare prefix would also exempt `/portal-admin`. */
 export const config = {
   matcher: [
-    "/((?!api|_next/static|_next/image|favicon.ico|sign-in|forgot-password|reset-password|request-access|portal).*)",
+    "/((?!api(?:/|$)|_next/static(?:/|$)|_next/image(?:/|$)|favicon\\.ico$|sign-in(?:/|$)|forgot-password(?:/|$)|reset-password(?:/|$)|request-access(?:/|$)|portal(?:/|$)).*)",
   ],
 };

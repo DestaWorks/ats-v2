@@ -1,4 +1,4 @@
-import { scrubBreadcrumb, scrubEvent } from "@/lib/monitoring/sentry-scrub";
+import { scrubBreadcrumb, scrubEvent } from "@destaworks/config/monitoring/sentry-scrub";
 
 /**
  * Browser error tracking (Sentry) — activate-by-key; a blank `NEXT_PUBLIC_SENTRY_DSN` means this

@@ -5,12 +5,16 @@
   "type": "module",
   "license": "UNLICENSED",
   "exports": {
+    "./env": "./src/env.ts",
     "./logger": "./src/logger/index.ts",
     "./logger/*": "./src/logger/*.ts",
+    "./monitoring/*": "./src/monitoring/*.ts",
+    "./request-cache": "./src/request-cache.ts",
     "./request-context": "./src/request-context.ts"
   },
   "dependencies": {
-    "pino": "^10.3.1"
+    "pino": "^10.3.1",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@destaworks/tsconfig": "workspace:*",

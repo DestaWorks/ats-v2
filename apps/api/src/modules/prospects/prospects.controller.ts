@@ -38,6 +38,7 @@ import { defined } from "@destaworks/domain/utils/defined";
 import type { AuthContext } from "@destaworks/auth/guards";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { RequireCapability } from "../../common/decorators/require-capability.decorator";
+import { RequireModule } from "../../common/decorators/require-module.decorator";
 import { CapabilityGuard } from "../../common/guards/capability.guard";
 import { ZodValidationPipe, type ContractOutput } from "../../common/pipes/zod-validation.pipe";
 import { flatQuery } from "../../common/query-params";
@@ -57,6 +58,7 @@ import { PROSPECT_SERVICE } from "./prospects.tokens";
  */
 @Controller("prospects")
 @UseGuards(CapabilityGuard)
+@RequireModule("discovery")
 @RequireCapability("viewClientDiscovery")
 export class ProspectsController {
   constructor(

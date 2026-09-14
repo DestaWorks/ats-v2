@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
+import { MODULES, ROLE_CAPABILITIES } from "@destaworks/domain/constants";
 import { fixedClock } from "@destaworks/domain/clock";
 import { effectiveLicenseStatus } from "@destaworks/domain/rules/license";
 import type { TenantContext } from "@destaworks/domain/tenant";
@@ -33,6 +34,8 @@ const NOW = fixedClock("2026-07-16T00:00:00Z");
 const ctx: TenantContext = {
   tenantId: "t1",
   membershipId: "u1-m",
+  modules: MODULES,
+  capabilities: ROLE_CAPABILITIES.Associate,
   user: { id: "u1", email: "u@desta.works", name: "Test User" },
   role: "Associate",
 };

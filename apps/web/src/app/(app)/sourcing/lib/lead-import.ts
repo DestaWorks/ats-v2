@@ -6,7 +6,7 @@
  * the server contract (bad emails/URLs → null, status fuzzy-normalized) so a junk cell drops the
  * value, never the whole request. Dedup is SERVER-side.
  */
-import { read as readWorkbook, utils as xlsxUtils } from "xlsx";
+import { read as readWorkbook, utils as xlsxUtils } from "@e965/xlsx";
 import { LEAD_STATUSES, type LeadStatus } from "@destaworks/domain/constants";
 import type { ImportLeadRow } from "@destaworks/contracts/validation/lead";
 

@@ -138,7 +138,7 @@ export function toCandidateDTO(row: CandidateRow, viewer: DtoViewer): CandidateD
     deletedAt: row.deletedAt,
     deletedById: row.deletedById,
   };
-  if (hasCapability(viewer.role, "viewCredentials")) dto.licenseNumber = row.licenseNumber;
+  if (hasCapability(viewer, "viewCredentials")) dto.licenseNumber = row.licenseNumber;
   return dto;
 }
 

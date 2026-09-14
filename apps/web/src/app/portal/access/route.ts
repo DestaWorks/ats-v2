@@ -14,12 +14,22 @@ import { AppError } from "@destaworks/integrations/http/app-error";
  * Cookie `path` is `/` (not `/portal`) — the write route lives at `/api/portal/roles`, which
  * doesn't share the `/portal` prefix, so a narrower path would silently fail to attach there.
  */
+function rateLimitKey(req: Request): string {
+  const forwarded = req.headers.get("x-forwarded-for");
+  const firstHop = forwarded?.split(",")[0]?.trim();
+  const address =
+    firstHop !== undefined && firstHop !== ""
+      ? firstHop
+      : (req.headers.get("x-real-ip") ?? "anonymous");
+  return `portal-access:ip:${address}`;
+}
+
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const rawToken = url.searchParams.get("token");
 
   try {
-    await checkRateLimit("portal-access", { limit: 20, windowMs: 60_000 });
+    await checkRateLimit(rateLimitKey(req), { limit: 20, windowMs: 60_000 });
   } catch (err) {
     if (err instanceof AppError && err.code === "RATE_LIMITED") {
       return NextResponse.redirect(
