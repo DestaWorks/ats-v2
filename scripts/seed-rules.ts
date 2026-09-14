@@ -1,6 +1,7 @@
 import "dotenv/config";
-import { prisma } from "@/server/db/prisma";
-import { BASE_CLIENT_RULES } from "@/lib/constants";
+import { prisma } from "@destaworks/db/prisma";
+import { FOUNDING_TENANT_ID } from "@destaworks/db/tenant-tables";
+import { BASE_CLIENT_RULES } from "@destaworks/domain/constants";
 
 /**
  * Seed the `client_rules` table from `BASE_CLIENT_RULES` (DATA, not code — DECISIONS). Idempotent:
@@ -10,7 +11,9 @@ import { BASE_CLIENT_RULES } from "@/lib/constants";
  */
 async function main() {
   for (const r of BASE_CLIENT_RULES) {
-    const client = await prisma.client.findFirst({ where: { name: r.clientName } });
+    const client = await prisma.client.findFirst({
+      where: { tenantId: FOUNDING_TENANT_ID, name: r.clientName },
+    });
     if (!client) {
       console.warn(
         `⚠ Skipped rules for "${r.clientName}" — client not found (run db:seed:clients first)`,
@@ -28,7 +31,7 @@ async function main() {
     };
     await prisma.clientRules.upsert({
       where: { clientId: client.id },
-      create: { clientId: client.id, ...data },
+      create: { tenantId: FOUNDING_TENANT_ID, clientId: client.id, ...data },
       update: data,
     });
     console.log(`✓ Seeded rules: ${r.clientName}`);

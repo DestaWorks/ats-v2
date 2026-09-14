@@ -1,7 +1,9 @@
 # Migration Plan — Strangler-Fig Roadmap
 
-> **⚠️ SUPERSEDED — kept for history.** The live plan is **`docs/IMPLEMENTATION-PLAN.md`**
-> (tasks) + **`docs/ESTIMATE.md`** (schedule), governed by **`docs/DECISIONS.md`** (authoritative).
+> **⚠️ SUPERSEDED — kept for history.** The base document for current work is
+> **`docs/SAAS-RESTRUCTURE-PLAN.md`**; the Wave 0–6 rebuild that replaced this plan is recorded in
+> **`docs/IMPLEMENTATION-PLAN.md`** (tasks) + **`docs/ESTIMATE.md`** (schedule), governed by
+> **`docs/DECISIONS.md`**.
 > This document's **anti-corruption-layer / dual-read / "adapter reads the Sheet" approach is
 > retired**: per DECISIONS **D1**, migration is a **one-time ETL** (extract → transform → load,
 > with a read-only freeze at cutover), **not** a live Sheet adapter. Read this only for

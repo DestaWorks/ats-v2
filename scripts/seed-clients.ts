@@ -1,6 +1,7 @@
 import "dotenv/config";
-import { prisma } from "@/server/db/prisma";
-import { BASE_CLIENTS } from "@/lib/constants";
+import { prisma } from "@destaworks/db/prisma";
+import { FOUNDING_TENANT_ID } from "@destaworks/db/tenant-tables";
+import { BASE_CLIENTS } from "@destaworks/domain/constants";
 
 /**
  * Seed the `clients` table from `BASE_CLIENTS` (DATA-MODEL). Idempotent — upserts by the
@@ -10,9 +11,17 @@ import { BASE_CLIENTS } from "@/lib/constants";
 async function main() {
   for (const client of BASE_CLIENTS) {
     await prisma.client.upsert({
-      where: { legacyId: client.legacyId },
-      create: { legacyId: client.legacyId, name: client.name, capacity: client.capacity },
-      update: { name: client.name, capacity: client.capacity },
+      where: { tenantId_legacyId: { tenantId: FOUNDING_TENANT_ID, legacyId: client.legacyId } },
+      create: {
+        tenantId: FOUNDING_TENANT_ID,
+        legacyId: client.legacyId,
+        name: client.name,
+        ...(client.capacity !== undefined && { capacity: client.capacity }),
+      },
+      update: {
+        name: client.name,
+        ...(client.capacity !== undefined && { capacity: client.capacity }),
+      },
     });
     console.log(`✓ Seeded client: ${client.name}`);
   }

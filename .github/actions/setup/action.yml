@@ -1,0 +1,39 @@
+name: Setup workspace
+description: Node, pnpm, a warm Turborepo cache and a generated Prisma client — the shared prelude of every CI job.
+
+runs:
+  using: composite
+  steps:
+    # No `version:` here — pnpm/action-setup reads it from package.json `packageManager`
+    # (pnpm@11.1.2). Specifying both errors with ERR_PNPM_BAD_PM_VERSION.
+    - uses: pnpm/action-setup@v4
+
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 24
+        cache: pnpm
+
+    - name: Install dependencies
+      shell: bash
+      run: pnpm install --frozen-lockfile
+
+    # Turborepo has no remote cache here, so the task cache is carried between runs as an
+    # Actions cache. This is what makes "unaffected work is not redone" real: a task whose
+    # declared inputs are unchanged replays from cache instead of executing.
+    - name: Restore Turborepo cache
+      uses: actions/cache@v4
+      with:
+        path: .turbo
+        key: turbo-${{ runner.os }}-${{ github.sha }}
+        restore-keys: |
+          turbo-${{ runner.os }}-
+
+    # The generated Prisma client is gitignored, so CI must generate it before typecheck/test.
+    # `generate` only reads the schema — no DB connection — so a placeholder URL satisfies
+    # prisma.config.ts (env("DIRECT_URL")) without needing real credentials as CI secrets.
+    - name: Generate Prisma client
+      shell: bash
+      env:
+        DIRECT_URL: postgresql://user:pass@localhost:5432/placeholder
+        DATABASE_URL: postgresql://user:pass@localhost:5432/placeholder
+      run: pnpm db:generate

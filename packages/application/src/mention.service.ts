@@ -1,0 +1,71 @@
+import type { NoteType } from "@destaworks/domain/constants";
+import type {
+  MarkMentionReadInput,
+  MentionDTO,
+  MentionListDTO,
+} from "@destaworks/contracts/validation/mention";
+import type { TenantContext } from "@destaworks/domain/tenant";
+import { mentionRepository, type MentionRow } from "@destaworks/db/repositories/mention.repository";
+import { AppError } from "@destaworks/integrations/http/app-error";
+import { toIso } from "@destaworks/domain/utils/iso";
+
+/** Rows the panel lists (unread + a tail of recent read; the badge count is separate/true). */
+const MENTIONS_PAGE = 20;
+const EXCERPT_MAX = 140;
+
+/** Project a joined mention row to its wire DTO (excerpt truncated, dates ISO). */
+function toMentionDTO(row: MentionRow): MentionDTO {
+  const body = row.note.body;
+  return {
+    id: row.id,
+    candidateId: row.candidateId,
+    candidateName: row.note.candidate.name,
+    authorName: row.note.authorName,
+    noteType: row.note.noteType as NoteType,
+    excerpt: body.length > EXCERPT_MAX ? `${body.slice(0, EXCERPT_MAX - 1)}…` : body,
+    createdAt: toIso(row.createdAt),
+    readAt: row.readAt ? toIso(row.readAt) : null,
+  };
+}
+
+/**
+ * Mention read-side business logic (`ats_get_mentions` / `ats_mark_mention_read` parity). The
+ * recipient is ALWAYS the session user — a caller can only ever list or mark their own mentions.
+ * Being mentioned intentionally grants reading the tagged note's excerpt regardless of note-type
+ * visibility (legacy parity: the notification carried the full text).
+ */
+export const mentionService = {
+  /** The viewer's recent mentions (newest first) + the true unread badge count. */
+  async listMine(ctx: TenantContext): Promise<MentionListDTO> {
+    const [rows, unread] = await Promise.all([
+      mentionRepository.listForRecipient(ctx, ctx.user.id, MENTIONS_PAGE),
+      mentionRepository.countUnread(ctx, ctx.user.id),
+    ]);
+    return { mentions: rows.map(toMentionDTO), unread };
+  },
+
+  /**
+   * Mark one mention (`mentionId`) or all of the viewer's mentions (`all: true`) read. Marking
+   * someone else's mention id is a NOT_FOUND (the repo scopes the update to the recipient).
+   * Marking an already-read mention is a no-op success (idempotent). Returns the fresh unread
+   * count so the bell can re-render without a second round trip.
+   */
+  async markRead(input: MarkMentionReadInput, ctx: TenantContext): Promise<{ unread: number }> {
+    if (input.all) {
+      await mentionRepository.markAllRead(ctx, ctx.user.id);
+    } else {
+      const count = await mentionRepository.markRead(ctx, input.mentionId, ctx.user.id);
+      if (count === 0) {
+        const exists = await mentionRepository.existsForRecipient(
+          ctx,
+          input.mentionId,
+          ctx.user.id,
+        );
+        if (!exists) {
+          throw new AppError("NOT_FOUND", "Mention not found");
+        }
+      }
+    }
+    return { unread: await mentionRepository.countUnread(ctx, ctx.user.id) };
+  },
+};

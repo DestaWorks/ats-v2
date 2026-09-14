@@ -1,6 +1,6 @@
 import "dotenv/config";
-import { auth } from "@/server/auth/auth";
-import { prisma } from "@/server/db/prisma";
+import { auth } from "@destaworks/auth/auth";
+import { prisma } from "@destaworks/db/prisma";
 
 /**
  * TEMP dev helper — reset a login account's password (Better Auth's own hasher, so sign-in verifies).
@@ -48,7 +48,7 @@ async function main() {
 
   console.log(
     res.count > 0
-      ? `✓ Password reset for ${email} (role=${user.role})`
+      ? `✓ Password reset for ${email}`
       : `⚠ ${email} has no credential account — no password to reset`,
   );
 }

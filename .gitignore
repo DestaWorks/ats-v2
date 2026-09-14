@@ -1,11 +1,11 @@
-# Dependencies
-/node_modules
+# Dependencies (unanchored: every workspace package has its own node_modules)
+node_modules/
 .pnp
 .pnp.*
 
-# Next.js
-/.next/
-/out/
+# Next.js (the app lives in apps/web — unanchored so any app's build output is ignored)
+.next/
+out/
 next-env.d.ts
 
 # Production build
@@ -19,6 +19,8 @@ next-env.d.ts
 .env*.local
 .env.development
 .env.staging
+# Local restructure database — loopback only, but it still carries a password.
+.env.restructure
 .env.production
 
 # Editor / OS
@@ -36,7 +38,7 @@ yarn-error.log*
 .pnpm-debug.log*
 
 # Prisma generated client
-/src/generated/
+/packages/db/src/generated/
 
 # Legacy app (Apps Script backend + monolith client) — LOCAL-ONLY parity reference.
 # Never committed: keep it on the dev machine, not in the shared repo.
@@ -46,3 +48,12 @@ yarn-error.log*
 
 # Internal-only defense-book study reference (chapters + generator + output, all private).
 /internal-docs/
+
+# Turborepo
+.turbo
+
+# API build output (apps/api/build.mjs) — an immutable artefact, rebuilt per deploy.
+apps/api/dist/
+
+# Playwright's saved sign-in session (auth.setup.ts) — a live credential, not source.
+/e2e/.auth/

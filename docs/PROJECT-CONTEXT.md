@@ -39,9 +39,12 @@ dated June 26–27 2026). This is the "why and under what rules" behind the tech
 | EMR Platform | Clinical records, scheduling, ambient AI notes | Roadmap (longest horizon) |
 | Client Web Builds | Practice websites (e.g. Waymakers) | Delivery work |
 
-> Core stack going forward (company-wide): **Next.js, TypeScript, Node, PostgreSQL
-> (Supabase), serverless endpoints for AI features on the Claude API.** This is the same
-> stack we locked for the ATS rebuild (`docs/STACK-ARCHITECTURE.md`).
+> Core stack going forward (company-wide, **as the Owner stated it**): **Next.js, TypeScript,
+> Node, PostgreSQL (Supabase), serverless endpoints for AI features on the Claude API.** This is
+> the same stack we locked for the ATS rebuild (`docs/STACK-ARCHITECTURE.md`), with two
+> deliberate divergences: the AI layer is **provider-agnostic** (Anthropic · OpenAI · Google via
+> the Vercel AI SDK, chosen by `AI_MODEL`) rather than tied to one vendor, and the backend is a
+> long-lived, containerised **NestJS process** rather than serverless endpoints.
 
 ## The mandate (today → where we take it)
 
@@ -51,7 +54,7 @@ dated June 26–27 2026). This is the "why and under what rules" behind the tech
 | App architecture | Apps Script + Sheets (ATS/LMS) | Real backends + DB (PostgreSQL/Supabase) that scale |
 | Deploys | Manual, ad hoc | Reliable, repeatable, tested before live |
 | Data & secrets | Sheets data; keys handled by hand | Real data layer; secure secrets — **no keys in code** |
-| AI features | Not built | Serverless endpoints on the **Claude API** |
+| AI features | Not built | Server-side endpoints, **provider-agnostic** (Anthropic / OpenAI / Google) |
 
 ## ATS product priorities (the work ahead)
 
@@ -60,8 +63,8 @@ From the Engineering Projects Overview. These are the prioritized feature track 
 
 1. **Role-based access** — each team member sees only what their role allows. *(legacy: roles
    exist but are client-trusted — must become server-enforced RBAC.)*
-2. **Bulk importer** — migrate thousands of historical records and **auto-match résumés to
-   candidate profiles**. *(legacy: a bulk-import/migration view exists; add résumé matching.)*
+2. **Bulk importer** — migrate thousands of historical records and **auto-match resumes to
+   candidate profiles**. *(legacy: a bulk-import/migration view exists; add resume matching.)*
 3. **License verification** against state-board data. *(legacy: per-state board lookup links +
    NPPES exist.)* v1 = **assisted verification queue**; full automation is a fast-follow (`DECISIONS.md` D4).
 4. **Smarter sourcing** — "find providers like this" matching + supply-gap analysis. *(legacy:
@@ -81,7 +84,9 @@ and process.
 - **Third-party licenses (NDA §5b):** use **permissive licenses only** (MIT, BSD, Apache 2.0).
   **No copyleft/reciprocal licenses (GPL, LGPL, AGPL)** without the Owner's prior written
   consent. **Maintain a record of third-party components and their licenses** (an SBOM) and
-  provide it on request. → enforced as a convention (`docs/CONVENTIONS.md`).
+  provide it on request. → stated as a convention (`docs/CONVENTIONS.md`), **but not yet
+  enforced**: no SBOM file exists in the repo and CI has no license check. This is an open NDA
+  §5b obligation, not a satisfied one.
 - **AI dev tools (NDA §5c):** allowed, provided they don't transmit Confidential Information or
   source to third parties in a way that compromises confidentiality/ownership; all output is
   Work Product owned by the Owner.
@@ -93,9 +98,10 @@ and process.
 
 ## How this maps to our plan
 
-- The migration plan (`docs/MIGRATION-PLAN.md`) **is** the mandate's "today → where we take
-  it," sequenced. Phase 0 (version-control discipline + close security holes) directly
-  satisfies the "Source & workflow" and "Data & secrets" mandates.
+- The migration plan **is** the mandate's "today → where we take it," sequenced. Its Phase 0
+  (version-control discipline + close security holes) directly satisfies the "Source & workflow"
+  and "Data & secrets" mandates. *(The original `docs/MIGRATION-PLAN.md` is superseded and now
+  lives at `docs/archive/MIGRATION-PLAN.md`; the live plan is `docs/SAAS-RESTRUCTURE-PLAN.md`.)*
 - The product priorities above are the **feature track** that runs alongside the
   re-architecture, not instead of it.
 - Compliance (HIPAA + Ethiopian proclamation) and "no keys in code" are now **acceptance
@@ -109,7 +115,8 @@ and process.
 
 ## To raise with Biruh later (holding for now)
 
-- Provisioning of the **Claude API key, two Supabase projects (staging + prod), Vercel,
-  Google OAuth, domain/DNS access (`zyx.com` + `staging.zyx.com`), and Apps Script access**
+- Provisioning of an **AI provider key (any of Anthropic / OpenAI / Google), two Postgres
+  databases (staging + prod), a container host, Google OAuth, domain/DNS access
+  (`zyx.com` + `staging.zyx.com`), and Apps Script access**
   (Owner holds keys; engineer builds against env secrets). See `DECISIONS.md` D6 for the
   environment/domain setup.

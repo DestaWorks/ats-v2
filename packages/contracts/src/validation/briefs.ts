@@ -1,0 +1,163 @@
+/**
+ * Briefs contract (Wave 5.1, legacy `daily_brief_*`/`weekly_brief_*`) — isomorphic types + zod
+ * shared by the brief routes and the Daily Brief / Weekly Brief clients. Pure (NO server
+ * imports). AI generation happens server-side via the provider-agnostic layer (`server/ai`);
+ * these schemas are BOTH the AI's structured-output contract (`generateStructured`) and the
+ * request/response contract for the generate/save routes — one shape, not two.
+ */
+import { z } from "zod";
+import { DATE_KEY_RE } from "@destaworks/domain/daily";
+
+const dateKey = z.string().regex(DATE_KEY_RE, "Expected YYYY-MM-DD");
+
+// --- AI output shapes (also the editable "draft" the client holds between generate → save) ----
+
+export const dailyBriefAiSchema = z.object({
+  headline: z.string().describe("One sharp sentence — the single most important thing today"),
+  exceptions: z
+    .array(z.string())
+    .describe("3-5 exception-first callouts: what's off-track and needs attention NOW"),
+  yesterdayCheck: z
+    .array(z.object({ associate: z.string(), note: z.string() }))
+    .describe("Accountability check against yesterday's commitments — empty if none existed"),
+  clientCards: z
+    .array(z.object({ clientName: z.string(), summary: z.string() }))
+    .describe("Top clients by activity, most active first"),
+  perAssociate: z
+    .array(z.object({ name: z.string(), todos: z.array(z.string()) }))
+    .describe("Every active recruiter, with specific (not vague) next actions"),
+  teamPulse: z.string().describe("One sentence on overall team health/momentum"),
+});
+export type DailyBriefAiOutput = z.infer<typeof dailyBriefAiSchema>;
+
+export const weeklyBriefAiSchema = z.object({
+  headline: z.string(),
+  kpiNarrative: z.string().describe("Plain-language read of the KPI deltas — not a number dump"),
+  clientCards: z.array(z.object({ clientName: z.string(), summary: z.string() })),
+  perAssociate: z.array(z.object({ name: z.string(), summary: z.string() })),
+  lastWeekCheck: z
+    .array(z.object({ item: z.string(), status: z.string() }))
+    .describe("Accountability against last week's saved priorities — empty if none existed"),
+  decisions: z.array(z.string()).describe("Decisions that came out of this week, if any"),
+  highlights: z.string(),
+  blockers: z.string(),
+});
+export type WeeklyBriefAiOutput = z.infer<typeof weeklyBriefAiSchema>;
+
+export const weeklyPatternsAiSchema = z.object({
+  patterns: z
+    .array(z.object({ insight: z.string(), evidence: z.string(), action: z.string() }))
+    .describe("3-5 most actionable trends/anomalies across the last 4 weeks"),
+});
+export type WeeklyPatternsAiOutput = z.infer<typeof weeklyPatternsAiSchema>;
+
+export const targetsSuggestAiSchema = z.object({
+  sourcing: z.number().int().min(0).max(999),
+  outreach: z.number().int().min(0).max(999),
+  atsCleanup: z.number().int().min(0).max(999),
+  inbound: z.number().int().min(0).max(999),
+  screens: z.number().int().min(0).max(999),
+  rationale: z.string().describe("One sentence explaining the suggested numbers"),
+});
+export type TargetsSuggestAiOutput = z.infer<typeof targetsSuggestAiSchema>;
+
+// --- persisted-row DTOs (what GET/save return — attribution resolved to a name) ---------------
+
+/**
+ * The unreviewed AI output a generate JOB left behind (Phase 5), carried alongside the saved
+ * brief rather than merged into it: until a human saves it, a draft is a proposal, and the saved
+ * fields must keep showing what that human last approved.
+ */
+export interface BriefDraftEnvelope<TOutput> {
+  draft: TOutput | null;
+  draftAt: string | null; // ISO
+}
+
+export interface DailyBriefDTO extends DailyBriefAiOutput, BriefDraftEnvelope<DailyBriefAiOutput> {
+  date: string;
+  priorityClientId: string | null;
+  shiftA: string | null;
+  shiftB: string | null;
+  watchItems: string | null;
+  savedByName: string | null;
+  savedAt: string | null; // ISO
+}
+
+export interface WeeklyBriefDTO
+  extends WeeklyBriefAiOutput, BriefDraftEnvelope<WeeklyBriefAiOutput> {
+  weekStart: string;
+  savedByName: string | null;
+  savedAt: string | null; // ISO
+}
+
+// --- request schemas ----------------------------------------------------------------------
+
+/** `POST /api/briefs/daily/generate` — Phase 5: QUEUES the generation, returns the job id. */
+/** NOT `.strict()` — the request body also carries `manualInputsSchema`'s fields (route parses
+ *  both against the same JSON body); unknown keys are stripped here, not rejected. */
+export const generateDailyBriefSchema = z.object({ date: dateKey, tz: z.coerce.number().int() });
+export type GenerateDailyBriefInput = z.infer<typeof generateDailyBriefSchema>;
+
+/**
+ * The Daily Brief form's manual inputs. Declared once because BOTH the generate request and the
+ * save request carry them — generate to seed the AI's context, save to persist what the author
+ * typed — and two copies of the same four fields drift the moment one of them gains a fifth.
+ */
+const manualInputsShape = {
+  priorityClientId: z.string().min(1).nullish(),
+  shiftA: z.string().trim().max(2000).nullish(),
+  shiftB: z.string().trim().max(2000).nullish(),
+  watchItems: z.string().trim().max(2000).nullish(),
+};
+
+/**
+ * `POST /api/briefs/daily/generate` — the full request body: the day window plus the manual
+ * inputs. NOT `.strict()`, matching `generateDailyBriefSchema`: unknown keys are stripped.
+ */
+export const generateDailyBriefRequestSchema = generateDailyBriefSchema.extend(manualInputsShape);
+export type GenerateDailyBriefRequest = z.infer<typeof generateDailyBriefRequestSchema>;
+
+/** `POST /api/briefs/daily/save` — persist the (possibly edited) draft + manual inputs. */
+export const saveDailyBriefSchema = dailyBriefAiSchema
+  .extend({ date: dateKey, ...manualInputsShape })
+  .strict();
+export type SaveDailyBriefInput = z.infer<typeof saveDailyBriefSchema>;
+
+/** `POST /api/briefs/weekly/generate`. */
+export const generateWeeklyBriefSchema = z
+  .object({ weekStart: dateKey, tz: z.coerce.number().int() })
+  .strict();
+export type GenerateWeeklyBriefInput = z.infer<typeof generateWeeklyBriefSchema>;
+
+/** `POST /api/briefs/weekly/save`. */
+export const saveWeeklyBriefSchema = weeklyBriefAiSchema.extend({ weekStart: dateKey }).strict();
+export type SaveWeeklyBriefInput = z.infer<typeof saveWeeklyBriefSchema>;
+
+/** `POST /api/briefs/weekly/patterns` — generate-only, never persisted (legacy parity). */
+export const weeklyPatternsSchema = z
+  .object({ weekStart: dateKey, tz: z.coerce.number().int() })
+  .strict();
+export type WeeklyPatternsInput = z.infer<typeof weeklyPatternsSchema>;
+
+/** `POST /api/targets/suggest` — feeds the existing 3.1 manager target-setting modal. */
+export const suggestTargetsSchema = z.object({ userId: z.string().min(1), date: dateKey }).strict();
+export type SuggestTargetsInput = z.infer<typeof suggestTargetsSchema>;
+
+// --- job payloads -------------------------------------------------------------------------
+
+/**
+ * What a brief-generation JOB carries, as distinct from what the endpoint accepts.
+ *
+ * The two must stay separate. A job resumes with no request and no session, so the tenant has to
+ * travel in the payload — but putting `tenantId` on the REQUEST schema would let a client name the
+ * tenant its brief is generated from, which is a forgeable claim rather than a scope. The enqueue
+ * site adds it from the context the guard resolved; the handler rebuilds a scope from it with
+ * `systemContextFor`. Same split, and the same reason, as `reportExportPayloadSchema`.
+ */
+const tenantIdShape = { tenantId: z.string().min(1) };
+
+export const generateDailyBriefJobSchema = generateDailyBriefRequestSchema.extend(tenantIdShape);
+export type GenerateDailyBriefJobPayload = z.infer<typeof generateDailyBriefJobSchema>;
+
+export const generateWeeklyBriefJobSchema = generateWeeklyBriefSchema.extend(tenantIdShape);
+export type GenerateWeeklyBriefJobPayload = z.infer<typeof generateWeeklyBriefJobSchema>;

@@ -1,0 +1,48 @@
+@import "tailwindcss";
+
+/*
+  The platform console's theme. It carries the brand palette and the two surface/elevation tokens
+  that `@destaworks/ui` components reference (`bg-navy`, `text-charcoal`, `shadow-card`, …) and
+  nothing else — the pipeline status colors in apps/web are a TENANT's vocabulary, and the console
+  never renders a tenant's pipeline.
+*/
+@theme {
+  --color-charcoal: #2d2d2d;
+  --color-brand: #8b7355;
+  --color-ivory: #f8f6f1;
+  --color-navy: #1e4a8a;
+  --color-green: #43a047;
+  --color-red: #d32f2f;
+  --color-orange: #b45309;
+  --color-gray: #6b6b6b;
+  --color-purple: #7b1fa2;
+  --color-teal: #00897b;
+  --color-label: #ebf0f8;
+
+  --color-surface: #f0f2f5;
+
+  --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.03);
+  --shadow-card-hover: 0 2px 6px 0 rgb(0 0 0 / 0.05);
+  --shadow-modal: 0 20px 60px 0 rgb(0 0 0 / 0.15);
+}
+
+html {
+  /* Matches apps/web: every shared `@destaworks/ui` component is sized against a 14px root. */
+  font-size: 87.5%;
+}
+
+html,
+body {
+  color-scheme: light;
+  background: var(--color-surface);
+  color: var(--color-charcoal);
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    Helvetica,
+    Arial,
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+}

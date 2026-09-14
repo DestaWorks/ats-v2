@@ -11,6 +11,16 @@ in `docs/IMPLEMENTATION-PLAN.md` + `docs/ESTIMATE.md`.
 > is fully specified in
 > **`docs/STACK-ARCHITECTURE.md`** — read that for folder structure, layer rules, auth setup,
 > and conventions. The stack notes in §2 below are kept for rationale/history.
+>
+> ### Written before the restructure — read for rationale, not for shape
+>
+> This document designs a **single Next.js application**: one process, App Router route handlers as
+> the API, one organisation. All three have since changed, and
+> [`SAAS-RESTRUCTURE-PLAN.md`](./SAAS-RESTRUCTURE-PLAN.md) is the base document that wins on
+> conflict. What is different now: the repo is a pnpm/Turborepo monorepo of `apps/*` + nine
+> `@destaworks/*` packages; the API is a **separate NestJS process** (`apps/api`), containerised, and
+> the App Router handlers were **deleted** in Phase 4.3; and the system is **multi-tenant**. The
+> goals, the threat model, and the migration reasoning below are still the reasoning we hold.
 
 ---
 
@@ -26,7 +36,11 @@ in `docs/IMPLEMENTATION-PLAN.md` + `docs/ESTIMATE.md`.
 ### Non-goals (for v1 of the migration)
 - Redesigning the product/UX (we preserve behavior; redesign is a later, separate effort).
 - New features unrelated to the migration.
-- Multi-tenant SaaS generalization (single-org for now).
+- ~~Multi-tenant SaaS generalization (single-org for now).~~ **No longer a non-goal.** This was
+  true for the v1 migration and is now superseded: `ARCHITECTURE-PROPOSAL.md` took the decision to
+  go multi-tenant, and `SAAS-RESTRUCTURE-PLAN.md` Phase 6 built it — `Tenant` + `Membership`
+  models, a tenant-scoping seam no repository call can bypass, Postgres RLS with `ENABLE`/`FORCE`
+  per tenant-scoped table, and a CI job that seeds two tenants and proves A cannot read B.
 
 ---
 
@@ -53,11 +67,20 @@ in-browser transpilation, adding types, tests, and code-splitting; single full-s
 **Alternatives considered:** Stay on babel-standalone (rejected — production-forbidden, no
 types/tests). Separate SPA build (rejected — needless churn; Next.js full-stack is the lock).
 
-### 2.3 Backend — Next.js Route Handlers (full-stack)
-**Decision:** **Next.js Route Handlers** as the API layer → `http → services → repositories →
-Prisma` (layered, per STACK-ARCHITECTURE). Single full-stack app; no separate API service.
-**Why:** Same language across the stack, strong typing end-to-end, large ecosystem,
-straightforward Claude API and Postgres integration, and best velocity for a solo build.
+### 2.3 Backend — a separate NestJS API (`apps/api`)
+**Decision (revised — SAAS-RESTRUCTURE-PLAN Phase 4).** Originally: Next.js Route Handlers as the
+API layer, single full-stack app, no separate API service. That shipped and then was replaced.
+The API is now **NestJS in its own process** → `controller → application → repository → Prisma`, and
+the 140 Route Handlers were deleted in 4.3.
+**Why the change:** multi-tenancy. With `apps/web` able to read in-process *and* over HTTP there
+were two paths into the same data, so tenant scoping and capability checks had to be proven correct
+in both — and a missed tenant filter is a reportable breach, not a bug. One surface is one place to
+prove isolation, and the client portal (plus any future mobile client) was always going to use the
+HTTP path anyway. Slow work also needed a long-lived process for the job runner, which serverless
+functions cannot host.
+**What it cost:** one network hop per server render, paid down by turning composite reads into
+composite endpoints; and the two processes no longer typecheck together, which is why every wire
+shape lives in `@destaworks/contracts` and is imported by both sides.
 
 ### 2.4 Database — PostgreSQL + Prisma
 **Decision:** PostgreSQL with Prisma ORM (migrations + type-safe queries).
@@ -91,7 +114,7 @@ Separate config per environment (local/staging/prod).
 
 ### 2.9 Environments & domains (DECISIONS D6)
 Three isolated environments: **production `zyx.com`** (`main` branch, Supabase `desta-ats-prod`),
-**staging `staging.zyx.com`** (`staging` branch, Supabase `desta-ats-staging`), plus per-PR Vercel
+**staging `staging.zyx.com`** (`staging` branch, Supabase `desta-ats-staging`), plus per-PR
 previews and local. Staging and production use **two separate Supabase projects** — staging never
 touches production PII. Secrets, `BETTER_AUTH_URL`, and Google OAuth redirect URIs are
 per-environment/per-domain. **Migrations and the Sheet→Postgres data migration are rehearsed on
@@ -172,10 +195,14 @@ enable for all → remove the legacy view's code from `index.html`. **Pipeline (
 ## 8. Open questions
 
 **Resolved by the client onboarding docs (see `docs/PROJECT-CONTEXT.md`):**
-- ✅ **AI provider/model:** Claude API (Anthropic), server-side key held by the Owner.
+- ✅ **AI provider/model:** provider-agnostic via the Vercel AI SDK — Anthropic, OpenAI and Google
+  adapters all installed, chosen by `AI_MODEL`; server-side key held by the Owner. *(Originally
+  recorded as "Claude API (Anthropic)"; the vendor lock was dropped deliberately — no LLM feature
+  may hard-wire one provider.)*
 - ✅ **Compliance regime:** US HIPAA (where applicable) + Ethiopian Data Protection
   Proclamation 1321/2024.
-- ✅ **Hosting / managed Postgres:** Vercel + Supabase (Postgres).
+- ✅ **Hosting / managed Postgres:** containers (one `Dockerfile`, five targets) + managed
+  Postgres. The container host is an open decision; nothing in the repo names one.
 - ✅ **Secrets ownership:** the Owner holds all keys; we build against env vars.
 - ✅ **Auth layer:** **Better Auth on Supabase Postgres** (decided — Supabase as managed
   Postgres only; Better Auth for auth/RBAC). To be shared with the Owner, not blocked on him.

@@ -1,5 +1,15 @@
 # Module Breakdown — Legacy ATS (`index.html`)
 
+> ## Legacy reference — the rebuild it plans for is done
+>
+> This maps the **old** single-file app, not the running system. Every module below has been
+> rebuilt; the "sub-tasks to rebuild" and "gotchas that will bite" are written in a future tense
+> that has passed. Use it to answer parity questions — "what did the old app do here?" — and
+> nothing else. What runs today is `apps/web` + `apps/api`; see the root `README.md`.
+>
+> **The file it describes is not in this repo.** `legacy/index.html` is gitignored and local-only,
+> so a fresh clone has neither it nor the line numbers cited throughout.
+
 A deep, line-level map of the entire 9,531-line legacy app, produced by reading every section.
 For each module: sub-modules, sub-tasks to rebuild, key functions/state, backend events,
 integrations, and a **complexity rating (Logic 1–5 / Implementation 1–5)** with the hidden
@@ -27,8 +37,9 @@ gotchas that will bite during the rebuild.
   **reconstructed by scanning `db.activity` for magic Action strings on every render** —
   mutating module-level globals (`USER_ROLES`, `CUSTOM_ROLES`, `CLIENTS`) as a render side
   effect. There are no real tables for these.
-- **AI = Gemini inside Apps Script** today (the client only assembles context + renders). Our
-  rebuild moves this to the Claude API server-side.
+- **AI = Gemini inside Apps Script** in the legacy app (the client only assembles context +
+  renders). The rebuild moved this server-side and **provider-agnostic** — Anthropic, OpenAI and
+  Google all work, selected by `AI_MODEL`.
 - **No memoization anywhere** — every panel re-derives from `candidates`/`db.activity` on each
   render (O(n·activity)); the Weekly/Brief/CRM analytics re-parse `OutreachAttempts` JSON for
   every lead many times per render. This is the #1 perf refactor.

@@ -1,6 +1,45 @@
-# pnpm settings file (single-package repo). In pnpm 10+, install-time settings
+# pnpm workspace + settings file. In pnpm 10+, install-time settings
 # such as build-script approval live here rather than in package.json / .npmrc.
 #
+# Phase 1 of docs/SAAS-RESTRUCTURE-PLAN.md: the workspace exists and the tooling is shared.
+# `apps/*` and `packages/*` are declared ahead of Phase 2 (package extraction) so the globs
+# do not have to change when the first package lands; today only `tooling/*` is populated.
+packages:
+  - "apps/*"
+  - "packages/*"
+  - "tooling/*"
+
+# One version of the cross-cutting dependencies for the whole workspace. Every package
+# references these as `catalog:` so a version bump happens here, once, and cannot drift
+# between packages (see scripts/check-dependency-drift.mjs).
+catalog:
+  # ONE VERSION PER DEPENDENCY IS NOT ENOUGH — the LOCKFILE has to hold one RESOLUTION too.
+  #
+  # `@types/react`, `@types/node`, `react` and `react-dom` are peers of most of this graph, so a
+  # lockfile carrying two resolutions of any of them gives pnpm a separate peer-hash of everything
+  # downstream. That is not academic: it produced 12 copies of `next`, 10 of `better-auth` and 4
+  # of `@prisma/client` at 75MB each, and a web build that mixes two copies of Next fails at
+  # prerender with `useContext` of null or `<Html> outside pages/_document`.
+  #
+  # `deps:check` cannot see it: it compares DECLARED specs, which were already correct. Run
+  # `pnpm dedupe` when the lockfile drifts — it collapses to the fewest resolutions the ranges
+  # allow, which is the fix. Ranges stay ranges, so a patch is still a deliberate bump away.
+  esbuild: ^0.28.1
+  next: ^15.5.23
+  "@types/node": ^22.10.0
+  "@types/react": ^19.0.0
+  "@types/react-dom": ^19.0.0
+  # MIT (as are its three dependencies: pg, cron-parser, serialize-error), so it clears the
+  # permissive-licence-only constraint in docs/PROJECT-CONTEXT.md.
+  pg-boss: ^12.28.0
+  react: ^19.0.0
+  react-dom: ^19.0.0
+  # MIT. Shared by `apps/web` and `packages/ui` since the console's charts moved into the shared
+  # component package, so it belongs here rather than being declared twice.
+  recharts: ^3.10.1
+  typescript: ^5.7.2
+  zod: ^4.4.3
+
 # Native deps whose install/build scripts we explicitly trust and run:
 #   esbuild        — required by Vitest (bundling for tests)
 #   unrs-resolver  — required by eslint-plugin-import's resolver

@@ -4,10 +4,19 @@
 **Owner:** Project lead (you).
 **Last updated:** 2026-06-29.
 
-> This PRD documents what the system *currently does*, derived from `index.html`. It is the
-> baseline we will validate against and build the target system from. Items marked
-> _(assumption)_ are inferred from client-side code and need confirmation against the
-> Google Apps Script backend.
+> This PRD documents what the **legacy** system did, derived from `index.html`. It was the
+> baseline the target system was validated against and built from. Items marked
+> _(assumption)_ are inferred from client-side code.
+
+> ## Requirements, not current state
+>
+> Written 2026-06-29 against the legacy monolith, which is now gitignored and local-only. Read it
+> for **what the product must do and for whom** — that is still the requirement. Do **not** read
+> it as a description of the running system: the §7 roadmap has largely shipped (role-based
+> access is server-enforced, bulk import and NPPES discovery are built, license verification
+> ships as the assisted queue of DECISIONS D4), and the integrations section still names Google
+> Sign-In and Apps Script + Sheets where the app now uses Better Auth and Postgres. The
+> "Out of scope / open questions" list is answered in `docs/SECURITY-AUDIT-LEGACY.md`.
 
 ## 1. Purpose & vision
 
@@ -32,15 +41,21 @@ The product's differentiators over a generic ATS:
 | **Manager** | Leadership | Leadership views |
 | **Screener** | Screens/qualifies candidates | Core recruiting views |
 | **Associate** | General recruiter | Core recruiting views |
-| **Admin** _(account flag)_ | System administration | Admin Panel, Client Portal config |
+| **Admin** | System administration | Admin Panel, Client Portal config |
 
-- **Leadership** (Owner/Director/Manager/admin) unlocks: Reports, Bulk Import, Credentials, CRM.
-- **Admin** additionally unlocks: Client Portal, Admin Panel.
+- **Leadership** (Owner/Director/Manager/Admin) unlocks: Reports, Bulk Import, Credentials, CRM,
+  plus `viewAnalytics` and `viewClientDiscovery`.
+- **Admin** additionally unlocks: Client Portal, Admin Panel, and the account-management
+  capabilities — `manageUsers`, `manageRoles`, `manageAccessRequests`, `viewAudit`,
+  `viewAllNoteTypes`, `purgeCandidate`, `deleteOpenRole`, `manageAiSettings`.
 - **Clients** (external) get a **read-only Client Portal** via `?portal=true` — they see
   candidates submitted to them and can post open roles / request access.
 
-> Today roles are hardcoded by name for some users (`BASE_ROLES`) and the role is trusted
-> from the browser. The target system must make roles data-driven and server-enforced.
+> In the legacy app roles were hardcoded by name for some users (`BASE_ROLES`) and trusted
+> from the browser. **This is done:** roles are data-driven and server-enforced, and `admin` is a
+> **role value, not an account flag**. The authoritative capability map is
+> `packages/domain/src/constants/roles.ts`; since Phase 6 the role that authorizes is the one on
+> the user's `Membership` in the active workspace.
 
 ## 3. Core capabilities (by view)
 
@@ -125,9 +140,10 @@ Child/Adolescent, Hybrid/Outpatient, **HIGH** priority.
 - **50-state medical/nursing license board lookups** — verification links (CT, NJ, NY, PA,
   FL, MA, CA, OH, TX, VA, WA, CO, AZ, MD, NC, etc.).
 - **Email providers** — Gmail / Outlook / Yahoo compose links.
-- **AI/LLM — Claude API (Anthropic)**, via server-side serverless endpoints (key held by the
-  Owner) — resume extraction, JD parsing, daily/weekly briefs, inbound triage, CRM workspace,
-  and (roadmap) résumé→profile matching and "find providers like this". _(Legacy currently
+- **AI/LLM — provider-agnostic via the Vercel AI SDK** (Anthropic · OpenAI · Google, selected by
+  the `AI_MODEL` env var), server-side only, key held by the
+  Owner — resume extraction, JD parsing, daily/weekly briefs, inbound triage, CRM workspace,
+  and (roadmap) resume→profile matching and "find providers like this". _(Legacy currently
   invokes the LLM inside Apps Script — confirm.)_
 - **pdf.js** (resume text), **xlsx/jszip** (import/export).
 
@@ -143,13 +159,15 @@ Child/Adolescent, Hybrid/Outpatient, **HIGH** priority.
 
 ## 7. Roadmap — prioritized feature work
 
-From the client's Engineering Projects Overview. These run **alongside** the re-architecture
-(`docs/MIGRATION-PLAN.md`); several already exist in rough form in the legacy app and must be
-made robust and real:
+From the client's Engineering Projects Overview. These ran **alongside** the re-architecture
+(then `docs/MIGRATION-PLAN.md`, now superseded — see `docs/SAAS-RESTRUCTURE-PLAN.md`); several
+already existed in rough form in the legacy app and had to be made robust and real. **Most have
+since shipped** — check `docs/IMPLEMENTATION-PLAN.md` for per-item status before treating any of
+them as outstanding:
 
 1. **Role-based access** — each member sees only what their role allows (→ server-enforced
    RBAC; legacy roles are client-trusted).
-2. **Bulk importer** — migrate thousands of historical records with **résumé→candidate-profile
+2. **Bulk importer** — migrate thousands of historical records with **resume→candidate-profile
    auto-matching** (legacy has a bulk-import view; add the matching).
 3. **License verification** against state-board data (legacy has board links + NPPES). *v1 ships
    an **assisted verification queue**; fully automated per-state checks are a fast-follow — see

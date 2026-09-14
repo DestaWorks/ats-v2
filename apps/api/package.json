@@ -1,0 +1,34 @@
+{
+  "name": "@destaworks/api",
+  "version": "0.0.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "type": "module",
+  "dependencies": {
+    "@destaworks/application": "workspace:*",
+    "@destaworks/auth": "workspace:*",
+    "@destaworks/config": "workspace:*",
+    "@destaworks/contracts": "workspace:*",
+    "@destaworks/domain": "workspace:*",
+    "@destaworks/integrations": "workspace:*",
+    "@destaworks/jobs": "workspace:*",
+    "@nestjs/common": "^12.0.1",
+    "@nestjs/core": "^12.0.1",
+    "@nestjs/platform-express": "^12.0.1",
+    "@sentry/node": "^10.71.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@destaworks/tsconfig": "workspace:*",
+    "@types/node": "catalog:",
+    "esbuild": "catalog:",
+    "typescript": "catalog:"
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "start": "node dist/main.js",
+    "start:worker": "node dist/worker.js"
+  }
+}

@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { prisma } from "../src/server/db/prisma";
+import { prisma } from "../packages/db/src/prisma";
 
 /** Quick dev utility: how much data is in the connected DB? `pnpm db:status`. */
 async function main() {

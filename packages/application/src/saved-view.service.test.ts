@@ -1,0 +1,134 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { TenantContext } from "@destaworks/domain/tenant";
+
+/**
+ * Proves saved-view ownership isolation (a user can only ever list/delete their own rows — the
+ * repository is always called with `user.id`, never a client-suppliable value) and the
+ * create/duplicate-name round-trip — all WITHOUT a DB. `savedViewRepository`, `writeAudit`, and
+ * `withTenantTransaction` are mocked.
+ */
+
+const h = vi.hoisted(() => ({
+  fakeTx: { __tx: true },
+  associate: {
+    tenantId: "t1",
+    membershipId: "u1-m",
+    user: { id: "u1", email: "u@desta.works", name: "Test User" },
+    role: "Associate" as const,
+    capabilities: [] as const,
+    modules: ["core", "sourcing", "discovery", "reports", "ai", "portal", "compliance"] as const,
+  },
+  other: {
+    tenantId: "t1",
+    membershipId: "u2-m",
+    user: { id: "u2", email: "other@desta.works", name: "Other User" },
+    role: "Associate" as const,
+    capabilities: [] as const,
+    modules: ["core", "sourcing", "discovery", "reports", "ai", "portal", "compliance"] as const,
+  },
+  repo: {
+    listByUser: vi.fn(),
+    findByUserScopeName: vi.fn(),
+    create: vi.fn(),
+    deleteOwned: vi.fn(),
+  },
+  writeAudit: vi.fn(),
+}));
+
+vi.mock("server-only", () => ({}));
+vi.mock("@destaworks/db/repositories/saved-view.repository", () => ({
+  savedViewRepository: h.repo,
+}));
+vi.mock("@destaworks/db/audit", () => ({ writeAudit: h.writeAudit }));
+vi.mock("@destaworks/db/with-transaction", () => ({
+  withTenantTransaction: (_ctx: unknown, fn: (tx: unknown) => unknown) => fn(h.fakeTx),
+}));
+
+import { savedViewService } from "./saved-view.service";
+
+const associate = h.associate as TenantContext;
+const other = h.other as TenantContext;
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+
+function view(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "v1",
+    userId: "u1",
+    scope: "pipeline",
+    name: "My hot leads",
+    query: "mine=1&hot=1",
+    createdAt: new Date("2026-07-01T00:00:00Z"),
+    updatedAt: new Date("2026-07-01T00:00:00Z"),
+    ...overrides,
+  };
+}
+
+describe("savedViewService.list — ownership isolation", () => {
+  it("always queries by the CALLER's id, never a client-suppliable value", async () => {
+    h.repo.listByUser.mockResolvedValue([view()]);
+    await savedViewService.list("pipeline", associate);
+    expect(h.repo.listByUser).toHaveBeenCalledWith(associate, "u1", "pipeline");
+
+    h.repo.listByUser.mockClear();
+    await savedViewService.list("pipeline", other);
+    expect(h.repo.listByUser).toHaveBeenCalledWith(other, "u2", "pipeline");
+  });
+});
+
+describe("savedViewService.remove — ownership isolation", () => {
+  it("throws NOT_FOUND (not FORBIDDEN) when the row isn't found or isn't the caller's, and never audits", async () => {
+    h.repo.deleteOwned.mockResolvedValue({ count: 0 });
+    await expect(savedViewService.remove("v1", other)).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
+    expect(h.repo.deleteOwned).toHaveBeenCalledWith(other, "v1", "u2", h.fakeTx);
+    expect(h.writeAudit).not.toHaveBeenCalled();
+  });
+
+  it("deletes + audits when the row exists and belongs to the caller", async () => {
+    h.repo.deleteOwned.mockResolvedValue({ count: 1 });
+    const result = await savedViewService.remove("v1", associate);
+    expect(result).toEqual({ id: "v1" });
+    expect(h.repo.deleteOwned).toHaveBeenCalledWith(associate, "v1", "u1", h.fakeTx);
+    expect(h.writeAudit).toHaveBeenCalledWith(
+      h.fakeTx,
+      expect.objectContaining({ entity: "saved_view", entityId: "v1", action: "delete" }),
+    );
+  });
+});
+
+describe("savedViewService.create", () => {
+  it("creates + audits, stripping a leading '?' from the query", async () => {
+    h.repo.findByUserScopeName.mockResolvedValue(null);
+    h.repo.create.mockResolvedValue(view({ query: "mine=1" }));
+    const dto = await savedViewService.create(
+      { scope: "pipeline", name: "My hot leads", query: "?mine=1" },
+      associate,
+    );
+    expect(h.repo.create).toHaveBeenCalledWith(
+      associate,
+      { userId: "u1", scope: "pipeline", name: "My hot leads", query: "mine=1" },
+      h.fakeTx,
+    );
+    expect(h.writeAudit).toHaveBeenCalledWith(
+      h.fakeTx,
+      expect.objectContaining({ entity: "saved_view", action: "create" }),
+    );
+    expect(dto).toMatchObject({ id: "v1", scope: "pipeline", name: "My hot leads" });
+  });
+
+  it("rejects a duplicate name for the same user+scope with CONFLICT, never calling create", async () => {
+    h.repo.findByUserScopeName.mockResolvedValue(view());
+    await expect(
+      savedViewService.create(
+        { scope: "pipeline", name: "My hot leads", query: "mine=1" },
+        associate,
+      ),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+    expect(h.repo.create).not.toHaveBeenCalled();
+    expect(h.writeAudit).not.toHaveBeenCalled();
+  });
+});

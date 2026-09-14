@@ -1,6 +1,7 @@
 import "dotenv/config";
-import { prisma } from "@/server/db/prisma";
-import { statusOrder, type CandidateStatus } from "@/lib/constants";
+import { prisma } from "@destaworks/db/prisma";
+import { FOUNDING_TENANT_ID } from "@destaworks/db/tenant-tables";
+import { statusOrder, type CandidateStatus } from "@destaworks/domain/constants";
 
 /**
  * Seed DEMO candidates for local/staging testing — clearly FAKE data (no real PII), tagged with a
@@ -201,7 +202,10 @@ const DEMO: DemoCandidate[] = [
 ];
 
 async function main() {
-  const clients = await prisma.client.findMany({ orderBy: { createdAt: "asc" } });
+  const clients = await prisma.client.findMany({
+    where: { tenantId: FOUNDING_TENANT_ID },
+    orderBy: { createdAt: "asc" },
+  });
   const now = Date.now();
 
   for (const c of DEMO) {
@@ -229,8 +233,8 @@ async function main() {
       createdById: "seed",
     };
     await prisma.candidate.upsert({
-      where: { legacyId: c.legacyId },
-      create: { legacyId: c.legacyId, ...data },
+      where: { tenantId_legacyId: { tenantId: FOUNDING_TENANT_ID, legacyId: c.legacyId } },
+      create: { tenantId: FOUNDING_TENANT_ID, legacyId: c.legacyId, ...data },
       update: data,
     });
     console.log(`✓ ${c.name} — ${c.status}${client ? " @ " + client.name : ""}`);

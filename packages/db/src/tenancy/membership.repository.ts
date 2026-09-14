@@ -1,0 +1,325 @@
+import { dbUnscoped, type AnyTx } from "../tenant-scope";
+import { MAX_ROWS_CAP, REFERENCE_ROWS_CAP } from "../query-limits";
+
+/**
+ * Data access for `Membership` and `Tenant` — the two GLOBAL models of the tenancy plane
+ * (SAAS-RESTRUCTURE-PLAN 6.5).
+ *
+ * ── Why this sits beside `src/repositories/`, not inside it ─────────────────────────────────────
+ *
+ * Everything in `src/repositories/` is tenant-scoped and, from 6.3 onward, takes a `TenantContext`
+ * as its first argument so that scoping cannot be forgotten. These methods cannot: they are what
+ * PRODUCES the context. `findActiveByUserAndSlug` is called before any tenant is known — it is the
+ * query that decides which tenant the request is even allowed to be in — so demanding a context
+ * would be circular.
+ *
+ * `Tenant` and `Membership` are therefore in the enforcement seam's `GLOBAL_MODELS` allowlist
+ * (`../tenant-scope.ts`), which is the same statement from the other direction: a query that
+ * filtered memberships by the active tenant could never answer "which tenants may this user switch
+ * to". Keeping them in their own directory makes the exception visible instead of leaving one
+ * unscoped file to be mistaken for an oversight in a directory where scoping is mandatory.
+ *
+ * ── What "unscoped" does and does not mean here ─────────────────────────────────────────────────
+ *
+ * Every read below is keyed by `userId`, a `tenantId` the caller has already verified, or both.
+ * There is no method that lists memberships across tenants for anyone other than the subject user.
+ * Cross-tenant reach belongs to the platform plane (6.8) and is audited there, never here.
+ */
+
+/**
+ * Columns of the joined tenant a resolution needs. `plan` is here because it became an
+ * AUTHORIZATION input — `TenantContext` carries resolved modules. The rest stay in the registry.
+ */
+const TENANT_SELECT = {
+  id: true,
+  slug: true,
+  name: true,
+  status: true,
+  deletedAt: true,
+  plan: true,
+} as const;
+
+/**
+ * What the tenant REGISTRY reads — `TENANT_SELECT` plus the commercial columns.
+ *
+ * Deliberately a second select rather than a wider first one. `TENANT_SELECT` is joined onto every
+ * membership read, which is the hot path that authorizes every request in the application; the
+ * platform plane's health view (6.8) is a handful of calls a day by a handful of operators. Paying
+ * for `seatLimit` and `trialEndsAt` on the former to serve the latter is the wrong way round, and
+ * it would put the platform's billing vocabulary on the row type `auth` resolves contexts from.
+ */
+export const TENANT_REGISTRY_SELECT = {
+  ...TENANT_SELECT,
+  seatLimit: true,
+  trialEndsAt: true,
+  createdAt: true,
+} as const;
+
+/** The role row a membership resolves its capabilities from. Joined on the authorization path. */
+const ACCESS_ROLE_SELECT = {
+  id: true,
+  name: true,
+  capabilities: true,
+  templateKey: true,
+  isBuiltIn: true,
+} as const;
+
+const MEMBERSHIP_SELECT = {
+  id: true,
+  tenantId: true,
+  userId: true,
+  role: true,
+  roleId: true,
+  status: true,
+  invitedById: true,
+  createdAt: true,
+  tenant: { select: TENANT_SELECT },
+  accessRole: { select: ACCESS_ROLE_SELECT },
+} as const;
+
+/** The tenant facts a membership row carries. `status`/`role` stay raw strings — the vocabulary
+ *  that validates them lives in `domain`, which `db` may not reach into for a decision. */
+export interface MembershipTenantRow {
+  id: string;
+  slug: string;
+  name: string;
+  status: string;
+  deletedAt: Date | null;
+  /** The raw stored plan. Callers narrow it with `toPlan`/`modulesForPlan` — never trusted verbatim. */
+  plan: string;
+}
+
+/**
+ * One tenant as the registry holds it — a `MembershipTenantRow` plus what it is paying for.
+ *
+ * Only the platform plane (6.8) and the invitation flow read through `tenantRepository`, and only
+ * the former looks at the extra columns. Callers that want just the identity keep working against
+ * the narrower type, which is why this widens rather than replaces.
+ */
+export interface TenantRegistryRow extends MembershipTenantRow {
+  seatLimit: number | null;
+  trialEndsAt: Date | null;
+  createdAt: Date;
+}
+
+/** One tenant-owned role, as the authorization path reads it. */
+export interface AccessRoleRow {
+  id: string;
+  name: string;
+  /** Raw stored codes. Narrowed with `toCapabilities` — a row is never trusted verbatim. */
+  capabilities: string[];
+  templateKey: string | null;
+  isBuiltIn: boolean;
+}
+
+/** One membership, joined to its tenant and to the role row it draws capabilities from. */
+export interface MembershipRow {
+  id: string;
+  tenantId: string;
+  userId: string;
+  /** The role's display NAME. `accessRole` is what actually grants anything. */
+  role: string;
+  roleId: string;
+  status: string;
+  invitedById: string | null;
+  createdAt: Date;
+  tenant: MembershipTenantRow;
+  accessRole: AccessRoleRow;
+}
+
+export const membershipRepository = {
+  /**
+   * The membership a tenant CLAIM has to match: this user, this tenant slug, whatever its status.
+   *
+   * It deliberately does not filter on `status`, even though only `active` grants access. The
+   * caller needs to tell "you were invited but have not accepted" and "your access was removed"
+   * apart from "no such membership" — three different answers for the user, one query.
+   */
+  findByUserAndSlug(userId: string, slug: string, tx?: AnyTx): Promise<MembershipRow | null> {
+    return dbUnscoped(tx).membership.findFirst({
+      where: { userId, tenant: { slug } },
+      select: MEMBERSHIP_SELECT,
+    });
+  },
+
+  /** The same row by tenant id — what an invitation checks before it creates or revives one. */
+  findByTenantAndUser(tenantId: string, userId: string, tx?: AnyTx): Promise<MembershipRow | null> {
+    return dbUnscoped(tx).membership.findUnique({
+      where: { tenantId_userId: { tenantId, userId } },
+      select: MEMBERSHIP_SELECT,
+    });
+  },
+
+  /** Every membership this user holds, in any status — the tenant switcher and its pending
+   *  invitations, in one read. Ordered by tenant name so the switcher is stable. */
+  listByUser(userId: string, tx?: AnyTx): Promise<MembershipRow[]> {
+    return dbUnscoped(tx).membership.findMany({
+      where: { userId },
+      select: MEMBERSHIP_SELECT,
+      orderBy: { tenant: { name: "asc" } },
+      take: REFERENCE_ROWS_CAP,
+    });
+  },
+
+  /** One membership by id, constrained to a tenant the caller has already been verified in.
+   *  The `tenantId` is part of the predicate, not an assertion after the fact. */
+  findByIdInTenant(
+    tenantId: string,
+    membershipId: string,
+    tx?: AnyTx,
+  ): Promise<MembershipRow | null> {
+    return dbUnscoped(tx).membership.findFirst({
+      where: { id: membershipId, tenantId },
+      select: MEMBERSHIP_SELECT,
+    });
+  },
+
+  /** This tenant's roster. Ordered oldest-first so the founding members read first. */
+  listByTenant(tenantId: string, tx?: AnyTx): Promise<MembershipRow[]> {
+    return dbUnscoped(tx).membership.findMany({
+      where: { tenantId },
+      select: MEMBERSHIP_SELECT,
+      orderBy: { createdAt: "asc" },
+      take: REFERENCE_ROWS_CAP,
+    });
+  },
+
+  /**
+   * Active member counts for several tenants at once, as `Map<tenantId, count>`.
+   *
+   * One query rather than a count per tenant, because the only caller is the platform plane's
+   * tenant list and an N+1 there would grow with the customer base. Tenants with no active member
+   * are absent from the map; the caller defaults them to zero.
+   *
+   * Counted in memory over a single indexed column rather than by `groupBy`: `tx` is `AnyTx`, and
+   * the union of the two transaction clients has no callable `groupBy` signature. The ceiling is
+   * what keeps that honest.
+   */
+  async countActiveByTenantIds(
+    tenantIds: readonly string[],
+    tx?: AnyTx,
+  ): Promise<Map<string, number>> {
+    if (tenantIds.length === 0) return new Map();
+    const rows = await dbUnscoped(tx).membership.findMany({
+      where: { tenantId: { in: [...tenantIds] }, status: "active" },
+      select: { tenantId: true },
+      take: MAX_ROWS_CAP,
+    });
+    const counts = new Map<string, number>();
+    for (const row of rows) counts.set(row.tenantId, (counts.get(row.tenantId) ?? 0) + 1);
+    return counts;
+  },
+
+  /**
+   * Grant a membership, or revive one previously removed.
+   *
+   * An upsert rather than a create because `@@unique([tenantId, userId])` means a removed member
+   * still occupies the row: re-granting has to revive it, not collide with it. The update branch
+   * is narrow on purpose — it never touches an `active` row's role (that would be a silent
+   * privilege change), which the service enforces before calling.
+   *
+   * `status` is the caller's, because the two ways in differ: an account that already exists is
+   * `invited` and must accept, while an account an administrator CREATES is `active` — they set
+   * the password and hand it over, so there is nobody left to accept and an invitation would
+   * leave the person able to sign in and reach nothing.
+   */
+  upsertMembership(
+    input: {
+      tenantId: string;
+      userId: string;
+      /** The role ROW being granted. `role` below is its name, denormalised for display. */
+      roleId: string;
+      role: string;
+      invitedById: string;
+      status: "invited" | "active";
+    },
+    tx?: AnyTx,
+  ): Promise<MembershipRow> {
+    return dbUnscoped(tx).membership.upsert({
+      where: {
+        tenantId_userId: { tenantId: input.tenantId, userId: input.userId },
+        // The guard is HERE, not in the caller. The service checks for an existing active
+        // membership before inviting, but that read and this write are two statements: an accept
+        // landing between them would be overwritten, silently demoting a member who had just
+        // joined back to `invited`. Prisma treats an unmatched `where` on an upsert as "create",
+        // which the unique constraint then rejects — a refused invitation rather than a lost
+        // membership, which is the right way for this to fail.
+        ...(input.status === "invited" && { status: { not: "active" } }),
+      },
+      create: {
+        tenantId: input.tenantId,
+        userId: input.userId,
+        roleId: input.roleId,
+        role: input.role,
+        status: input.status,
+        invitedById: input.invitedById,
+      },
+      update: {
+        roleId: input.roleId,
+        role: input.role,
+        status: input.status,
+        invitedById: input.invitedById,
+      },
+      select: MEMBERSHIP_SELECT,
+    });
+  },
+
+  /**
+   * The only write that changes what a member MAY DO. Separate from `upsertMembership`, which is
+   * about existence and refuses to touch an active row's role — so re-inviting cannot promote.
+   */
+  updateRole(
+    membershipId: string,
+    role: { id: string; name: string },
+    tx?: AnyTx,
+  ): Promise<MembershipRow> {
+    return dbUnscoped(tx).membership.update({
+      where: { id: membershipId },
+      data: { roleId: role.id, role: role.name },
+      select: MEMBERSHIP_SELECT,
+    });
+  },
+
+  /** Move a membership between lifecycle states. The only write that changes access. */
+  updateStatus(membershipId: string, status: string, tx?: AnyTx): Promise<MembershipRow> {
+    return dbUnscoped(tx).membership.update({
+      where: { id: membershipId },
+      data: { status },
+      select: MEMBERSHIP_SELECT,
+    });
+  },
+};
+
+export const tenantRepository = {
+  /** One tenant by slug, live rows only. Feeds invitation and platform reads, never a data query. */
+  findBySlug(slug: string, tx?: AnyTx): Promise<TenantRegistryRow | null> {
+    return dbUnscoped(tx).tenant.findFirst({
+      where: { slug, deletedAt: null },
+      select: TENANT_REGISTRY_SELECT,
+    });
+  },
+
+  /** One tenant by id, live rows only. */
+  findById(id: string, tx?: AnyTx): Promise<TenantRegistryRow | null> {
+    return dbUnscoped(tx).tenant.findFirst({
+      where: { id, deletedAt: null },
+      select: TENANT_REGISTRY_SELECT,
+    });
+  },
+
+  /**
+   * Every live tenant on the installation.
+   *
+   * The only genuinely cross-tenant read in this file, and it returns operational metadata only —
+   * no candidates, no clients, nothing a tenant would consider its own. It is reachable exclusively
+   * from the platform plane, whose guard is `packages/auth/src/platform-admin.ts`.
+   */
+  listAll(tx?: AnyTx): Promise<TenantRegistryRow[]> {
+    return dbUnscoped(tx).tenant.findMany({
+      where: { deletedAt: null },
+      select: TENANT_REGISTRY_SELECT,
+      orderBy: { name: "asc" },
+      take: REFERENCE_ROWS_CAP,
+    });
+  },
+};

@@ -1,0 +1,55 @@
+import { db, scopedWrite } from "../tenant-scope";
+import type { TenantContext } from "@destaworks/domain/tenant";
+import { logger } from "@destaworks/config/logger";
+
+export interface AiUsageEventInput {
+  operation: string;
+  provider: string;
+  model: string;
+  status: "success" | "error";
+  inputTokens?: number | null;
+  outputTokens?: number | null;
+  latencyMs: number;
+  errorName?: string | null;
+  errorStatusCode?: number | null;
+}
+
+export interface AiUsageStatusBreakdown {
+  status: string;
+  count: number;
+  inputTokens: number;
+  outputTokens: number;
+  latencyMsSum: number;
+}
+
+export const aiUsageEventRepository = {
+  async record(ctx: TenantContext, data: AiUsageEventInput): Promise<void> {
+    try {
+      await db(ctx).aiUsageEvent.create({ data: scopedWrite(data) });
+    } catch (err) {
+      logger.error("ai.usage_event.record_failed", {
+        errorType: err instanceof Error ? err.name : "UnknownError",
+      });
+    }
+  },
+
+  listRecent(ctx: TenantContext, limit: number) {
+    return db(ctx).aiUsageEvent.findMany({ orderBy: { createdAt: "desc" }, take: limit });
+  },
+
+  async summarySince(ctx: TenantContext, since: Date): Promise<AiUsageStatusBreakdown[]> {
+    const grouped = await db(ctx).aiUsageEvent.groupBy({
+      by: ["status"],
+      where: { createdAt: { gte: since } },
+      _count: { _all: true },
+      _sum: { inputTokens: true, outputTokens: true, latencyMs: true },
+    });
+    return grouped.map((g) => ({
+      status: g.status,
+      count: g._count._all,
+      inputTokens: g._sum.inputTokens ?? 0,
+      outputTokens: g._sum.outputTokens ?? 0,
+      latencyMsSum: g._sum.latencyMs ?? 0,
+    }));
+  },
+};

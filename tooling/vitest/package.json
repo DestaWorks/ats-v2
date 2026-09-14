@@ -1,0 +1,20 @@
+{
+  "name": "@destaworks/vitest-config",
+  "version": "0.0.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./index.d.mts",
+      "default": "./index.mjs"
+    }
+  },
+  "files": [
+    "index.mjs",
+    "index.d.mts"
+  ],
+  "devDependencies": {
+    "vitest": "^2.1.8"
+  }
+}

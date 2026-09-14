@@ -1,0 +1,17 @@
+{
+  "name": "@destaworks/prettier-config",
+  "version": "0.0.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "type": "module",
+  "main": "./index.mjs",
+  "exports": {
+    ".": "./index.mjs"
+  },
+  "files": [
+    "index.mjs"
+  ],
+  "devDependencies": {
+    "prettier": "^3.4.2"
+  }
+}
