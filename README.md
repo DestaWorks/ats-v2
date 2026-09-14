@@ -243,6 +243,7 @@ never commit real secrets (NDA-binding).
 | `pnpm db:studio` | Open Prisma Studio |
 | `pnpm db:status` | Print DB/migration status |
 | `pnpm db:seed*` | Seed owner / clients / rules / demo data |
+| `pnpm test:e2e` | Run the Playwright critical-flow suite (see below) |
 
 ---
 
@@ -268,6 +269,18 @@ pnpm rls:check && pnpm raw-index:check
 `pnpm test:isolation` provisions its own throwaway Postgres cluster on a loopback port and deletes
 it afterwards, so it needs no configuration — but it will not run against a database you supply
 unless `ISOLATION_DATABASE_URL` points at a disposable one.
+
+A further CI job, **E2E**, runs [Playwright](https://playwright.dev) over `e2e/` against its own
+throwaway Postgres container, covering the pipeline, CRM, sourcing, reports, admin and
+multi-tenancy flows. Resume extraction is mocked at the network layer, so no AI provider key is
+needed. To run it locally, point `.env` at a **scratch** Postgres (never your shared dev DB — the
+suite creates and moves real rows):
+
+```bash
+pnpm exec playwright install --with-deps chromium   # once
+pnpm exec prisma migrate deploy && pnpm db:seed      # build + seed the scratch DB
+pnpm test:e2e
+```
 
 ---
 

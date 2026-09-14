@@ -1,9 +1,10 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const ADMIN_PORT = process.env["ADMIN_PORT"] ?? "3008";
+
 /**
- * E2E config for this branch's multi-tenancy surface (workspace member management to start).
- * Mirrors the config on `main`'s `test/p3-e2e-critical-flows` line, which this branch predates —
- * ported here rather than waiting for a merge so the new tenancy UI gets coverage now.
+ * E2E config for the four critical flows (sign-in, add/move candidate, promote lead, parse
+ * resume) — docs/STACK-ARCHITECTURE.md and docs/CONVENTIONS.md both name Playwright for this.
  *
  * `webServer` starts BOTH apps/web (3007) and apps/api (3004) the same way locally and in CI —
  * the dev servers, not a production build — so there's exactly one startup path to keep working,
@@ -32,6 +33,11 @@ export default defineConfig({
   },
   projects: [
     {
+      name: "unauthenticated",
+      use: { ...devices["Desktop Chrome"] },
+      testMatch: /sign-in\.spec\.ts/,
+    },
+    {
       name: "auth-setup",
       use: { ...devices["Desktop Chrome"] },
       testMatch: /auth\.setup\.ts/,
@@ -40,7 +46,7 @@ export default defineConfig({
       name: "chromium",
       use: { ...devices["Desktop Chrome"], storageState: "e2e/.auth/owner.json" },
       dependencies: ["auth-setup"],
-      testIgnore: [/auth\.setup\.ts/],
+      testIgnore: [/auth\.setup\.ts/, /sign-in\.spec\.ts/],
     },
   ],
   webServer: [
@@ -66,12 +72,11 @@ export default defineConfig({
     },
     {
       // `dev:admin` has no explicit port (defaults to Next's 3000), which would collide with
-      // whatever else is already using it locally — pinned to 3008 here so it's an address the
-      // platform-tenants-console spec can navigate to explicitly, without touching apps/web's
-      // baseURL. `PLATFORM_API_URL` has no default in `apps/admin/src/lib/platform-api.ts` — unset,
-      // every platform-admin page fails closed with a MISCONFIGURED refusal.
-      command: "pnpm dev:admin -- --port 3008",
-      url: "http://localhost:3008/tenants",
+      // whatever else is already using it locally — pinned to 3008 so the platform-console spec
+      // can navigate to it explicitly without touching apps/web's baseURL. `PLATFORM_API_URL` has
+      // no default, and unset makes every platform-admin page fail closed with a refusal.
+      command: `pnpm dev:admin --port ${ADMIN_PORT}`,
+      url: `http://localhost:${ADMIN_PORT}/tenants`,
       reuseExistingServer: !process.env.CI,
       timeout: 180_000,
       stdout: "pipe",

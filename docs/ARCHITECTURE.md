@@ -72,68 +72,130 @@ local-only and gitignored, so a fresh clone will not have it.)*
 
 ---
 
-## 2. Target architecture — largely built
+## 2. The system as built
 
-> **Mostly "is", not "to-be".** The monorepo, the package graph, the NestJS API and the
-> platform-admin console are shipped on the `restructure` branch; multi-tenancy is written and
-> waiting on migrations. `docs/SAAS-RESTRUCTURE-PLAN.md` is the phase-by-phase status and is the
-> base document. The full stack/layer/auth detail lives in `docs/STACK-ARCHITECTURE.md`, the locked
-> decisions in `docs/DECISIONS.md`. This section is a **one-glance summary** — do not duplicate
-> detail here; if it conflicts with STACK, STACK wins.
+> **"Is", not "to-be".** The monorepo, the package graph, the NestJS API, the worker, the client
+> portal and the platform-admin console are built and merged to `main`. Multi-tenancy is written
+> and enforced in code; its Phase 6 migrations are authored and committed but deliberately
+> **unapplied to the shared database** until the end of the restructure (owner decision).
+> `docs/SAAS-RESTRUCTURE-PLAN.md` is the phase-by-phase status and is the base document. The full
+> stack/layer/auth detail lives in `docs/STACK-ARCHITECTURE.md`, the locked decisions in
+> `docs/DECISIONS.md`. This section is a **one-glance summary** — do not duplicate detail here; if
+> it conflicts with STACK, STACK wins.
 
-Goal: a conventional, typed, tested full-stack web app with a real database, real auth, and
-server-enforced authorization — reached **incrementally**, running beside the legacy app.
+Three apps, nine packages, one backend. The worker is a **second entry point of `apps/api`**
+(`apps/api/src/worker.ts`) shipped as its own container, not a fourth app. `apps/web` and `apps/admin` render HTML and hold no
+business logic; every rule is enforced in `apps/api` or below it.
 
 ```
-┌──────────────── apps/web — Next.js App Router + React + TS ──────────────┐
-│  • Next.js, component-per-file, code-split by route                       │
-│  • Serves HTML only. NO API routes — 4.3 deleted them                     │
-│  • RSC reads and browser calls both go over HTTP to apps/api              │
-│  • Auth via Better Auth session; NO role logic trusted client-side        │
-└───────────────┬──────────────────────────────────────────────────────────┘
-                │  HTTPS, JSON, authenticated (Better Auth session cookie,
-                │  forwarded by hand on the server-rendered read)
-                ▼
-┌──────────────── apps/api — NestJS, the ONLY backend surface ─────────────┐
-│  • controller → application → repository → Prisma                         │
-│  • Guards: session, tenant, capability. Zod pipe bound to contracts       │
-│  • Thin transport: business rules live in application/ and domain/        │
-│  • Secrets in env vars; AI keys server-side only                          │
-└───────────────┬───────────────────────────────────────────────────────────┘
-                ▼
-        ┌──────────────────┐     ┌──────────────────────────┐
-        │  PostgreSQL      │     │  External integrations    │
-        │  (Prisma + migr.)│     │  • LLM via the AI SDK     │
-        │  audit log,      │     │  • NPPES, license boards  │
-        │  soft-delete     │     │  • Email send (server)    │
-        └──────────────────┘     │  • Object storage (resumes)│
-                                 └──────────────────────────┘
+┌── apps/web ──────────┐  ┌── apps/admin ────────┐  ┌── client portal ─────┐
+│ Next.js App Router   │  │ platform console     │  │ apps/web /portal/*   │
+│ operator UI          │  │ PLATFORM_ADMIN_      │  │ identity from the    │
+│ Serves HTML only —   │  │ USER_IDS, not a role │  │ portal_token cookie, │
+│ exactly 2 route      │  │ HTTP-only, like web  │  │ resolved server-side │
+│ handlers repo-wide:  │  └───────────┬──────────┘  └───────────┬──────────┘
+│ Better Auth catch-all│              │                         │
+│ + /portal/access     │              │                         │
+└───────────┬──────────┘              │                         │
+            └─────────────────────────┴─────────────────────────┘
+                     HTTPS + JSON, session cookie forwarded
+                     (no global prefix — served at bare paths)
+                                      ▼
+┌──────────── apps/api — NestJS, the ONLY backend surface ──────────────────┐
+│  50 controllers · 205 route handlers · 27 feature modules                  │
+│  controller → application → repository → Prisma                            │
+│  Guards: session · identity · tenant · capability · portal · rate-limit     │
+│          + @RequireModule entitlement enforcement                          │
+│  Thin transport: controllers hold no business rules. Zod pipe ← contracts  │
+└───────┬──────────────────────────────────────────┬────────────────────────┘
+        │                                          │
+        ▼                                          ▼
+┌──────────────────────┐  ┌──────────────┐  ┌──────────────────────────┐
+│  PostgreSQL          │  │ worker       │  │ External integrations     │
+│  Prisma + migrations │  │ apps/api/src/│  │ • LLM via the AI SDK      │
+│  RLS on 39 tables    │◄─┤ worker.ts —  │  │   (provider-agnostic)     │
+│  audit log,          │  │ pg-boss on   │  │ • NPPES, license boards   │
+│  soft-delete         │  │ the SAME     │  │ • Email send (server)     │
+└──────────────────────┘  │ Postgres     │  │ • Object storage (resumes)│
+                          └──────────────┘  └──────────────────────────┘
+   Redis is OPTIONAL and used for rate limiting only — never as the queue.
+   Unset, the limiter is per-process: exact for one instance, and silently
+   `limit x instances` once a second one exists.
 ```
+
+### Authorization — two axes, ANDed
+
+Access requires both, and they are never merged:
+
+| | scope | question |
+|---|---|---|
+| **Entitlement** | the **tenant** | has this firm PAID FOR this module? |
+| **Capability** | the **membership** | may THIS USER do it? |
+
+- **Roles are tenant-owned data, not a fixed enum.** `access_roles` holds one row per role per
+  tenant; the six built-ins (Owner, Director, Manager, Screener, Associate, Admin) are **templates**
+  the seed clones, not the runtime answer. Two workspaces may both have a "Director" granting
+  different things, so `hasCapability` takes the **viewer**, never a role name.
+- `Membership.roleId` carries a **composite** foreign key `(roleId, tenantId)` → `(id, tenantId)`,
+  which makes a membership holding another tenant's role *unrepresentable* rather than merely
+  rejected.
+- Capabilities are resolved **per request** and never cached beyond one, so a revoked permission
+  cannot outlive its revocation.
+- Modules derive from `Tenant.plan` via `PLAN_MODULES`. An unentitled module answers
+  **402 `PLAN_UPGRADE_REQUIRED`** — an upsell, deliberately distinct from 403 "you may not".
+- Tenant isolation is defence-in-depth: RLS is enabled **and forced** on 39 tables, with eight
+  global models exempt by design (`User`, `Session`, `Account`, `Verification`, `ScheduleRun`,
+  `Tenant`, `Membership`, `AccessRole`) — the last three because they are what *produce* a tenant
+  context and so cannot be filtered by one.
+
+### The package graph
+
+Nine packages under a one-way dependency law, enforced in CI by `scripts/check-architecture.mjs`:
+
+```
+domain ← contracts ← db ← integrations ← auth ← application ← jobs
+config (leaf)                                    ui ← domain
+```
+
+`domain` and `config` are dependency-free leaves. **`db` is the only package that imports Prisma.**
+`jobs` sits *above* `application` and the edge is one-way — a service may not import `jobs`, or a
+handler could enqueue itself through a cycle the graph could no longer see.
+
+Nine `scripts/check-*.mjs` gates run on every PR — architecture, tenant-scope, RLS coverage, module
+gates, the auth surface, dependency drift, raw-SQL indexes, the runtime manifest, and licence
+policy — across five CI jobs (commit-messages, static, test, isolation, build).
 
 **Stack in one line:** pnpm/Turborepo monorepo · Next.js (App Router) + TS · Tailwind v4 + Sonner ·
-NestJS controllers → application services → repositories → Prisma · PostgreSQL (Supabase) · Better
-Auth (6 fixed roles → capability groups) · Zod · RSC + typed fetch helpers (no client cache
-library) · provider-agnostic LLM via the Vercel AI SDK · `apps/api` runs as a container (`Dockerfile`).
+NestJS controllers → application services → repositories → Prisma · PostgreSQL (Supabase on staging)
+· Better Auth with **tenant-managed roles → capability groups** · Zod · RSC + typed fetch helpers
+(no client cache library) · provider-agnostic LLM via the Vercel AI SDK · pg-boss job runner ·
+**one `Dockerfile`, five runtime targets** (api, worker, web, admin, migrate).
 → **Full detail: `docs/STACK-ARCHITECTURE.md`. The package graph and its CI checks:
 `docs/SAAS-RESTRUCTURE-PLAN.md`. Locked decisions: `docs/DECISIONS.md`.**
 
 **Migration** is a **one-time ETL** (no live Sheet adapter, no dual-read) — see DECISIONS D1 and
-the per-wave ETL tasks in `docs/IMPLEMENTATION-PLAN.md`.
+Phase 7, which has **not started**: the feature surface is fully ported, the historical data is not
+yet imported.
 
 ---
 
-## 3. Component inventory (current → target mapping)
+## 3. Where each domain lives now
 
-| Domain | Current location | Target home |
-|--------|------------------|-------------|
-| Pipeline / candidates | `App()` kanban+table views, `scoreCandidate`, `CLIENT_RULES` | `candidates` service + `pipeline` feature module |
-| Sourcing leads | sourcing view, `normalizeStatus`, import/promote | `leads` service + `sourcing` module |
-| Resume parsing | `parse` view, pdf.js, `extract_resume` | `parsing` service (AI server-side) |
-| Briefs (daily/weekly) | brief/weekly views, `*_brief_generate` | `briefs` service |
-| CRM / deals | crm view, `deal_*`, `crm_*` | `crm` module |
-| Users / auth / admin | auth + admin views, invites, blocks | `auth` + `admin` modules + provider |
-| Client portal | `?portal=true` branch, `portal_*` | dedicated portal app/route |
-| Verification | credentials view, NPPES, board links | `verification` service |
-| Audit | `ats_log` | DB audit table + middleware |
+Every domain below is **built**. This table replaced a legacy→target mapping: the port is done, so
+what matters is the current address.
+
+| Domain | Legacy origin | Where it lives now |
+|--------|---------------|--------------------|
+| Pipeline / candidates | `App()` kanban+table, `scoreCandidate`, `CLIENT_RULES` | `apps/api` candidates module · `apps/web/app/(app)/candidates` · rules in `client_rules` (data, not code) |
+| Sourcing leads | sourcing view, `normalizeStatus`, import/promote | `leads`/`sourcing` modules · `apps/web/app/(app)/sourcing` |
+| Resume parsing | `parse` view, pdf.js, `extract_resume` | AI server-side via the AI SDK; keys never client-side |
+| Briefs (daily/weekly) | brief/weekly views, `*_brief_generate` | `packages/jobs/src/handlers/briefs.ts`, run on the worker container |
+| CRM / deals | crm view, `deal_*`, `crm_*` | `crm` module · `apps/web/app/(app)/crm` |
+| Users / auth / admin | auth + admin views, invites, blocks | `packages/auth` + `tenants` module; roles in `access_roles` |
+| Platform operations | *(did not exist)* | `apps/admin`, gated by `PLATFORM_ADMIN_USER_IDS` |
+| Client portal | `?portal=true` branch, `portal_*` | `apps/web/app/portal/*`, identity from the `portal_token` cookie — the fix for legacy's IDOR |
+| Verification | credentials view, NPPES, board links | `verification` service · `compliance` module |
+| Background work | *(none — all inline)* | `packages/jobs` on pg-boss, run by `apps/api/src/worker.ts` |
+| Audit | `ats_log` | tenant-scoped `activity_log` + audit writes beside each mutation |
 
 See `docs/DATA-MODEL.md` and `docs/API-CONTRACT.md` for field- and operation-level detail.

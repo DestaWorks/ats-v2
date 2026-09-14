@@ -49,6 +49,25 @@ export interface CookieResponseLike {
 const TENANT_COOKIE_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
 
 /**
+ * Remember the workspace the caller is now acting in.
+ *
+ * Shared by `switch` and `accept` because both end with the server having VERIFIED a membership,
+ * and the value written is the slug the server resolved rather than anything the client sent.
+ * Accepting an invitation is the other way a person arrives in a workspace, so it has to leave the
+ * same claim behind — a user whose first membership was joined by invitation is otherwise left
+ * with two memberships and no claim, which resolves `ambiguous`.
+ */
+function rememberActiveTenant(response: CookieResponseLike, slug: string): void {
+  response.cookie(TENANT_COOKIE, slug, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: TENANT_COOKIE_MAX_AGE_SECONDS * 1000,
+  });
+}
+
+/**
  * Workspace membership from the member's side: which workspaces am I in, which one am I in now,
  * and — with `manageUsers` — who else is in this one (SAAS-RESTRUCTURE-PLAN 6.5).
  *
@@ -100,13 +119,7 @@ export class TenantsController {
     @Res({ passthrough: true }) response: CookieResponseLike,
   ): Promise<PostTenantSwitchResponse> {
     const result = await this.memberships.switchTenant(user, body);
-    response.cookie(TENANT_COOKIE, result.tenant.slug, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      maxAge: TENANT_COOKIE_MAX_AGE_SECONDS * 1000,
-    });
+    rememberActiveTenant(response, result.tenant.slug);
     return result;
   }
 
@@ -117,8 +130,11 @@ export class TenantsController {
     @Body(new ZodValidationPipe(acceptInvitationSchema))
     body: ContractOutput<typeof acceptInvitationSchema>,
     @CurrentIdentity() user: AuthUser,
+    @Res({ passthrough: true }) response: CookieResponseLike,
   ): Promise<PostTenantMemberAcceptResponse> {
-    return this.memberships.acceptInvitation(user, body);
+    const result = await this.memberships.acceptInvitation(user, body);
+    rememberActiveTenant(response, result.tenant.slug);
+    return result;
   }
 
   /** GET /tenants/members — the active workspace's roster. */

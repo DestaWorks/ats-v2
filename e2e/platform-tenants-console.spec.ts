@@ -1,5 +1,7 @@
 import { test, expect } from "@playwright/test";
 
+const ADMIN_BASE_URL = `http://localhost:${process.env["ADMIN_PORT"] ?? "3008"}`;
+
 /**
  * The platform-admin plane's tenants console (`apps/admin`), the third of the three flows that
  * needed a second tenant to exist — see `workspace-switching.spec.ts` for the other two.
@@ -20,7 +22,7 @@ const TENANT_B_SLUG = process.env["SEED_TENANT_B_SLUG"] ?? "e2e-tenant-b";
 const TENANT_B_NAME = process.env["SEED_TENANT_B_NAME"] ?? "E2E Second Workspace";
 
 test("lists both tenants and shows a workspace's detail", async ({ page }) => {
-  await page.goto("http://localhost:3008/tenants");
+  await page.goto(`${ADMIN_BASE_URL}/tenants`);
   await expect(page.getByRole("heading", { name: "Tenants" })).toBeVisible();
 
   const table = page.getByRole("table", { name: "Tenants on this installation" });
@@ -30,7 +32,7 @@ test("lists both tenants and shows a workspace's detail", async ({ page }) => {
   await expect(tenantBRow.getByText("active", { exact: true })).toBeVisible();
 
   await tenantBRow.getByRole("link", { name: TENANT_B_NAME }).click();
-  await expect(page).toHaveURL(`http://localhost:3008/tenants/${TENANT_B_SLUG}`);
+  await expect(page).toHaveURL(`${ADMIN_BASE_URL}/tenants/${TENANT_B_SLUG}`);
   await expect(page.getByRole("heading", { name: TENANT_B_NAME })).toBeVisible();
   await expect(page.getByText("Slug").locator("..").getByText(TENANT_B_SLUG)).toBeVisible();
   await expect(page.getByText("Members").locator("..").getByText(/^\d+$/)).toBeVisible();

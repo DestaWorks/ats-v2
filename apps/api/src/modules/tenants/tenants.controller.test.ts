@@ -149,10 +149,36 @@ describe("the member routes forward the resolved context, not a client-supplied 
   });
 
   it("accept takes only the signed-in user — an invitee has no tenant context yet", async () => {
-    h.memberships.acceptInvitation.mockResolvedValue({ tenant: {} });
+    h.memberships.acceptInvitation.mockResolvedValue({ tenant: { slug: "acme" } });
 
-    await controller.accept({ tenant: "acme" }, user);
+    await controller.accept({ tenant: "acme" }, user, recordingResponse());
 
     expect(h.memberships.acceptInvitation).toHaveBeenCalledWith(user, { tenant: "acme" });
+  });
+
+  it("remembers the accepted workspace, so a second membership is not ambiguous", async () => {
+    h.memberships.acceptInvitation.mockResolvedValue({
+      tenant: { tenantId: "t2", slug: "acme", name: "Acme Health", status: "active" },
+    });
+    const response = recordingResponse();
+
+    await controller.accept({ tenant: "acme" }, user, response);
+
+    expect(response.calls).toHaveLength(1);
+    expect(response.calls[0]?.name).toBe("dw_tenant");
+    expect(response.calls[0]?.value).toBe("acme");
+  });
+
+  it("sets NO cookie when the invitation is refused", async () => {
+    h.memberships.acceptInvitation.mockRejectedValue(
+      new AppError("CONFLICT", "That invitation is no longer open"),
+    );
+    const response = recordingResponse();
+
+    await expect(controller.accept({ tenant: "acme" }, user, response)).rejects.toMatchObject({
+      code: "CONFLICT",
+    });
+
+    expect(response.calls).toHaveLength(0);
   });
 });
