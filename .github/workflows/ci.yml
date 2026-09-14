@@ -265,7 +265,9 @@ jobs:
       DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/destaworks_e2e
       DIRECT_URL: postgresql://postgres:postgres@127.0.0.1:5432/destaworks_e2e
       BETTER_AUTH_URL: http://localhost:3007
-      BETTER_AUTH_SECRET: e2e-ci-only-not-a-real-secret
+      # 32 chars minimum — `packages/config/src/env.ts` refuses to start below that, and a
+      # server that never boots reads here as a Playwright timeout rather than a bad secret.
+      BETTER_AUTH_SECRET: e2e-ci-only-not-a-real-secret-0000000000
       API_URL: http://localhost:3004
       NEXT_PUBLIC_API_URL: http://localhost:3004
       WEB_ORIGINS: http://localhost:3007
