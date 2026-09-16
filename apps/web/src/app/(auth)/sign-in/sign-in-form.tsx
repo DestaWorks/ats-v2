@@ -21,7 +21,13 @@ const GOOGLE_ERROR_MESSAGES: Record<string, string> = {
 };
 const GOOGLE_ERROR_FALLBACK = "Something went wrong signing in with Google. Please try again.";
 
-export function SignInForm({ googleEnabled }: { googleEnabled: boolean }) {
+export function SignInForm({
+  googleEnabled,
+  returnTo,
+}: {
+  googleEnabled: boolean;
+  returnTo?: string;
+}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [showPassword, setShowPassword] = useState(false);
@@ -55,6 +61,12 @@ export function SignInForm({ googleEnabled }: { googleEnabled: boolean }) {
       setServerError(error.message ?? "Sign in failed");
       return;
     }
+    // `returnTo` is already validated against the deployment's trusted origins — a full navigation
+    // rather than `router.push`, because it may be another app on another origin.
+    if (returnTo) {
+      window.location.assign(returnTo);
+      return;
+    }
     router.push("/dashboard");
     router.refresh();
   }
@@ -69,7 +81,7 @@ export function SignInForm({ googleEnabled }: { googleEnabled: boolean }) {
       // which is a fresh mount anyway so there's no stuck-disabled state to worry about.
       await signIn.social({
         provider: "google",
-        callbackURL: "/dashboard",
+        callbackURL: returnTo ?? "/dashboard",
         errorCallbackURL: "/sign-in",
       });
     } finally {
