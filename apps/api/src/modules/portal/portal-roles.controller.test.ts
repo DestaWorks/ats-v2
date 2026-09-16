@@ -1,5 +1,5 @@
 import "reflect-metadata";
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, vi, beforeAll, afterAll } from "vitest";
 
 /**
  * `PortalRolesController` — `POST /portal/roles`, ported from `apps/web/src/app/api/portal/roles`.
@@ -60,6 +60,15 @@ import {
   throughGuards,
 } from "../../common/testing/controller-contract";
 import { PortalRolesController } from "./portal-roles.controller";
+
+// These exercise SUBDOMAIN tenancy, which is only read against a configured apex — without it a
+// host is just a host, and the claim falls through to the cookie.
+beforeAll(() => {
+  process.env["TENANT_APEX_DOMAIN"] = "desta.works";
+});
+afterAll(() => {
+  delete process.env["TENANT_APEX_DOMAIN"];
+});
 
 installNestRequestContext();
 

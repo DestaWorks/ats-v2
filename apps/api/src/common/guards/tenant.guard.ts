@@ -1,6 +1,6 @@
 import { Injectable, type CanActivate, type ExecutionContext } from "@nestjs/common";
 import { requestContext } from "@destaworks/config/request-context";
-import { TENANT_COOKIE } from "@destaworks/domain/constants";
+import { TENANT_COOKIE, tenantApexDomain } from "@destaworks/domain/constants";
 import { readTenantClaim } from "@destaworks/auth/tenant-claim";
 import { requireTenantContext } from "@destaworks/auth/tenant-context";
 import { AppError } from "@destaworks/integrations/http/app-error";
@@ -34,6 +34,7 @@ export class TenantGuard implements CanActivate {
         // truncated path would drop a `/t/<slug>` claim without any error to notice.
         path: request.originalUrl ?? request.url,
         cookie: await requestContext().cookie(TENANT_COOKIE),
+        apex: tenantApexDomain(),
       });
       // `user` is an AuthContext once SessionAuthGuard has run (6.4), so hand the resolver the
       // identity half it actually takes. The context it returns is the authoritative one — the

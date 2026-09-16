@@ -1,3 +1,4 @@
+import { tenantApexDomain } from "@destaworks/domain/constants";
 import { readTenantClaim } from "@destaworks/auth/tenant-claim";
 import { tenantIsUsable } from "@destaworks/auth/tenant-context";
 import { tenantRepository } from "@destaworks/db/tenancy/membership.repository";
@@ -12,7 +13,7 @@ import { systemContextFor } from "@destaworks/domain/system-context";
  */
 export const publicTenantService = {
   async contextForHost(host: string | undefined): Promise<TenantContext | null> {
-    const claim = readTenantClaim({ host, cookie: undefined });
+    const claim = readTenantClaim({ host, cookie: undefined, apex: tenantApexDomain() });
     if (!claim) return null;
     const tenant = await tenantRepository.findBySlug(claim.slug);
     if (!tenant || !tenantIsUsable(tenant)) return null;

@@ -80,10 +80,19 @@ export interface TenantClaimInput {
   readonly path?: string | undefined;
   /** The already-decoded `dw_tenant` cookie value. */
   readonly cookie?: string | undefined;
+  /**
+   * The domain tenant subdomains hang off — `desta.com`, so that `acme.desta.com` names `acme`.
+   *
+   * Required for a subdomain to be read at all. Without it any three-label host would name a
+   * tenant after its own first label: `13.140.40.247.nip.io` claims `13`, `desta-ats.vercel.app`
+   * claims `desta-ats`. Both resolve to nothing, and because the subdomain OUTRANKS the cookie
+   * the user is bounced to the picker on every request — a switch that succeeds and never sticks.
+   *
+   * Absent, subdomain routing is simply off and the cookie decides. That is the right default:
+   * an installation not serving a tenant per subdomain should never infer one from its own URL.
+   */
+  readonly apex?: string | undefined;
 }
-
-/** `acme.localhost` has only two labels but is a real dev subdomain, so `localhost` is an apex. */
-const APEX_LABELS: readonly string[] = ["localhost"];
 
 /** Normalise, then accept only a syntactically valid, non-reserved slug. */
 function toSlug(raw: string | undefined): string | null {
@@ -102,25 +111,28 @@ function fromPath(path: string | undefined): string | null {
 }
 
 /**
- * `<slug>.example.com` → `<slug>`.
+ * `<slug>.<apex>` → `<slug>`, and nothing else.
  *
- * Requires a real parent domain, so a bare apex (`example.com`, `localhost`) claims nothing. An IP
- * literal has no subdomain by definition and is rejected by the slug grammar anyway — `127` is a
- * valid label but `127.0.0.1` yields `127`, so the apex-label check below is what keeps a
- * loopback host from being read as a tenant named `127`.
+ * The host must be exactly one label deeper than the configured apex. That single rule replaces
+ * counting labels, which could not tell a tenant subdomain from an ordinary hostname that happened
+ * to have enough dots — the apex says which hosts are tenant-shaped, so nothing has to be guessed.
+ *
+ * An IP literal is still rejected outright: it can never be one label deeper than a domain apex,
+ * and checking keeps the intent legible.
  */
-function fromHost(host: string | undefined): string | null {
-  if (host === undefined) return null;
+function fromHost(host: string | undefined, apex: string | undefined): string | null {
+  if (host === undefined || apex === undefined) return null;
   const hostname = host.split(":", 1)[0]?.trim().toLowerCase() ?? "";
-  if (hostname === "") return null;
+  const parent = apex.split(":", 1)[0]?.trim().toLowerCase().replace(/^\./, "") ?? "";
+  if (hostname === "" || parent === "") return null;
   if (/^[\d.]+$/.test(hostname) || hostname.includes("[")) return null;
 
-  const labels = hostname.split(".").filter(Boolean);
-  const last = labels[labels.length - 1];
-  const minimumLabels = last !== undefined && APEX_LABELS.includes(last) ? 2 : 3;
-  if (labels.length < minimumLabels) return null;
+  const suffix = `.${parent}`;
+  if (!hostname.endsWith(suffix)) return null;
+  const label = hostname.slice(0, -suffix.length);
+  if (label === "" || label.includes(".")) return null;
 
-  return toSlug(labels[0]);
+  return toSlug(label);
 }
 
 /**
@@ -136,7 +148,7 @@ export function readTenantClaim(input: TenantClaimInput): TenantClaim | null {
   const path = fromPath(input.path);
   if (path !== null) return { source: "path", slug: path };
 
-  const subdomain = fromHost(input.host);
+  const subdomain = fromHost(input.host, input.apex);
   if (subdomain !== null) return { source: "subdomain", slug: subdomain };
 
   const cookie = toSlug(input.cookie);

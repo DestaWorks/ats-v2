@@ -23,7 +23,12 @@ describe("readTenantClaim — precedence", () => {
 
   it("prefers the subdomain over the cookie", () => {
     expect(
-      readTenantClaim({ host: "acme.desta.works", path: "/pipeline", cookie: "northwind" }),
+      readTenantClaim({
+        host: "acme.desta.works",
+        path: "/pipeline",
+        cookie: "northwind",
+        apex: "desta.works",
+      }),
     ).toEqual({ source: "subdomain", slug: "acme" });
   });
 
@@ -80,24 +85,57 @@ describe("readTenantClaim — what is not a claim", () => {
 describe("readTenantClaim — normalisation", () => {
   it("lowercases and trims, so one tenant is not two", () => {
     expect(readTenantClaim({ cookie: "  ACME " })).toEqual({ source: "cookie", slug: "acme" });
-    expect(readTenantClaim({ host: "ACME.Desta.Works" })).toEqual({
+    expect(readTenantClaim({ host: "ACME.Desta.Works", apex: "Desta.Works" })).toEqual({
       source: "subdomain",
       slug: "acme",
     });
   });
 
   it("strips the port before reading the host", () => {
-    expect(readTenantClaim({ host: "acme.desta.works:8443" })).toEqual({
+    expect(readTenantClaim({ host: "acme.desta.works:8443", apex: "desta.works" })).toEqual({
       source: "subdomain",
       slug: "acme",
     });
   });
 
-  it("treats `localhost` as an apex so `acme.localhost` works in development", () => {
-    expect(readTenantClaim({ host: "acme.localhost:3003" })).toEqual({
+  it("reads `acme.localhost` in development, when localhost is the configured apex", () => {
+    expect(readTenantClaim({ host: "acme.localhost:3003", apex: "localhost" })).toEqual({
       source: "subdomain",
       slug: "acme",
     });
-    expect(readTenantClaim({ host: "localhost:3003" })).toBeNull();
+    expect(readTenantClaim({ host: "localhost:3003", apex: "localhost" })).toBeNull();
+  });
+});
+
+describe("readTenantClaim — a subdomain is only read against a configured apex", () => {
+  // The bug this pins: `13.140.40.247.nip.io` has six labels, so counting them read `13` as the
+  // tenant. Subdomain OUTRANKS cookie, so a user who had just switched workspaces was bounced
+  // back to the picker on the very next request — the switch succeeded and never stuck.
+  it("does not read a tenant out of a host that merely has enough dots", () => {
+    expect(readTenantClaim({ host: "13.140.40.247.nip.io", cookie: "destaworks" })).toEqual({
+      source: "cookie",
+      slug: "destaworks",
+    });
+    expect(readTenantClaim({ host: "desta-ats.vercel.app", cookie: "destaworks" })).toEqual({
+      source: "cookie",
+      slug: "destaworks",
+    });
+  });
+
+  it("ignores a host that is not under the apex", () => {
+    expect(readTenantClaim({ host: "acme.example.com", apex: "desta.works" })).toBeNull();
+    expect(readTenantClaim({ host: "13.140.40.247.nip.io", apex: "desta.works" })).toBeNull();
+  });
+
+  it("requires exactly one label below the apex, so a deeper host claims nothing", () => {
+    expect(readTenantClaim({ host: "a.b.desta.works", apex: "desta.works" })).toBeNull();
+    expect(readTenantClaim({ host: "desta.works", apex: "desta.works" })).toBeNull();
+  });
+
+  it("tolerates a leading dot and a port on the configured apex", () => {
+    expect(readTenantClaim({ host: "acme.desta.works", apex: ".desta.works" })).toEqual({
+      source: "subdomain",
+      slug: "acme",
+    });
   });
 });
