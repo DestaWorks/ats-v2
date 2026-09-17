@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, vi, beforeAll, afterAll } from "vitest";
 import { MODULES, ROLE_CAPABILITIES, type Role } from "@destaworks/domain/constants";
 
 /**
@@ -26,6 +26,15 @@ import { executionContextFor } from "./testing/execution-context.fixture";
 import { TenantGuard } from "./tenant.guard";
 import type { TenantScopedRequest } from "./authenticated-request";
 import type { AuthContext, AuthUser } from "@destaworks/auth/guards";
+
+// These exercise SUBDOMAIN tenancy, which is only read against a configured apex — without it a
+// host is just a host, and the claim falls through to the cookie.
+beforeAll(() => {
+  process.env["TENANT_APEX_DOMAIN"] = "desta.works";
+});
+afterAll(() => {
+  delete process.env["TENANT_APEX_DOMAIN"];
+});
 
 installNestRequestContext();
 

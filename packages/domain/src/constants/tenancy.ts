@@ -89,3 +89,12 @@ export function isTenantSlug(value: string): boolean {
 export function normaliseTenantSlug(value: string): string {
   return value.trim().toLowerCase();
 }
+
+/**
+ * The domain tenant subdomains hang off, or `undefined` when this installation does not route by
+ * subdomain. Spelled once here so no caller invents its own env name — see `readTenantClaim`.
+ */
+export function tenantApexDomain(): string | undefined {
+  const raw = process.env["TENANT_APEX_DOMAIN"]?.trim();
+  return raw ? raw : undefined;
+}

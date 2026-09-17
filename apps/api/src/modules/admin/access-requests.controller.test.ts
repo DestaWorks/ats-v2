@@ -42,6 +42,15 @@ import { AccessRequestsController } from "./access-requests.controller";
 import { AdminModule } from "./admin.module";
 import { ACCESS_REQUEST_SERVICE } from "./admin.tokens";
 
+// These exercise SUBDOMAIN tenancy, which is only read against a configured apex — without it a
+// host is just a host, and the claim falls through to the cookie.
+beforeAll(() => {
+  process.env["TENANT_APEX_DOMAIN"] = "destaworks.com";
+});
+afterAll(() => {
+  delete process.env["TENANT_APEX_DOMAIN"];
+});
+
 const APPLICANT = { name: "Sam Adera", email: "sam@example.com" };
 
 /** A live workspace as `tenantRepository.findBySlug` returns it. */

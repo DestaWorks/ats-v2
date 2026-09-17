@@ -1,3 +1,4 @@
+import { headers } from "next/headers";
 import { Card } from "@destaworks/ui/card";
 
 /**
@@ -10,8 +11,22 @@ import { Card } from "@destaworks/ui/card";
  * The operator sign-in address is configuration, so an unconfigured deployment shows the
  * instruction without a link rather than a link that goes nowhere.
  */
-export function Refusal({ reason }: { reason: "signed-out" | "refused" }) {
-  const signInUrl = process.env["OPERATOR_APP_URL"];
+/** This console's own absolute URL for the current request, so a deep link survives sign-in. */
+async function consoleUrl(): Promise<string> {
+  const h = await headers();
+  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "";
+  const proto = h.get("x-forwarded-proto") ?? "https";
+  const path = h.get("x-invoke-path") ?? h.get("x-pathname") ?? "/";
+  return `${proto}://${host}${path}`;
+}
+
+export async function Refusal({ reason }: { reason: "signed-out" | "refused" }) {
+  const operatorUrl = process.env["OPERATOR_APP_URL"];
+  // Carry where they were going, so signing in returns them HERE rather than to an app this
+  // account may have no workspace in. The operator app validates it before following it.
+  const signInUrl = operatorUrl
+    ? `${operatorUrl}/sign-in?next=${encodeURIComponent(await consoleUrl())}`
+    : undefined;
   const signedOut = reason === "signed-out";
 
   return (

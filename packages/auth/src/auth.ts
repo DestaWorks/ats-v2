@@ -39,6 +39,42 @@ function signInMax(): number {
   return Number.isInteger(raw) && raw > 0 ? raw : 5;
 }
 
+/**
+ * Cookie scope when the browser app and the API sit on DIFFERENT subdomains.
+ *
+ * Better Auth sets a host-only cookie by default, which the browser then refuses to send to
+ * `api.<host>` — server-rendered pages still work (the web server forwards the cookie itself) while
+ * every browser-initiated call 401s, and the UI reports it as an expired session. `SameSite=Lax`
+ * blocks the cross-site POST besides, so the domain alone is not enough.
+ *
+ * Unset — local development, where both apps are `localhost` and cookies ignore the port — this
+ * returns nothing and the defaults stand. `SameSite=None` is only ever paired with `Secure`.
+ */
+function crossSubDomainCookieConfig() {
+  const domain = process.env["COOKIE_DOMAIN"];
+  if (!domain) return {};
+  return {
+    crossSubDomainCookies: { enabled: true, domain },
+    defaultCookieAttributes: { sameSite: "none" as const, secure: true },
+  };
+}
+
+/**
+ * Origins allowed to make state-changing auth calls.
+ *
+ * `AUTH_TRUSTED_ORIGINS` is a comma-separated list, and exists because the platform console is a
+ * SEPARATE origin that must be able to end a session — without it Better Auth refuses the sign-out
+ * with INVALID_ORIGIN and the console has no way to log anyone out. Development keeps the localhost
+ * wildcard, which `next dev` needs because it picks whatever port is free.
+ */
+export function authTrustedOrigins(): string[] {
+  const configured = (process.env["AUTH_TRUSTED_ORIGINS"] ?? "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter((origin) => origin.length > 0);
+  return process.env.NODE_ENV !== "production" ? [...configured, "http://localhost:*"] : configured;
+}
+
 export const auth = betterAuth({
   database: prismaAdapter(prisma, { provider: "postgresql" }),
   emailAndPassword: {
@@ -94,6 +130,7 @@ export const auth = betterAuth({
       "/request-password-reset": { window: 60, max: 5 },
     },
   },
+  advanced: crossSubDomainCookieConfig(),
   // Dev only: trust localhost on whatever port `next dev` picks. A wildcard port, not a fixed
   // list — this machine runs several other local dev servers (other projects), so `next dev`
   // frequently lands outside any small hardcoded range (e.g. 3000/3001 already taken elsewhere),
@@ -101,7 +138,7 @@ export const auth = betterAuth({
   // Auth's own `trustedOrigins` wildcard support (`"http://localhost:*"` matches the origin
   // string, port included — verified directly against the installed package's
   // `wildcardMatch`/`matchesOriginPattern` source, not just the docs).
-  ...(process.env.NODE_ENV !== "production" ? { trustedOrigins: ["http://localhost:*"] } : {}),
+  trustedOrigins: authTrustedOrigins(),
   plugins: [
     adminPlugin({
       adminRoles: ["Owner", "Admin"],

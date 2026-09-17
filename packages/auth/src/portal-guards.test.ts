@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, vi, beforeAll, afterAll } from "vitest";
 
 /**
  * Portal token resolution (Wave 4.3). Mirrors `guards.test.ts`'s approach: mock the repository and
@@ -47,6 +47,15 @@ vi.mock("@destaworks/db/repositories/client-portal-token.repository", () => ({
 import { PORTAL_TOKEN_COOKIE } from "@destaworks/domain/constants";
 import { installRequestContext } from "@destaworks/config/request-context";
 import { exchangePortalToken, resolvePortalContact, hashPortalToken } from "./portal-guards";
+
+// These exercise SUBDOMAIN tenancy, which is only read against a configured apex — without it a
+// host is just a host, and the claim falls through to the cookie.
+beforeAll(() => {
+  process.env["TENANT_APEX_DOMAIN"] = "desta.works";
+});
+afterAll(() => {
+  delete process.env["TENANT_APEX_DOMAIN"];
+});
 
 let mockCookie: string | undefined;
 

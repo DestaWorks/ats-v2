@@ -5,6 +5,7 @@ import { AppError } from "@destaworks/integrations/http/app-error";
 import {
   hasCapability,
   hasModule,
+  tenantApexDomain,
   type Capability,
   type Module,
 } from "@destaworks/domain/constants";
@@ -95,6 +96,7 @@ export const getCurrentUser = cache(async (): Promise<AuthContext | null> => {
     host: headers.get("host") ?? undefined,
     path: headers.get("x-invoke-path") ?? headers.get("x-pathname") ?? undefined,
     cookie: (await requestContext().cookie(TENANT_COOKIE)) ?? undefined,
+    apex: tenantApexDomain(),
   });
 
   const resolution = await resolveTenantContext(identity, claim);

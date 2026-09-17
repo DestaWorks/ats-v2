@@ -38,6 +38,15 @@ import { PortalAccessRequestsController } from "./portal-access-requests.control
 import { PortalModule } from "./portal.module";
 import { PORTAL_ACCESS_REQUEST_SERVICE } from "./portal.tokens";
 
+// These exercise SUBDOMAIN tenancy, which is only read against a configured apex — without it a
+// host is just a host, and the claim falls through to the cookie.
+beforeAll(() => {
+  process.env["TENANT_APEX_DOMAIN"] = "destaworks.com";
+});
+afterAll(() => {
+  delete process.env["TENANT_APEX_DOMAIN"];
+});
+
 const REQUESTER = {
   name: "Dana Bekele",
   email: "dana@client.example",

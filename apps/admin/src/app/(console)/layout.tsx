@@ -3,6 +3,7 @@ import { Refusal } from "../../components/refusal";
 import { platformGate } from "../../lib/platform-session";
 import { ConsoleNav } from "./console-nav";
 import { CONSOLE_NAV } from "./nav";
+import { SignOutButton } from "./sign-out-button";
 
 /**
  * The gate for every console route, and the console's chrome.
@@ -17,6 +18,8 @@ import { CONSOLE_NAV } from "./nav";
 export default async function ConsoleLayout({ children }: { children: React.ReactNode }) {
   const gate = await platformGate();
   if (gate.outcome !== "granted") return <Refusal reason={gate.outcome} />;
+
+  const operatorUrl = process.env["OPERATOR_APP_URL"];
 
   const items = CONSOLE_NAV.filter((item) => hasPlatformCapability(gate.context, item.capability));
 
@@ -35,7 +38,10 @@ export default async function ConsoleLayout({ children }: { children: React.Reac
             Platform console
           </span>
         </div>
-        <span className="text-xs text-gray">{gate.context.user.email}</span>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-gray">{gate.context.user.email}</span>
+          {operatorUrl ? <SignOutButton operatorUrl={operatorUrl} /> : null}
+        </div>
       </header>
       <div className="flex flex-1 flex-col md:flex-row">
         <ConsoleNav items={items} />

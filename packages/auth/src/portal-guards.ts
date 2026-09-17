@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { PORTAL_TOKEN_COOKIE, TENANT_COOKIE } from "@destaworks/domain/constants";
+import { PORTAL_TOKEN_COOKIE, TENANT_COOKIE, tenantApexDomain } from "@destaworks/domain/constants";
 import { AppError } from "@destaworks/integrations/http/app-error";
 import { clientPortalTokenRepository } from "@destaworks/db/repositories/client-portal-token.repository";
 import { requestContext } from "@destaworks/config/request-context";
@@ -45,6 +45,7 @@ async function claimedTenantScope() {
   const claim = readTenantClaim({
     host: (await ctx.headers()).get("host") ?? undefined,
     cookie: await ctx.cookie(TENANT_COOKIE),
+    apex: tenantApexDomain(),
   });
   if (!claim) return null;
   const tenant = await tenantRepository.findBySlug(claim.slug);

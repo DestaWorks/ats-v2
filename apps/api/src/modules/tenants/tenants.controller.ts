@@ -58,10 +58,16 @@ const TENANT_COOKIE_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
  * with two memberships and no claim, which resolves `ambiguous`.
  */
 function rememberActiveTenant(response: CookieResponseLike, slug: string): void {
+  // `COOKIE_DOMAIN` is set only where the browser app and this API are on different subdomains.
+  // Without it the claim is host-only to the API's host, so the web app never receives it, resolves
+  // AMBIGUOUS, and bounces the user back to the picker — a switch that reports 201 and changes
+  // nothing. `SameSite=None` is required for the same reason the session cookie needs it: this
+  // cookie travels on cross-origin calls, and `Lax` withholds it there.
+  const domain = process.env["COOKIE_DOMAIN"];
   response.cookie(TENANT_COOKIE, slug, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
+    ...(domain ? { domain, sameSite: "none" as const } : { sameSite: "lax" as const }),
     path: "/",
     maxAge: TENANT_COOKIE_MAX_AGE_SECONDS * 1000,
   });

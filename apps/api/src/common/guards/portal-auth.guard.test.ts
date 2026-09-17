@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, vi, beforeAll, afterAll } from "vitest";
 
 /**
  * `PortalAuthGuard` — the external client-contact identity, which is not a session and not a role.
@@ -47,6 +47,15 @@ import { installNestRequestContext } from "../request-context/nest-request-conte
 import { executionContextFor } from "./testing/execution-context.fixture";
 import { PortalAuthGuard } from "./portal-auth.guard";
 import type { AuthenticatedRequest, PortalRequest } from "./authenticated-request";
+
+// These exercise SUBDOMAIN tenancy, which is only read against a configured apex — without it a
+// host is just a host, and the claim falls through to the cookie.
+beforeAll(() => {
+  process.env["TENANT_APEX_DOMAIN"] = "desta.works";
+});
+afterAll(() => {
+  delete process.env["TENANT_APEX_DOMAIN"];
+});
 
 installNestRequestContext();
 
