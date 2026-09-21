@@ -173,11 +173,17 @@ for (const [key, hit] of nest) {
   // why a `/platform/*` route carrying one is an error rather than an omission.
   const isPlatform = / \/platform\//.test(key) || key.endsWith(" /platform");
   const hasIdentityGuard = /IdentityAuthGuard/.test(g);
+  // The console authenticates against its OWN Better Auth instance, so the platform surface has
+  // its own guard. A workspace cookie must not reach it, and it must not reach a tenant route —
+  // which is why this is a separate guard rather than a wider `IdentityAuthGuard`.
+  const hasPlatformGuard = /PlatformAuthGuard/.test(g);
 
-  if (isPlatform && hasIdentityGuard && hit.caps.length)
+  if (isPlatform && (hasIdentityGuard || hasPlatformGuard) && hit.caps.length)
     note(`${key}: platform route declares a tenant capability [${hit.caps}]`);
   if (!isPlatform && hasIdentityGuard && !PRE_TENANT_ENDPOINTS.has(key))
     note(`${key}: carries IdentityAuthGuard but is neither a platform nor a pre-tenant route`);
+  if (!isPlatform && hasPlatformGuard)
+    note(`${key}: carries PlatformAuthGuard but is not a platform route`);
   if (isPortal && hasSession) note(`${key}: portal route carries SessionAuthGuard`);
   if (isPortal && !hasPortal) note(`${key}: portal route missing PortalAuthGuard`);
   if (!isPortal && hasPortal) note(`${key}: non-portal route carries PortalAuthGuard`);
@@ -189,7 +195,11 @@ for (const [key, hit] of nest) {
   // CapabilityGuard delegates to requireCapability(), which authenticates AND authorizes in one
   // step, so it is itself an auth guard whenever a capability is attached.
   const authenticated =
-    hasSession || hasPortal || hasIdentityGuard || (hasCapGuard && hit.caps.length > 0);
+    hasSession ||
+    hasPortal ||
+    hasIdentityGuard ||
+    hasPlatformGuard ||
+    (hasCapGuard && hit.caps.length > 0);
   if (!isPublic && !authenticated) note(`${key}: no auth guard (${hit.file})`);
   if (isPublic && authenticated)
     note(`${key}: listed as deliberately public but carries an auth guard — the list is stale`);

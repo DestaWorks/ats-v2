@@ -19,8 +19,6 @@ export default async function ConsoleLayout({ children }: { children: React.Reac
   const gate = await platformGate();
   if (gate.outcome !== "granted") return <Refusal reason={gate.outcome} />;
 
-  const operatorUrl = process.env["OPERATOR_APP_URL"];
-
   const items = CONSOLE_NAV.filter((item) => hasPlatformCapability(gate.context, item.capability));
 
   return (
@@ -40,7 +38,7 @@ export default async function ConsoleLayout({ children }: { children: React.Reac
         </div>
         <div className="flex items-center gap-3">
           <span className="text-xs text-gray">{gate.context.user.email}</span>
-          {operatorUrl ? <SignOutButton operatorUrl={operatorUrl} /> : null}
+          <SignOutButton />
         </div>
       </header>
       <div className="flex flex-1 flex-col md:flex-row">

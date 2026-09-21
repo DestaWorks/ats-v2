@@ -1,36 +1,26 @@
 "use client";
 
 import { useState } from "react";
+import { platformAuthClient } from "@destaworks/auth/platform-auth-client";
 
 /**
- * End the session from the console.
+ * End the CONSOLE session.
  *
- * Better Auth lives in the operator app, not here, so this posts to ITS sign-out endpoint rather
- * than clearing a cookie locally: expiring the cookie would log this browser out while leaving the
- * session row valid until it aged out, which is not what a sign-out on the plane that reads every
- * tenant should mean. The operator origin must therefore be in `AUTH_TRUSTED_ORIGINS`.
- *
- * The redirect happens whatever the response was. A failed revoke still ends the session locally,
- * and leaving an operator sitting on a console that looks signed in would be the worse outcome.
+ * Signs out of this app's own instance, so an operator who is also signed into a workspace stays
+ * signed into it — which is the point of the two cookies. Posting to the operator app here would
+ * end the wrong session and leave console authority in place.
  */
-export function SignOutButton({ operatorUrl }: { operatorUrl: string }) {
+export function SignOutButton() {
   const [pending, setPending] = useState(false);
 
   async function signOut() {
     setPending(true);
     try {
-      await fetch(`${operatorUrl}/api/auth/sign-out`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        // Better Auth parses the body even though it needs nothing from it; declaring JSON and
-        // sending none is a 400, and the session survives a sign-out that looked like it worked.
-        body: "{}",
-      });
+      await platformAuthClient.signOut();
     } catch {
       // fall through to the redirect
     }
-    window.location.href = `${operatorUrl}/sign-in`;
+    window.location.href = "/sign-in";
   }
 
   return (

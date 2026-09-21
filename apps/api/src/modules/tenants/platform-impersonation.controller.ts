@@ -20,7 +20,7 @@ import type { TenantContext } from "@destaworks/domain/tenant";
 import type { AuthUser } from "@destaworks/auth/guards";
 import { CurrentTenant } from "../../common/decorators/current-tenant.decorator";
 import { CurrentIdentity } from "../../common/decorators/current-identity.decorator";
-import { IdentityAuthGuard } from "../../common/guards/identity-auth.guard";
+import { PlatformAuthGuard } from "../../common/guards/platform-auth.guard";
 import { SessionAuthGuard } from "../../common/guards/session-auth.guard";
 import { TenantGuard } from "../../common/guards/tenant.guard";
 import { ZodValidationPipe, type ContractOutput } from "../../common/pipes/zod-validation.pipe";
@@ -89,7 +89,7 @@ export class PlatformImpersonationController {
    * capability are all read server-side, on this request, from state the caller cannot author.
    */
   @Get(":slug/activity")
-  @UseGuards(IdentityAuthGuard)
+  @UseGuards(PlatformAuthGuard)
   async activity(
     @Param("slug") slug: string,
     @CurrentIdentity() user: AuthUser,

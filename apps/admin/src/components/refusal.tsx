@@ -1,4 +1,3 @@
-import { headers } from "next/headers";
 import { Card } from "@destaworks/ui/card";
 
 /**
@@ -11,22 +10,10 @@ import { Card } from "@destaworks/ui/card";
  * The operator sign-in address is configuration, so an unconfigured deployment shows the
  * instruction without a link rather than a link that goes nowhere.
  */
-/** This console's own absolute URL for the current request, so a deep link survives sign-in. */
-async function consoleUrl(): Promise<string> {
-  const h = await headers();
-  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "";
-  const proto = h.get("x-forwarded-proto") ?? "https";
-  const path = h.get("x-invoke-path") ?? h.get("x-pathname") ?? "/";
-  return `${proto}://${host}${path}`;
-}
-
-export async function Refusal({ reason }: { reason: "signed-out" | "refused" }) {
-  const operatorUrl = process.env["OPERATOR_APP_URL"];
-  // Carry where they were going, so signing in returns them HERE rather than to an app this
-  // account may have no workspace in. The operator app validates it before following it.
-  const signInUrl = operatorUrl
-    ? `${operatorUrl}/sign-in?next=${encodeURIComponent(await consoleUrl())}`
-    : undefined;
+export function Refusal({ reason }: { reason: "signed-out" | "refused" }) {
+  // The console signs in on its OWN host now — no hop to the operator app, and no chance of
+  // stranding an operator in a workspace app they may have no membership in.
+  const signInUrl = "/sign-in";
   const signedOut = reason === "signed-out";
 
   return (
@@ -43,7 +30,7 @@ export async function Refusal({ reason }: { reason: "signed-out" | "refused" }) 
             ? "This console is for platform operators. Sign in to continue."
             : "This account is not on the platform administrator list. Access to the console is granted by deployment configuration, not by any role inside a workspace."}
         </p>
-        {signedOut && signInUrl ? (
+        {signedOut ? (
           <a
             href={signInUrl}
             className="mt-6 inline-flex items-center rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white"
