@@ -1,0 +1,63 @@
+# Runs the four ATS services from images already built and pushed by `.github/workflows/deploy.yml`.
+#
+# Distinct from the repo root's `docker-compose.yml`, which BUILDS from source for local work. A
+# host must never build: the artefact that was tested in CI is the artefact that runs, and a host
+# that compiles its own is a host running something no test ever saw.
+#
+# `REF` is the full commit SHA being rolled out. Every service pins the same one, so a half-applied
+# rollout is impossible — either all four move or none do.
+#
+# PORTS: deliberately 4003/4004/4005 rather than 3003/3004/3005. The systemd deployment still owns
+# those, and this stack is meant to run BESIDE it until it is proven, at which point the cutover is
+# an nginx upstream change rather than a leap. Bound to 127.0.0.1 — nginx is the only way in.
+name: destaworks
+
+services:
+  api:
+    image: ghcr.io/destaworks/ats-v2/api:${REF:?set REF to the deployed commit SHA}
+    env_file: /srv/destaworks/shared/.env.api
+    environment:
+      NODE_ENV: production
+      PORT: 3004
+    ports: ["127.0.0.1:4004:3004"]
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3004/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+  worker:
+    image: ghcr.io/destaworks/ats-v2/worker:${REF:?set REF to the deployed commit SHA}
+    env_file: /srv/destaworks/shared/.env.api
+    environment:
+      NODE_ENV: production
+    restart: unless-stopped
+
+  web:
+    # Environment-SPECIFIC: `NEXT_PUBLIC_API_URL` is baked in at build time, so this tag must carry
+    # the environment or a production build of the same SHA will overwrite it and point staging's
+    # browser bundle at the production API.
+    image: ghcr.io/destaworks/ats-v2/web:${REF:?set REF to the deployed commit SHA}
+    env_file: /srv/destaworks/shared/.env.web
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+    ports: ["127.0.0.1:4003:3000"]
+    restart: unless-stopped
+
+  admin:
+    image: ghcr.io/destaworks/ats-v2/admin:${REF:?set REF to the deployed commit SHA}
+    env_file: /srv/destaworks/shared/.env.admin
+    environment:
+      NODE_ENV: production
+      PORT: 3010
+    ports: ["127.0.0.1:4005:3010"]
+    restart: unless-stopped
