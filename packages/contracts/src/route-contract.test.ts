@@ -55,6 +55,14 @@ const RESPONSE_TYPE_EXEMPTIONS = [
       "return through json(). The wire shapes are Better Auth's, not ours to declare.",
     mustContain: "toNextJsHandler",
   },
+  {
+    path: "apps/admin/src/app/api/auth/[...all]/route.ts",
+    reason:
+      "The platform console's OWN Better Auth catch-all. It exists so the console holds a session " +
+      "independent of the operator app's — same user table, separate cookie — and like the other " +
+      "catch-all it re-exports a handler rather than returning through json().",
+    mustContain: "platformAuthHandler",
+  },
 ] as const;
 
 const EXEMPT_PATHS = new Set<string>(RESPONSE_TYPE_EXEMPTIONS.map((e) => e.path));
@@ -72,7 +80,8 @@ function filesUnder(dir: string, matches: (name: string) => boolean, out: string
 
 /**
  * Every App Router `route.ts` still served by an app. Phase 4.3 deleted the 140 that made up the
- * old API; what remains is the Better Auth catch-all, which is transport Better Auth owns. The
+ * old API; what remains is a Better Auth catch-all per app — the operator app's, and the console's
+ * own — which is transport Better Auth owns. The
  * API surface itself is `apps/api` — `controllerFiles()` below — and `check-auth-surface.mjs`
  * is what proves the two agree on guards and capabilities.
  */
@@ -133,10 +142,20 @@ describe("every endpoint declares its request and response types", () => {
   const controllers = controllerFiles();
 
   it("finds the API surface", () => {
-    // The floor is on `apps/api` now. `apps/web` serves one route (Better Auth) and must not grow
-    // a second — a new handler there would be a second API surface, which 4.0 decided against.
+    // The floor is on `apps/api` now.
     expect(controllers.length).toBeGreaterThanOrEqual(24);
-    expect(routes.length).toBe(1);
+
+    // Asserted PER APP rather than as one total: the rule is that `apps/web` must not grow a
+    // second handler — that would be a second API surface, which 4.0 decided against — and a bare
+    // total would let a new route there hide behind a legitimate one somewhere else.
+    //
+    // Each app serves exactly one, and both are Better Auth catch-alls: the operator app's, and
+    // the console's own, which exists so the two planes hold separate sessions.
+    const byApp = (app: string) => routes.filter((r) => r.startsWith(`apps/${app}/`)).length;
+    expect(byApp("web")).toBe(1);
+    expect(byApp("admin")).toBe(1);
+    expect(byApp("api")).toBe(0);
+    expect(routes.length).toBe(2);
   });
 
   it("declares a concrete response type on every controller handler", () => {

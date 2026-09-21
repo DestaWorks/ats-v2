@@ -9,11 +9,15 @@
     "./guards": "./src/guards.ts",
     "./impersonation": "./src/impersonation.ts",
     "./platform-admin": "./src/platform-admin.ts",
+    "./platform-auth": "./src/platform-auth.ts",
+    "./platform-guards": "./src/platform-guards.ts",
+    "./platform-auth-client": "./src/platform-auth-client.ts",
     "./portal-guards": "./src/portal-guards.ts",
     "./request-context": "./src/request-context.ts",
     "./tenant-claim": "./src/tenant-claim.ts",
     "./tenant-context": "./src/tenant-context.ts",
-    "./testing/*": "./src/testing/*.ts"
+    "./testing/*": "./src/testing/*.ts",
+    "./trusted-origins": "./src/trusted-origins.ts"
   },
   "dependencies": {
     "@destaworks/config": "workspace:*",

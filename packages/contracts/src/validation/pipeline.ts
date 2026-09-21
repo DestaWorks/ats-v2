@@ -114,8 +114,93 @@ export interface DashboardStatsDTO {
   total: number;
   active: number;
   terminal: number;
+  /**
+   * Candidates whose status is not a recognised code. Counted rather than absorbed: `terminal`
+   * used to be `total - active`, which silently reclassified an unknown status as closed.
+   */
+  unknown: number;
+  /** Added in the last 30 days, and in the 30 before that — a REAL period-over-period pair. */
+  addedLast30: number;
+  addedPrev30: number;
   columns: DashboardStatColumn[];
   attention: CandidateCardDTO[];
+}
+
+/**
+ * One client's response rhythm, as the Overview's cadence strip reads it.
+ *
+ * `avgDays` is the mean gap between touches on that client's candidates; `daysSinceLast` is how
+ * long since the most recent one. `anomaly` marks a client that has gone quiet WHILE something is
+ * sitting with them — the pair is what makes it actionable rather than merely idle.
+ */
+export interface ClientCadenceDTO {
+  clientId: string;
+  clientName: string;
+  /** Mean gap between touches, in days, to one decimal. `0` when there is no gap to measure. */
+  avgDays: number;
+  /** Days since the last touch. `null` when the client has no dated activity at all. */
+  daysSinceLast: number | null;
+  /** Candidates currently sitting with the client (submitted or interviewing). */
+  pendingCount: number;
+  anomaly: boolean;
+  /** The longest-waiting pending candidate, named only when `anomaly` is true. */
+  waitingCandidate: { id: string; name: string } | null;
+}
+
+/**
+ * One proposed piece of work on the Overview's queue.
+ *
+ * `reason` is a complete, templated sentence — never model-written — so the same workspace reads
+ * identically for two people and "why is this here?" has an answer in the rules.
+ */
+export interface NextActionDTO {
+  type: string;
+  priority: string;
+  candidateId: string;
+  candidateName: string;
+  status: string;
+  statusLabel: string;
+  daysInStage: number;
+  reason: string;
+}
+
+/** The queue plus the counters its header shows, so the client counts nothing itself. */
+export interface NextActionsDTO {
+  actions: NextActionDTO[];
+  total: number;
+  overdue: number;
+  verifications: number;
+  /** True when the scan hit its cap, so the queue is computed from a prefix. */
+  truncated: boolean;
+}
+
+/** One row of the Overview's best-fit ranking. */
+export interface TopCandidateDTO {
+  id: string;
+  name: string;
+  credential: string | null;
+  licenseState: string | null;
+  clientName: string;
+  status: string;
+  statusLabel: string;
+  /** Fit against the assigned client's rules, 0-100. Only scored candidates are ranked. */
+  matchPct: number;
+  daysInStage: number;
+  isOverdue: boolean;
+}
+
+/**
+ * The Overview's cadence strip and best-fit ranking, in one read — both from one candidate scan.
+ *
+ * Deliberately does NOT carry per-client pipeline counts: `/crm/compare` already reports pipeline,
+ * placed, active, conversion and health per client, and an unbounded card grid on the dashboard
+ * both duplicated it and grew without a ceiling.
+ */
+export interface ClientOverviewDTO {
+  cadence: ClientCadenceDTO[];
+  topCandidates: TopCandidateDTO[];
+  /** True when the candidate scan hit its row cap, so the figures are computed from a prefix. */
+  truncated: boolean;
 }
 
 // --- request schemas (server validates; client may reuse) -------------------

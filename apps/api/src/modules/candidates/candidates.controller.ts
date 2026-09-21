@@ -44,6 +44,8 @@ import type {
   BulkMoveResponse,
   ColumnPageDTO,
   DashboardStatsDTO,
+  ClientOverviewDTO,
+  NextActionsDTO,
 } from "@destaworks/contracts/validation/pipeline";
 import type {
   CandidateAckEnvelope,
@@ -59,6 +61,10 @@ import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { RateLimit } from "../../common/decorators/rate-limit.decorator";
 import { RequireCapability } from "../../common/decorators/require-capability.decorator";
 import { CapabilityGuard } from "../../common/guards/capability.guard";
+import {
+  outreachMessageQuerySchema,
+  type OutreachMessageDTO,
+} from "@destaworks/contracts/validation/outreach-draft";
 import { RateLimitGuard } from "../../common/guards/rate-limit.guard";
 import { SessionAuthGuard } from "../../common/guards/session-auth.guard";
 import { ZodValidationPipe, type ContractOutput } from "../../common/pipes/zod-validation.pipe";
@@ -192,6 +198,23 @@ export class CandidatesController {
   }
 
   /**
+   * GET /candidates/client-overview — the Overview's client cadence strip and snapshot cards.
+   * Declared before `:id` for the same reason as `dashboard-stats`.
+   */
+  @Get("client-overview")
+  async clientOverview(@CurrentUser() user: AuthContext): Promise<ClientOverviewDTO> {
+    return this.candidates.clientOverview(user);
+  }
+
+  /**
+   * GET /candidates/next-actions — the Overview's work queue. Declared before `:id`, as above.
+   */
+  @Get("next-actions")
+  async nextActions(@CurrentUser() user: AuthContext): Promise<NextActionsDTO> {
+    return this.candidates.nextActions(user);
+  }
+
+  /**
    * GET /candidates/:id — the lighter profile projection the recipient picker fetches after a pick.
    * Not the detail composite the RSC page loads: no documents, notes, history or outreach.
    */
@@ -309,6 +332,22 @@ export class CandidatesController {
     @CurrentUser() user: AuthContext,
   ): Promise<NoteEnvelope> {
     return { note: await this.notes.add(user, id, body) };
+  }
+
+  /**
+   * GET /candidates/:id/outreach/message — the ready-to-send message for one queued action.
+   *
+   * Not module-gated: this is template composition, not a paid capability. Not a POST either — it
+   * writes nothing, and a send is still `POST :id/outreach` below.
+   */
+  @Get(":id/outreach/message")
+  async outreachMessage(
+    @Param("id") id: string,
+    @Query(new ZodValidationPipe(outreachMessageQuerySchema))
+    query: ContractOutput<typeof outreachMessageQuerySchema>,
+    @CurrentUser() user: AuthContext,
+  ): Promise<OutreachMessageDTO> {
+    return this.candidates.outreachMessage(id, query, user);
   }
 
   /** POST /candidates/:id/outreach — log one attempt; the lead-side twin is `/leads/:id/outreach`. */

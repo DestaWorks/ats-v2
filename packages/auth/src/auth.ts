@@ -4,6 +4,7 @@ import { nextCookies } from "better-auth/next-js";
 import { admin as adminPlugin } from "better-auth/plugins/admin";
 import { adminAc, userAc } from "better-auth/plugins/admin/access";
 import { prisma } from "@destaworks/db/prisma";
+import { authTrustedOrigins } from "./trusted-origins";
 import { sendEmail } from "@destaworks/integrations/email/provider";
 import { resetPasswordEmail } from "@destaworks/integrations/email/templates/reset-password";
 
@@ -57,22 +58,6 @@ function crossSubDomainCookieConfig() {
     crossSubDomainCookies: { enabled: true, domain },
     defaultCookieAttributes: { sameSite: "none" as const, secure: true },
   };
-}
-
-/**
- * Origins allowed to make state-changing auth calls.
- *
- * `AUTH_TRUSTED_ORIGINS` is a comma-separated list, and exists because the platform console is a
- * SEPARATE origin that must be able to end a session — without it Better Auth refuses the sign-out
- * with INVALID_ORIGIN and the console has no way to log anyone out. Development keeps the localhost
- * wildcard, which `next dev` needs because it picks whatever port is free.
- */
-export function authTrustedOrigins(): string[] {
-  const configured = (process.env["AUTH_TRUSTED_ORIGINS"] ?? "")
-    .split(",")
-    .map((origin) => origin.trim())
-    .filter((origin) => origin.length > 0);
-  return process.env.NODE_ENV !== "production" ? [...configured, "http://localhost:*"] : configured;
 }
 
 export const auth = betterAuth({

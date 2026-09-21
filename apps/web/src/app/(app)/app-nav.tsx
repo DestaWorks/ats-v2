@@ -2,6 +2,7 @@
 
 import { useState, type ComponentType, type SVGProps } from "react";
 import Link from "next/link";
+import { HoverPrefetchLink } from "@/components/hover-prefetch-link";
 import { usePathname } from "next/navigation";
 import {
   HomeIcon,
@@ -201,7 +202,9 @@ function NavLink({
 }) {
   const Icon = item.icon ? ICONS[item.icon] : null;
   return (
-    <Link
+    // Every nav item is on screen at once, so the default would prefetch the whole sidebar on each
+    // page — most of it for routes this session will never open. Hovering is the better signal.
+    <HoverPrefetchLink
       href={item.href}
       aria-current={isActive ? "page" : undefined}
       onClick={onNavigate}
@@ -220,6 +223,6 @@ function NavLink({
         />
       ) : null}
       {item.label}
-    </Link>
+    </HoverPrefetchLink>
   );
 }

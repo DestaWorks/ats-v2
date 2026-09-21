@@ -1,20 +1,28 @@
 import Link from "next/link";
-import { BoltIcon, FlagIcon, UserGroupIcon } from "@heroicons/react/24/outline";
+import {
+  BoltIcon,
+  FlagIcon,
+  QuestionMarkCircleIcon,
+  UserGroupIcon,
+} from "@heroicons/react/24/outline";
 import { requirePageUser } from "@/lib/page-user";
-import { viewerTzOffset } from "@destaworks/integrations/http/viewer-tz";
-import type { DashboardStatsDTO } from "@destaworks/contracts/validation/pipeline";
-import type { DailyOverviewDTO } from "@destaworks/contracts/validation/daily";
-import { apiGet, query } from "@/lib/api/server";
-import { dateKeyForOffset } from "@destaworks/domain/daily";
+import type {
+  DashboardStatsDTO,
+  ClientOverviewDTO,
+  NextActionsDTO,
+} from "@destaworks/contracts/validation/pipeline";
+import { apiGet } from "@/lib/api/server";
 import type { CandidateCardDTO } from "@destaworks/contracts/validation/pipeline";
 import { EmptyState } from "@destaworks/ui/empty-state";
 import { Card } from "@destaworks/ui/card";
 import { cn } from "@destaworks/domain/utils/cn";
 import { STATUS_BG } from "../pipeline/lib/status-style";
 import { StatCard } from "./stat-card";
-import { DailyStrip } from "./daily-strip";
 import { SinceYouClosed } from "./since-you-closed";
 import { PipelineDistributionChart } from "./pipeline-distribution-chart-lazy";
+import { ClientCadence } from "./client-cadence";
+import { NextActions } from "./next-actions";
+import { TopCandidates } from "./top-candidates";
 
 /**
  * Overview (RSC, legacy-parity). Reads a lightweight summary (`GET /candidates/dashboard-stats`)
@@ -26,18 +34,10 @@ import { PipelineDistributionChart } from "./pipeline-distribution-chart-lazy";
 export default async function DashboardPage() {
   const user = await requirePageUser();
 
-  // Daily strip's "today" is the USER-LOCAL date (`app-tz` cookie, shared with `/daily-log` and
-  // `/weekly-brief` — see those pages' comments) — seed it server-side when the cookie is
-  // present so it renders immediately instead of a blank gap while it fetches on mount.
-  const initialTz = await viewerTzOffset();
-
-  const [stats, initialDailyOverview] = await Promise.all([
+  const [stats, clientOverview, nextActions] = await Promise.all([
     apiGet<DashboardStatsDTO>("/candidates/dashboard-stats"),
-    initialTz !== undefined
-      ? apiGet<DailyOverviewDTO>(
-          `/daily/overview${query({ date: dateKeyForOffset(initialTz), tz: initialTz })}`,
-        )
-      : Promise.resolve(undefined),
+    apiGet<ClientOverviewDTO>("/candidates/client-overview"),
+    apiGet<NextActionsDTO>("/candidates/next-actions"),
   ]);
   const attention: CandidateCardDTO[] = stats.attention;
 
@@ -50,6 +50,19 @@ export default async function DashboardPage() {
     month: "long",
     day: "numeric",
   });
+
+  // A REAL period-over-period delta: candidates added in the last 30 days against the 30 before.
+  // Absent — not zero — when there is no prior window to compare against, because "0%" would
+  // assert a flat trend the data cannot support.
+  const addedTrend =
+    stats.addedPrev30 === 0
+      ? null
+      : {
+          direction: (stats.addedLast30 >= stats.addedPrev30 ? "up" : "down") as "up" | "down",
+          label: `${stats.addedLast30 >= stats.addedPrev30 ? "+" : ""}${Math.round(
+            ((stats.addedLast30 - stats.addedPrev30) / stats.addedPrev30) * 100,
+          )}%`,
+        };
 
   const filled = stats.columns.filter((c) => c.count > 0);
   const distributionTotal = filled.reduce((sum, c) => sum + c.count, 0);
@@ -65,21 +78,44 @@ export default async function DashboardPage() {
         </p>
       </header>
 
-      {/* Daily accountability loop (Wave 3.1): targets/pace + End of Shift, then the recap. */}
-      <DailyStrip
-        {...(initialDailyOverview !== undefined && { initial: initialDailyOverview })}
-        {...(initialTz !== undefined && { initialTz })}
-      />
       <SinceYouClosed userId={user.user.id} />
+      <NextActions data={nextActions} />
 
       {/* Main (stats + distribution) + a sidebar (needs attention) — fills the width on wide
           screens instead of one narrow centered column with dead space on both sides. */}
       <div className="grid items-start gap-6 lg:grid-cols-3">
         <div className="flex flex-col gap-6 lg:col-span-2">
-          <section className="grid grid-cols-3 gap-3">
-            <StatCard label="Total" value={stats.total} icon={UserGroupIcon} />
-            <StatCard label="Active" value={stats.active} tone="teal" icon={BoltIcon} />
-            <StatCard label="Terminal" value={stats.terminal} tone="orange" icon={FlagIcon} />
+          <section className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <StatCard
+              label="Total"
+              value={stats.total}
+              icon={UserGroupIcon}
+              caption="candidates in this workspace"
+              {...(addedTrend !== null && { trend: addedTrend })}
+            />
+            <StatCard
+              label="Active"
+              value={stats.active}
+              tone="teal"
+              icon={BoltIcon}
+              caption="still moving through the pipeline"
+            />
+            <StatCard
+              label="Terminal"
+              value={stats.terminal}
+              tone="orange"
+              icon={FlagIcon}
+              caption="closed out — rejected, no response or parked"
+            />
+            {stats.unknown > 0 && (
+              <StatCard
+                label="Unrecognised"
+                value={stats.unknown}
+                tone="red"
+                icon={QuestionMarkCircleIcon}
+                caption="status not in the 13 stages — needs a look"
+              />
+            )}
           </section>
 
           <Card as="section" className="p-5">
@@ -171,6 +207,9 @@ export default async function DashboardPage() {
           )}
         </Card>
       </div>
+
+      <ClientCadence rows={clientOverview.cadence} />
+      <TopCandidates rows={clientOverview.topCandidates} />
     </div>
   );
 }

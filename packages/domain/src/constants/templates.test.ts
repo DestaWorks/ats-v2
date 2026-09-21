@@ -13,8 +13,8 @@ import {
 import { BASE_CLIENTS } from "./clients";
 
 describe("TEMPLATES", () => {
-  it("has 12 templates, each with non-empty subject/body and a known category/dir", () => {
-    expect(TEMPLATES).toHaveLength(12);
+  it("has 13 templates, each with non-empty subject/body and a known category/dir", () => {
+    expect(TEMPLATES).toHaveLength(13);
     const categoryIds = TEMPLATE_CATEGORIES.map((c) => c.id);
     for (const t of TEMPLATES) {
       expect(t.subject.length).toBeGreaterThan(0);

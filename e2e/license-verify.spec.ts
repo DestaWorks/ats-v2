@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { gotoReady } from "./fixtures/navigate";
-import { createCandidate, verifyLicense } from "./fixtures/api";
+import { createCandidate, deleteCandidate, verifyLicense } from "./fixtures/api";
 
 /**
  * License Verify (`apps/web/src/app/(app)/license-verify/page.tsx`) — a read-only Verification
@@ -13,20 +13,31 @@ import { createCandidate, verifyLicense } from "./fixtures/api";
  * the newest — could fall off the cap in a long-lived shared dev DB. The timeline is sorted
  * soonest-expiry-first and capped at 12; an already-expired fixture date sorts before any real
  * candidate's future expiry, so it's reliably within the cap regardless of DB growth.
+ *
+ * That last claim held only while ONE expired fixture existed. Repeated runs against a shared dev
+ * DB left fourteen of them tied on the same expiry date, and `orderBy: licenseExpiry asc` then
+ * returns an arbitrary twelve — so the newest fixture could miss the cap and the test failed on
+ * accumulated data rather than on a real defect. The fixture is now removed at the end of the run.
  */
 test("shows a verified candidate's license on the expiry timeline", async ({ page, request }) => {
   const name = `E2E License Candidate ${Date.now()}`;
   const candidateId = await createCandidate(request, name, "Clinical");
   await verifyLicense(request, candidateId, "Active", "2020-01-01");
 
-  await gotoReady(page, "/license-verify");
+  try {
+    await gotoReady(page, "/license-verify");
 
-  const link = page.getByRole("link", { name });
-  await expect(link).toBeVisible();
-  // The immediate parent `<div>` is the timeline row — it also holds the days-left label.
-  const row = link.locator("xpath=..");
-  await expect(row.getByText("EXPIRED")).toBeVisible();
+    const link = page.getByRole("link", { name });
+    await expect(link).toBeVisible();
+    // The immediate parent `<div>` is the timeline row — it also holds the days-left label.
+    const row = link.locator("xpath=..");
+    await expect(row.getByText("EXPIRED")).toBeVisible();
 
-  await link.click();
-  await expect(page.getByRole("heading", { name, level: 1 })).toBeVisible();
+    await link.click();
+    await expect(page.getByRole("heading", { name, level: 1 })).toBeVisible();
+  } finally {
+    // Trashing the fixture keeps the timeline's twelve slots free for the next run. Without it,
+    // every run left one more expired licence tied at the same date until the cap overflowed.
+    await deleteCandidate(request, candidateId);
+  }
 });

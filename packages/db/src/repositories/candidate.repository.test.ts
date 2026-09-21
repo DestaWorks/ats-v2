@@ -277,3 +277,99 @@ describe("groupActiveByCredentialState — Discover coverage-gap widget (Wave 5.
     expect(arg.where.state).toEqual({ not: null });
   });
 });
+
+/**
+ * The Overview projection is the one candidate read that scans the table, so what it SELECTS is
+ * the thing worth pinning: a later edit that widened it to the full row would leak `licenseNumber`
+ * into a dashboard read and nothing else would notice.
+ */
+describe("candidateRepository.listForClientOverview", () => {
+  beforeEach(() => {
+    h.findMany.mockReset().mockResolvedValue([]);
+  });
+
+  it("selects no contact details and no licence number", async () => {
+    await candidateRepository.listForClientOverview(ctx);
+    const arg = h.findMany.mock.calls[0]![0] as { select: Record<string, boolean> };
+
+    expect(arg.select["licenseNumber"]).toBeUndefined();
+    expect(arg.select["email"]).toBeUndefined();
+    expect(arg.select["phone"]).toBeUndefined();
+    expect(arg.select["notes"]).toBeUndefined();
+  });
+
+  it("selects exactly what the two strips compute from", async () => {
+    await candidateRepository.listForClientOverview(ctx);
+    const arg = h.findMany.mock.calls[0]![0] as { select: Record<string, boolean> };
+
+    for (const field of [
+      "id",
+      "name",
+      "clientId",
+      "status",
+      "stageEnteredAt",
+      "updatedAt",
+      "licenseState",
+      "credential",
+    ]) {
+      expect(arg.select[field]).toBe(true);
+    }
+  });
+
+  it("reads only live, client-assigned rows and caps the scan", async () => {
+    await candidateRepository.listForClientOverview(ctx);
+    const arg = h.findMany.mock.calls[0]![0] as {
+      where: { deletedAt: null; clientId: { not: null } };
+      take: number;
+    };
+
+    expect(arg.where.deletedAt).toBeNull();
+    expect(arg.where.clientId).toEqual({ not: null });
+    expect(arg.take).toBe(MAX_ROWS_CAP);
+  });
+});
+
+describe("candidateRepository.listActiveForActions", () => {
+  beforeEach(() => {
+    h.findMany.mockReset().mockResolvedValue([]);
+  });
+
+  it("selects no contact details and no licence number", async () => {
+    await candidateRepository.listActiveForActions(ctx);
+    const arg = h.findMany.mock.calls[0]![0] as { select: Record<string, boolean> };
+
+    expect(arg.select["licenseNumber"]).toBeUndefined();
+    expect(arg.select["email"]).toBeUndefined();
+    expect(arg.select["phone"]).toBeUndefined();
+  });
+
+  it("selects what the rule needs to decide an action", async () => {
+    await candidateRepository.listActiveForActions(ctx);
+    const arg = h.findMany.mock.calls[0]![0] as { select: Record<string, boolean> };
+
+    for (const field of [
+      "id",
+      "name",
+      "status",
+      "stageEnteredAt",
+      "track",
+      "licenseState",
+      "licenseStatus",
+      "licenseExpiry",
+    ]) {
+      expect(arg.select[field]).toBe(true);
+    }
+  });
+
+  it("reads live ACTIVE rows only, and caps the scan", async () => {
+    await candidateRepository.listActiveForActions(ctx);
+    const arg = h.findMany.mock.calls[0]![0] as {
+      where: { deletedAt: null; stageOrder: { lt: number } };
+      take: number;
+    };
+
+    expect(arg.where.deletedAt).toBeNull();
+    expect(arg.where.stageOrder).toEqual({ lt: 9 });
+    expect(arg.take).toBe(MAX_ROWS_CAP);
+  });
+});

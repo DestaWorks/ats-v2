@@ -80,13 +80,6 @@ export default async function AppLayout({
   }
   if (hasCapability(user, "viewReports")) {
     items.push({
-      href: "/weekly-brief",
-      label: "Weekly Brief",
-      group: "Home",
-      icon: "calendar",
-      module: "ai",
-    });
-    items.push({
       href: "/reports",
       label: "Reports",
       group: "Insights",

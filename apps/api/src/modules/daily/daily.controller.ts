@@ -32,6 +32,10 @@ import {
   type TeamBreakdownDTO,
 } from "@destaworks/contracts/validation/daily";
 import { MS_PER_DAY, systemClock, type Clock } from "@destaworks/domain/clock";
+import {
+  dailySummaryQuerySchema,
+  type DailySummaryDTO,
+} from "@destaworks/contracts/validation/daily-range";
 import type { AuthContext } from "@destaworks/auth/guards";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { SessionAuthGuard } from "../../common/guards/session-auth.guard";
@@ -48,6 +52,7 @@ const journalEntryPipe = new ZodValidationPipe(journalEntrySchema);
 const journalGoalPipe = new ZodValidationPipe(journalGoalSchema);
 const toggleGoalPipe = new ZodValidationPipe(toggleGoalSchema);
 const teamBreakdownPipe = new ZodValidationPipe(teamBreakdownQuerySchema);
+const dailySummaryPipe = new ZodValidationPipe(dailySummaryQuerySchema);
 const recapQueryPipe = new ZodValidationPipe(recapQuerySchema);
 
 /** The write that only reports its own success. One object, not eight `{ ok: true }` literals. */
@@ -159,6 +164,18 @@ export class DailyController {
     @CurrentUser() user: AuthContext,
   ): Promise<RecapDTO> {
     return this.daily.recap(clampRecapSince(query.since), user);
+  }
+
+  /**
+   * GET /daily/summary?range&date&scope — one period of activity, for the range-filtered page.
+   * `scope=team` is leadership-only and re-checked in the service, never here.
+   */
+  @Get("summary")
+  rangeSummary(
+    @Query(dailySummaryPipe) query: ContractOutput<typeof dailySummaryQuerySchema>,
+    @CurrentUser() user: AuthContext,
+  ): Promise<DailySummaryDTO> {
+    return this.daily.rangeSummary(query, user);
   }
 
   /** GET /daily/team-breakdown?weekStart — per-associate weekly rollup. Leadership only. */

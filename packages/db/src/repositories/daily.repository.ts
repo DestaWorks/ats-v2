@@ -101,6 +101,21 @@ export const dailyRepository = {
       take,
     });
   },
+  /** One user's self-reported logs across a date range (inclusive) — the "My log" summary. */
+  logsForUserInRange(
+    ctx: TenantContext,
+    userId: string,
+    startDate: string,
+    endDate: string,
+    tx?: ScopedTx,
+  ) {
+    return db(ctx, tx).dailyLog.findMany({
+      where: { userId, date: { gte: startDate, lte: endDate } },
+      orderBy: { date: "asc" },
+      take: REFERENCE_ROWS_CAP,
+    });
+  },
+
   /** Every self-reported log across ALL users in a date range (inclusive) — the admin team
    *  breakdown's input (Wave 3.1 backlog). Mirrors `actualsForRange`'s shape one level up. */
   logsForDateRange(ctx: TenantContext, startDate: string, endDate: string, tx?: ScopedTx) {

@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
-import { googleEnabled, authTrustedOrigins } from "@destaworks/auth/auth";
+import { googleEnabled } from "@destaworks/auth/auth";
+import { authTrustedOrigins } from "@destaworks/auth/trusted-origins";
 import { getCurrentUser } from "@destaworks/auth/guards";
 import { safeReturnTo } from "@destaworks/domain/utils/return-to";
 import { AuthShell } from "../auth-shell";
