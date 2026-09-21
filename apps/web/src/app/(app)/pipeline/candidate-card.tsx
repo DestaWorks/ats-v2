@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import Link from "next/link";
+import { HoverPrefetchLink } from "@/components/hover-prefetch-link";
 import { useRouter } from "next/navigation";
 import { useDraggable } from "@dnd-kit/core";
 import { ALL_STATUS_CODES, statusLabel, type CandidateStatus } from "@destaworks/domain/constants";
@@ -192,12 +192,12 @@ export function CandidateCard({
 
       {/* Footer controls sit OUTSIDE the drag listeners so click/keyboard work without drag ambiguity. */}
       <div className="flex items-center justify-between gap-2 border-t border-black/5 px-3 py-1.5">
-        <Link
+        <HoverPrefetchLink
           href={`/candidates/${card.id}`}
           className="text-[11px] font-semibold text-navy hover:underline"
         >
           View profile
-        </Link>
+        </HoverPrefetchLink>
       </div>
 
       <div className="border-t border-black/5 px-3 py-1.5">

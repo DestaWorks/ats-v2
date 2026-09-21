@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
+import { HoverPrefetchLink } from "@/components/hover-prefetch-link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { CandidateListDTO } from "@destaworks/contracts/validation/candidate";
@@ -318,12 +319,12 @@ export function CandidatesList({
                 />
               </Td>
               <Td>
-                <Link
+                <HoverPrefetchLink
                   href={`/candidates/${c.id}`}
                   className="font-semibold text-navy hover:underline focus-visible:ring-2 focus-visible:ring-navy focus-visible:outline-none"
                 >
                   {c.name}
-                </Link>
+                </HoverPrefetchLink>
               </Td>
               <Td>{c.credential ?? <span className="text-gray">—</span>}</Td>
               <Td>
