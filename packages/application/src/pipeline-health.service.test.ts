@@ -25,7 +25,7 @@ vi.mock("@destaworks/integrations/ai/pipeline-health/pipeline-health", () => ({
   generatePipelineHealth: h.generatePipelineHealth,
 }));
 
-import { pipelineHealthService } from "./pipeline-health.service";
+import { pipelineHealthService, __resetPipelineHealthCache } from "./pipeline-health.service";
 
 const actor: TenantContext = {
   tenantId: "t1",
@@ -37,6 +37,9 @@ const actor: TenantContext = {
 };
 
 beforeEach(() => {
+  // The strip is cached per workspace in module state, so without this the first case's result is
+  // served to every later one — which reads as "the AI module was never called", not as a cache.
+  __resetPipelineHealthCache();
   h.candidateRepo.count.mockReset();
   h.candidateRepo.topOverdue.mockReset().mockResolvedValue([]);
   h.clientRepo.nameMap.mockReset().mockResolvedValue(new Map());
@@ -102,5 +105,59 @@ describe("pipelineHealthService.generate", () => {
     h.candidateRepo.count.mockResolvedValue(0);
     const result = await pipelineHealthService.generate(actor);
     expect(result).toEqual({ diagnostic: "d", healthScore: 80, topAction: "a" });
+  });
+});
+
+describe("pipelineHealthService.generate — caching", () => {
+  it("generates once per workspace, then serves the cached strip", async () => {
+    h.candidateRepo.count.mockResolvedValue(0);
+
+    const first = await pipelineHealthService.generate(actor);
+    const second = await pipelineHealthService.generate(actor);
+
+    expect(second).toEqual(first);
+    expect(h.generatePipelineHealth).toHaveBeenCalledTimes(1);
+  });
+
+  it("regenerates when the caller forces it — the Refresh button must actually refresh", async () => {
+    h.candidateRepo.count.mockResolvedValue(0);
+
+    await pipelineHealthService.generate(actor);
+    await pipelineHealthService.generate(actor, { force: true });
+
+    expect(h.generatePipelineHealth).toHaveBeenCalledTimes(2);
+  });
+
+  it("caches per WORKSPACE, so one tenant never reads another's strip", async () => {
+    h.candidateRepo.count.mockResolvedValue(0);
+
+    await pipelineHealthService.generate(actor);
+    await pipelineHealthService.generate({ ...actor, tenantId: "t2" });
+
+    expect(h.generatePipelineHealth).toHaveBeenCalledTimes(2);
+  });
+
+  it("collapses concurrent callers into ONE generation, not one each", async () => {
+    h.candidateRepo.count.mockResolvedValue(0);
+
+    const [a, b, c] = await Promise.all([
+      pipelineHealthService.generate(actor),
+      pipelineHealthService.generate(actor),
+      pipelineHealthService.generate(actor),
+    ]);
+
+    expect(h.generatePipelineHealth).toHaveBeenCalledTimes(1);
+    expect(b).toEqual(a);
+    expect(c).toEqual(a);
+  });
+
+  it("does not wedge the workspace when a generation fails", async () => {
+    h.candidateRepo.count.mockResolvedValue(0);
+    h.generatePipelineHealth.mockRejectedValueOnce(new Error("model unavailable"));
+
+    await expect(pipelineHealthService.generate(actor)).rejects.toThrow("model unavailable");
+
+    // The failed promise must not still be sitting in the in-flight map.
+    await expect(pipelineHealthService.generate(actor)).resolves.toBeDefined();
   });
 });

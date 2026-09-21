@@ -25,10 +25,13 @@ export function HealthStrip() {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(true);
 
-  async function refresh() {
+  // `force` only on the button. Mounting reads the server's cached strip, which is what stops an
+  // ordinary page visit costing a model call; the button is the one path that must bypass it, or
+  // it would hand back the same answer and look broken.
+  async function refresh(force = false) {
     setPending(true);
     setError(null);
-    const res = await postJson<PipelineHealthDTO>("/api/pipeline/health", {});
+    const res = await postJson<PipelineHealthDTO>("/api/pipeline/health", { refresh: force });
     setPending(false);
     if (res.ok) setHealth(res.data);
     else setError(messageForFailure(res.failure));
@@ -65,7 +68,7 @@ export function HealthStrip() {
         variant="secondary"
         size="sm"
         loading={pending}
-        onClick={() => void refresh()}
+        onClick={() => void refresh(true)}
       >
         ↻ Refresh
       </Button>

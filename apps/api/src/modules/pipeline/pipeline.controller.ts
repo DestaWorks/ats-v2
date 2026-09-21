@@ -1,5 +1,9 @@
-import { Controller, HttpCode, HttpStatus, Inject, Post, UseGuards } from "@nestjs/common";
-import type { PostPipelineHealthResponse } from "@destaworks/contracts/validation/pipeline-health";
+import { Body, Controller, HttpCode, HttpStatus, Inject, Post, UseGuards } from "@nestjs/common";
+import {
+  pipelineHealthRequestSchema,
+  type PostPipelineHealthResponse,
+} from "@destaworks/contracts/validation/pipeline-health";
+import { ZodValidationPipe, type ContractOutput } from "../../common/pipes/zod-validation.pipe";
 import type { AuthContext } from "@destaworks/auth/guards";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { RateLimit } from "../../common/decorators/rate-limit.decorator";
@@ -28,7 +32,11 @@ export class PipelineController {
   @HttpCode(HttpStatus.OK)
   @UseGuards(RateLimitGuard)
   @RateLimit({ name: "pipeline-health", limit: 20, windowMs: 60_000 })
-  async health(@CurrentUser() user: AuthContext): Promise<PostPipelineHealthResponse> {
-    return await this.pipelineHealth.generate(user);
+  async health(
+    @Body(new ZodValidationPipe(pipelineHealthRequestSchema))
+    body: ContractOutput<typeof pipelineHealthRequestSchema>,
+    @CurrentUser() user: AuthContext,
+  ): Promise<PostPipelineHealthResponse> {
+    return await this.pipelineHealth.generate(user, { force: body.refresh === true });
   }
 }

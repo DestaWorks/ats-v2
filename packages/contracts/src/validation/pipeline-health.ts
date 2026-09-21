@@ -20,5 +20,14 @@ export const pipelineHealthAiSchema = z.object({
 });
 export type PipelineHealthDTO = z.infer<typeof pipelineHealthAiSchema>;
 
+/**
+ * Request body of `POST /api/pipeline/health`.
+ *
+ * `refresh` exists because the answer is cached per workspace: without a way to force it, the
+ * strip's Refresh button would hand back the cached value and appear broken.
+ */
+export const pipelineHealthRequestSchema = z.object({ refresh: z.boolean().optional() }).strict();
+export type PipelineHealthRequest = z.infer<typeof pipelineHealthRequestSchema>;
+
 /** Response body of `POST /api/pipeline/health`. */
 export type PostPipelineHealthResponse = PipelineHealthDTO;

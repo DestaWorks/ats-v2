@@ -87,8 +87,8 @@ describe("PipelineController — delegation", () => {
     };
     const generate = vi.fn().mockResolvedValue(summary);
 
-    expect(await controllerWith({ generate }).health(actor)).toBe(summary);
-    expect(generate).toHaveBeenCalledWith(actor);
+    expect(await controllerWith({ generate }).health({}, actor)).toBe(summary);
+    expect(generate).toHaveBeenCalledWith(actor, { force: false });
   });
 });
 
@@ -102,7 +102,7 @@ describe("PipelineController — authentication and rate limiting", () => {
         method: "health",
         guards: [new SessionAuthGuard(), new RateLimitGuard()],
         request: { headers: {} },
-        invoke: () => controllerWith({ generate }).health(actor),
+        invoke: () => controllerWith({ generate }).health({}, actor),
       }),
     ).rejects.toMatchObject({ code: "UNAUTHORIZED", status: 401 });
 
@@ -119,7 +119,7 @@ describe("PipelineController — authentication and rate limiting", () => {
       method: "health",
       guards: [new SessionAuthGuard(), new RateLimitGuard()],
       request: { headers: {} },
-      invoke: () => controllerWith({ generate }).health(actor),
+      invoke: () => controllerWith({ generate }).health({}, actor),
     });
 
     expect(h.checkRateLimit).toHaveBeenCalledWith("pipeline-health:u7", {
