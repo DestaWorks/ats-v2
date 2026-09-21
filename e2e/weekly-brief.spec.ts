@@ -2,23 +2,33 @@ import { test, expect } from "@playwright/test";
 import { gotoReady } from "./fixtures/navigate";
 
 /**
- * Weekly Brief (`weekly-brief-view.tsx`) — leadership-gated `viewReports`. "Generate"/"Find
- * Patterns" are AI-backed job-queue flows (poll-for-draft, ~real generation time) that would need
- * either a real AI key or mocking the job-queue polling contract, not just one HTTP call — out of
- * scope here. This covers the deterministic part instead: picking a week with no saved brief
- * renders the empty state rather than a stale/wrong week's data, proving the week-picker actually
- * drives the fetch (`refresh()` in `weekly-brief-view.tsx`).
+ * Weekly Brief (`weekly-brief-view.tsx`) — leadership-gated `viewReports`, now reached through
+ * Performance's **Week** range rather than its own nav item (`/weekly-brief` is a redirect).
+ *
+ * "Generate"/"Find Patterns" are AI-backed job-queue flows (poll-for-draft, ~real generation time)
+ * that would need either a real AI key or mocking the job-queue polling contract, not just one HTTP
+ * call — out of scope here. This covers the deterministic part instead: picking a week with no
+ * saved brief renders the empty state rather than a stale/wrong week's data, proving the week
+ * picker actually drives the fetch (`refresh()` in `weekly-brief-view.tsx`).
  */
-test("shows the empty state for a week with no saved brief", async ({ page }) => {
+test("the old route still lands somewhere real", async ({ page }) => {
   await gotoReady(page, "/weekly-brief");
+  await expect(page).toHaveURL(/\/daily-log/);
+  await expect(page.getByRole("heading", { name: "Performance", level: 1 })).toBeVisible();
+});
 
-  await expect(page.getByRole("heading", { name: "Weekly Brief", level: 1 })).toBeVisible();
+test("shows the empty state for a week with no saved brief", async ({ page }) => {
+  await gotoReady(page, "/daily-log");
+
+  // The brief lives at the Week range — Day is the log-entry surface and carries no brief.
+  await page.getByRole("radio", { name: "Week" }).click();
 
   // A week far in the future can never have a saved brief seeded by any other spec's fixtures.
   // The input's `onChange` normalizes whatever date is typed to that week's Monday
   // (`mondayOf(e.target.value)` in `weekly-brief-view.tsx`), so read the normalized value back
   // rather than assuming which day of the week the picked date falls on.
   const weekInput = page.getByLabel("Week of (Monday)");
+  await expect(weekInput).toBeVisible();
   await weekInput.fill("2099-01-01");
   const normalizedMonday = await weekInput.inputValue();
 

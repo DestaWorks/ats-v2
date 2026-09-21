@@ -1,10 +1,13 @@
-import { hasCapability } from "@destaworks/domain/constants";
+import { hasCapability, hasModule } from "@destaworks/domain/constants";
 import { dateKeyForOffset } from "@destaworks/domain/daily";
 import { requirePageUser } from "@/lib/page-user";
 import { viewerTzOffset } from "@destaworks/integrations/http/viewer-tz";
 import type { DailyLogViewDTO } from "@destaworks/contracts/validation/daily";
 import { apiGet, query } from "@/lib/api/server";
-import { DailyLogView } from "./daily-log-view";
+import { ActivityView } from "./activity-view";
+import { WeeklyBriefView } from "../weekly-brief/weekly-brief-view";
+import { mondayOf } from "@destaworks/domain/daily";
+import type { WeeklyBriefDTO } from "@destaworks/contracts/validation/briefs";
 
 /**
  * Daily Log & KPI Tracker (Wave 3.1, legacy `vw="dailylog"` + the Journal). "Today" is the
@@ -37,16 +40,37 @@ export default async function DailyLogPage() {
         )
       : undefined;
 
+  // The Weekly Brief, folded into `week` rather than kept as its own nav item. Both gates are the
+  // page's own — the AI module and reporting access — so an unentitled viewer simply gets no brief
+  // rather than an upsell wedged inside the activity page.
+  // Seeded only when the `app-tz` cookie is present; WITHOUT it the component still renders and
+  // fetches on mount. Gating the whole block on the cookie hid the brief entirely on a session
+  // that had not written one yet — which is every first visit.
+  const briefSeed =
+    initialTz === undefined
+      ? {}
+      : {
+          initial: await apiGet<WeeklyBriefDTO | null>(
+            `/briefs/weekly${query({ weekStart: mondayOf(dateKeyForOffset(initialTz)) })}`,
+          ),
+          initialWeekStart: mondayOf(dateKeyForOffset(initialTz)),
+          initialTz,
+        };
+
+  const weeklyBrief =
+    hasModule(user.modules, "ai") && canViewTeam ? <WeeklyBriefView {...briefSeed} /> : null;
+
   return (
     <div className="flex flex-col gap-6 px-8 py-6">
       <header>
-        <h1 className="text-2xl font-bold text-navy">Daily Log</h1>
+        <h1 className="text-2xl font-bold text-navy">Performance</h1>
         <p className="mt-1 text-sm text-gray">
-          Self-report today&apos;s numbers, track your ramp, and keep your journal.
+          Targets, activity and briefs — for you or the team, over any period.
         </p>
       </header>
-      <DailyLogView
+      <ActivityView
         canViewTeam={canViewTeam}
+        {...(weeklyBrief !== null && { weeklyBrief })}
         {...(initial !== undefined && { initial })}
         {...(initialTz !== undefined && { initialTz })}
       />

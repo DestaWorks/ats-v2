@@ -9,6 +9,7 @@
     "./constants": "./src/constants/index.ts",
     "./constants/*": "./src/constants/*.ts",
     "./daily": "./src/daily.ts",
+    "./daily-range": "./src/daily-range.ts",
     "./mentions": "./src/mentions.ts",
     "./money": "./src/money.ts",
     "./pagination": "./src/pagination.ts",

@@ -36,12 +36,15 @@ export function StatCard({
   tone = "default",
   icon: Icon,
   trend,
+  caption,
 }: {
   label: string;
   value: number;
   tone?: StatCardTone;
   icon?: ComponentType<SVGProps<SVGSVGElement>>;
   trend?: { direction: "up" | "down"; label: string };
+  /** What the number counts, in words. A bare figure makes the reader guess. */
+  caption?: string;
 }) {
   const valueClass = TONE_CLASS[tone];
   return (
@@ -58,6 +61,7 @@ export function StatCard({
         <p className={cn("text-2xl font-bold", valueClass)}>{value}</p>
         {trend ? <TrendChip direction={trend.direction} label={trend.label} /> : null}
       </div>
+      {caption ? <p className="mt-1 text-xs text-gray">{caption}</p> : null}
     </Card>
   );
 }

@@ -78,6 +78,14 @@ export const TEMPLATES: readonly TemplateDef[] = [
   },
   // --- presentation ---
   {
+    id: "clientfollowup",
+    category: "presentation",
+    name: "Submission Follow-Up (to Client)",
+    dir: "to-client",
+    subject: "Following Up: {name} — Submitted Candidate",
+    body: "Dear {clientContact},\n\nI hope this message finds you well.\n\nI'm following up on {name}, {credential}, whom we submitted for your consideration at {client}. We remain keen to arrange an interview, and this profile is still a strong match for your requirements.\n\nCould you share an update on the candidacy, or let me know the best next step?\n\nThank you for your time.",
+  },
+  {
     id: "present",
     category: "presentation",
     name: "Candidate Presentation",

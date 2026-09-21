@@ -538,6 +538,72 @@ export const candidateRepository = {
   },
 
   /**
+   * The narrow per-candidate projection the Overview's client strips are computed from.
+   *
+   * A scan rather than an aggregate because both figures it feeds are gap-based: cadence needs
+   * each touch timestamp to measure the intervals between them, and the match average needs each
+   * candidate's scoring inputs. Neither is expressible as a `groupBy`.
+   *
+   * The select is therefore the floor, not a convenience: no `licenseNumber`, no `email`, no
+   * `phone`. `name` is present only so an anomaly can say who is waiting. Capped at
+   * `MAX_ROWS_CAP`; a caller that gets exactly that many rows must treat the result as a prefix.
+   */
+  /**
+   * Active candidates as the "what to do next" queue reads them.
+   *
+   * Deliberately NOT `listStaleActive`: that is ordered oldest-in-stage first, so a candidate added
+   * yesterday with an unverified licence would fall outside any cap and the queue would silently
+   * never ask for the check. The rule decides what is actionable; the read must not pre-filter by a
+   * proxy for it.
+   *
+   * Same PII floor as the Overview scan — no `licenseNumber`, no `email`, no `phone`. `licenseState`
+   * is present because the reason sentence names the state, not the number.
+   */
+  listActiveForActions(ctx: TenantContext, tx?: ScopedTx) {
+    return db(ctx, tx).candidate.findMany({
+      where: { deletedAt: null, stageOrder: { lt: 9 } },
+      select: {
+        id: true,
+        name: true,
+        status: true,
+        stageEnteredAt: true,
+        track: true,
+        credential: true,
+        licenseState: true,
+        licenseStatus: true,
+        licenseExpiry: true,
+        clientId: true,
+      },
+      orderBy: { stageEnteredAt: "asc" },
+      take: MAX_ROWS_CAP,
+    });
+  },
+
+  listForClientOverview(ctx: TenantContext, tx?: ScopedTx) {
+    return db(ctx, tx).candidate.findMany({
+      where: { deletedAt: null, clientId: { not: null } },
+      select: {
+        id: true,
+        name: true,
+        clientId: true,
+        status: true,
+        stageOrder: true,
+        stageEnteredAt: true,
+        updatedAt: true,
+        track: true,
+        credential: true,
+        licenseState: true,
+        licenseStatus: true,
+        licenseExpiry: true,
+        population: true,
+        setting: true,
+      },
+      orderBy: { updatedAt: "desc" },
+      take: MAX_ROWS_CAP,
+    });
+  },
+
+  /**
    * Team-wide (no owner scope) longest-overdue candidates, capped small — the AI Pipeline Health
    * strip's context (Wave 5.5 backlog, legacy `ats_pipeline_health`). Same `overdueWhere` predicate
    * `listBoard`'s `meta.overdue` and `alertBuckets`'s per-owner bucket already use. Only

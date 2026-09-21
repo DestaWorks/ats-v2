@@ -28,6 +28,13 @@ import type {
   TeamBreakdownDTO,
 } from "@destaworks/contracts/validation/daily";
 import { toIso } from "@destaworks/domain/utils/iso";
+import { datesInWindow, previousWindow, rangeWindow } from "@destaworks/domain/daily-range";
+import type {
+  DailyPointDTO,
+  DailySummaryDTO,
+  DailySummaryQuery,
+  DailyTotalsDTO,
+} from "@destaworks/contracts/validation/daily-range";
 import type { TenantContext } from "@destaworks/domain/tenant";
 import { writeAudit } from "@destaworks/db/audit";
 import { withTenantTransaction } from "@destaworks/db/with-transaction";
@@ -47,6 +54,67 @@ import { cachedUserList } from "@destaworks/integrations/http/request-cache";
 
 /** The capability that gates target-setting (leadership; legacy: the Daily Brief manager modal). */
 const SET_TARGETS_CAP = "viewReports" as const;
+
+/** Sum the five self-reported numbers over a set of logs. */
+function sumLogs(
+  logs: readonly {
+    sourced: number;
+    outreach: number;
+    responses: number;
+    screenings: number;
+    submitted: number;
+  }[],
+): DailyTotalsDTO {
+  const totals: DailyTotalsDTO = {
+    sourced: 0,
+    outreach: 0,
+    responses: 0,
+    screenings: 0,
+    submitted: 0,
+    daysLogged: logs.length,
+  };
+  for (const log of logs) {
+    totals.sourced += log.sourced;
+    totals.outreach += log.outreach;
+    totals.responses += log.responses;
+    totals.screenings += log.screenings;
+    totals.submitted += log.submitted;
+  }
+  return totals;
+}
+
+/**
+ * Sum targets into the same five-number shape the logs report in.
+ *
+ * The two models do not share names — a target sets `sourcing`/`inbound`/`screens` where a log
+ * reports `sourced`/`responses`/`screenings` — so the mapping is written out rather than inferred.
+ * `submitted` has NO target: nobody sets a daily submission goal, so it stays 0 and the page shows
+ * the actual against nothing rather than against a fabricated zero target.
+ */
+function sumTargets(
+  targets: readonly {
+    sourcing: number;
+    outreach: number;
+    inbound: number;
+    screens: number;
+  }[],
+): DailyTotalsDTO {
+  const totals: DailyTotalsDTO = {
+    sourced: 0,
+    outreach: 0,
+    responses: 0,
+    screenings: 0,
+    submitted: 0,
+    daysLogged: targets.length,
+  };
+  for (const t of targets) {
+    totals.sourced += t.sourcing;
+    totals.outreach += t.outreach;
+    totals.responses += t.inbound;
+    totals.screenings += t.screens;
+  }
+  return totals;
+}
 
 /**
  * The Associate roster this workspace's leadership sets targets for and sends feedback to.
@@ -514,6 +582,72 @@ export const dailyService = {
    * per-associate weekly rollup built from real self-reported `DailyLog` rows (NOT event-derived
    * live counts, matching legacy's own inputs). LEADERSHIP only, same tier as `setTarget`.
    */
+  /**
+   * One period of activity, whatever its length — the range-filtered activity page's single read.
+   *
+   * Every range goes through the same aggregation rather than a per-range endpoint, so a month and
+   * a week cannot disagree about what "sourced" counts. The window itself is calendar-anchored in
+   * `domain/daily-range`: Week means Monday–Sunday, not the last seven days, or the totals would
+   * not reconcile with anyone's own reckoning of their week.
+   */
+  async rangeSummary(query: DailySummaryQuery, ctx: TenantContext): Promise<DailySummaryDTO> {
+    const team = query.scope === "team";
+    if (team && !hasCapability(ctx, SET_TARGETS_CAP)) {
+      throw new AppError("FORBIDDEN", "You don't have permission to do that");
+    }
+
+    const { from, to } = rangeWindow(query.range, query.date);
+    const prev = previousWindow(from, to);
+    const dates = datesInWindow(from, to);
+
+    const [logs, previousLogs, targets] = await withTenantTransaction(ctx, async (tx) =>
+      Promise.all([
+        team
+          ? dailyRepository.logsForDateRange(ctx, from, to, tx)
+          : dailyRepository.logsForUserInRange(ctx, ctx.user.id, from, to, tx),
+        team
+          ? dailyRepository.logsForDateRange(ctx, prev.from, prev.to, tx)
+          : dailyRepository.logsForUserInRange(ctx, ctx.user.id, prev.from, prev.to, tx),
+        dailyRepository.targetsForDateRange(ctx, dates, tx),
+      ]),
+    );
+
+    const byDate = new Map<string, DailyPointDTO>();
+    for (const date of dates) {
+      byDate.set(date, {
+        date,
+        sourced: 0,
+        outreach: 0,
+        responses: 0,
+        screenings: 0,
+        submitted: 0,
+      });
+    }
+    for (const log of logs) {
+      const point = byDate.get(log.date);
+      if (!point) continue;
+      point.sourced += log.sourced;
+      point.outreach += log.outreach;
+      point.responses += log.responses;
+      point.screenings += log.screenings;
+      point.submitted += log.submitted;
+    }
+
+    const scopedTargets = team ? targets : targets.filter((t) => t.userId === ctx.user.id);
+
+    return {
+      range: query.range,
+      scope: query.scope,
+      from,
+      to,
+      daysInPeriod: dates.length,
+      totals: sumLogs(logs),
+      previous: sumLogs(previousLogs),
+      days: [...byDate.values()],
+      targets: scopedTargets.length === 0 ? null : sumTargets(scopedTargets),
+    };
+  },
+
   async teamBreakdown(weekStart: string, ctx: TenantContext): Promise<TeamBreakdownDTO> {
     if (!hasCapability(ctx, SET_TARGETS_CAP)) {
       throw new AppError("FORBIDDEN", "Only leadership can view the team breakdown");

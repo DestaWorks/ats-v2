@@ -32,6 +32,10 @@ import type {
   CandidateCardDTO,
   ColumnPageDTO,
   DashboardStatsDTO,
+  ClientCadenceDTO,
+  ClientOverviewDTO,
+  TopCandidateDTO,
+  NextActionsDTO,
 } from "@destaworks/contracts/validation/pipeline";
 import { encodeCursor, type PageCursor } from "@destaworks/contracts/validation/cursor";
 import { toIso } from "@destaworks/domain/utils/iso";
@@ -68,6 +72,25 @@ import { scoreCandidate } from "@destaworks/domain/rules/scoring";
 import { getAutoDisqualify } from "@destaworks/domain/rules/disqualify";
 import type { ClientRules } from "@destaworks/domain/rules/types";
 import { getDaysInStage, isOverdue, isStuck } from "@destaworks/domain/rules/stage-timing";
+import {
+  nextActionsFor,
+  rankNextActions,
+  type NextAction,
+} from "@destaworks/domain/rules/next-actions";
+import { findTemplate } from "@destaworks/domain/constants/templates";
+
+import type {
+  OutreachMessageQuery,
+  OutreachMessageDTO,
+} from "@destaworks/contracts/validation/outreach-draft";
+import {
+  fillTemplate,
+  type TemplateFillContext,
+  type TemplateRecipient,
+} from "@destaworks/domain/rules/fill-template";
+import { clientTemplateInfo } from "@destaworks/domain/constants/templates";
+import { clientContactRepository } from "@destaworks/db/repositories/client-contact.repository";
+
 import { AppError } from "@destaworks/integrations/http/app-error";
 import { visibleNotes, toNoteDTO } from "./note.service";
 import { toDocumentDTO } from "./document.dto";
@@ -214,6 +237,124 @@ function buildRulesMap(
 /** A rules row that constrains none of the four matchable dimensions offers no client-specific fit. */
 function constrainsNothing(rules: ClientRules): boolean {
   return rules.states.length + rules.creds.length + rules.pops.length + rules.settings.length === 0;
+}
+
+/** The two stages that mean a candidate is sitting with the client, awaiting their move. */
+const PENDING_WITH_CLIENT: ReadonlySet<string> = new Set([
+  "SUBMITTED_TO_CLIENT",
+  "CLIENT_INTERVIEW",
+]);
+
+/** The comparison window the dashboard's delta chips are computed over. */
+const TREND_WINDOW_DAYS = 30;
+
+/**
+ * Which house template answers which action.
+ *
+ * A NUDGE is addressed to the CLIENT and a re-engagement to the CANDIDATE, which is why they are
+ * two different templates rather than one with a swapped greeting.
+ */
+const OUTREACH_TEMPLATE = { NUDGE: "clientfollowup", STALE: "followup1" } as const;
+
+/**
+ * The candidate as the template engine reads them.
+ *
+ * `licenseNumber` is deliberately withheld. Neither template this endpoint uses references it, and
+ * passing it would make the dashboard a second path capable of emitting a licence number into an
+ * email body — the Templates screen is the one place that does that, on purpose and in view.
+ */
+function toTemplateRecipient(row: {
+  name: string;
+  credential: string | null;
+  licenseState: string | null;
+  licenseStatus: string;
+  yearsExp: number | null;
+  employer: string | null;
+  population: string | null;
+  setting: string | null;
+  telehealthPref: string | null;
+  city: string | null;
+  email: string | null;
+  phone: string | null;
+  targetLocation: string | null;
+}): TemplateRecipient {
+  return {
+    name: row.name,
+    credential: row.credential,
+    licenseState: row.licenseState,
+    licenseNumber: null,
+    licenseStatus: row.licenseStatus,
+    npi: null,
+    yearsExp: row.yearsExp,
+    specialty: null,
+    employer: row.employer,
+    population: row.population,
+    setting: row.setting,
+    telehealthPref: row.telehealthPref,
+    city: row.city,
+    email: row.email,
+    phone: row.phone,
+    targetLocations: row.targetLocation,
+  };
+}
+
+/** How many actions the queue shows. The counters above it always report the full backlog. */
+const NEXT_ACTIONS_LIMIT = 12;
+
+/** How many best-fit candidates the Overview ranks. */
+const TOP_CANDIDATES_LIMIT = 5;
+
+/** Below this, a client's silence is never an anomaly however fast their usual rhythm. */
+const ANOMALY_FLOOR_DAYS = 5;
+
+/** A gap longer than this is a relationship restarting, not a rhythm — it would skew the mean. */
+const MAX_CADENCE_GAP_DAYS = 60;
+
+const MS_PER_DAY = 86_400_000;
+
+interface PendingCandidate {
+  id: string;
+  name: string;
+  touchedAt: number;
+}
+
+interface ClientAccumulator {
+  clientName: string;
+  touches: number[];
+  pending: PendingCandidate[];
+}
+
+/**
+ * A client's rhythm from its touch timestamps: the mean gap between them, and how long since the
+ * last. Gaps of 60 days or more are dropped rather than averaged — one dormant spell would
+ * otherwise raise the mean enough to make every later silence look normal.
+ */
+function cadenceOf(
+  touches: number[],
+  now: Date,
+): { avgDays: number; daysSinceLast: number | null } {
+  if (touches.length === 0) return { avgDays: 0, daysSinceLast: null };
+  const sorted = [...touches].sort((a, b) => a - b);
+  const gaps: number[] = [];
+  for (let i = 1; i < sorted.length; i += 1) {
+    const gap = ((sorted[i] as number) - (sorted[i - 1] as number)) / MS_PER_DAY;
+    if (gap >= 0 && gap < MAX_CADENCE_GAP_DAYS) gaps.push(gap);
+  }
+  const avgDays =
+    gaps.length === 0
+      ? 0
+      : Math.round((gaps.reduce((sum, g) => sum + g, 0) / gaps.length) * 10) / 10;
+  const last = sorted[sorted.length - 1] as number;
+  return { avgDays, daysSinceLast: Math.floor((now.getTime() - last) / MS_PER_DAY) };
+}
+
+/** The pending candidate who has been waiting longest — the one an anomaly is actually about. */
+function oldestPending(pending: PendingCandidate[]): PendingCandidate | null {
+  let oldest: PendingCandidate | null = null;
+  for (const candidate of pending) {
+    if (oldest === null || candidate.touchedAt < oldest.touchedAt) oldest = candidate;
+  }
+  return oldest;
 }
 
 /**
@@ -765,6 +906,75 @@ export const candidateService = {
    * attempt (shared `outreach_attempts` table), bump the candidate's denormalized counter, and
    * audit. Returns the fresh attempt DTO (actor name resolved) for in-place prepend.
    */
+  /**
+   * The ready-to-send message for one queued action, composed from a house template.
+   *
+   * Built on demand rather than shipped with the queue, because the recipient's address is PII and
+   * the queue lists a dozen rows the operator will not open. One expansion, one address.
+   *
+   * The AUDIENCE is decided here, from the action type, and is the part most worth getting right:
+   * a NUDGE chases the CLIENT for a response, while a re-engagement goes to the CANDIDATE. Sending
+   * a candidate the note written about them is the failure this switch exists to prevent.
+   */
+  async outreachMessage(
+    id: string,
+    query: OutreachMessageQuery,
+    ctx: TenantContext,
+  ): Promise<OutreachMessageDTO> {
+    const candidate = await candidateRepository.findById(ctx, id);
+    if (!candidate) throw new AppError("NOT_FOUND", "Candidate not found");
+    if (query.type === "VERIFY") {
+      throw new AppError("CONFLICT", "A verification is worked in the app, not by email");
+    }
+
+    const toClient = query.type === "NUDGE";
+    const template = findTemplate(toClient ? OUTREACH_TEMPLATE.NUDGE : OUTREACH_TEMPLATE.STALE);
+    if (!template) throw new AppError("CONFLICT", "The outreach template is missing");
+
+    const [clientNames, preferences] = await Promise.all([
+      cachedClientNameMap(ctx),
+      userRepository.findPreferences(ctx.user.id),
+    ]);
+    const clientName = candidate.clientId ? (clientNames.get(candidate.clientId) ?? "") : "";
+    const info = clientTemplateInfo(clientName);
+
+    // The client's own contact, for a message addressed to them. Looked up only on the client
+    // path — a re-engagement to the candidate has no business reading the client's contact list.
+    let clientContactName = info.contactTitle;
+    let clientContactEmail: string | null = null;
+    if (toClient && candidate.clientId) {
+      const [contact] = await clientContactRepository.listForClient(ctx, candidate.clientId);
+      if (contact) {
+        clientContactName = contact.fullName;
+        clientContactEmail = contact.email;
+      }
+    }
+
+    const fill: TemplateFillContext = {
+      recipient: toTemplateRecipient(candidate),
+      clientName: clientName || "[Client]",
+      clientDesc: info.desc,
+      clientContact: clientContactName,
+      clientHighlights: info.highlights,
+      recruiterName: ctx.user.name,
+      today: toIso(new Date()).slice(0, 10),
+    };
+
+    const signature = preferences?.emailSignature?.trim();
+    const signOff = signature
+      ? `\n\n${signature}`
+      : `\n\nBest regards,\n${ctx.user.name}\nDestaHealth Recruiting`;
+
+    return {
+      to: toClient ? clientContactEmail : candidate.email,
+      audience: toClient ? "client" : "candidate",
+      subject: fillTemplate(template.subject, fill),
+      body: fillTemplate(template.body, fill) + signOff,
+      templateId: template.id,
+      templateName: template.name,
+    };
+  },
+
   async logOutreach(
     id: string,
     input: LogOutreachInput,
@@ -947,21 +1157,34 @@ export const candidateService = {
    * `licenseNumber`, so there's no PII gate here to drive.
    */
   async dashboardStats(viewer: TenantContext): Promise<DashboardStatsDTO> {
-    const [grouped, staleRows, clientNames, rulesRows] = await Promise.all([
-      candidateRepository.groupByStatus(viewer),
-      candidateRepository.listStaleActive(viewer, ATTENTION_LIMIT),
-      cachedClientNameMap(viewer),
-      cachedClientRulesList(viewer),
-    ]);
+    const now = new Date();
+    const windowStart = new Date(now.getTime() - TREND_WINDOW_DAYS * MS_PER_DAY);
+    const previousStart = new Date(now.getTime() - 2 * TREND_WINDOW_DAYS * MS_PER_DAY);
+
+    const [grouped, staleRows, clientNames, rulesRows, addedLast30, addedPrev30] =
+      await Promise.all([
+        candidateRepository.groupByStatus(viewer),
+        candidateRepository.listStaleActive(viewer, ATTENTION_LIMIT),
+        cachedClientNameMap(viewer),
+        cachedClientRulesList(viewer),
+        candidateRepository.count(viewer, { addedFrom: windowStart }),
+        candidateRepository.count(viewer, { addedFrom: previousStart, addedTo: windowStart }),
+      ]);
 
     const countByStatus = new Map<string, number>();
     for (const g of grouped) countByStatus.set(g.status, g._count._all);
 
+    // Each bucket is COUNTED. Deriving `terminal` by subtraction made an unrecognised status
+    // indistinguishable from a closed one — which is exactly what a legacy import would produce.
     let total = 0;
     let active = 0;
+    let terminal = 0;
+    let unknown = 0;
     for (const [status, n] of countByStatus) {
       total += n;
-      if (isCandidateStatus(status) && !isTerminalStatus(status)) active += n;
+      if (!isCandidateStatus(status)) unknown += n;
+      else if (isTerminalStatus(status)) terminal += n;
+      else active += n;
     }
 
     const columns = ACTIVE_STATUS_CODES.map((status) => ({
@@ -971,7 +1194,6 @@ export const candidateService = {
     }));
 
     const rulesByClient = buildRulesMap(clientNames, rulesRows);
-    const now = new Date();
     const attention = staleRows
       .map((row) =>
         toCard(
@@ -984,7 +1206,156 @@ export const candidateService = {
       )
       .filter((c) => c.isOverdue || c.isStuck);
 
-    return { total, active, terminal: total - active, columns, attention };
+    return { total, active, terminal, unknown, addedLast30, addedPrev30, columns, attention };
+  },
+
+  /**
+   * The Overview's client cadence strip and its best-fit candidate ranking.
+   *
+   * Both come from ONE narrow candidate scan, because neither is expressible as a `groupBy`:
+   * cadence measures the intervals BETWEEN touches, and the ranking needs a score computed per
+   * candidate. Sharing the scan also keeps the ranking identical to `/candidates?sort=fit`.
+   *
+   * Ported from the legacy Overview (`DROP 44`) with two deliberate changes. Overdue is measured
+   * from `stageEnteredAt`, not `updatedAt` — legacy used the latter only because it had no stage
+   * clock, and using it here would restart a candidate's SLA on any unrelated edit. And the
+   * per-client snapshot cards are NOT ported: `/crm/compare` already reports pipeline, placed,
+   * active, conversion and health per client, and an unbounded card grid on the dashboard both
+   * duplicated that screen and grew without a ceiling.
+   */
+  /**
+   * The Overview's work queue: every action the pipeline rules currently warrant, ranked.
+   *
+   * The rule is in `domain` and runs over a PII-light projection here, so the queue is decided by
+   * the same stage SLAs and licence gate the rest of the app enforces. Nothing is model-ranked and
+   * nothing is stored — the list is a view of the pipeline's current state, recomputed per request.
+   */
+  async nextActions(viewer: TenantContext): Promise<NextActionsDTO> {
+    const rows = await candidateRepository.listActiveForActions(viewer);
+    const now = new Date();
+
+    const actions: NextAction[] = [];
+    for (const row of rows) {
+      if (!isCandidateStatus(row.status)) continue;
+      actions.push(
+        ...nextActionsFor(
+          {
+            id: row.id,
+            name: row.name,
+            status: row.status,
+            track: row.track as Track,
+            stageEnteredAt: row.stageEnteredAt,
+            credential: row.credential,
+            licenseState: row.licenseState,
+            licenseStatus: row.licenseStatus as LicenseStatus,
+            licenseExpiry: row.licenseExpiry,
+            clientId: row.clientId,
+          },
+          now,
+        ),
+      );
+    }
+
+    const ranked = rankNextActions(actions);
+    return {
+      actions: ranked.slice(0, NEXT_ACTIONS_LIMIT),
+      // Counted over EVERY action, not the page: the header says how much work exists, and a
+      // count that shrank to match the visible rows would quietly under-report the backlog.
+      total: ranked.length,
+      overdue: ranked.filter((a) => a.priority === "P1").length,
+      verifications: ranked.filter((a) => a.type === "VERIFY").length,
+      truncated: rows.length === MAX_ROWS_CAP,
+    };
+  },
+
+  async clientOverview(viewer: TenantContext): Promise<ClientOverviewDTO> {
+    const [rows, clientNames, rulesRows] = await Promise.all([
+      candidateRepository.listForClientOverview(viewer),
+      cachedClientNameMap(viewer),
+      cachedClientRulesList(viewer),
+    ]);
+
+    const rulesByClient = buildRulesMap(clientNames, rulesRows);
+    const now = new Date();
+
+    const byClient = new Map<string, ClientAccumulator>();
+    const ranked: TopCandidateDTO[] = [];
+    for (const row of rows) {
+      const clientId = row.clientId;
+      if (clientId === null) continue;
+      const name = clientNames.get(clientId);
+      if (name === undefined) continue;
+
+      let acc = byClient.get(clientId);
+      if (acc === undefined) {
+        acc = { clientName: name, touches: [], pending: [] };
+        byClient.set(clientId, acc);
+      }
+      acc.touches.push(row.updatedAt.getTime());
+
+      const status = row.status;
+      if (!isCandidateStatus(status)) continue;
+      if (PENDING_WITH_CLIENT.has(status)) {
+        acc.pending.push({ id: row.id, name: row.name, touchedAt: row.updatedAt.getTime() });
+      }
+      if (isTerminalStatus(status)) continue;
+
+      // Ranked from the SAME scan rather than a second scored read: the list page already pays
+      // for that query, and the Overview showing a different top five than `sort=fit` would be
+      // the two disagreeing about the same question.
+      const pct = scoreFor({ ...row, email: null, phone: null }, rulesByClient, now);
+      if (pct === null) continue;
+      ranked.push({
+        id: row.id,
+        name: row.name,
+        credential: row.credential,
+        licenseState: row.licenseState,
+        clientName: name,
+        status,
+        statusLabel: statusLabel(status),
+        matchPct: pct,
+        daysInStage: getDaysInStage(row.stageEnteredAt, now),
+        isOverdue: isOverdue(status, row.stageEnteredAt, now),
+      });
+    }
+
+    const cadence: ClientCadenceDTO[] = [];
+    for (const [clientId, acc] of byClient) {
+      const { avgDays, daysSinceLast } = cadenceOf(acc.touches, now);
+      // Quiet ALONE is not a finding — a client with nothing pending is simply between candidates.
+      // It becomes one only when something is sitting with them and the silence has outrun their
+      // own rhythm. The 5-day floor stops a client who normally replies hourly from alarming daily.
+      const anomaly =
+        acc.pending.length > 0 &&
+        avgDays > 0 &&
+        daysSinceLast !== null &&
+        daysSinceLast > Math.max(avgDays * 2, ANOMALY_FLOOR_DAYS);
+      if (avgDays === 0 && acc.pending.length === 0) continue;
+      const waiting = anomaly ? oldestPending(acc.pending) : null;
+
+      cadence.push({
+        clientId,
+        clientName: acc.clientName,
+        avgDays,
+        daysSinceLast,
+        pendingCount: acc.pending.length,
+        anomaly,
+        waitingCandidate: waiting === null ? null : { id: waiting.id, name: waiting.name },
+      });
+    }
+
+    // Anomalies first, then whoever is holding the most — the order the strip is read in.
+    cadence.sort((a, b) =>
+      a.anomaly === b.anomaly ? b.pendingCount - a.pendingCount : a.anomaly ? -1 : 1,
+    );
+    // Name breaks ties so the ranking is stable between reads — scores collide often at 100.
+    ranked.sort((a, b) => b.matchPct - a.matchPct || a.name.localeCompare(b.name));
+
+    return {
+      cadence,
+      topCandidates: ranked.slice(0, TOP_CANDIDATES_LIMIT),
+      truncated: rows.length === MAX_ROWS_CAP,
+    };
   },
 
   /**

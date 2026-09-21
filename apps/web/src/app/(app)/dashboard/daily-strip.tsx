@@ -34,9 +34,18 @@ const PACE_COLOR = { hit: "text-green", "on pace": "text-navy", behind: "text-or
 export function DailyStrip({
   initial,
   initialTz,
+  showRoster = false,
 }: {
   initial?: DailyOverviewDTO;
   initialTz?: number;
+  /**
+   * Also render the leadership roster for setting OTHER people's targets.
+   *
+   * Off by default because it grows with headcount — it lists every associate, so on a real
+   * workspace it buried whatever came after it. One component rather than two so the strip and the
+   * roster share a single fetch of the day.
+   */
+  showRoster?: boolean;
 }) {
   const [data, setData] = useState<DailyOverviewDTO | null>(initial ?? null);
   const [open, setOpen] = useState<"eos" | "targets" | null>(null);
@@ -169,7 +178,7 @@ export function DailyStrip({
         </section>
       )}
 
-      {canSetTargets && data.teammates && data.teammates.length > 0 ? (
+      {showRoster && canSetTargets && data.teammates && data.teammates.length > 0 ? (
         <TargetRosterSection
           teammates={data.teammates}
           onPick={(id) => {

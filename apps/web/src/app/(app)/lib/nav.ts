@@ -58,7 +58,7 @@ export interface NavItem {
 export const BASE_NAV_ITEMS: readonly NavItem[] = [
   { href: "/dashboard", label: "Overview", icon: "home" },
 
-  { href: "/daily-log", label: "Daily Log", group: "Home", icon: "clipboard" },
+  { href: "/daily-log", label: "Performance", group: "Home", icon: "clipboard" },
 
   { href: "/sourcing", label: "Sourcing", group: "Recruiting", icon: "search", module: "sourcing" },
   { href: "/pipeline", label: "Pipeline", group: "Recruiting", icon: "board" },

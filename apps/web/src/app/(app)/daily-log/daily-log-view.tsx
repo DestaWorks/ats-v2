@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { dateKey, daysBefore, mondayOf } from "@destaworks/domain/daily";
+import { dateKey, mondayOf } from "@destaworks/domain/daily";
 import { useTzCookieSync } from "@/lib/use-tz-cookie-sync";
 import {
   BLOCKERS,
@@ -10,18 +10,17 @@ import {
   type TeamBreakdownDTO,
   type AcknowledgedDTO,
   type CreatedJournalEntryDTO as PostDailyJournalEntriesResponse,
-  type CreatedJournalGoalDTO as PostDailyJournalGoalsResponse,
   type SubmittedLogDTO as PostDailyLogResponse,
 } from "@destaworks/contracts/validation/daily";
-import { getJson, postJson, patchJson, messageForFailure } from "@/lib/api/client";
+import { getJson, postJson, messageForFailure } from "@/lib/api/client";
 import { Button } from "@destaworks/ui/button";
 import { Card } from "@destaworks/ui/card";
 import { Field } from "@destaworks/ui/field";
 import { Input } from "@destaworks/ui/input";
 import { Select } from "@destaworks/ui/select";
 import { Modal } from "@destaworks/ui/modal";
-import { DetailTabs, type TabDef } from "@destaworks/ui/tabs";
 import { Table, Td } from "@destaworks/ui/table";
+import { MetricCard, type MetricAccent } from "@destaworks/ui/metric-card";
 import { Textarea } from "@destaworks/ui/textarea";
 import { cn } from "@destaworks/domain/utils/cn";
 import { TeamBriefSection } from "./team-brief-section";
@@ -120,30 +119,6 @@ function RampTrack({ weekNum }: { weekNum: number }) {
  * rather than being skipped, oldest→newest left to right. Plain CSS bars, matching this app's
  * no-charting-library convention (see the Reports tabs' own bar visuals).
  */
-function WeekTrendBars({ today, history }: { today: string; history: DailyLogViewDTO["history"] }) {
-  const byDate = new Map(history.map((l) => [l.date, l.sourced]));
-  const days = Array.from({ length: 7 }, (_, i) => {
-    const date = daysBefore(today, 6 - i);
-    return { date, sourced: byDate.get(date) ?? 0 };
-  });
-  const max = Math.max(1, ...days.map((d) => d.sourced));
-  return (
-    <div className="flex items-end gap-2">
-      {days.map((d) => (
-        <div key={d.date} className="flex flex-1 flex-col items-center gap-1">
-          <div className="flex h-16 w-full items-end rounded bg-black/5">
-            <div
-              className="w-full rounded bg-brand"
-              style={{ height: `${Math.max(4, (d.sourced / max) * 100)}%` }}
-            />
-          </div>
-          <span className="text-[10px] font-semibold text-gray tabular-nums">{d.sourced}</span>
-          <span className="text-[9px] text-gray/70">{d.date.slice(5)}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
 
 /**
  * Leadership team breakdown + manager-feedback composer (Wave 3.1 backlog, legacy `isAdmin`-only
@@ -267,31 +242,11 @@ function TeamBreakdownSection({ weekStart }: { weekStart: string }) {
 type TileLabel = "Added (auto)" | "Moves (auto)" | "Notes (auto)" | "Verified (auto)";
 
 /** Icon mirrors legacy's own tile icons (🔍/➡/📝/✓) — one accent per auto-captured metric. */
-const TILE_META: Record<TileLabel, { icon: string; bar: string; badge: string; tint: string }> = {
-  "Added (auto)": {
-    icon: "🔍",
-    bar: "bg-navy",
-    badge: "bg-navy/10 text-navy",
-    tint: "bg-navy/[0.025]",
-  },
-  "Moves (auto)": {
-    icon: "➡️",
-    bar: "bg-purple",
-    badge: "bg-purple/10 text-purple",
-    tint: "bg-purple/[0.025]",
-  },
-  "Notes (auto)": {
-    icon: "📝",
-    bar: "bg-teal",
-    badge: "bg-teal/10 text-teal",
-    tint: "bg-teal/[0.025]",
-  },
-  "Verified (auto)": {
-    icon: "✓",
-    bar: "bg-green",
-    badge: "bg-green/10 text-green",
-    tint: "bg-green/[0.025]",
-  },
+const TILE_META: Record<TileLabel, { icon: string; accent: MetricAccent }> = {
+  "Added (auto)": { icon: "🔍", accent: "navy" },
+  "Moves (auto)": { icon: "➡️", accent: "purple" },
+  "Notes (auto)": { icon: "📝", accent: "teal" },
+  "Verified (auto)": { icon: "✓", accent: "green" },
 };
 
 /**
@@ -318,10 +273,13 @@ const TILE_META: Record<TileLabel, { icon: string; bar: string; badge: string; t
  */
 export function DailyLogView({
   canViewTeam,
+  scope,
   initial,
   initialTz,
 }: {
   canViewTeam: boolean;
+  /** Whose day to show. Owned by the page so one control serves every range. */
+  scope: "mine" | "team";
   initial?: DailyLogViewDTO;
   initialTz?: number;
 }) {
@@ -336,9 +294,7 @@ export function DailyLogView({
     notes: "",
     shiftHandoff: "",
   });
-  const [goalText, setGoalText] = useState("");
   const [entryText, setEntryText] = useState("");
-  const [goalPending, setGoalPending] = useState(false);
   const [entryPending, setEntryPending] = useState(false);
   const [perClient, setPerClient] = useState<Record<string, string>>({});
   const [pending, setPending] = useState(false);
@@ -363,19 +319,7 @@ export function DailyLogView({
   useTzCookieSync(tz);
 
   if (!view) return <p className="text-sm text-gray">Loading…</p>;
-  const {
-    log,
-    auto,
-    ramp,
-    streak,
-    history,
-    goals,
-    entries,
-    clients,
-    weekTotals,
-    pacing,
-    feedback,
-  } = view;
+  const { log, auto, ramp, streak, history, entries, clients, feedback } = view;
 
   async function submitLog() {
     setPending(true);
@@ -410,28 +354,6 @@ export function DailyLogView({
     }
   }
 
-  async function addGoal() {
-    if (!goalText.trim() || goalPending) return;
-    setGoalPending(true);
-    const res = await postJson<PostDailyJournalGoalsResponse>("/api/daily/journal/goals", {
-      weekStart: mondayOf(today),
-      text: goalText.trim(),
-    });
-    setGoalPending(false);
-    if (res.ok) {
-      setGoalText("");
-      void refresh();
-    } else toast.error(messageForFailure(res.failure));
-  }
-
-  async function toggleGoal(id: string, done: boolean) {
-    const res = await patchJson<AcknowledgedDTO>(`/api/daily/journal/goals/${id}`, {
-      done,
-    });
-    if (res.ok) void refresh();
-    else toast.error(messageForFailure(res.failure));
-  }
-
   async function addEntry() {
     if (!entryText.trim() || entryPending) return;
     setEntryPending(true);
@@ -452,7 +374,6 @@ export function DailyLogView({
     ["Notes (auto)", auto.notes],
     ["Verified (auto)", auto.verified],
   ];
-  const goalsDone = goals.filter((g) => g.done).length;
 
   const myLogPanel = (
     <div className="flex flex-col gap-5">
@@ -476,29 +397,6 @@ export function DailyLogView({
         </div>
         <RampTrack weekNum={ramp.weekNum} />
       </section>
-
-      {/* Predictive pacing + 7-day trend (Wave 3.1 backlog) — this week's sourcing so far vs.
-          the daily ramp target, and a zero-filled bar chart of the last 7 calendar days. */}
-      <Card as="section" className="grid gap-4 p-5 sm:grid-cols-2">
-        <div>
-          <h2 className="mb-2 text-sm font-bold tracking-wide text-navy uppercase">
-            This week&apos;s pace
-          </h2>
-          <p className="text-sm text-charcoal">
-            {weekTotals.sourced} sourced over {weekTotals.days}{" "}
-            {weekTotals.days === 1 ? "day" : "days"} logged.
-          </p>
-          <p className="mt-1 text-sm text-gray">
-            Need <span className="font-semibold text-charcoal">{pacing.neededPerDay}/day</span> to
-            hit the weekly target · projected total:{" "}
-            <span className="font-semibold text-charcoal">{pacing.projectedTotal}</span>
-          </p>
-        </div>
-        <div>
-          <h2 className="mb-2 text-sm font-bold tracking-wide text-navy uppercase">Last 7 days</h2>
-          <WeekTrendBars today={today} history={history} />
-        </div>
-      </Card>
 
       {/* Manager feedback (Wave 3.1 backlog, legacy `mgr_feedback`) — last 2, own-record only. */}
       {feedback.length > 0 ? (
@@ -525,31 +423,13 @@ export function DailyLogView({
         {tiles.map(([label, value]) => {
           const meta = TILE_META[label];
           return (
-            <Card
+            <MetricCard
               key={label}
-              className={cn("overflow-hidden p-0 transition hover:shadow-sm", meta.tint)}
-            >
-              <div className={cn("h-1", meta.bar)} />
-              <div className="flex items-center gap-4 p-5">
-                <span
-                  aria-hidden
-                  className={cn(
-                    "flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-lg",
-                    meta.badge,
-                  )}
-                >
-                  {meta.icon}
-                </span>
-                <div>
-                  <p className="font-serif text-3xl leading-none font-bold text-charcoal">
-                    {value}
-                  </p>
-                  <p className="mt-2 text-[11px] font-semibold tracking-wide text-gray uppercase">
-                    {label}
-                  </p>
-                </div>
-              </div>
-            </Card>
+              label={label}
+              value={value}
+              accent={meta.accent}
+              icon={meta.icon}
+            />
           );
         })}
       </section>
@@ -707,84 +587,36 @@ export function DailyLogView({
         </div>
       </Modal>
 
-      {/* Journal — weekly goals (real toggles) + daily notes. */}
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Card as="section" className="p-5">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-bold tracking-wide text-navy uppercase">
-              This week&apos;s goals
-            </h2>
-            {goals.length > 0 ? (
-              <span className="text-xs font-semibold text-gray tabular-nums">
-                {goalsDone}/{goals.length} done
-              </span>
-            ) : null}
-          </div>
-          <ul className="flex flex-col gap-1.5">
-            {goals.map((g) => (
-              <li key={g.id}>
-                <label className="flex cursor-pointer items-start gap-2 text-sm text-charcoal">
-                  <input
-                    type="checkbox"
-                    className="mt-0.5 accent-navy"
-                    checked={g.done}
-                    onChange={(e) => void toggleGoal(g.id, e.target.checked)}
-                  />
-                  <span className={g.done ? "text-gray line-through" : ""}>{g.text}</span>
-                </label>
-              </li>
-            ))}
-            {goals.length === 0 ? (
-              <li className="text-sm text-gray italic">No goals yet this week — add one below.</li>
-            ) : null}
-          </ul>
-          <div className="mt-3 flex gap-2">
-            <Input
-              aria-label="New goal"
-              placeholder="Add a goal for this week…"
-              value={goalText}
-              disabled={goalPending}
-              onChange={(e) => setGoalText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") void addGoal();
-              }}
-            />
-            <Button type="button" size="sm" loading={goalPending} onClick={() => void addGoal()}>
-              {goalPending ? "Adding…" : "Add"}
-            </Button>
-          </div>
-        </Card>
-
-        <Card as="section" className="p-5">
-          <h2 className="mb-3 text-sm font-bold tracking-wide text-navy uppercase">Journal</h2>
-          <div className="flex gap-2">
-            <Input
-              aria-label="Journal note"
-              placeholder="What happened today…"
-              value={entryText}
-              disabled={entryPending}
-              onChange={(e) => setEntryText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") void addEntry();
-              }}
-            />
-            <Button type="button" size="sm" loading={entryPending} onClick={() => void addEntry()}>
-              {entryPending ? "Saving…" : "Save"}
-            </Button>
-          </div>
-          <ul className="mt-3 flex flex-col gap-1.5">
-            {entries.slice(0, 8).map((e) => (
-              <li key={e.id} className="text-sm text-charcoal">
-                <span className="mr-2 text-xs text-gray tabular-nums">{e.date}</span>
-                <span className="whitespace-pre-wrap">{e.text}</span>
-              </li>
-            ))}
-            {entries.length === 0 ? (
-              <li className="text-sm text-gray italic">No notes yet — jot down how today went.</li>
-            ) : null}
-          </ul>
-        </Card>
-      </div>
+      {/* Journal — today's note. Weekly goals moved to the Week range (`week-panel.tsx`). */}
+      <Card as="section" className="p-5">
+        <h2 className="mb-3 text-sm font-bold tracking-wide text-navy uppercase">Journal</h2>
+        <div className="flex gap-2">
+          <Input
+            aria-label="Journal note"
+            placeholder="What happened today…"
+            value={entryText}
+            disabled={entryPending}
+            onChange={(e) => setEntryText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") void addEntry();
+            }}
+          />
+          <Button type="button" size="sm" loading={entryPending} onClick={() => void addEntry()}>
+            {entryPending ? "Saving…" : "Save"}
+          </Button>
+        </div>
+        <ul className="mt-3 flex flex-col gap-1.5">
+          {entries.slice(0, 8).map((e) => (
+            <li key={e.id} className="text-sm text-charcoal">
+              <span className="mr-2 text-xs text-gray tabular-nums">{e.date}</span>
+              <span className="whitespace-pre-wrap">{e.text}</span>
+            </li>
+          ))}
+          {entries.length === 0 ? (
+            <li className="text-sm text-gray italic">No notes yet — jot down how today went.</li>
+          ) : null}
+        </ul>
+      </Card>
 
       {/* Log history (last 10). */}
       <Card as="section" className="p-5">
@@ -815,20 +647,18 @@ export function DailyLogView({
     </div>
   );
 
-  const tabs: TabDef[] = [{ key: "log", label: "My Log", panel: myLogPanel }];
-  if (canViewTeam) {
-    tabs.push({
-      key: "team",
-      label: "Team",
-      panel: (
-        <div className="flex flex-col gap-5">
-          {/* AI team brief, then the raw weekly breakdown table (summary → detail). */}
-          <TeamBriefSection />
-          <TeamBreakdownSection weekStart={mondayOf(today)} />
-        </div>
-      ),
-    });
+  // Scope comes from the page, which owns ONE control for every range. This used to render its
+  // own "My Log / Team" tabs, which meant two different toggles for the same question depending on
+  // which range you were looking at.
+  if (scope === "team" && canViewTeam) {
+    return (
+      <div className="flex flex-col gap-5">
+        {/* AI team brief, then the raw weekly breakdown table (summary → detail). */}
+        <TeamBriefSection />
+        <TeamBreakdownSection weekStart={mondayOf(today)} />
+      </div>
+    );
   }
 
-  return <DetailTabs tabs={tabs} ariaLabel="Daily Log" />;
+  return myLogPanel;
 }

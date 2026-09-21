@@ -363,4 +363,43 @@ describe("candidateService.dashboardStats", () => {
       8,
     );
   });
+
+  it("counts an unrecognised status as unknown rather than absorbing it into terminal", async () => {
+    // The regression this pins: `terminal` was `total - active`, so a status the vocabulary does
+    // not know became indistinguishable from a closed candidate. A legacy import is precisely
+    // where such a row would come from, and it would have been silently reported as rejected.
+    h.candidateRepo.groupByStatus.mockResolvedValue([
+      { status: "NEW_CANDIDATE", _count: { _all: 5 } },
+      { status: "NOT_QUALIFIED", _count: { _all: 2 } },
+      { status: "3 - Some Legacy Label", _count: { _all: 4 } },
+    ]);
+
+    const stats = await candidateService.dashboardStats(viewer);
+    expect(stats.total).toBe(11);
+    expect(stats.active).toBe(5);
+    expect(stats.terminal).toBe(2);
+    expect(stats.unknown).toBe(4);
+  });
+
+  it("reports no unknowns when every status is a recognised code", async () => {
+    const stats = await candidateService.dashboardStats(viewer);
+    expect(stats.unknown).toBe(0);
+    expect(stats.total).toBe(stats.active + stats.terminal + stats.unknown);
+  });
+
+  it("reads two real 30-day windows for the delta chip", async () => {
+    h.candidateRepo.count.mockReset();
+    h.candidateRepo.count.mockResolvedValueOnce(12).mockResolvedValueOnce(8);
+
+    const stats = await candidateService.dashboardStats(viewer);
+    expect(stats.addedLast30).toBe(12);
+    expect(stats.addedPrev30).toBe(8);
+
+    // The windows must ABUT: the previous one ends exactly where the current one starts, or the
+    // comparison double-counts or skips a slice of time.
+    const current = h.candidateRepo.count.mock.calls[0]![1] as { addedFrom: Date };
+    const previous = h.candidateRepo.count.mock.calls[1]![1] as { addedFrom: Date; addedTo: Date };
+    expect(previous.addedTo.getTime()).toBe(current.addedFrom.getTime());
+    expect(current.addedFrom.getTime() - previous.addedFrom.getTime()).toBe(30 * 86_400_000);
+  });
 });
