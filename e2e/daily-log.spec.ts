@@ -1,6 +1,8 @@
 import { test, expect } from "@playwright/test";
 import { gotoReady } from "./fixtures/navigate";
 
+const DAILY_API_BASE = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:3004";
+
 /**
  * Submit today's daily log (`apps/web/src/app/(app)/daily-log/daily-log-view.tsx`). The server
  * enforces one submission per day (409 on a second `POST /api/daily/log`), and the client hides
@@ -29,4 +31,20 @@ test("submits today's daily log", async ({ page }) => {
 
   await expect(page.getByText("Today's log submitted")).toBeVisible();
   await expect(page.getByText("Outreach Sent: 12")).toBeVisible();
+});
+
+test("refuses a daily log with a negative count", async ({ request }) => {
+  const response = await request.post(`${DAILY_API_BASE}/daily/log`, {
+    data: { date: "2026-09-22", tz: 0, sourced: -5 },
+  });
+
+  expect(response.status()).toBe(422);
+});
+
+test("refuses a daily log with a malformed date", async ({ request }) => {
+  const response = await request.post(`${DAILY_API_BASE}/daily/log`, {
+    data: { date: "22-09-2026", tz: 0, sourced: 1 },
+  });
+
+  expect(response.status()).toBe(422);
 });
