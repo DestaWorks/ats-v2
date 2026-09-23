@@ -35,6 +35,6 @@ test("creates a deal, moves its stage, and closes it won", async ({ page, reques
 
   await dialog.getByRole("button", { name: "Close" }).first().click();
   await expect(page.getByText("Closed Deals")).toBeVisible();
-  await expect(page.getByText(dealName)).toBeVisible();
+  await expect(page.getByText(dealName).first()).toBeVisible();
   await expect(page.getByText("Won").first()).toBeVisible();
 });

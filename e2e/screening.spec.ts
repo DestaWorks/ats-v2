@@ -2,6 +2,8 @@ import { test, expect } from "@playwright/test";
 import { gotoReady } from "./fixtures/navigate";
 import { createCandidate, moveCandidateStatus } from "./fixtures/api";
 
+const SCREENING_API_BASE = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:3004";
+
 /**
  * Screening (`apps/web/src/app/(app)/screening/screening-view.tsx`) — pick a candidate from the
  * picker (scoped server-side to `SCREENING_ELIGIBLE_STATUSES`), fill part of the scorecard, save.
@@ -37,4 +39,12 @@ test("scores a candidate and saves the scorecard", async ({ page, request }) => 
 
   // Saving (not advancing) doesn't move the candidate — it's still in the eligible-stage picker.
   await expect(page.getByRole("button", { name: new RegExp(name) })).toBeVisible();
+});
+
+test("refuses a screening for a candidate that does not exist", async ({ request }) => {
+  const response = await request.post(`${SCREENING_API_BASE}/screening/does-not-exist`, {
+    data: {},
+  });
+
+  expect([404, 422]).toContain(response.status());
 });

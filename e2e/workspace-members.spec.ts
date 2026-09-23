@@ -2,6 +2,8 @@ import { test, expect } from "@playwright/test";
 import { gotoReady } from "./fixtures/navigate";
 import { createUser } from "./fixtures/api";
 
+const MEMBERS_API_BASE = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:3004";
+
 /**
  * Workspace members (`apps/web/src/app/(app)/workspace/members-view.tsx`, Phase 6.5) — no prior
  * E2E coverage exists for this page or for `membershipService` at all.
@@ -76,4 +78,12 @@ test("removes a member from the workspace", async ({ page, request }) => {
   await expect(page.getByText(`${memberName} removed`)).toBeVisible();
   await expect(row.getByText("removed", { exact: true })).toBeVisible();
   await expect(row.getByRole("button", { name: "Remove", exact: true })).toHaveCount(0);
+});
+
+test("refuses an invitation to a malformed email address", async ({ request }) => {
+  const response = await request.post(`${MEMBERS_API_BASE}/tenants/members`, {
+    data: { email: "not-an-email", role: "Associate" },
+  });
+
+  expect(response.status()).toBe(422);
 });

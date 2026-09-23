@@ -21,7 +21,11 @@ const config = {
   ...base,
   test: {
     ...base.test,
-    include: ["apps/*/src/**/*.{test,spec}.{ts,tsx}", "packages/*/src/**/*.{test,spec}.{ts,tsx}"],
+    include: [
+      "apps/*/src/**/*.{test,spec}.{ts,tsx}",
+      "packages/*/src/**/*.{test,spec}.{ts,tsx}",
+      "e2e/**/*.vitest.ts",
+    ],
   },
   resolve: {
     alias: [{ find: "@/", replacement: resolve(root, "apps/web/src/") + "/" }],

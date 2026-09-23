@@ -2,6 +2,8 @@ import { test, expect } from "@playwright/test";
 import { gotoReady } from "./fixtures/navigate";
 import { createCandidate, deleteCandidate } from "./fixtures/api";
 
+const TRASH_API_BASE = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:3004";
+
 /**
  * Restore a soft-deleted candidate from Trash (`apps/web/src/app/(app)/trash/trash-list.tsx`).
  * The candidate is created and soft-deleted via the API first, so the test exercises only the
@@ -19,4 +21,20 @@ test("restores a soft-deleted candidate", async ({ page, request }) => {
 
   await row.getByRole("button", { name: "Restore" }).click();
   await expect(row).not.toBeVisible();
+});
+
+test("refuses restoring a candidate that is not in the trash", async ({ request }) => {
+  const id = await createCandidate(request, `E2E Not Trashed ${Date.now()}`, "Operations");
+
+  const response = await request.post(`${TRASH_API_BASE}/candidates/${id}/restore`, { data: {} });
+
+  expect(response.status()).toBe(409);
+});
+
+test("answers 404 when purging a candidate that does not exist", async ({ request }) => {
+  const response = await request.post(`${TRASH_API_BASE}/candidates/does-not-exist/purge`, {
+    data: {},
+  });
+
+  expect(response.status()).toBe(404);
 });
