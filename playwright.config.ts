@@ -2,6 +2,9 @@ import { defineConfig, devices } from "@playwright/test";
 
 const ADMIN_PORT = process.env["ADMIN_PORT"] ?? "3008";
 
+/** `E2E_STRICT_SERVERS` forces the suite to start its own servers rather than reuse a port. */
+const REUSE_SERVERS = !process.env.CI && process.env["E2E_STRICT_SERVERS"] !== "1";
+
 /**
  * E2E config for the four critical flows (sign-in, add/move candidate, promote lead, parse
  * resume) — docs/STACK-ARCHITECTURE.md and docs/CONVENTIONS.md both name Playwright for this.
@@ -13,11 +16,17 @@ const ADMIN_PORT = process.env["ADMIN_PORT"] ?? "3008";
  */
 export default defineConfig({
   testDir: "./e2e",
+  globalSetup: "./e2e/fixtures/global-setup.ts",
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,
   workers: 1,
-  reporter: process.env.CI ? [["html", { open: "never" }], ["github"]] : "list",
+  reporter: [
+    ["list"],
+    ["html", { outputFolder: "playwright-report/html", open: "never" }],
+    ["json", { outputFile: "playwright-report/results.json" }],
+    ...(process.env.CI ? ([["github"]] as const) : ([] as const)),
+  ],
   // `next dev` compiles each route on its FIRST hit in a given server lifetime — independent of
   // the webServer readiness check above, which only proves the process is listening. Measured
   // ~3 minutes for a cold `/sign-in` compile on this monorepo; the default 30s per-test timeout
@@ -53,7 +62,7 @@ export default defineConfig({
     {
       command: "pnpm dev:api",
       url: "http://localhost:3004/health",
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: REUSE_SERVERS,
       // A cold `tsx watch`/`next dev` first compile of this monorepo comfortably exceeds 60s —
       // measured ~90s for the API alone on a cold cache.
       timeout: 180_000,
@@ -63,7 +72,7 @@ export default defineConfig({
     {
       command: "pnpm dev:web",
       url: "http://localhost:3007/sign-in",
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: REUSE_SERVERS,
       // The suite signs in as six different accounts well inside Better Auth's 60s window, and the
       // sixth would be refused — raised HERE so the ceiling itself stays 5 everywhere else.
       env: { E2E_SIGNIN_RATE_MAX: "100" },
@@ -80,7 +89,7 @@ export default defineConfig({
       // no default, and unset makes every platform-admin page fail closed with a refusal.
       command: `pnpm dev:admin --port ${ADMIN_PORT}`,
       url: `http://localhost:${ADMIN_PORT}/tenants`,
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: REUSE_SERVERS,
       timeout: 180_000,
       stdout: "pipe",
       stderr: "pipe",
