@@ -21,7 +21,13 @@ test("shows the empty state for a week with no saved brief", async ({ page }) =>
   await gotoReady(page, "/daily-log");
 
   // The brief lives at the Week range — Day is the log-entry surface and carries no brief.
-  await page.getByRole("radio", { name: "Week" }).click();
+  // Retried as a unit: `gotoReady`'s networkidle is only a hydration proxy, and on a cold CI
+  // runner the click can land before React attaches and be silently dropped.
+  const weekRange = page.getByRole("radio", { name: "Week" });
+  await expect(async () => {
+    await weekRange.click();
+    await expect(weekRange).toHaveAttribute("aria-checked", "true", { timeout: 2_000 });
+  }).toPass({ timeout: 30_000 });
 
   // A week far in the future can never have a saved brief seeded by any other spec's fixtures.
   // The input's `onChange` normalizes whatever date is typed to that week's Monday
