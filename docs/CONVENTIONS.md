@@ -13,36 +13,44 @@ is the one that gets corrected.
 
 ## 1. Source control & workflow
 
-### 1.1 Branching — while the restructure is in progress
+### 1.1 Branching
 
-**`main` is not worked on.** It stays exactly equal to what is deployed, so there is always an
-unambiguous answer to "what are our users running?" It is merged into once, at the end of the
-programme, with a merge commit — never a squash, because every commit reaching it was already
-reviewed on the way in.
+**Since 2026-09-14 the flow is trunk-based off `main`.** PR #68 merged `restructure` into `main` —
+the "once, at the end" step the old table below prescribed — and every PR since (#69 onward) has
+branched from `main` and merged back into it with a merge commit, never a squash, because every
+commit reaching it was already reviewed on the way in.
 
 | Branch | Cut from | Merges into | Purpose |
 |---|---|---|---|
-| `main` | — | — | Deployed truth. Hotfixes only |
-| `restructure` | `main` | `main`, once, at the end | The integration base. Every phase lands here |
-| `<type>/p<N>-<slug>` | `restructure` | `restructure` | One concern, short-lived |
-| `fix/<slug>` | `main` | `main`, **then down to `restructure` the same day** | Hotfix |
+| `main` | — | — | Deployed truth. Never worked on directly |
+| `<type>/<slug>` | `main` | `main` via PR | One concern, short-lived |
 
-Branch names carry their phase so history reads as the plan: `chore/p0-clock-module`,
-`refactor/p2-pkg-domain`, `feat/p6-tenant-schema`.
+Branch names still carry their scope so history reads as intent: `test/e2e-full-coverage`,
+`fix/p6-cross-subdomain-auth`, `feat/overview-work-queue`.
 
-**A hotfix that has not been merged down to `restructure` by end of day is a defect, not a state to
-tolerate.** Divergence is what kills long-lived branches.
+**Work is never committed on `main` itself.** Cut a branch first, even for a one-line fix — the
+required checks run on a PR, not on a direct push, so committing to `main` skips the gate.
+
+<details>
+<summary>The restructure-era flow (2026-07 → 2026-09-14) — kept for reading old history</summary>
+
+While the restructure ran, `restructure` was the integration base: phase branches were cut from it
+as `<type>/p<N>-<slug>` and merged back into it, `main` took hotfixes only, and a hotfix not merged
+down to `restructure` the same day was treated as a defect. That branch is now 27 commits behind
+`main` and is not to be branched from — cutting a feature branch from it today would put the work on
+a tree where most of `e2e/` does not exist.
+
+</details>
 
 ### 1.2 Worktrees
 
-The workspace layout changes during the restructure, so `node_modules` does not match across
-branches and switching in place means repeated reinstalls. One worktree per concurrent line of work:
+`node_modules` does not always match across branches, so switching in place can mean repeated
+reinstalls. One worktree per concurrent line of work:
 
 ```
 ~/Documents/biruh/
-├── desta-ats/          restructure — primary, all phase work
-├── desta-ats-main/     main — hotfixes only
-└── desta-ats-wt/<task> per-task, cut from restructure
+├── desta-ats/          main — primary
+└── desta-ats-wt/<task> per-task, cut from main
 ```
 
 ```bash

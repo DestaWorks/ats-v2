@@ -122,15 +122,16 @@ read them as a record of what was built, not as instructions for new work.
 3. **Every change is a reviewable diff.** No more whole-file uploads. Work on a branch,
    open a PR, keep commits small and described.
 3b. **Branching, worktrees and merging are `docs/CONVENTIONS.md` §1 — follow it, don't improvise.**
-   The short version while the restructure runs: **never work on `main`** (it equals what is
-   deployed); branch from `restructure` as `<type>/p<N>-<slug>`; a hotfix goes `main` → deployed →
-   **merged down to `restructure` the same day**. One worktree per concurrent line of work, and
-   **verify its base commit before starting** — tooling cuts worktrees from whatever `HEAD` was.
-   `.env*` never follows a worktree; **never put `DATABASE_URL` in `.env.local`**, because Next.js
-   prefers it while the Prisma CLI reads only `.env`. When merging parallel branches, order by
-   ascending file overlap, gate between every merge, and **re-run the boundary invariant checks
-   after the last one** — branches that are each green can combine to undo one another, and no test
-   will tell you.
+   The short version: **never work on `main`** (it equals what is deployed, and the required checks
+   run on a PR, not on a direct push); branch from `main` as `<type>/<slug>` and merge back via PR
+   with a merge commit. The `restructure` branch is **finished and 27 commits behind** — PR #68
+   merged it into `main` on 2026-09-14 and every PR since has branched from `main`; do not cut new
+   work from it. One worktree per concurrent line of work, and **verify its base commit before
+   starting** — tooling cuts worktrees from whatever `HEAD` was. `.env*` never follows a worktree;
+   **never put `DATABASE_URL` in `.env.local`**, because Next.js prefers it while the Prisma CLI
+   reads only `.env`. When merging parallel branches, order by ascending file overlap, gate between
+   every merge, and **re-run the boundary invariant checks after the last one** — branches that are
+   each green can combine to undo one another, and no test will tell you.
 4. **Do not expand the monolith.** New functionality goes into the monorepo packages, never into
    `legacy/index.html`. We are strangling that file, not growing it. A new backend endpoint is a
    NestJS controller in `apps/api` — **never** a route handler in `apps/web`, which 4.3 removed on
