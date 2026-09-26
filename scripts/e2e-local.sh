@@ -72,6 +72,7 @@ export WEB_ORIGINS=http://localhost:3007
 export PLATFORM_API_URL=http://localhost:3004
 export ANTHROPIC_API_KEY=e2e-local-dummy-key
 export E2E_SIGNIN_RATE_MAX=100
+export TENANT_APEX_DOMAIN=localhost
 export SEED_OWNER_EMAIL=owner@e2e.local
 export SEED_OWNER_PASSWORD='E2eOwnerPass123!'
 export SEED_TENANT_B_SLUG=e2e-tenant-b

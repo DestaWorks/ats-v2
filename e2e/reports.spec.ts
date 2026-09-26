@@ -29,3 +29,54 @@ test("renders the Executive report and switches to Pipeline Funnel", async ({ pa
     page.getByText("Candidates who EVER reached this stage or beyond", { exact: false }),
   ).toBeVisible();
 });
+
+const REPORTS_API_BASE = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:3004";
+
+const REPORT_TABS = [
+  "executive",
+  "pipeline-funnel",
+  "client-funnel",
+  "client-portfolio",
+  "client-capacity",
+  "team-performance",
+  "source-roi",
+  "time-analysis",
+  "compliance",
+  "mass-journey",
+  "trends",
+] as const;
+
+test("every report answers on its own endpoint", async ({ request }) => {
+  for (const tab of REPORT_TABS) {
+    const response = await request.get(`${REPORTS_API_BASE}/reports/${tab}`);
+    expect(response.status(), `GET /reports/${tab}`).toBe(200);
+  }
+});
+
+test("narrows the figures to a date range with nothing in it", async ({ request }) => {
+  const all = await request.get(`${REPORTS_API_BASE}/reports/executive`);
+  const { total } = (await all.json()) as { total: number };
+  expect(total, "the seeded workspace has candidates to filter out").toBeGreaterThan(0);
+
+  const empty = await request.get(
+    `${REPORTS_API_BASE}/reports/executive?addedFrom=1900-01-01&addedTo=1900-12-31`,
+  );
+  expect(empty.status()).toBe(200);
+  const narrowed = (await empty.json()) as { total: number; placed: number };
+  expect(narrowed.total).toBe(0);
+  expect(narrowed.placed).toBe(0);
+});
+
+test("refuses a report filtered on a malformed date", async ({ request }) => {
+  const response = await request.get(`${REPORTS_API_BASE}/reports/executive?addedFrom=not-a-date`);
+
+  expect(response.status()).toBe(422);
+});
+
+test("shows the empty state rather than zeros for a range with no candidates", async ({ page }) => {
+  await gotoReady(page, "/reports");
+  await page.getByLabel("Added from").fill("1900-01-01");
+  await page.getByLabel("Added to").fill("1900-12-31");
+
+  await expect(page.getByText("No scored candidates")).toBeVisible();
+});

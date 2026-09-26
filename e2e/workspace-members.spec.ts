@@ -87,3 +87,39 @@ test("refuses an invitation to a malformed email address", async ({ request }) =
 
   expect(response.status()).toBe(422);
 });
+
+test("locks a removed member out of the workspace", async ({ request, browser }) => {
+  const stamp = Date.now();
+  const email = `e2e-locked-out-${stamp}@example.com`;
+  const password = "E2eLockedOut123!";
+  await createUser(request, `E2E Locked Out ${stamp}`, email, "Associate", password);
+
+  const context = await browser.newContext({ storageState: { cookies: [], origins: [] } });
+  const signIn = await context.request.post("http://localhost:3007/api/auth/sign-in/email", {
+    data: { email, password },
+    headers: { origin: "http://localhost:3007" },
+  });
+  expect(signIn.ok()).toBeTruthy();
+  const entered = await context.request.post(`${MEMBERS_API_BASE}/tenants/switch`, {
+    data: { tenant: "destaworks" },
+  });
+  expect(entered.ok(), "the member reaches the workspace before removal").toBeTruthy();
+
+  const roster = await request.get(`${MEMBERS_API_BASE}/tenants/members`);
+  const { members } = (await roster.json()) as {
+    members: { membershipId: string; email: string }[];
+  };
+  const membership = members.find((member) => member.email === email);
+  expect(membership, `no membership for ${email}`).toBeDefined();
+  const removed = await request.delete(
+    `${MEMBERS_API_BASE}/tenants/members/${membership!.membershipId}`,
+  );
+  expect(removed.ok()).toBeTruthy();
+
+  const afterRemoval = await context.request.post(`${MEMBERS_API_BASE}/tenants/switch`, {
+    data: { tenant: "destaworks" },
+  });
+  expect(afterRemoval.ok(), "a removed member cannot re-enter the workspace").toBeFalsy();
+
+  await context.close();
+});

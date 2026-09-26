@@ -2,6 +2,8 @@ import { test, expect } from "@playwright/test";
 import { gotoReady } from "./fixtures/navigate";
 import { createCandidate, deleteCandidate, verifyLicense } from "./fixtures/api";
 
+const LICENSE_API_BASE = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:3004";
+
 /**
  * License Verify (`apps/web/src/app/(app)/license-verify/page.tsx`) — a read-only Verification
  * Queue + Expiry Timeline; the verify form itself lives on the candidate detail License tab
@@ -40,4 +42,39 @@ test("shows a verified candidate's license on the expiry timeline", async ({ pag
     // every run left one more expired licence tied at the same date until the cap overflowed.
     await deleteCandidate(request, candidateId);
   }
+});
+
+test("refuses a licence status that does not exist", async ({ request }) => {
+  const id = await createCandidate(request, `E2E Lic Status ${Date.now()}`, "Clinical");
+
+  const response = await request.post(`${LICENSE_API_BASE}/candidates/${id}/verify-license`, {
+    data: { licenseStatus: "Probably Fine" },
+  });
+
+  expect(response.status()).toBe(422);
+});
+
+test("refuses a licence expiry that is not a date", async ({ request }) => {
+  const id = await createCandidate(request, `E2E Lic Expiry ${Date.now()}`, "Clinical");
+
+  const response = await request.post(`${LICENSE_API_BASE}/candidates/${id}/verify-license`, {
+    data: { licenseStatus: "Active", licenseExpiry: "not-a-date" },
+  });
+
+  expect(response.status()).toBe(422);
+});
+
+test("refuses verifying a licence for a candidate that does not exist", async ({ request }) => {
+  const response = await request.post(
+    `${LICENSE_API_BASE}/candidates/does-not-exist/verify-license`,
+    { data: { licenseStatus: "Active" } },
+  );
+
+  expect(response.status()).toBe(404);
+});
+
+test("the verification dashboard renders", async ({ page }) => {
+  await gotoReady(page, "/license-verify");
+
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
 });

@@ -50,3 +50,23 @@ test("exchanges a portal link and posts a role as the client contact", async ({
 
   await context.close();
 });
+
+test("refuses a portal token that is not real", async ({ browser }) => {
+  const context = await browser.newContext({});
+  const page = await context.newPage();
+
+  await page.goto("/portal/access?token=not-a-real-portal-token");
+
+  await expect(page).toHaveURL(/\/portal\/request-access\?error=invalid_link/);
+  await context.close();
+});
+
+test("keeps the portal shut to a visitor carrying no token", async ({ browser }) => {
+  const context = await browser.newContext({});
+  const page = await context.newPage();
+
+  await page.goto("/portal");
+
+  await expect(page).not.toHaveURL(/\/portal$/);
+  await context.close();
+});

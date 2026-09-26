@@ -42,3 +42,30 @@ test("adds a candidate and moves it to the next pipeline stage", async ({ page }
       .first(),
   ).toBeVisible();
 });
+
+test("renders every active stage on the board, including empty ones", async ({ page }) => {
+  await gotoReady(page, "/pipeline");
+
+  for (const label of [
+    "New Candidate",
+    "Qualified (Pre-Screen)",
+    "Initial Screening",
+    "Desta Review",
+    "Submitted to Client",
+    "Client Interview",
+    "Offer / Negotiation",
+    "Offer Accepted",
+    "Started (Day 1)",
+  ]) {
+    await expect(
+      page.getByRole("group", { name: new RegExp(label.replace(/[()/]/g, "\\$&")) }),
+    ).toBeVisible();
+  }
+});
+
+test("shows the board's own heading and stays on the board", async ({ page }) => {
+  await gotoReady(page, "/pipeline");
+
+  await expect(page.getByRole("heading", { name: "Pipeline", level: 1 })).toBeVisible();
+  await expect(page).toHaveURL(/\/pipeline/);
+});

@@ -39,8 +39,8 @@ generic stack notes in `ARCHITECTURE.md`/`EDD.md` and locks the decisions.
 | Framework | **Next.js** (App Router) + **React + TypeScript** |
 | Styling | **Tailwind CSS v4** (CSS-first config) |
 | Toasts/notifications | **Sonner** |
-| ORM / DB | **Prisma** + **PostgreSQL** (managed via **Supabase**) |
-| Auth | **Better Auth** (Prisma adapter, email/password + Google) — on Supabase Postgres¹ |
+| ORM / DB | **Prisma** + **PostgreSQL** (self-hosted — see `DECISIONS.md` D6, amended 2026-09-25) |
+| Auth | **Better Auth** (Prisma adapter, email/password + Google) — on the same Postgres¹ |
 | AI | **Provider-agnostic via the Vercel AI SDK** — Anthropic, OpenAI and Google adapters are all installed and selectable; never one vendor hard-wired. Server-held keys, with a fallback model per call |
 | Validation | **Zod** (shared client ↔ server) |
 | Server state | **RSC reads + typed fetch helpers** (see §6) — no client cache library |
@@ -50,14 +50,17 @@ generic stack notes in `ARCHITECTURE.md`/`EDD.md` and locks the decisions.
 | Hosting | **Containerised** — one `Dockerfile` with `api`, `worker`, `web`, `admin` and `migrate` targets, composed by `docker-compose.yml`. One host, one domain: the session cookie is `SameSite=Lax`, so splitting web and API across registrable domains would 401 every browser mutation³ |
 | Package manager | **pnpm** workspaces + **Turborepo** |
 
-> ¹ **Decided.** Company direction names "Supabase (PostgreSQL + auth)"; we use **Supabase
+> ¹ **Decided.** Company direction named "Supabase (PostgreSQL + auth)"; we used **Supabase
 > purely as managed Postgres** (and object storage) with **Better Auth** as the auth/RBAC
 > layer — a technical "how" call (owned by the engineer), to be shared with the Owner, not
 > blocked on him. Rationale: code-owned six-role RBAC + server guards, auth stays portable.
+> **Superseded 2026-09-25:** the PHI call of 2026-09-02 retired Supabase for self-hosted Postgres
+> on the deploy host (`DECISIONS.md` D6, amended). Better Auth was portable, which is why the swap
+> cost nothing — the rationale held.
 > Licensing & secrets rules in §12 are contractually binding (NDA) — read them.
 >
 > ² **Three isolated environments (DECISIONS D6).** Production (`zyx.com`, `main` branch) and
-> staging (`staging.zyx.com`, `staging` branch) run on **two separate Supabase projects** —
+> staging (`staging.zyx.com`, `staging` branch) run on **two separate Postgres databases** —
 > staging never touches production PII. Secrets, `BETTER_AUTH_URL`, and Google OAuth redirect
 > URIs are **per-environment/per-domain**. Migrations and the Sheet→Postgres data migration are
 > dry-run on staging first, then applied to production. Full setup: `IMPLEMENTATION-PLAN.md` 0.1b.
@@ -568,7 +571,7 @@ the same inline-style soup. No `@apply` soup; extract shared patterns into compo
 | `server/services` | Integration with mocked repos / test DB | Vitest |
 | `app/api` routes | Integration incl. authz failure cases | Vitest + test Postgres |
 | `lib/validation` | Schema round-trip / edge cases | Vitest |
-| Critical flows | E2E: sign-in, add/move candidate, promote lead, parse resume | Playwright — **planned, not adopted**: it is in no manifest and there are no e2e specs, so nothing exercises a real browser today |
+| Critical flows | E2E: sign-in, add/move candidate, promote lead, parse resume | Playwright — **adopted 2026-09-25**: 259 specs across 48 files in `e2e/`, run against a throwaway Postgres in CI. Coverage is measured from the API request log, not asserted: 177 of 209 handlers execute |
 
 CI runs typecheck + lint + tests on every PR. Red = no merge.
 

@@ -3,6 +3,8 @@ import { gotoReady } from "./fixtures/navigate";
 import type { TriageResultDTO } from "@destaworks/contracts/validation/inbound";
 import type { LeadEnvelope } from "@destaworks/contracts/validation/lead";
 
+const INBOUND_API_BASE = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:3004";
+
 const WEB_ORIGIN = "http://localhost:3007";
 
 /**
@@ -114,4 +116,26 @@ test("triages a pasted reply with AI and saves it as a new Sourced lead", async 
   await page.getByRole("button", { name: "Save as Sourced Lead (Responded — Hot)" }).click();
 
   await expect(page.getByText("Saved — Casey Nguyen is now Responded — Hot.")).toBeVisible();
+});
+
+test("refuses triage of a message too short to be a reply", async ({ request }) => {
+  const response = await request.post(`${INBOUND_API_BASE}/inbound/triage`, {
+    data: { messageText: "hi" },
+  });
+
+  expect(response.status()).toBe(422);
+});
+
+test("refuses triage with no message at all", async ({ request }) => {
+  const response = await request.post(`${INBOUND_API_BASE}/inbound/triage`, { data: {} });
+
+  expect(response.status()).toBe(422);
+});
+
+test("refuses attaching an inbound reply to a lead that does not exist", async ({ request }) => {
+  const response = await request.post(`${INBOUND_API_BASE}/inbound/attach`, {
+    data: { leadId: "does-not-exist", messageText: "A reply long enough to pass validation." },
+  });
+
+  expect([404, 422]).toContain(response.status());
 });

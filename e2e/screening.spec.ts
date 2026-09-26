@@ -48,3 +48,23 @@ test("refuses a screening for a candidate that does not exist", async ({ request
 
   expect([404, 422]).toContain(response.status());
 });
+
+test("refuses a screening with an out-of-range salary", async ({ request }) => {
+  const id = await createCandidate(request, `E2E Salary ${Date.now()}`, "Operations");
+
+  const response = await request.post(`${SCREENING_API_BASE}/screening/${id}`, {
+    data: { salaryAsk: 9999999 },
+  });
+
+  expect(response.status()).toBe(422);
+});
+
+test("refuses a screening action that is not a known action", async ({ request }) => {
+  const id = await createCandidate(request, `E2E Action ${Date.now()}`, "Operations");
+
+  const response = await request.post(`${SCREENING_API_BASE}/screening/${id}`, {
+    data: { action: "teleport" },
+  });
+
+  expect(response.status()).toBe(422);
+});

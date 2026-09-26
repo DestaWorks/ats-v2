@@ -96,7 +96,7 @@ When several branches run at once:
 - **No secrets in git.** `.env` is gitignored; commit `.env.example` with keys, not values.
 - **Promotion path (DECISIONS D6):** branch → per-PR preview URL → merge to `staging`
   (QA on `staging.zyx.com`) → merge to `main` (production `zyx.com`). Staging and production run
-  on **separate Supabase projects**; **migrations and the data migration run staging-first, then
+  on **separate Postgres databases**; **migrations and the data migration run staging-first, then
   production.** Never author schema directly against prod.
 
 ## 2. Languages & tooling
@@ -329,9 +329,15 @@ Rigor is **tiered — not full coverage everywhere** (we ship then harden):
   is rejected (not just that the right role passes).
 - **Migration golden-files** — each ETL transform has a golden input → expected-rows test.
 
+**End-to-end (mandatory since 2026-09-25):**
+- `e2e/` holds 259 Playwright specs, one file per module, run in CI against a throwaway Postgres.
+  Assert where the behaviour lives — validation and authorization at the API, anything the user
+  sees in the browser. A destructive test must read the row back and prove it is gone; a 200 from a
+  DELETE is not evidence.
+
 **Best-effort elsewhere ("ship then harden"):**
-- Other API routes, components, and E2E flows (sign-in, add candidate, move stage, promote
-  lead, parse resume) get tests as time allows and are backfilled when a slice stabilizes.
+- Components and the thinner read surfaces get tests as time allows, backfilled when a slice
+  stabilizes.
 - A bug fix ships with a test that would have caught it (this applies everywhere).
 
 CI runs typecheck + lint + the mandatory tests on every PR; red = no merge.

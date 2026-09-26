@@ -30,3 +30,27 @@ test("picks a template, sends to a sourced lead, and logs the outreach", async (
   const row = page.getByRole("row").filter({ hasText: name });
   await expect(row.getByText("Outreach 1")).toBeVisible();
 });
+
+test("shows the preview with its subject and body", async ({ page }) => {
+  await gotoReady(page, "/templates");
+
+  await expect(page.getByText("Preview")).toBeVisible();
+  await expect(page.getByText("SUBJECT")).toBeVisible();
+  await expect(page.getByText("BODY")).toBeVisible();
+});
+
+test("tells the user when a recipient search matches nothing", async ({ page }) => {
+  await gotoReady(page, "/templates");
+
+  await page.getByPlaceholder("Search candidate name...").fill("zzz-no-such-candidate-zzz");
+
+  await expect(page.getByText("No matches")).toBeVisible();
+});
+
+const TEMPLATES_API_BASE = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:3004";
+
+test("loads template performance figures", async ({ request }) => {
+  const response = await request.get(`${TEMPLATES_API_BASE}/templates/performance`);
+
+  expect(response.status()).toBe(200);
+});

@@ -23,7 +23,7 @@ Vercel), and is now most of the way through a second change: a **restructure int
 separate API and multi-tenancy**, running on the `restructure` branch.
 
 - **New app** — the `apps/` + `packages/` tree below. Next.js + NestJS + TypeScript + Prisma +
-  PostgreSQL (Supabase) + Better Auth. Real build, ~2.3k tests, and typecheck/lint/format plus
+  PostgreSQL + Better Auth. Real build, ~2.5k unit tests plus 259 end-to-end, and typecheck/lint/format plus
   architecture, auth-surface and tenant-scope checks all enforced in CI on every PR.
 - **Legacy app** — kept **local-only and gitignored** (`legacy/`) as a parity reference. It is
   **not maintained**, was strangled wave by wave rather than built on, and a fresh clone will not
@@ -65,7 +65,7 @@ carries the earlier wave-by-wave feature status.
 |---------|--------|
 | Framework | Next.js (App Router) + React 19 + TypeScript |
 | Styling | Tailwind CSS v4 |
-| ORM / DB | Prisma + PostgreSQL (managed via Supabase) |
+| ORM / DB | Prisma + PostgreSQL (self-hosted on the deploy host) |
 | Auth | Better Auth (email/password + Google OAuth) |
 | AI | Vercel AI SDK — provider-agnostic (Anthropic · OpenAI · Google) |
 | Validation | Zod (shared client ↔ server) |
@@ -97,8 +97,8 @@ apps/
 │       ├── portal/       # client portal (external audience); portal/access/route.ts
 │       │                 #   trades a one-time token for a cookie
 │       └── api/auth/     # Better Auth catch-all — the ONLY route under app/api
-├── api/                  # NestJS — the only backend HTTP surface (49 controllers,
-│   │                     #   200 route handlers, 27 feature modules, no global prefix)
+├── api/                  # NestJS — the only backend HTTP surface (50 controllers,
+│   │                     #   209 route handlers, 27 feature modules, no global prefix)
 │   └── src/modules/      # one module per domain area; controllers are thin transport
 └── admin/                # platform-admin console
 
@@ -128,7 +128,7 @@ phase status, and [`docs/STACK-ARCHITECTURE.md`](docs/STACK-ARCHITECTURE.md) for
 
 - **Node.js** ≥ 20 (see [`.nvmrc`](.nvmrc))
 - **pnpm** 11 (pinned via `packageManager` in `package.json`)
-- A **PostgreSQL** database (Supabase project or local Postgres)
+- A **PostgreSQL** database (local Postgres, or the one your deploy host runs)
 
 ### Setup
 
@@ -200,8 +200,8 @@ never commit real secrets (NDA-binding).
 |----------|---------|
 | `BETTER_AUTH_URL` | This environment's own origin (the **web** origin, not the API's) |
 | `BETTER_AUTH_SECRET` | Auth signing secret (`openssl rand -base64 32`) |
-| `DATABASE_URL` | Runtime Postgres connection — Supabase **transaction** pooler (6543) |
-| `DIRECT_URL` | Migrations **and** the pg-boss queue — Supabase **session** pooler (5432). The transaction pooler supports neither the prepared statements migrations need nor the `LISTEN`/`NOTIFY` session the queue holds |
+| `DATABASE_URL` | Runtime Postgres connection — the **pooled** endpoint, if the host has one |
+| `DIRECT_URL` | Migrations **and** the pg-boss queue — a **direct, unpooled** connection. A transaction pooler supports neither the prepared statements migrations need nor the `LISTEN`/`NOTIFY` session the queue holds, so this must bypass one |
 | `API_URL` | Where `apps/web`'s server-rendered pages reach `apps/api`. Server-only; no default — unset throws |
 | `NEXT_PUBLIC_API_URL` | Where the **browser** reaches `apps/api`. No default — unset throws; also fixes the CSP `connect-src` at build time |
 | `WEB_ORIGINS` | `apps/api` only — comma-separated browser origins allowed to call it with credentials. An allowlist; never `*` |
@@ -326,8 +326,8 @@ reached over the network.
 
 Three isolated environments (see `docs/DECISIONS.md` D6):
 
-- **Production** — `main` branch, its own Supabase project.
-- **Staging** — `staging` branch, a separate Supabase project (never touches production PII).
+- **Production** — `main` branch, its own Postgres database.
+- **Staging** — `staging` branch, a separate Postgres database (never touches production PII).
 - **Previews** — one per PR.
 
 Migrations and the Sheet→Postgres data migration are dry-run on staging first, then applied
