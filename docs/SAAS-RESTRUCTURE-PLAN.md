@@ -21,9 +21,10 @@ Phases are ordered by dependency, not by calendar. Each phase states its goal, i
 3. **Aliases keep working throughout — and then go.** `@/*` paths resolved to the new locations so
    no move PR broke the rest of the tree; Phase 2.10 retired them (2,687 specifiers rewritten,
    `paths` 26 → 1). Do not reintroduce one that spans packages: an import names its package now.
-4. **The suite is green between every PR.** 2,299 tests across 214 files today. The number only goes up except when
-   code is deleted: 4.3 removed 140 route handlers and the 100 test files that drove them, which
-   moved coverage onto the controllers rather than shrinking it.
+4. **The suite is green between every PR.** 2,534 unit tests across 230 files today, plus 259
+   end-to-end specs across 48 files. The number only goes up except when code is deleted: 4.3
+   removed 140 route handlers and the 100 test files that drove them, which moved coverage onto the
+   controllers rather than shrinking it.
 5. **A rule without an automated check is not a rule.** Every architectural constraint in this plan
    ships with the check that enforces it, in the same PR.
 
@@ -53,7 +54,7 @@ job runner, multi-tenancy, legacy data migration, platform-admin console, billin
 | Backend | NestJS + TypeScript; controllers → application → domain → repositories; contract-first typed REST |
 | Database | PostgreSQL + Prisma; repository pattern; Row-Level Security |
 | Validation | Zod at every boundary |
-| Testing | Vitest; Playwright for critical end-to-end flows — **Playwright is a target, not yet adopted**: it is in no manifest and there are no e2e specs, so nothing exercises a real browser today |
+| Testing | Vitest (~2.5k); Playwright for critical end-to-end flows — **adopted 2026-09-25**: 259 specs in `e2e/`, a CI job of their own against a throwaway Postgres. 177 of 209 route handlers execute in a full run, measured from the request log |
 | CI/CD | GitHub Actions; affected builds and tests; architecture checks |
 
 A new general-purpose language requires a documented architectural reason and must be isolated to a

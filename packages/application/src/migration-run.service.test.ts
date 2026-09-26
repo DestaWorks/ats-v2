@@ -153,6 +153,23 @@ describe("start", () => {
       migrationRunService.start(owner, { format: "csv", content: CONTENT }),
     ).rejects.toMatchObject({ code: "INTERNAL" });
   });
+
+  it("marks the run failed when the enqueue throws, never leaving it queued", async () => {
+    h.runRepo.create.mockResolvedValue({ id: "run-1" });
+    registerMigrationCommitEnqueuer(vi.fn().mockRejectedValue(new Error("queue down")));
+
+    await expect(
+      migrationRunService.start(owner, { format: "csv", content: CONTENT }),
+    ).rejects.toThrow();
+
+    expect(h.runRepo.finish).toHaveBeenCalledWith(
+      owner,
+      "run-1",
+      expect.objectContaining({ status: "failed", failureCode: "ENQUEUE_FAILED" }),
+      expect.any(Date),
+    );
+    expect(h.runRepo.setJobId).not.toHaveBeenCalled();
+  });
 });
 
 describe("state", () => {

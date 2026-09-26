@@ -29,7 +29,7 @@ wave-by-wave feature status, before assuming something doesn't exist yet.
     App Router route handlers remain in the whole repo: the Better Auth catch-all at
     `app/api/auth/[...all]/route.ts` (the only one under `app/api`) and `app/portal/access/route.ts`,
     which trades a one-time portal token for a cookie. Both own their own transport.
-  - `apps/api` — NestJS, the **only** backend HTTP surface: 49 controllers, **200 route handlers**,
+  - `apps/api` — NestJS, the **only** backend HTTP surface: 50 controllers, **209 route handlers**,
     27 feature modules, and **no global prefix** (routes are served at bare paths — `client.ts`
     strips the `/api` its call sites still spell). Layered
     `controller → application → repository → prisma`; controllers are thin transport and hold no
@@ -37,7 +37,7 @@ wave-by-wave feature status, before assuming something doesn't exist yet.
   - `apps/admin` — the platform-admin console (Phase 8), HTTP-only like `apps/web`.
   - `packages/` — `domain` (zero runtime deps), `contracts` (every wire shape), `application`
     (services), `db` (**the only** Prisma importer), `auth`, `integrations`, `jobs`, `ui`, `config`.
-  Real build (`pnpm build`), real tests (`vitest`, ~2.3k), typecheck + lint + format + architecture
+  Real build (`pnpm build`), real tests (`vitest`, ~2.5k, plus 259 end-to-end), typecheck + lint + format + architecture
   checks all enforced in CI on every PR.
 - **The legacy app is local-only and NOT in this repo.** `legacy/` is gitignored deliberately
   (`index.html`, the original ~9,500-line React/babel-standalone monolith, and `Code.gs`, the

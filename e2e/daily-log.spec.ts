@@ -3,6 +3,17 @@ import { gotoReady } from "./fixtures/navigate";
 
 const DAILY_API_BASE = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:3004";
 
+/** Every metric is required, so a partial body is refused before the field under test is read. */
+const fullLog = {
+  date: "2026-09-22",
+  tz: 0,
+  sourced: 3,
+  outreach: 3,
+  responses: 1,
+  screenings: 1,
+  submitted: 1,
+};
+
 /**
  * Submit today's daily log (`apps/web/src/app/(app)/daily-log/daily-log-view.tsx`). The server
  * enforces one submission per day (409 on a second `POST /api/daily/log`), and the client hides
@@ -35,7 +46,7 @@ test("submits today's daily log", async ({ page }) => {
 
 test("refuses a daily log with a negative count", async ({ request }) => {
   const response = await request.post(`${DAILY_API_BASE}/daily/log`, {
-    data: { date: "2026-09-22", tz: 0, sourced: -5 },
+    data: { ...fullLog, date: "2026-09-22", sourced: -5 },
   });
 
   expect(response.status()).toBe(422);
@@ -43,8 +54,34 @@ test("refuses a daily log with a negative count", async ({ request }) => {
 
 test("refuses a daily log with a malformed date", async ({ request }) => {
   const response = await request.post(`${DAILY_API_BASE}/daily/log`, {
-    data: { date: "22-09-2026", tz: 0, sourced: 1 },
+    data: { ...fullLog, date: "22-09-2026" },
   });
 
   expect(response.status()).toBe(422);
+});
+
+test("refuses a second log for the same day", async ({ request }) => {
+  const today = new Date().toISOString().slice(0, 10);
+  await request.post(`${DAILY_API_BASE}/daily/log`, {
+    data: { ...fullLog, date: today },
+  });
+
+  const second = await request.post(`${DAILY_API_BASE}/daily/log`, {
+    data: { ...fullLog, date: today, sourced: 4 },
+  });
+
+  expect(second.status()).toBe(409);
+});
+
+test("swaps the log form for a range total on the week range", async ({ page }) => {
+  await gotoReady(page, "/daily-log");
+  await expect(page.getByRole("radiogroup", { name: "Date range" })).toBeVisible();
+
+  await page.getByRole("radio", { name: "Week", exact: true }).click();
+
+  await expect(page.getByRole("button", { name: "Log Today's Numbers" })).toHaveCount(0);
+  await expect(page.getByRole("radio", { name: "Week", exact: true })).toHaveAttribute(
+    "aria-checked",
+    "true",
+  );
 });

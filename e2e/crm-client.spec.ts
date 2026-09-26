@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { gotoReady } from "./fixtures/navigate";
+import { createClient } from "./fixtures/api";
 
 const API_BASE_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:3004";
 
@@ -57,6 +58,109 @@ test("refuses a client with an out-of-range capacity", async ({ request }) => {
   const response = await request.post(`${API_BASE_URL}/crm/clients`, {
     data: { name: `E2E Capacity ${Date.now()}`, capacity: 999999 },
   });
+
+  expect(response.status()).toBe(422);
+});
+
+test("refuses a contact with a malformed email", async ({ request }) => {
+  const clientId = await createClient(request, `E2E Contact Client ${Date.now()}`);
+
+  const response = await request.post(`${API_BASE_URL}/crm/clients/${clientId}/contacts`, {
+    data: { fullName: "E2E Contact", email: "not-an-email" },
+  });
+
+  expect(response.status()).toBe(422);
+});
+
+test("refuses a note with no body on a client", async ({ request }) => {
+  const clientId = await createClient(request, `E2E Note Client ${Date.now()}`);
+
+  const response = await request.post(`${API_BASE_URL}/crm/clients/${clientId}/notes`, {
+    data: { text: "  " },
+  });
+
+  expect(response.status()).toBe(422);
+});
+
+async function clientDetail(
+  request: import("@playwright/test").APIRequestContext,
+  clientId: string,
+): Promise<{
+  client: { name: string };
+  contacts: { id: string; fullName: string; status: string }[];
+  tasks: { id: string }[];
+  meetings: { id: string }[];
+  deals: { id: string; name: string; stage: string }[];
+}> {
+  const response = await request.get(`${API_BASE_URL}/crm/clients/${clientId}`);
+  expect(response.ok(), `GET /crm/clients/${clientId}`).toBeTruthy();
+  return await response.json();
+}
+
+test("edits a client and keeps the change", async ({ request }) => {
+  const clientId = await createClient(request, `E2E Edit Client ${Date.now()}`);
+  const renamed = `E2E Renamed Client ${Date.now()}`;
+
+  const patched = await request.patch(`${API_BASE_URL}/crm/clients/${clientId}`, {
+    data: { name: renamed },
+  });
+  expect(patched.ok()).toBeTruthy();
+
+  expect((await clientDetail(request, clientId)).client.name).toBe(renamed);
+});
+
+test("deletes a client contact and leaves the roster", async ({ request }) => {
+  const clientId = await createClient(request, `E2E Contact Delete ${Date.now()}`);
+  const added = await request.post(`${API_BASE_URL}/crm/clients/${clientId}/contacts`, {
+    data: { fullName: "E2E Doomed Contact", role: "gatekeeper" },
+  });
+  expect(added.ok()).toBeTruthy();
+  const { contact } = (await added.json()) as { contact: { id: string } };
+
+  const deleted = await request.delete(
+    `${API_BASE_URL}/crm/clients/${clientId}/contacts/${contact.id}`,
+  );
+  expect(deleted.ok()).toBeTruthy();
+
+  const after = await clientDetail(request, clientId);
+  expect(after.contacts.map((c) => c.id)).not.toContain(contact.id);
+});
+
+test("edits a client contact and marks them departed", async ({ request }) => {
+  const clientId = await createClient(request, `E2E Contact Edit ${Date.now()}`);
+  const added = await request.post(`${API_BASE_URL}/crm/clients/${clientId}/contacts`, {
+    data: { fullName: "E2E Original Name", role: "unknown" },
+  });
+  const { contact } = (await added.json()) as { contact: { id: string } };
+
+  const renamed = await request.patch(
+    `${API_BASE_URL}/crm/clients/${clientId}/contacts/${contact.id}`,
+    { data: { fullName: "E2E Updated Name", title: "Director of Nursing" } },
+  );
+  expect(renamed.ok()).toBeTruthy();
+
+  const departed = await request.patch(
+    `${API_BASE_URL}/crm/clients/${clientId}/contacts/${contact.id}`,
+    { data: { status: "left" } },
+  );
+  expect(departed.ok()).toBeTruthy();
+
+  const after = (await clientDetail(request, clientId)).contacts.find((c) => c.id === contact.id);
+  expect(after?.fullName).toBe("E2E Updated Name");
+  expect(after?.status).toBe("left");
+});
+
+test("refuses a contact edit that changes nothing", async ({ request }) => {
+  const clientId = await createClient(request, `E2E Empty Patch ${Date.now()}`);
+  const added = await request.post(`${API_BASE_URL}/crm/clients/${clientId}/contacts`, {
+    data: { fullName: "E2E No-op Contact" },
+  });
+  const { contact } = (await added.json()) as { contact: { id: string } };
+
+  const response = await request.patch(
+    `${API_BASE_URL}/crm/clients/${clientId}/contacts/${contact.id}`,
+    { data: {} },
+  );
 
   expect(response.status()).toBe(422);
 });

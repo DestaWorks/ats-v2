@@ -3,6 +3,8 @@ import { gotoReady } from "./fixtures/navigate";
 import type { ParsedJdDTO } from "@destaworks/contracts/validation/open-role";
 import { createClient } from "./fixtures/api";
 
+const JD_API_BASE = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:3004";
+
 const WEB_ORIGIN = "http://localhost:3007";
 
 /**
@@ -70,4 +72,16 @@ test("autofills the add-role form from a pasted job description", async ({ page,
   // "Ohio" isn't a member of `US_STATES` (which holds two-letter codes) — `handleAutofill`'s
   // membership check must skip it rather than crash the Select on an unmatched value.
   await expect(page.getByLabel("State")).toHaveValue("");
+});
+
+test("refuses parsing a job description that is too short", async ({ request }) => {
+  const response = await request.post(`${JD_API_BASE}/roles/parse-jd`, { data: { text: "short" } });
+
+  expect(response.status()).toBe(422);
+});
+
+test("refuses parsing with no text at all", async ({ request }) => {
+  const response = await request.post(`${JD_API_BASE}/roles/parse-jd`, { data: {} });
+
+  expect(response.status()).toBe(422);
 });

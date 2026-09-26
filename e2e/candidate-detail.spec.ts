@@ -90,3 +90,87 @@ test("refuses a move to a status that does not exist", async ({ request }) => {
 
   expect(response.status()).toBe(422);
 });
+
+test("refuses an outreach channel that does not exist", async ({ request }) => {
+  const id = await createCandidate(request, `E2E Channel ${Date.now()}`, "Operations");
+
+  const response = await request.post(`${API_BASE_URL}/candidates/${id}/outreach`, {
+    data: { channel: "smoke-signal" },
+  });
+
+  expect(response.status()).toBe(422);
+});
+
+test("refuses a years-of-experience value beyond the allowed range", async ({ request }) => {
+  const response = await request.post(`${API_BASE_URL}/candidates`, {
+    data: { name: `E2E Years ${Date.now()}`, yearsExp: 200 },
+  });
+
+  expect(response.status()).toBe(422);
+});
+
+test("refuses a state that is not a US state", async ({ request }) => {
+  const response = await request.post(`${API_BASE_URL}/candidates`, {
+    data: { name: `E2E State ${Date.now()}`, state: "Atlantis" },
+  });
+
+  expect(response.status()).toBe(422);
+});
+
+async function candidateProfile(
+  request: import("@playwright/test").APIRequestContext,
+  candidateId: string,
+): Promise<{ candidate: { name: string; city: string | null; state: string | null } }> {
+  const response = await request.get(`${API_BASE_URL}/candidates/${candidateId}`);
+  expect(response.ok(), `GET /candidates/${candidateId}`).toBeTruthy();
+  return await response.json();
+}
+
+test("edits a candidate and keeps the change", async ({ request }) => {
+  const candidateId = await createCandidate(request, `E2E Edit Candidate ${Date.now()}`);
+  const renamed = `E2E Renamed Candidate ${Date.now()}`;
+
+  const patched = await request.patch(`${API_BASE_URL}/candidates/${candidateId}`, {
+    data: { name: renamed, city: "Sacramento", state: "CA" },
+  });
+  expect(patched.ok()).toBeTruthy();
+
+  const { candidate } = await candidateProfile(request, candidateId);
+  expect(candidate.name).toBe(renamed);
+  expect(candidate.city).toBe("Sacramento");
+  expect(candidate.state).toBe("CA");
+});
+
+test("refuses an edit that blanks a candidate's name", async ({ request }) => {
+  const candidateId = await createCandidate(request, `E2E Blank Name ${Date.now()}`);
+
+  const response = await request.patch(`${API_BASE_URL}/candidates/${candidateId}`, {
+    data: { name: "" },
+  });
+
+  expect(response.status()).toBe(422);
+});
+
+test("refuses editing a candidate that does not exist", async ({ request }) => {
+  const response = await request.patch(`${API_BASE_URL}/candidates/does-not-exist`, {
+    data: { city: "Fresno" },
+  });
+
+  expect(response.status()).toBe(404);
+});
+
+test("loads a candidate's notes and journey", async ({ request }) => {
+  const candidateId = await createCandidate(request, `E2E Journey Candidate ${Date.now()}`);
+
+  const notes = await request.get(`${API_BASE_URL}/candidates/${candidateId}/notes`);
+  expect(notes.status()).toBe(200);
+
+  const journey = await request.get(`${API_BASE_URL}/candidates/${candidateId}/journey`);
+  expect(journey.status()).toBe(200);
+});
+
+test("answers 404 for the journey of a candidate that does not exist", async ({ request }) => {
+  const response = await request.get(`${API_BASE_URL}/candidates/does-not-exist/journey`);
+
+  expect(response.status()).toBe(404);
+});

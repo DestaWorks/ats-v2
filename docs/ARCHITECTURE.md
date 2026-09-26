@@ -102,7 +102,7 @@ business logic; every rule is enforced in `apps/api` or below it.
                      (no global prefix — served at bare paths)
                                       ▼
 ┌──────────── apps/api — NestJS, the ONLY backend surface ──────────────────┐
-│  50 controllers · 205 route handlers · 27 feature modules                  │
+│  50 controllers · 209 route handlers · 27 feature modules                  │
 │  controller → application → repository → Prisma                            │
 │  Guards: session · identity · tenant · capability · portal · rate-limit     │
 │          + @RequireModule entitlement enforcement                          │
@@ -166,7 +166,7 @@ gates, the auth surface, dependency drift, raw-SQL indexes, the runtime manifest
 policy — across five CI jobs (commit-messages, static, test, isolation, build).
 
 **Stack in one line:** pnpm/Turborepo monorepo · Next.js (App Router) + TS · Tailwind v4 + Sonner ·
-NestJS controllers → application services → repositories → Prisma · PostgreSQL (Supabase on staging)
+NestJS controllers → application services → repositories → Prisma · PostgreSQL (self-hosted)
 · Better Auth with **tenant-managed roles → capability groups** · Zod · RSC + typed fetch helpers
 (no client cache library) · provider-agnostic LLM via the Vercel AI SDK · pg-boss job runner ·
 **one `Dockerfile`, five runtime targets** (api, worker, web, admin, migrate).

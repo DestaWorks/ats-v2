@@ -44,7 +44,7 @@ production-grade system.
 8. **[ARCHITECTURE.md](./ARCHITECTURE.md)** — §1 the legacy architecture, §2 the system as built.
 9. **[DATA-MODEL.md](./DATA-MODEL.md)** — entities, fields, pipeline stages, rules, schema.
 10. **[API-CONTRACT.md](./API-CONTRACT.md)** — the ~90 **legacy** backend operations. Not the
-    current API: that is 200 route handlers across 49 NestJS controllers in `apps/api`.
+    current API: that is 209 route handlers across 50 NestJS controllers in `apps/api`.
 11. **[MODULE-BREAKDOWN.md](./MODULE-BREAKDOWN.md)** — deep line-level map of every module, its
     sub-modules, complexity ratings, and hidden gotchas (from reading the full `index.html`).
 12. **[EDD.md](./EDD.md)** — Engineering Design for the target system & migration. *Pre-restructure.*
@@ -97,8 +97,8 @@ The three questions this section used to carry are **closed**:
 **Still open, and blocking the last step:**
 
 1. **The real production domain and database.** `zyx.com` throughout these docs is still a
-   placeholder. Today's deployed environment is **staging**; no separate production Supabase
-   project exists yet, so DECISIONS D6's "two separate projects" is a decision, not yet a fact.
+   placeholder. Today's deployed environment is **staging**; no separate production database
+   exists yet, so DECISIONS D6's "two separate databases" is a decision, not yet a fact.
 2. **When the Phase 7 data migration runs.** The importers are not committed and the Phase 6
    tenancy migrations are authored but deliberately unapplied.
 
@@ -106,9 +106,18 @@ _Resolved: **AI = provider-agnostic** via the Vercel AI SDK — Anthropic, OpenA
 adapters are all installed and selected by the `AI_MODEL` env var; never one vendor hard-wired.
 Compliance = HIPAA + Ethiopian Data Protection Proclamation 1321/2024. Hosting = `apps/web` on
 `apps/api` + worker as containers, Postgres managed. Owner holds all secrets. Sequencing =
-ATS. **Auth = Better Auth on Supabase Postgres.**_
+ATS. **Auth = Better Auth on self-hosted Postgres.**_
 
 ## Changelog
+
+- 2026-09-25 — **Doc audit against the tree.** Corrected the API surface everywhere it was quoted
+  (200→**209** route handlers, 49→**50** controllers; 27 feature modules was right) and the test
+  count (~2.3k→**2,534** unit, plus **259** end-to-end). Playwright went from "planned, not
+  adopted" to adopted in `STACK-ARCHITECTURE`, `SAAS-RESTRUCTURE-PLAN` and `CONVENTIONS`, and the
+  matching P3 in `REMAINING-WORK` is closed. **Supabase is retired** — the 2026-09-02 PHI call
+  moved Postgres onto the deploy host, so `DECISIONS` D6 carries a dated amendment and the
+  current-state docs now say self-hosted Postgres. Historical entries and changelog lines were left
+  untouched.
 
 - 2026-06-29 — Initial docs suite created (PRD, Architecture, Data Model, API Contract, EDD,
   Conventions, Migration Plan) from reverse-engineering the legacy single-file app.

@@ -107,6 +107,13 @@ function toDTO(user: BetterAuthUser, role: { id: string; name: string }): AdminU
  * oracle for probing other customers' user ids. The second case is `CONFLICT` and explicit,
  * because by then the caller has already proven they may see this account.
  */
+/** The UI disables Block and Remove on your own row; the server has to say the same thing. */
+function refuseSelf(ctx: TenantContext, userId: string, action: string): void {
+  if (userId === ctx.user.id) {
+    throw new AppError("CONFLICT", `You cannot ${action} your own account`);
+  }
+}
+
 async function requireAccountBelongsToTenant(
   ctx: TenantContext,
   userId: string,
@@ -164,6 +171,12 @@ export const adminUserService = {
   async create(ctx: TenantContext, input: CreateUserInput): Promise<GeneratedPasswordDTO> {
     const role = await accessRoleRepository.findByIdInTenant(ctx.tenantId, input.roleId);
     if (role === null) throw new AppError("NOT_FOUND", "No such role in this workspace");
+    // Better Auth raises its own APIError for a taken email, which `classifyError` cannot see —
+    // it becomes an opaque 500 and a Sentry event for what is ordinary input. Same pre-check
+    // `accessRequestService.approve` already makes for the same reason.
+    if (await userRepository.findByEmail(input.email)) {
+      throw new AppError("CONFLICT", "An account with this email already exists");
+    }
 
     const password = input.password ?? generatePassword();
     const generatedPassword = input.password ? null : password;
@@ -236,6 +249,7 @@ export const adminUserService = {
   },
 
   async ban(ctx: TenantContext, userId: string, input: BanUserInput): Promise<AdminUserDTO> {
+    refuseSelf(ctx, userId, "ban");
     const { role } = await requireAccountBelongsToTenant(ctx, userId);
     const result = await auth.api.banUser({
       headers: await requestContext().headers(),
@@ -298,6 +312,7 @@ export const adminUserService = {
   },
 
   async remove(ctx: TenantContext, userId: string): Promise<void> {
+    refuseSelf(ctx, userId, "remove");
     await requireAccountBelongsToTenant(ctx, userId);
     await auth.api.removeUser({ headers: await requestContext().headers(), body: { userId } });
     await withAnnouncedTenant(ctx.tenantId, (tx) =>

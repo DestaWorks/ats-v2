@@ -79,3 +79,54 @@ test("invites across tenants, accepts via the header switcher, and resolves the 
   await expect(switcherButton).toContainText(TENANT_B_NAME);
   await invitee.context.close();
 });
+
+test("sends a single-workspace account straight past the picker", async ({ browser, request }) => {
+  const stamp = Date.now();
+  const email = `e2e-one-workspace-${stamp}@example.com`;
+  const password = "E2eOneWorkspace123!";
+  await createUser(request, `E2E One Workspace ${stamp}`, email, "Associate", password);
+
+  const { context, page } = await signInFresh(browser, email, password);
+
+  await expect(page).toHaveURL(/\/dashboard/);
+  await expect(page).not.toHaveURL(/\/choose-workspace/);
+  await expect(page.getByRole("heading", { name: "Choose a workspace" })).toHaveCount(0);
+
+  await context.close();
+});
+
+test("puts an account active in two workspaces on the picker", async ({ browser, request }) => {
+  const stamp = Date.now();
+  const email = `e2e-two-workspaces-${stamp}@example.com`;
+  const password = "E2eTwoWorkspaces123!";
+  await createUser(request, `E2E Two Workspaces ${stamp}`, email, "Associate", password);
+
+  const ownerB = await signInFresh(browser, TENANT_B_OWNER_EMAIL, TENANT_B_OWNER_PASSWORD);
+  await expect(ownerB.page).toHaveURL(/\/dashboard/);
+  await ownerB.page.goto("/workspace");
+  await ownerB.page.getByRole("button", { name: "Invite member", exact: true }).click();
+  await ownerB.page.getByLabel("Email").fill(email);
+  await ownerB.page.getByRole("button", { name: "Send invitation", exact: true }).click();
+  await expect(ownerB.page.getByText(`Invited ${email}`)).toBeVisible();
+  await ownerB.context.close();
+
+  const invitee = await signInFresh(browser, email, password);
+  await expect(invitee.page).toHaveURL(/\/dashboard/);
+  const switcher = invitee.page.locator('button[aria-haspopup="menu"]').first();
+  await expect(switcher).toContainText("1");
+  await switcher.click();
+  await invitee.page.getByRole("menuitem", { name: new RegExp(TENANT_B_NAME) }).click();
+  await expect(invitee.page.getByText(`Now working in ${TENANT_B_NAME}`)).toBeVisible();
+  await invitee.context.close();
+
+  const fresh = await browser.newContext({ storageState: { cookies: [], origins: [] } });
+  const page = await fresh.newPage();
+  await gotoReady(page, "/sign-in");
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password", { exact: true }).fill(password);
+  await page.getByRole("button", { name: "Sign In", exact: true }).click();
+
+  await expect(page).toHaveURL(/\/choose-workspace/);
+  await expect(page.getByRole("heading", { name: "Choose a workspace" })).toBeVisible();
+  await fresh.close();
+});

@@ -17,6 +17,7 @@ const h = vi.hoisted(() => {
     findRoleById: vi.fn(),
     changeRole: vi.fn(),
     listAdminUsersByTenant: vi.fn(),
+    findByEmail: vi.fn().mockResolvedValue(null),
     createUser: vi.fn(),
     setRole: vi.fn(),
     banUser: vi.fn(),
@@ -64,7 +65,7 @@ vi.mock("@destaworks/db/tenancy/access-role.repository", () => ({
   accessRoleRepository: { findByIdInTenant: h.findRoleById },
 }));
 vi.mock("@destaworks/db/repositories/user.repository", () => ({
-  userRepository: { listAdminUsersByTenant: h.listAdminUsersByTenant },
+  userRepository: { listAdminUsersByTenant: h.listAdminUsersByTenant, findByEmail: h.findByEmail },
 }));
 // The authoritative half lives there now; this service resolves, delegates, and syncs.
 vi.mock("./membership.service", () => ({ membershipService: { changeRole: h.changeRole } }));
@@ -394,6 +395,37 @@ describe("adminUserService.resetPassword", () => {
     );
     const [, auditParams] = h.writeAudit.mock.calls[0]!;
     expect(JSON.stringify(auditParams)).not.toContain(result.generatedPassword);
+  });
+});
+
+describe("adminUserService guards the acting account", () => {
+  it("refuses banning yourself, so the last administrator cannot lock the workspace", async () => {
+    await expect(
+      adminUserService.ban(adminCtx, adminCtx.user.id, { reason: null, expiresInDays: null }),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+    expect(h.banUser).not.toHaveBeenCalled();
+  });
+
+  it("refuses removing yourself", async () => {
+    await expect(adminUserService.remove(adminCtx, adminCtx.user.id)).rejects.toMatchObject({
+      code: "CONFLICT",
+    });
+    expect(h.removeUser).not.toHaveBeenCalled();
+  });
+});
+
+describe("adminUserService.create refuses a taken email", () => {
+  it("answers CONFLICT rather than letting Better Auth raise an opaque failure", async () => {
+    h.findByEmail.mockResolvedValueOnce({ id: "u-existing" });
+
+    await expect(
+      adminUserService.create(adminCtx, {
+        name: "Ann Owner",
+        email: "taken@desta.works",
+        roleId: "ar_Owner",
+      }),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+    expect(h.createUser).not.toHaveBeenCalled();
   });
 });
 

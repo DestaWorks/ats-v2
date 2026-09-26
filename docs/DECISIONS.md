@@ -119,6 +119,17 @@ the installation carries a second tenant. The domain placeholder `zyx.com` is st
 real production domain and database have not been provisioned, so today's deployed environment is
 **staging**.
 
+*Amended 2026-09-25 — Supabase is retired; the host is a VPS.* The PHI decision of 2026-09-02
+(`D9`, and `REMAINING-WORK.md`) settled hosting in a way this entry predates: a provider that signs
+a BAA, **Postgres on the host rather than a managed service** (~$72/mo against Supabase's ~$949),
+and Redis local rather than hosted. Staging now runs from `deploy/docker-compose.remote.yml` on a
+VPS, pulling five images from ghcr — so "two separate Supabase projects" reads as **two separate
+Postgres databases**, which is what the isolation requirement always meant. Everything else in this
+entry stands: separate databases, per-environment secrets, staging dry-run before production. The
+`DATABASE_URL`/`DIRECT_URL` split also stands, for the reason it always had — migrations need
+prepared statements and pg-boss needs a `LISTEN`/`NOTIFY` session, neither of which survives a
+transaction pooler — but the Supabase port numbers (6543/5432) are no longer the reference.
+
 **D7 — Server-state fetching = RSC reads + typed `ApiResult<T>` mutation helpers, not TanStack
 Query (supersedes the "Client-state classification" line under Resolved review findings →
 Front-end).** The pre-implementation review planned TanStack Query as the server-state layer, but

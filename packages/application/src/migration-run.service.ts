@@ -122,7 +122,24 @@ export const migrationRunService = {
       startedById: ctx.user.id,
     });
 
-    const jobId = await requireMigrationCommitEnqueuer()(run.id, ctx.tenantId);
+    // The row is written before the enqueue, so a failed enqueue would otherwise leave it queued
+    // for a job nobody holds. Mark it failed and rethrow, as the report-export route does.
+    let jobId: string;
+    try {
+      jobId = await requireMigrationCommitEnqueuer()(run.id, ctx.tenantId);
+    } catch (err) {
+      await migrationRunRepository.finish(
+        ctx,
+        run.id,
+        { status: "failed", failureCode: "ENQUEUE_FAILED" },
+        new Date(),
+      );
+      logger.error("migration.run.enqueue_failed", {
+        runId: run.id,
+        errorType: err instanceof Error ? err.name : "UnknownError",
+      });
+      throw err;
+    }
     await migrationRunRepository.setJobId(ctx, run.id, jobId);
 
     logger.info("migration.run.queued", { runId: run.id, jobId, actorId: ctx.user.id });

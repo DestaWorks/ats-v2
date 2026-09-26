@@ -38,3 +38,22 @@ test("answers 404 when purging a candidate that does not exist", async ({ reques
 
   expect(response.status()).toBe(404);
 });
+
+test("a purged candidate does not come back", async ({ request }) => {
+  const id = await createCandidate(request, `E2E Purge ${Date.now()}`, "Operations");
+  await deleteCandidate(request, id);
+
+  const purged = await request.post(`${TRASH_API_BASE}/candidates/${id}/purge`, { data: {} });
+  expect(purged.ok()).toBeTruthy();
+
+  const after = await request.get(`${TRASH_API_BASE}/candidates/${id}`);
+  expect(after.status()).toBe(404);
+});
+
+test("refuses purging a candidate that is still live", async ({ request }) => {
+  const id = await createCandidate(request, `E2E Live Purge ${Date.now()}`, "Operations");
+
+  const response = await request.post(`${TRASH_API_BASE}/candidates/${id}/purge`, { data: {} });
+
+  expect(response.status()).toBe(409);
+});

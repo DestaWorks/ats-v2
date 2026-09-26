@@ -8,7 +8,7 @@
 > text. What changed structurally:
 >
 > - **"every one of 60 API routes"** describes App Router handlers that **Phase 4.3 deleted**.
->   The API is now 200 route handlers across 49 NestJS controllers in `apps/api`; exactly two
+>   The API is now 209 route handlers across 50 NestJS controllers in `apps/api`; exactly two
 >   App Router handlers remain repo-wide. The auth posture over that new surface is checked by
 >   `pnpm auth:check` in CI, not by this document.
 > - **H6 assumes a serverless deployment.** `apps/api` is a long-lived container plus a worker,

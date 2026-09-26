@@ -2,7 +2,7 @@
 
 > ## This is the LEGACY contract. It is not the current API.
 >
-> The system's API today is **NestJS in `apps/api`** — 200 route handlers across 49 controllers,
+> The system's API today is **NestJS in `apps/api`** — 209 route handlers across 50 controllers,
 > contract-first with zod schemas in `@destaworks/contracts`, which are the real definition of
 > every request and response shape. Nothing below describes an endpoint you can call.
 >

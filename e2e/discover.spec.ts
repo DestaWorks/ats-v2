@@ -46,3 +46,33 @@ test("searches NPPES and adds a new match to Sourcing", async ({ page }) => {
   await gotoReady(page, "/sourcing");
   await expect(page.getByRole("row").filter({ hasText: name }).first()).toBeVisible();
 });
+
+const DISCOVER_API_BASE = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:3004";
+
+test("refuses a search with nothing to search on", async ({ request }) => {
+  const response = await request.get(`${DISCOVER_API_BASE}/discover/search?state=CA`);
+
+  expect(response.status()).toBe(422);
+});
+
+test("refuses adding a match with no providers named", async ({ request }) => {
+  const response = await request.post(`${DISCOVER_API_BASE}/discover/add`, {
+    data: { providers: [] },
+  });
+
+  expect(response.status()).toBe(422);
+});
+
+test("refuses coverage gap supply with no combination named", async ({ request }) => {
+  const response = await request.get(`${DISCOVER_API_BASE}/discover/coverage-gaps/supply`);
+
+  expect(response.status()).toBe(422);
+});
+
+test("loads the coverage gap supply figures", async ({ request }) => {
+  const response = await request.get(
+    `${DISCOVER_API_BASE}/discover/coverage-gaps/supply?credential=PMHNP&state=CA`,
+  );
+
+  expect(response.status()).toBe(200);
+});

@@ -1,8 +1,12 @@
 # Remaining work
 
 Everything known to be outstanding, in the order it should be done. Audited 2026-09-01 against a
-tree where all ten CI gates pass, there are zero `TODO`/`FIXME`/`HACK` markers in source, and zero
-skipped tests.
+tree where CI is fully green — six jobs (commit messages · static · test · tenant isolation ·
+build · e2e), with twelve separate checks inside `static` alone — there are zero
+`TODO`/`FIXME`/`HACK` markers in source, and zero skipped tests.
+
+**Re-audited 2026-09-25:** the Playwright P3 is done (259 specs, and the `e2e` job above is new
+since the first audit). Everything else below stands — Phase 7 is still the only P0.
 
 **How to read the priorities.** P0 blocks launch outright. P3 is worth doing when convenient.
 P1 and P2 are empty — those tiers were cleared on 2026-09-01/02; see [Done](#done-for-reference).
@@ -11,7 +15,7 @@ P1 and P2 are empty — those tiers were cleared on 2026-09-01/02; see [Done](#d
 |---|---|---|
 | **P0** | [Phase 7 — the data migration](#p0--phase-7-the-data-migration) | Nothing else matters until this exists |
 | ~~P2~~ | **All four P2 items are done** — see [Done](#done-for-reference) | 2026-09-01 |
-| **P3** | [Playwright, or drop the claim](#p3--playwright-or-stop-claiming-it) | Claimed, absent |
+| ~~P3~~ | ~~[Playwright, or drop the claim](#p3--playwright-or-stop-claiming-it)~~ | **Done 2026-09-25** — 259 specs |
 | **P3** | [`storageKey` prefix check](#p3--storagekey-prefix-check) | Deliberately deferred to Phase 7 |
 | **P3** | [Prisma WASM trimming](#p3--trim-unused-prisma-query-compilers) | ~47MB per image |
 
@@ -35,14 +39,29 @@ what the Sheet actually contains versus what the schema expects.
 
 ---
 
-## P3 — Playwright, or stop claiming it
+## ~~P3 — Playwright, or stop claiming it~~ — DONE 2026-09-25
 
-`STACK-ARCHITECTURE.md` and `SAAS-RESTRUCTURE-PLAN.md` both name Playwright for critical E2E flows.
-It is **in no manifest and there are zero e2e specs**. Both now carry an honest caveat, so this is
-tracked rather than false.
+Adopted, and well past the "handful of flows" this entry asked for. **259 specs across 48 files**,
+run from a throwaway Postgres on every CI run, with a step-summary report.
 
-Either adopt it for the handful of flows worth a real browser — sign-in, add/move candidate,
-promote lead, parse resume — or remove the aspiration from the standards table.
+Coverage was measured rather than asserted: the suite runs with the API request log captured, and
+every declared route is diffed against every route that actually executed. **177 of 209 handlers
+execute**; of the 184 in scope (the platform console, Credentials and Client Discovery are
+excluded), **7 remain unreached**, every one of them needing a live model provider or object store.
+37 of 40 pages render; the 3 that do not are out of scope or dev-only.
+
+All 14 capability gates are covered from the denied side, and every destructive path asserts the
+row is actually gone rather than trusting a 200.
+
+**Found and fixed along the way:** a taken email answered 500 instead of 409; `ban`/`remove` had no
+server-side self-lockout guard (the UI disabled the buttons, the API did not); and a failed enqueue
+left a migration run stranded at `queued` forever. Three tests that were passing for the wrong
+reason — asserting a 422 that came from an unknown key rather than the value under test — were
+repaired.
+
+**Known limits:** one browser at desktop width (no mobile, Safari, Firefox or visual regression);
+no accessibility assertions; 29 of 67 button labels have no click-path test, their handlers being
+covered at the API instead.
 
 ---
 
