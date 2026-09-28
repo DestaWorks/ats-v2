@@ -52,6 +52,9 @@
         "scripts/architecture-baseline.json"
       ]
     },
+    "//#app:a11y-check": {
+      "inputs": ["apps/web/src/app/**/*.tsx", "scripts/check-accessible-names.mjs"]
+    },
     "//#app:auth-check": {
       "inputs": [
         "apps/api/src/modules/**",

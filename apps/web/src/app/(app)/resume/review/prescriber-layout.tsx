@@ -33,10 +33,12 @@ function DeaEditor({ form }: { form: UseFormReturn<PrescriberResume> }) {
       {fields.map((field, index) => (
         <div key={field.id} className="flex items-center gap-2">
           <Input
+            aria-label={`DEA row ${index + 1} state`}
             {...form.register(`dea.${index}.state` as Path<PrescriberResume>)}
             placeholder="State"
           />
           <Input
+            aria-label={`DEA row ${index + 1} number`}
             {...form.register(`dea.${index}.number` as Path<PrescriberResume>)}
             placeholder="Number"
           />

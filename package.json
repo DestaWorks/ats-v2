@@ -11,6 +11,7 @@
     "admin:build": "next build apps/admin",
     "api:build": "tsc --noEmit -p apps/api",
     "app:arch-check": "node scripts/check-architecture.mjs",
+    "app:a11y-check": "node scripts/check-accessible-names.mjs",
     "app:auth-check": "node scripts/check-auth-surface.mjs",
     "app:build": "next build apps/web",
     "app:deps-check": "node scripts/check-dependency-drift.mjs",

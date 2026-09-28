@@ -83,6 +83,7 @@ export function SignatureEditor({
       <div>
         <div className="mb-1 text-[11px] text-gray">SIGNATURE</div>
         <Textarea
+          aria-label="Email signature"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           rows={6}

@@ -145,6 +145,7 @@ export function ProfileView({
               </button>
               <input
                 ref={fileRef}
+                aria-label="Choose an avatar image"
                 type="file"
                 accept="image/*"
                 onChange={(e) => void handleAvatarChange(e)}

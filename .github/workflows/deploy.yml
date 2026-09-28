@@ -300,7 +300,7 @@ jobs:
         run: |
           set -euo pipefail
           conclusions=$(gh api "repos/${{ github.repository }}/commits/${{ inputs.ref }}/check-runs" \
-            --jq '.check_runs[] | select(.name | IN("Commit messages","Static analysis","Tests","Tenant isolation","Build")) | "\(.name)=\(.conclusion)"')
+            --jq '.check_runs[] | select(.name | IN("Commit messages","Static analysis","Tests","Tenant isolation","Build","E2E")) | "\(.name)=\(.conclusion)"')
           echo "${conclusions}"
           # `Tenant isolation` is required, not optional. It is the ONLY check that proves tenant A
           # cannot read tenant B — per table, against a real Postgres — and leaving it out meant a

@@ -197,7 +197,12 @@ export function DealDetailModal({
 
       <div>
         <div className="mb-1 text-[11px] text-gray uppercase">Stage</div>
-        <Select value={deal.stage} onChange={(e) => moveStage(e.target.value)} disabled={pending}>
+        <Select
+          aria-label="Deal stage"
+          value={deal.stage}
+          onChange={(e) => moveStage(e.target.value)}
+          disabled={pending}
+        >
           {DEAL_STAGES.map((s) => (
             <option key={s} value={s}>
               {s}
@@ -290,6 +295,7 @@ export function DealDetailModal({
           {deal.blockers.length === 0 ? <p className="text-xs text-gray">No blockers.</p> : null}
           <div className="flex gap-2">
             <Input
+              aria-label="New blocker"
               value={blockerText}
               disabled={blockerPending}
               onChange={(e) => setBlockerText(e.target.value)}

@@ -148,7 +148,10 @@ function BulletsEditor<T extends FieldValues>({
       <span className="text-xs font-medium text-gray">Bullets</span>
       {fields.map((field, bulletIndex) => (
         <div key={field.id} className="flex items-center gap-2">
-          <Input {...form.register(`experience.${index}.bullets.${bulletIndex}` as Path<T>)} />
+          <Input
+            aria-label={`Bullet ${bulletIndex + 1}`}
+            {...form.register(`experience.${index}.bullets.${bulletIndex}` as Path<T>)}
+          />
           <button
             type="button"
             onClick={() => remove(bulletIndex)}

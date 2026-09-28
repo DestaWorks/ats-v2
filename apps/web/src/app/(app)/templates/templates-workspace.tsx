@@ -290,6 +290,7 @@ export function TemplatesWorkspace({
         <div>
           <div className="mb-1 text-[11px] text-gray">CLIENT</div>
           <Select
+            aria-label="Client"
             value={clientId}
             onChange={(e) => {
               setClientId(e.target.value);
@@ -334,6 +335,7 @@ export function TemplatesWorkspace({
           {recipientType === "candidate" ? (
             <div className="relative">
               <Input
+                aria-label="Search candidates"
                 value={candSearch}
                 onChange={(e) => {
                   setCandSearch(e.target.value);
@@ -363,6 +365,7 @@ export function TemplatesWorkspace({
           ) : (
             <div className="relative">
               <Input
+                aria-label="Search source leads"
                 value={leadSearch}
                 onChange={(e) => {
                   setLeadSearch(e.target.value);
@@ -398,6 +401,7 @@ export function TemplatesWorkspace({
                 <div className="mt-1.5 flex items-center gap-1.5">
                   <span className="text-[10px] text-purple">✓ Channel:</span>
                   <Select
+                    aria-label="Outreach channel"
                     value={channel}
                     onChange={(e) => setChannel(e.target.value as OutreachChannel)}
                     className="w-auto px-1.5 py-0.5 text-[10px]"
