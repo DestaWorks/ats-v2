@@ -5,6 +5,15 @@ import { prisma } from "@destaworks/db/prisma";
 import { authTrustedOrigins } from "./trusted-origins";
 
 /**
+ * The `/sign-in/email` ceiling for the platform console. 3 unless the E2E harness raises it;
+ * never read in production. Same pattern as the operator app's `signInMax()`.
+ */
+function platformSignInMax(): number {
+  const raw = Number(process.env["E2E_SIGNIN_RATE_MAX"]);
+  return Number.isInteger(raw) && raw > 0 ? raw : 3;
+}
+
+/**
  * A SECOND Better Auth instance, for the platform console only.
  *
  * ── Why a second one at all ─────────────────────────────────────────────────────────────────────
@@ -52,7 +61,9 @@ export const platformAuth = betterAuth({
     window: 60,
     max: 100,
     customRules: {
-      "/sign-in/email": { window: 60, max: 3 },
+      // Same escape hatch as the operator app's auth instance: `E2E_SIGNIN_RATE_MAX` is set only
+      // by `playwright.config.ts`'s admin webServer env, never in production. Unset: stays at 3.
+      "/sign-in/email": { window: 60, max: platformSignInMax() },
     },
   },
   // Better Auth validates `Origin` on state-changing calls, and without a list it refuses the

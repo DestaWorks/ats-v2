@@ -6,6 +6,17 @@ const ADMIN_PORT = process.env["ADMIN_PORT"] ?? "3008";
 const REUSE_SERVERS = !process.env.CI && process.env["E2E_STRICT_SERVERS"] !== "1";
 
 /**
+ * The seeded Owner's user id, passed in by `scripts/e2e-local.sh` (and by CI) so the admin dev
+ * server knows which account is allowed on the platform plane.
+ *
+ * Unset in a vanilla `pnpm test:e2e` run: the platform console specs will still start, sign in,
+ * and reach the console, but the console gate will refuse them with "Not a platform administrator"
+ * unless the developer exports `PLATFORM_ADMIN_USER_IDS` themselves. The auth-gate and sign-in
+ * specs (which run unauthenticated) are unaffected either way.
+ */
+const PLATFORM_ADMIN_USER_IDS = process.env["PLATFORM_ADMIN_USER_IDS"] ?? "";
+
+/**
  * E2E config for the four critical flows (sign-in, add/move candidate, promote lead, parse
  * resume) — docs/STACK-ARCHITECTURE.md and docs/CONVENTIONS.md both name Playwright for this.
  *
@@ -41,6 +52,7 @@ export default defineConfig({
     trace: "on-first-retry",
   },
   projects: [
+    // ── Operator app (apps/web) ───────────────────────────────────────────────────────────────
     {
       name: "unauthenticated",
       use: { ...devices["Desktop Chrome"] },
@@ -55,7 +67,45 @@ export default defineConfig({
       name: "chromium",
       use: { ...devices["Desktop Chrome"], storageState: "e2e/.auth/owner.json" },
       dependencies: ["auth-setup"],
-      testIgnore: [/auth\.setup\.ts/, /sign-in\.spec\.ts/],
+      testIgnore: [
+        /auth\.setup\.ts/,
+        /sign-in\.spec\.ts/,
+        // Platform console specs run under their own projects below; exclude them here so they
+        // don't run a second time (with the wrong baseURL and the wrong session) under chromium.
+        /platform-console-/,
+        /platform-auth\.setup\.ts/,
+      ],
+    },
+
+    // ── Platform console (apps/admin) ─────────────────────────────────────────────────────────
+    //
+    // Three projects mirror the operator app's three: an unauthenticated project for the sign-in
+    // and auth-gate specs, a setup project that signs in once and saves the platform session, and
+    // an authenticated project for all other console specs.
+    //
+    // `baseURL` is deliberately NOT set for these projects — the admin dev server is on a
+    // different port from the operator app and every spec constructs its own ADMIN_BASE_URL from
+    // `process.env["ADMIN_PORT"]`. Setting `baseURL` here would only cause confusion.
+    {
+      name: "platform-console-unauthenticated",
+      use: { ...devices["Desktop Chrome"] },
+      // Auth spec runs unauthenticated — it covers sign-in, bad creds, auth gates, refusal, sign-out.
+      testMatch: /platform-console-auth\.spec\.ts/,
+    },
+    {
+      name: "platform-auth-setup",
+      use: { ...devices["Desktop Chrome"] },
+      testMatch: /platform-auth\.setup\.ts/,
+    },
+    {
+      name: "platform-console",
+      use: {
+        ...devices["Desktop Chrome"],
+        storageState: "e2e/.auth/platform.json",
+      },
+      dependencies: ["platform-auth-setup"],
+      // All other platform-console-*.spec.ts run authenticated.
+      testMatch: /platform-console-(?!auth).*\.spec\.ts/,
     },
   ],
   webServer: [
@@ -91,12 +141,22 @@ export default defineConfig({
       // can navigate to it explicitly without touching apps/web's baseURL. `PLATFORM_API_URL` has
       // no default, and unset makes every platform-admin page fail closed with a refusal.
       command: `pnpm dev:admin --port ${ADMIN_PORT}`,
-      url: `http://localhost:${ADMIN_PORT}/tenants`,
+      url: `http://localhost:${ADMIN_PORT}/sign-in`,
       reuseExistingServer: REUSE_SERVERS,
       timeout: 180_000,
       stdout: "pipe",
       stderr: "pipe",
-      env: { PLATFORM_API_URL: "http://localhost:3004" },
+      env: {
+        PLATFORM_API_URL: "http://localhost:3004",
+        // The platform auth instance has its own rate limiter (3 sign-in attempts per window).
+        // The E2E suite signs in during setup and then again in the sign-in spec, so we raise it
+        // the same way the operator app's limiter is raised — via an env var only present here.
+        E2E_SIGNIN_RATE_MAX: "100",
+        // Forwarded from the shell that launched Playwright (set by e2e-local.sh / CI). Unset
+        // locally unless the developer exports it — the sign-in/auth-gate specs still pass, but
+        // the authenticated console specs will be refused by the platform gate.
+        ...(PLATFORM_ADMIN_USER_IDS ? { PLATFORM_ADMIN_USER_IDS } : {}),
+      },
     },
   ],
 });
