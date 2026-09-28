@@ -545,6 +545,7 @@ function NotesPanel({
       <form method="post" onSubmit={onSubmit} noValidate className="flex flex-col gap-2">
         <textarea
           rows={2}
+          aria-label="New note"
           placeholder="Add a note…"
           className="w-full resize-y rounded-md border border-black/15 px-2.5 py-1.5 text-sm focus:ring-2 focus:ring-navy focus:outline-none"
           {...form.register("body")}
@@ -554,7 +555,7 @@ function NotesPanel({
               (non-merging) `cn()` helper — see cn.ts's doc comment — so the width is constrained
               via a wrapper instead of fighting the cascade. */}
           <div className="w-44 shrink-0">
-            <Select {...form.register("category")}>
+            <Select aria-label="Note category" {...form.register("category")}>
               {ROLE_NOTE_CATEGORIES.map((c) => (
                 <option key={c} value={c}>
                   {c}

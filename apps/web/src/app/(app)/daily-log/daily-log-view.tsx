@@ -218,6 +218,7 @@ function TeamBreakdownSection({ weekStart }: { weekStart: string }) {
           </Select>
         </div>
         <Textarea
+          aria-label="Feedback for this teammate"
           rows={2}
           placeholder="A specific, actionable note…"
           value={feedbackBody}

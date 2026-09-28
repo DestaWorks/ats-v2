@@ -131,6 +131,9 @@ jobs:
       # dropped or swapped between a Next route and the controller replacing it, and that every
       # endpoint sits behind the right guard. It carries floors, so a parser that stops matching
       # fails loudly instead of reporting a clean surface it never inspected.
+      - name: Accessible names on form controls
+        run: pnpm exec turbo run //#app:a11y-check ${{ env.TURBO_AFFECTED }}
+
       - name: Auth-surface parity
         run: pnpm auth:check
 

@@ -32,17 +32,11 @@ test("surfaces the two invite failure branches", async ({ page, request }) => {
   await gotoReady(page, "/workspace");
 
   // No account anywhere on the installation with this email.
-  // NOTE: `messageForFailure` (`apps/web/src/lib/api/client.ts`) hardcodes its `NOT_FOUND` branch
-  // to a candidate-specific string ("This candidate no longer exists.") regardless of which
-  // domain raised it — a pre-existing bug surfaced by writing this test, not something this test
-  // should paper over. Asserting the (misleading) text the user actually sees today, not the
-  // server's real "No account with that email address" message, so this test starts failing the
-  // moment someone fixes `messageForFailure` and needs updating alongside that fix.
   const nonexistentEmail = `e2e-no-such-account-${Date.now()}@example.com`;
   await page.getByRole("button", { name: "Invite member", exact: true }).click();
   await page.getByLabel("Email").fill(nonexistentEmail);
   await page.getByRole("button", { name: "Send invitation", exact: true }).click();
-  await expect(page.getByText("This candidate no longer exists.")).toBeVisible();
+  await expect(page.getByText("No account with that email address")).toBeVisible();
 
   // An email that already has an active membership in this workspace (any fixture user does,
   // since `POST /admin/users` creates the account and an active membership in one act).

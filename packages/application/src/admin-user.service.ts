@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { auth } from "@destaworks/auth/auth";
+import { callAuthApi } from "@destaworks/auth/api-error";
 import { requestContext } from "@destaworks/config/request-context";
 import { toIso, isoOrNull } from "@destaworks/domain/utils/iso";
 import { writeAudit } from "@destaworks/db/audit";
@@ -180,16 +181,18 @@ export const adminUserService = {
 
     const password = input.password ?? generatePassword();
     const generatedPassword = input.password ? null : password;
-    const result = await auth.api.createUser({
-      headers: await requestContext().headers(),
-      body: {
-        name: input.name,
-        email: input.email,
-        role: betterAuthRoleFor(role),
-        password,
-        data: { emailVerified: true },
-      },
-    });
+    const result = await callAuthApi(async () =>
+      auth.api.createUser({
+        headers: await requestContext().headers(),
+        body: {
+          name: input.name,
+          email: input.email,
+          role: betterAuthRoleFor(role),
+          password,
+          data: { emailVerified: true },
+        },
+      }),
+    );
     // The account and its membership are one act. Without this the person signs in, resolves to no
     // workspace, and every guarded page answers 401 — an "Add user" that appears to work and does
     // not. Active, not invited: the administrator sets the password and hands it over, so there is
@@ -241,24 +244,28 @@ export const adminUserService = {
     const { member } = await membershipService.changeRole(ctx, membershipId, { roleId });
 
     const role = await accessRoleRepository.findByIdInTenant(ctx.tenantId, member.roleId);
-    const result = await auth.api.setRole({
-      headers: await requestContext().headers(),
-      body: { userId, role: betterAuthRoleFor(role ?? { capabilities: [] }) },
-    });
+    const result = await callAuthApi(async () =>
+      auth.api.setRole({
+        headers: await requestContext().headers(),
+        body: { userId, role: betterAuthRoleFor(role ?? { capabilities: [] }) },
+      }),
+    );
     return toDTO(result.user, { id: member.roleId, name: member.role });
   },
 
   async ban(ctx: TenantContext, userId: string, input: BanUserInput): Promise<AdminUserDTO> {
     refuseSelf(ctx, userId, "ban");
     const { role } = await requireAccountBelongsToTenant(ctx, userId);
-    const result = await auth.api.banUser({
-      headers: await requestContext().headers(),
-      body: {
-        userId,
-        banReason: input.reason ?? undefined,
-        banExpiresIn: input.expiresInDays ? input.expiresInDays * 86_400 : undefined,
-      },
-    });
+    const result = await callAuthApi(async () =>
+      auth.api.banUser({
+        headers: await requestContext().headers(),
+        body: {
+          userId,
+          banReason: input.reason ?? undefined,
+          banExpiresIn: input.expiresInDays ? input.expiresInDays * 86_400 : undefined,
+        },
+      }),
+    );
     await withAnnouncedTenant(ctx.tenantId, (tx) =>
       writeAudit(tx, {
         entity: "user",
@@ -274,10 +281,12 @@ export const adminUserService = {
 
   async unban(ctx: TenantContext, userId: string): Promise<AdminUserDTO> {
     const { role } = await requireAccountBelongsToTenant(ctx, userId);
-    const result = await auth.api.unbanUser({
-      headers: await requestContext().headers(),
-      body: { userId },
-    });
+    const result = await callAuthApi(async () =>
+      auth.api.unbanUser({
+        headers: await requestContext().headers(),
+        body: { userId },
+      }),
+    );
     await withAnnouncedTenant(ctx.tenantId, (tx) =>
       writeAudit(tx, {
         entity: "user",
@@ -295,10 +304,12 @@ export const adminUserService = {
   async resetPassword(ctx: TenantContext, userId: string): Promise<{ generatedPassword: string }> {
     await requireAccountBelongsToTenant(ctx, userId);
     const generatedPassword = generatePassword();
-    await auth.api.setUserPassword({
-      headers: await requestContext().headers(),
-      body: { userId, newPassword: generatedPassword },
-    });
+    await callAuthApi(async () =>
+      auth.api.setUserPassword({
+        headers: await requestContext().headers(),
+        body: { userId, newPassword: generatedPassword },
+      }),
+    );
     await withAnnouncedTenant(ctx.tenantId, (tx) =>
       writeAudit(tx, {
         entity: "user",
@@ -314,7 +325,9 @@ export const adminUserService = {
   async remove(ctx: TenantContext, userId: string): Promise<void> {
     refuseSelf(ctx, userId, "remove");
     await requireAccountBelongsToTenant(ctx, userId);
-    await auth.api.removeUser({ headers: await requestContext().headers(), body: { userId } });
+    await callAuthApi(async () =>
+      auth.api.removeUser({ headers: await requestContext().headers(), body: { userId } }),
+    );
     await withAnnouncedTenant(ctx.tenantId, (tx) =>
       writeAudit(tx, {
         entity: "user",

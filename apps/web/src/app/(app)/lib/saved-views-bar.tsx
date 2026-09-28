@@ -117,6 +117,7 @@ export function SavedViewsBar({
           <div className="flex flex-col gap-3 p-4">
             <Input
               autoFocus
+              aria-label="Name for this saved view"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="View name"

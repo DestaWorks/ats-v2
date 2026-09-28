@@ -205,6 +205,7 @@ function UploadResumeButton({
       )}
     >
       <input
+        aria-label="Choose a resume file"
         ref={inputRef}
         type="file"
         accept=".pdf,application/pdf"

@@ -126,6 +126,7 @@ export function SavedIcpBar({
         {open ? (
           <div className="flex flex-col gap-3 p-4">
             <Input
+              aria-label="Name for this saved search"
               autoFocus
               value={name}
               onChange={(e) => setName(e.target.value)}

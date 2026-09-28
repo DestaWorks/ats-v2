@@ -125,7 +125,11 @@ export function StringListEditor<T extends FieldValues>({
       <legend className="text-sm font-medium text-charcoal">{label}</legend>
       {fields.map((field, index) => (
         <div key={field.id} className="flex items-center gap-2">
-          <Input {...form.register(`${name}.${index}` as Path<T>)} placeholder={placeholder} />
+          <Input
+            aria-label={`${label} item ${index + 1}`}
+            {...form.register(`${name}.${index}` as Path<T>)}
+            placeholder={placeholder}
+          />
           <RemoveButton label={`Remove ${label} item ${index + 1}`} onClick={() => remove(index)} />
         </div>
       ))}

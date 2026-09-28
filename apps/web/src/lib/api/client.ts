@@ -67,7 +67,7 @@ export function messageForFailure(failure: ApiFailure): string {
     return failure.message || "You don't have permission to do that.";
   }
   if (failure.code === "UNAUTHORIZED") return "Your session expired. Please sign in again.";
-  if (failure.code === "NOT_FOUND") return "This candidate no longer exists.";
+  if (failure.code === "NOT_FOUND") return failure.message || "That record no longer exists.";
   return failure.message || "Something went wrong. Please try again.";
 }
 

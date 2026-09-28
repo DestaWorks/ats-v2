@@ -151,6 +151,7 @@ export function UsersTab({
               <Td>{u.email}</Td>
               <Td>
                 <Select
+                  aria-label={`Role for ${u.name}`}
                   value={u.roleId}
                   disabled={busyId === u.id}
                   onChange={(e) => void handleRoleChange(u, e.target.value)}

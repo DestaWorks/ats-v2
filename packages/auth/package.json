@@ -5,6 +5,7 @@
   "type": "module",
   "license": "UNLICENSED",
   "exports": {
+    "./api-error": "./src/api-error.ts",
     "./auth": "./src/auth.ts",
     "./guards": "./src/guards.ts",
     "./impersonation": "./src/impersonation.ts",
