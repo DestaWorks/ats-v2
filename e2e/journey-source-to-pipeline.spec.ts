@@ -41,8 +41,12 @@ test("follows one candidate from a source lead to a moved, persisted pipeline ca
   // 5. Move a stage, through the control an operator actually uses. Which stages are open depends
   // on the track the promotion assigned, so take the first stage the gate allows rather than
   // naming one — the point is that the move crosses screens, not which stage it lands on.
-  await page.locator('button[aria-haspopup="listbox"]').first().click();
+  const stageTrigger = page.locator('button[aria-haspopup="listbox"]').first();
   const target = page.locator('[role="option"][aria-selected="false"]:not([disabled])').first();
+  await expect(async () => {
+    await stageTrigger.click();
+    await expect(target).toBeVisible({ timeout: 2_000 });
+  }).toPass({ timeout: 30_000 });
   const movedTo = ((await target.textContent()) ?? "").trim();
   await target.click();
   await expect(page.getByText(/Moved to/)).toBeVisible();

@@ -15,9 +15,15 @@ test("marks a gated stage Blocked on the candidate's own page", async ({ page, r
   const candidateId = await createCandidate(request, `E2E Gated ${Date.now()}`, "Clinical");
 
   await gotoReady(page, `/candidates/${candidateId}`);
-  await page.locator('button[aria-haspopup="listbox"]').first().click();
 
+  // Retried as a unit: a click landing before React attaches is dropped silently, and the wait
+  // that follows then burns the full timeout on options that will never render.
+  const stageTrigger = page.locator('button[aria-haspopup="listbox"]').first();
   const gated = page.getByRole("option").filter({ hasText: GATED_STAGE });
+  await expect(async () => {
+    await stageTrigger.click();
+    await expect(gated).toBeVisible({ timeout: 2_000 });
+  }).toPass({ timeout: 30_000 });
   await expect(gated).toBeVisible();
   await expect(gated).toBeDisabled();
   await expect(gated).toContainText("Blocked");
