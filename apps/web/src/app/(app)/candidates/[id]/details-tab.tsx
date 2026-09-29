@@ -43,6 +43,39 @@ function MetaRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+/**
+ * The form's values as of RIGHT NOW — never memoized, never cached across renders. Called both to
+ * seed the form on mount and to `form.reset()` it on entering edit mode, so a field changed by a
+ * sibling control (e.g. the header's Track pill) while this tab stayed mounted is picked up
+ * instead of silently reverted by a save of the stale mount-time snapshot.
+ */
+function buildDefaultValues(
+  candidate: CandidateProfileDTO,
+  canEditCredential: boolean,
+): UpdateCandidateInput {
+  return {
+    name: candidate.name,
+    email: candidate.email ?? undefined,
+    phone: candidate.phone ?? undefined,
+    city: candidate.city ?? undefined,
+    state: (candidate.state as UpdateCandidateInput["state"]) ?? undefined,
+    targetLocation: candidate.targetLocation ?? undefined,
+    employer: candidate.employer ?? undefined,
+    yearsExp: candidate.yearsExp ?? undefined,
+    credential: (candidate.credential as UpdateCandidateInput["credential"]) ?? undefined,
+    population: (candidate.population as UpdateCandidateInput["population"]) ?? undefined,
+    setting: (candidate.setting as UpdateCandidateInput["setting"]) ?? undefined,
+    telehealthPref:
+      (candidate.telehealthPref as UpdateCandidateInput["telehealthPref"]) ?? undefined,
+    track: candidate.track as UpdateCandidateInput["track"],
+    source: (candidate.source as UpdateCandidateInput["source"]) ?? undefined,
+    tags: (candidate.tags as UpdateCandidateInput["tags"]) ?? [],
+    licenseState: (candidate.licenseState as UpdateCandidateInput["licenseState"]) ?? undefined,
+    clientId: candidate.clientId ?? undefined,
+    ...(canEditCredential ? { licenseNumber: candidate.licenseNumber ?? undefined } : {}),
+  };
+}
+
 export function DetailsTab({
   candidate,
   clients,
@@ -60,27 +93,7 @@ export function DetailsTab({
   const [editing, setEditing] = useState(false);
 
   const { form, pending, onSubmit } = useApiForm(updateCandidateSchema, {
-    defaultValues: {
-      name: candidate.name,
-      email: candidate.email ?? undefined,
-      phone: candidate.phone ?? undefined,
-      city: candidate.city ?? undefined,
-      state: (candidate.state as UpdateCandidateInput["state"]) ?? undefined,
-      targetLocation: candidate.targetLocation ?? undefined,
-      employer: candidate.employer ?? undefined,
-      yearsExp: candidate.yearsExp ?? undefined,
-      credential: (candidate.credential as UpdateCandidateInput["credential"]) ?? undefined,
-      population: (candidate.population as UpdateCandidateInput["population"]) ?? undefined,
-      setting: (candidate.setting as UpdateCandidateInput["setting"]) ?? undefined,
-      telehealthPref:
-        (candidate.telehealthPref as UpdateCandidateInput["telehealthPref"]) ?? undefined,
-      track: candidate.track as UpdateCandidateInput["track"],
-      source: (candidate.source as UpdateCandidateInput["source"]) ?? undefined,
-      tags: (candidate.tags as UpdateCandidateInput["tags"]) ?? [],
-      licenseState: (candidate.licenseState as UpdateCandidateInput["licenseState"]) ?? undefined,
-      clientId: candidate.clientId ?? undefined,
-      ...(canEditCredential ? { licenseNumber: candidate.licenseNumber ?? undefined } : {}),
-    },
+    defaultValues: buildDefaultValues(candidate, canEditCredential),
     submit: (values) => patchCandidate(candidate.id, values),
     onSuccess: (_data, values) => {
       onSaved(values);
@@ -96,7 +109,17 @@ export function DetailsTab({
     return (
       <div className="flex flex-col gap-4">
         <div className="flex justify-end">
-          <Button type="button" size="sm" variant="secondary" onClick={() => setEditing(true)}>
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            onClick={() => {
+              // Reset to the LIVE candidate prop, not the value this form was mounted with — a
+              // sibling control (the header's Track pill) can have changed it since then.
+              form.reset(buildDefaultValues(candidate, canEditCredential));
+              setEditing(true);
+            }}
+          >
             Edit
           </Button>
         </div>
