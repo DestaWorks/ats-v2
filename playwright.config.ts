@@ -70,10 +70,12 @@ export default defineConfig({
       testIgnore: [
         /auth\.setup\.ts/,
         /sign-in\.spec\.ts/,
-        // Platform console specs run under their own projects below; exclude them here so they
-        // don't run a second time (with the wrong baseURL and the wrong session) under chromium.
-        /platform-console-/,
-        /platform-auth\.setup\.ts/,
+        // Platform console specs (and their setup) run under their own projects below; exclude
+        // every platform-* file here so none of them run a second time (with the wrong baseURL
+        // and the wrong session) under chromium — matches `platform-console-*` and
+        // `platform-auth.setup.ts` alike, so a differently-ordered platform spec name can't slip
+        // through the way `platform-tenants-console.spec.ts` did.
+        /platform-/,
       ],
     },
 

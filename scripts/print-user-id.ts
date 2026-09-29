@@ -7,7 +7,7 @@ import { prisma } from "@destaworks/db/prisma";
  * `PLATFORM_ADMIN_USER_IDS` (`packages/auth/src/platform-admin.ts`) can only ever name an account
  * id that already exists, by design (6.8: no application path lets anyone choose one). The e2e
  * job needs the seeded Owner's real, database-assigned id to grant it the platform-admin plane
- * for the platform-tenants-console spec, and a `cuid` can't be predicted ahead of seeding it —
+ * for the platform-console-* specs, and a `cuid` can't be predicted ahead of seeding it —
  * this is that lookup.
  *
  * Usage: tsx scripts/print-user-id.ts <email>

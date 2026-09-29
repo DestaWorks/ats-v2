@@ -244,7 +244,7 @@ jobs:
   # `PLATFORM_ADMIN_USER_IDS` is set from the default Owner's real database id, looked up with
   # scripts/print-user-id.ts AFTER seeding — a `cuid` can't be predicted ahead of that, and no
   # application path may ever be given one to choose (packages/auth/src/platform-admin.ts) — so the
-  # platform-tenants-console spec has a platform admin to sign in as.
+  # platform-console-* specs have a platform admin to sign in as.
   e2e:
     name: E2E
     runs-on: ubuntu-latest
