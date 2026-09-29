@@ -1,14 +1,15 @@
 import { test, expect } from "@playwright/test";
-import { gotoReady } from "./fixtures/navigate";
+import { gotoReady, clickUntilSettled } from "./fixtures/navigate";
 import { createLead } from "./fixtures/api";
 
 /**
  * One candidate, followed across every screen that touches them, in the order an operator works:
- * sourcing → promote → pipeline → detail → stage move → journey → leave → return.
+ * sourcing → promote → pipeline → detail → a wrong turn → stage move → journey → leave → return.
  *
  * Every step here is covered in isolation elsewhere. What only this spec can catch is state that
  * does not survive the crossing: a promotion the pipeline never sees, a move the detail page
- * forgets, or history that is missing after a reload.
+ * forgets, or history that is missing after a reload — and, with the wrong turn in the middle,
+ * that a refusal met mid-session doesn't leave the session itself broken.
  */
 test("follows one candidate from a source lead to a moved, persisted pipeline card", async ({
   page,
@@ -38,15 +39,23 @@ test("follows one candidate from a source lead to a moved, persisted pipeline ca
   await expect(page.getByRole("heading", { name, level: 1 })).toBeVisible();
   const candidateUrl = page.url();
 
+  // 4b. A wrong turn, mid-session: an id that doesn't exist refuses cleanly, not with a crash —
+  // and the session must still be good for the real candidate afterward.
+  await gotoReady(page, `/candidates/does-not-exist-${Date.now()}`);
+  await expect(
+    page.getByRole("heading", { name: "We couldn't find that", level: 3 }),
+  ).toBeVisible();
+
+  // Back to the real candidate — the wrong turn must not have broken the session.
+  await gotoReady(page, candidateUrl);
+  await expect(page.getByRole("heading", { name, level: 1 })).toBeVisible();
+
   // 5. Move a stage, through the control an operator actually uses. Which stages are open depends
   // on the track the promotion assigned, so take the first stage the gate allows rather than
   // naming one — the point is that the move crosses screens, not which stage it lands on.
   const stageTrigger = page.locator('button[aria-haspopup="listbox"]').first();
   const target = page.locator('[role="option"][aria-selected="false"]:not([disabled])').first();
-  await expect(async () => {
-    await stageTrigger.click();
-    await expect(target).toBeVisible({ timeout: 2_000 });
-  }).toPass({ timeout: 30_000 });
+  await clickUntilSettled(stageTrigger, () => expect(target).toBeVisible({ timeout: 2_000 }));
   const movedTo = ((await target.textContent()) ?? "").trim();
   await target.click();
   await expect(page.getByText(/Moved to/)).toBeVisible();
