@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 
 /**
  * Navigate, then wait until the page is actually INTERACTIVE rather than merely rendered.
@@ -14,4 +14,38 @@ import type { Page } from "@playwright/test";
 export async function gotoReady(page: Page, url: string): Promise<void> {
   await page.goto(url);
   await page.waitForLoadState("networkidle").catch(() => {});
+}
+
+/**
+ * Navigate to a detail page and confirm it actually loaded by its own `<h1>` — the shape behind
+ * crm-ui.spec.ts's `openClient` and candidates-ui.spec.ts's `openCandidate`, which were identical
+ * apart from which base path they navigated to.
+ */
+export async function openDetailPage(page: Page, path: string, name: string): Promise<void> {
+  await gotoReady(page, path);
+  await expect(page.getByRole("heading", { name, level: 1 })).toBeVisible();
+}
+
+/**
+ * Click `trigger`, then run `assertSettled` — retried together as a UNIT, not the assertion alone.
+ *
+ * `gotoReady`'s networkidle wait is only a hydration proxy: on a cold CI runner a click can still
+ * land before React attaches to a server-rendered control, and the click is dropped silently.
+ * Waiting alone after such a click just burns the full timeout on a condition that will never
+ * become true, because the click itself never landed — clicking again is the only way out.
+ *
+ *   await clickUntilSettled(weekRange, () =>
+ *     expect(weekRange).toHaveAttribute("aria-checked", "true", { timeout: 2_000 }),
+ *   );
+ *   await clickUntilSettled(stageTrigger, () => expect(target).toBeVisible({ timeout: 2_000 }));
+ */
+export async function clickUntilSettled(
+  trigger: Locator,
+  assertSettled: () => Promise<void>,
+  timeout = 30_000,
+): Promise<void> {
+  await expect(async () => {
+    await trigger.click();
+    await assertSettled();
+  }).toPass({ timeout });
 }

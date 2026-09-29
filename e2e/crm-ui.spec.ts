@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { gotoReady } from "./fixtures/navigate";
+import { gotoReady, openDetailPage } from "./fixtures/navigate";
 import { createClient } from "./fixtures/api";
 
 /**
@@ -9,8 +9,7 @@ import { createClient } from "./fixtures/api";
  */
 
 async function openClient(page: import("@playwright/test").Page, name: string, id: string) {
-  await gotoReady(page, `/crm/${id}`);
-  await expect(page.getByRole("heading", { name, level: 1 })).toBeVisible();
+  await openDetailPage(page, `/crm/${id}`, name);
 }
 
 test("adds a client through the modal and lands on its page", async ({ page }) => {

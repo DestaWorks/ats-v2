@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { gotoReady } from "./fixtures/navigate";
+import { gotoReady, clickUntilSettled } from "./fixtures/navigate";
 import { createCandidate } from "./fixtures/api";
 
 /**
@@ -20,10 +20,7 @@ test("marks a gated stage Blocked on the candidate's own page", async ({ page, r
   // that follows then burns the full timeout on options that will never render.
   const stageTrigger = page.locator('button[aria-haspopup="listbox"]').first();
   const gated = page.getByRole("option").filter({ hasText: GATED_STAGE });
-  await expect(async () => {
-    await stageTrigger.click();
-    await expect(gated).toBeVisible({ timeout: 2_000 });
-  }).toPass({ timeout: 30_000 });
+  await clickUntilSettled(stageTrigger, () => expect(gated).toBeVisible({ timeout: 2_000 }));
   await expect(gated).toBeVisible();
   await expect(gated).toBeDisabled();
   await expect(gated).toContainText("Blocked");

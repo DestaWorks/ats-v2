@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { gotoReady } from "./fixtures/navigate";
+import { gotoReady, clickUntilSettled } from "./fixtures/navigate";
 import { createUser } from "./fixtures/api";
 
 /**
@@ -39,8 +39,19 @@ test("keeps capability gated destinations out of the nav for a role without them
   const nav = page.getByRole("navigation");
   await expect(nav.getByRole("link", { name: "Pipeline", exact: true })).toBeVisible();
   // An Associate holds no capabilities, so every gated destination must be absent — not merely
-  // unreachable. A link that 403s on click is a worse answer than no link.
-  for (const gated of ["CRM", "Activity", "Credentials", "Import"]) {
+  // unreachable. A link that 403s on click is a worse answer than no link. All eight capability
+  // gates in apps/web/src/app/(app)/layout.tsx, not a subset — a leak on any one of them (Workspace
+  // and Admin especially, both gated on manageUsers) must fail this test.
+  for (const gated of [
+    "CRM",
+    "Activity",
+    "Credentials",
+    "Import",
+    "Client Discovery",
+    "Reports",
+    "Workspace",
+    "Admin",
+  ]) {
     await expect(nav.getByRole("link", { name: gated, exact: true })).toHaveCount(0);
   }
   await context.close();
@@ -65,10 +76,7 @@ test("opens the account menu and signs out through it", async ({ browser, reques
     .locator('button[aria-haspopup="menu"]')
     .filter({ hasText: `E2E Chrome SignOut ${stamp}` });
   const menu = page.getByRole("menu", { name: "Account menu" });
-  await expect(async () => {
-    await trigger.click();
-    await expect(menu).toBeVisible({ timeout: 2_000 });
-  }).toPass({ timeout: 30_000 });
+  await clickUntilSettled(trigger, () => expect(menu).toBeVisible({ timeout: 2_000 }));
   await menu.getByRole("menuitem", { name: /Sign out/i }).click();
 
   await expect(page).toHaveURL(/\/sign-in/);

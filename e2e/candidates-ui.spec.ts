@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { gotoReady } from "./fixtures/navigate";
+import { gotoReady, openDetailPage } from "./fixtures/navigate";
 import { createCandidate } from "./fixtures/api";
 
 /**
@@ -8,8 +8,7 @@ import { createCandidate } from "./fixtures/api";
  */
 
 async function openCandidate(page: import("@playwright/test").Page, name: string, id: string) {
-  await gotoReady(page, `/candidates/${id}`);
-  await expect(page.getByRole("heading", { name, level: 1 })).toBeVisible();
+  await openDetailPage(page, `/candidates/${id}`, name);
 }
 
 test("adds a candidate through the form and lands on their page", async ({ page }) => {

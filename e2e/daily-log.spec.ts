@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { gotoReady } from "./fixtures/navigate";
+import { gotoReady, clickUntilSettled } from "./fixtures/navigate";
 
 const DAILY_API_BASE = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:3004";
 
@@ -77,12 +77,10 @@ test("swaps the log form for a range total on the week range", async ({ page }) 
   await gotoReady(page, "/daily-log");
   await expect(page.getByRole("radiogroup", { name: "Date range" })).toBeVisible();
 
-  // Retried as a unit — a click landing before hydration is dropped silently.
   const weekRange = page.getByRole("radio", { name: "Week", exact: true });
-  await expect(async () => {
-    await weekRange.click();
-    await expect(weekRange).toHaveAttribute("aria-checked", "true", { timeout: 2_000 });
-  }).toPass({ timeout: 30_000 });
+  await clickUntilSettled(weekRange, () =>
+    expect(weekRange).toHaveAttribute("aria-checked", "true", { timeout: 2_000 }),
+  );
 
   await expect(page.getByRole("button", { name: "Log Today's Numbers" })).toHaveCount(0);
 });
