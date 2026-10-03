@@ -285,6 +285,15 @@ jobs:
       SEED_TENANT_B_OWNER_EMAIL: owner-b@e2e.local
       SEED_TENANT_B_OWNER_PASSWORD: E2eOwnerBPass123!
       PLATFORM_API_URL: http://localhost:3004
+      # Object storage for the upload specs. Dummy credentials against a disposable container —
+      # the point is that the upload path runs at all, which it did not until 2026-10-03.
+      S3_ENDPOINT: http://127.0.0.1:8333
+      S3_PUBLIC_URL_BASE: http://127.0.0.1:8333
+      S3_ACCESS_KEY_ID: e2e-access-key
+      S3_SECRET_ACCESS_KEY: e2e-secret-key
+      S3_REGION: us-east-1
+      # Turns a missing store into a failure instead of a silently skipped upload test.
+      E2E_REQUIRE_STORAGE: "1"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -305,11 +314,18 @@ jobs:
           OWNER_ID=$(NODE_OPTIONS=--conditions=react-server pnpm exec tsx scripts/print-user-id.ts "$SEED_OWNER_EMAIL")
           echo "PLATFORM_ADMIN_USER_IDS=$OWNER_ID" >> "$GITHUB_ENV"
 
+      - name: Start the object store
+        run: bash scripts/e2e-storage.sh start
+
       - name: Install Playwright browsers
         run: pnpm exec playwright install --with-deps chromium
 
       - name: Run the E2E specs
         run: pnpm app:test-e2e
+
+      - name: Stop the object store
+        if: always()
+        run: bash scripts/e2e-storage.sh stop
 
       - name: Build the run summary
         if: always()
