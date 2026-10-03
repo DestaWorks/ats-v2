@@ -95,13 +95,13 @@ test("a resume attached in the browser comes back byte-for-byte through a signed
   await attachResume(page, candidateId, filename, bytes);
   await expect(page.getByText(`${filename} uploaded`)).toBeVisible({ timeout: 60_000 });
 
-  const detail = await request.get(`${RESUME_API}/candidates/${candidateId}/detail`);
-  expect(detail.ok(), "GET /candidates/:id/detail").toBeTruthy();
-  const { documents } = (await detail.json()) as {
-    documents: { id: string; originalFilename: string; storageKey: string | null }[];
+  const response = await request.get(`${RESUME_API}/candidates/${candidateId}/detail`);
+  expect(response.ok(), "GET /candidates/:id/detail").toBeTruthy();
+  const { detail } = (await response.json()) as {
+    detail: { documents: { id: string; originalFilename: string; storageKey: string | null }[] };
   };
 
-  const stored = documents.find((doc) => doc.originalFilename === filename);
+  const stored = detail.documents.find((doc) => doc.originalFilename === filename);
   if (!stored) throw new Error(`${filename} is not listed on the candidate after upload`);
   // Null here is the phantom row: metadata saved, bytes never stored.
   expect(stored.storageKey, "the document carries a storage key").toBeTruthy();
