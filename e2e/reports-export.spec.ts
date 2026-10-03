@@ -14,15 +14,11 @@ test("refuses to queue an export when no job queue is configured", async ({ requ
   const response = await request.post(`${EXPORT_API_BASE}/reports/export/jobs`);
 
   // No queue driver runs in the harness, so the enqueue fails and the export is marked failed
-  // rather than left pending. What is asserted is the refusal, not its status code.
-  //
-  // KNOWN DEFECT: this answers 500, where an unconfigured queue should be a clean 503
-  // FEATURE_DISABLED like every other activate-by-key integration. It used to answer 503 only
-  // because object storage was missing too and failed first; configuring storage for the upload
-  // specs removed that cover. `reports.controller.ts` rethrows the raw enqueue error, so it
-  // classifies as INTERNAL and raises a Sentry event for what is really a missing dependency.
-  expect(response.status(), "the export is refused, not left pending").toBeGreaterThanOrEqual(500);
-  expect(response.status()).toBeLessThan(600);
+  // rather than left pending. 502: the queue is a dependency that did not answer, which is not a
+  // fault in this request. It answered 500 until the driver learned to classify the failure —
+  // raising a Sentry event, and only looking correct here because object storage was missing too
+  // and failed first.
+  expect(response.status(), "an unreachable queue is an upstream failure").toBe(502);
 });
 
 test("answers 404 for an export job that does not exist", async ({ request }) => {

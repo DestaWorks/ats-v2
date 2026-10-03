@@ -58,6 +58,32 @@ describe("PgBossJobQueue", () => {
     expect(start).toHaveBeenCalledTimes(2);
   });
 
+  it("reports an unreachable queue as an upstream failure, not an internal error", async () => {
+    vi.spyOn(boss, "start").mockRejectedValue(new Error("connection refused"));
+
+    // A plain Error classifies as unexpected: 500 plus a Sentry event for a dependency being
+    // down. The queue failing to answer is not a fault in the caller's request.
+    await expect(queue.enqueue(briefJob, { candidateId: "cand_1" })).rejects.toMatchObject({
+      code: "UPSTREAM_ERROR",
+    });
+  });
+
+  it("reports a send that cannot reach the queue as an upstream failure", async () => {
+    vi.spyOn(boss, "send").mockRejectedValue(new Error("socket hang up"));
+
+    await expect(queue.enqueue(briefJob, { candidateId: "cand_1" })).rejects.toMatchObject({
+      code: "UPSTREAM_ERROR",
+    });
+  });
+
+  it("leaves an error that already carries a code alone", async () => {
+    vi.spyOn(boss, "send").mockRejectedValue(new AppError("BAD_REQUEST", "nope"));
+
+    await expect(queue.enqueue(briefJob, { candidateId: "cand_1" })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+    });
+  });
+
   it("translates the enqueue options onto the send", async () => {
     await queue.enqueue(
       briefJob,

@@ -69,7 +69,9 @@ test("marks a commit failed when it cannot be queued", async ({ request }) => {
     },
   });
 
-  // No enqueuer is registered in the harness. That is a deployment fault, so it stays a 500 —
-  // what matters is that the run row is not left queued for a job nobody holds.
-  expect(response.status()).toBe(500);
+  // No queue runs in the harness. 502, not 500: the queue is a dependency that did not answer,
+  // which is not a fault in this request — the driver classifies it so an outage stops paging as
+  // an application error. What matters either way is that the run row is not left queued for a job
+  // nobody holds.
+  expect(response.status()).toBe(502);
 });
