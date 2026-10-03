@@ -1,5 +1,11 @@
 # Deploying ATS to a host
 
+> **This describes the target, not what staging does today.** The pipeline below has never been
+> switched on: no repo secrets are set, the GHCR packages are private, and the host has no registry
+> login — so `13.140.40.247` is deployed by hand and **does** build on the box. How it actually runs,
+> including the SeaweedFS and nginx configuration that lives nowhere else, is in
+> [`staging/README.md`](staging/README.md). Read that before touching staging.
+
 The pipeline is `.github/workflows/deploy.yml`: it builds five images, pushes them to ghcr,
 applies migrations, then asks the host to roll out one revision and waits for `/health` to prove
 it. The host's only job is to pull a tag and restart — it never builds, and it never decides which
