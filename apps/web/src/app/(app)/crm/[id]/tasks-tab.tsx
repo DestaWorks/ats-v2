@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useConfirm } from "@destaworks/ui/confirm-dialog";
 import { toast } from "sonner";
 import { addTaskSchema, type ClientTaskDTO } from "@destaworks/contracts/validation/client";
 import type {
@@ -29,6 +30,7 @@ export function TasksTab({
   tasks: ClientTaskDTO[];
   onChanged: (next: ClientTaskDTO[]) => void;
 }) {
+  const confirm = useConfirm();
   const [modalOpen, setModalOpen] = useState(false);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const open = tasks.filter((t) => t.status === "open");
@@ -51,7 +53,10 @@ export function TasksTab({
   }
 
   async function handleDelete(task: ClientTaskDTO) {
-    if (!window.confirm(`Delete "${task.title}"?`)) return;
+    if (
+      !(await confirm({ title: "Delete task", message: `Delete "${task.title}"?`, tone: "danger" }))
+    )
+      return;
     setPendingId(task.id);
     const res = await deleteJson(`/api/crm/clients/${clientId}/tasks/${task.id}`);
     setPendingId(null);

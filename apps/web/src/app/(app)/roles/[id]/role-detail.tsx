@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import { useConfirm } from "@destaworks/ui/confirm-dialog";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -60,6 +61,7 @@ export function RoleDetail({
   clients: { id: string; name: string }[];
   canManageWeights: boolean;
 }) {
+  const confirm = useConfirm();
   const router = useRouter();
   const [role, setRole] = useState(initial);
   const [editing, setEditing] = useState(false);
@@ -69,8 +71,15 @@ export function RoleDetail({
     Math.floor((Date.now() - new Date(role.openedAt).getTime()) / 86_400_000),
   );
 
-  function handleDelete() {
-    if (!window.confirm(`Permanently delete "${role.title}"? This cannot be undone.`)) return;
+  async function handleDelete() {
+    if (
+      !(await confirm({
+        title: "Delete role",
+        message: `Permanently delete "${role.title}"? This cannot be undone.`,
+        tone: "danger",
+      }))
+    )
+      return;
     startDelete(async () => {
       const res = await deleteJson<DeleteRoleResponse>(`/api/roles/${role.id}`);
       if (res.ok) {

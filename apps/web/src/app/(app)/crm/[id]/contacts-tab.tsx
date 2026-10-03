@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useConfirm } from "@destaworks/ui/confirm-dialog";
 import { toast } from "sonner";
 import { CONTACT_ROLES, CONTACT_ROLE_LABELS, CONTACT_STATUSES } from "@destaworks/domain/constants";
 import {
@@ -40,6 +41,7 @@ export function ContactsTab({
   contacts: ClientContactDTO[];
   onChanged: (next: ClientContactDTO[]) => void;
 }) {
+  const confirm = useConfirm();
   const [modal, setModal] = useState<ContactModalState>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [markingLeftId, setMarkingLeftId] = useState<string | null>(null);
@@ -54,7 +56,14 @@ export function ContactsTab({
   }
 
   async function handleDelete(contact: ClientContactDTO) {
-    if (!window.confirm(`Remove ${contact.fullName}? This cannot be undone.`)) return;
+    if (
+      !(await confirm({
+        title: "Remove contact",
+        message: `Remove ${contact.fullName}? This cannot be undone.`,
+        tone: "danger",
+      }))
+    )
+      return;
     setDeletingId(contact.id);
     const res = await deleteJson(`/api/crm/clients/${clientId}/contacts/${contact.id}`);
     setDeletingId(null);

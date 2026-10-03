@@ -1,6 +1,7 @@
 "use client";
 
 import { useTransition } from "react";
+import { useConfirm } from "@destaworks/ui/confirm-dialog";
 import { toast } from "sonner";
 import { PROSPECT_STATUSES, prospectStatusTone } from "@destaworks/domain/constants";
 import type { ProspectListItemDTO } from "@destaworks/contracts/validation/prospect";
@@ -31,6 +32,7 @@ export function ProspectRow({
   onUpdated: (prospect: ProspectListItemDTO) => void;
   onRemoved: (id: string) => void;
 }) {
+  const confirm = useConfirm();
   const [pending, startTransition] = useTransition();
   const isClient = prospect.status === "Client";
 
@@ -46,8 +48,15 @@ export function ProspectRow({
     });
   }
 
-  function remove() {
-    if (!window.confirm(`Soft-delete ${prospect.practiceName}?`)) return;
+  async function remove() {
+    if (
+      !(await confirm({
+        title: "Delete prospect",
+        message: `Soft-delete ${prospect.practiceName}?`,
+        tone: "danger",
+      }))
+    )
+      return;
     startTransition(async () => {
       const res = await deleteProspect(prospect.id);
       if (res.ok) {

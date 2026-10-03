@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useConfirm } from "@destaworks/ui/confirm-dialog";
 import { toast } from "sonner";
 import { CLOSED_DEAL_STAGES, DEAL_STAGES } from "@destaworks/domain/constants";
 import {
@@ -38,6 +39,7 @@ export function DealDetailModal({
   onDeleted: () => void;
   onClose: () => void;
 }) {
+  const confirm = useConfirm();
   const [pending, startTransition] = useTransition();
   const [deleting, startDelete] = useTransition();
   const [closing, setClosing] = useState(false);
@@ -96,8 +98,15 @@ export function DealDetailModal({
     });
   }
 
-  function handleDelete() {
-    if (!window.confirm(`Delete "${deal.name}"? This cannot be undone.`)) return;
+  async function handleDelete() {
+    if (
+      !(await confirm({
+        title: "Delete deal",
+        message: `Delete "${deal.name}"? This cannot be undone.`,
+        tone: "danger",
+      }))
+    )
+      return;
     startDelete(async () => {
       const res = await deleteJson(`/api/crm/clients/${clientId}/deals/${deal.id}`);
       if (res.ok) {

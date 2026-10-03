@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useConfirm } from "@destaworks/ui/confirm-dialog";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import type { SavedViewDTO } from "@destaworks/contracts/validation/saved-view";
@@ -26,6 +27,7 @@ export function SavedViewsBar({
   scope: SavedViewScope;
   initial: SavedViewDTO[];
 }) {
+  const confirm = useConfirm();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -58,7 +60,14 @@ export function SavedViewsBar({
   }
 
   async function handleDelete(view: SavedViewDTO) {
-    if (!window.confirm(`Delete the "${view.name}" view? This cannot be undone.`)) return;
+    if (
+      !(await confirm({
+        title: "Delete saved view",
+        message: `Delete the "${view.name}" view? This cannot be undone.`,
+        tone: "danger",
+      }))
+    )
+      return;
     const result = await deleteSavedView(view.id);
     if (!result.ok) {
       toast.error(messageForFailure(result.failure));

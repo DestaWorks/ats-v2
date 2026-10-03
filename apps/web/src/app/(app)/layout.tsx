@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser, getSignedInIdentity } from "@destaworks/auth/guards";
 import { hasCapability } from "@destaworks/domain/constants";
+import { ConfirmProvider } from "@destaworks/ui/confirm-dialog";
 import { StickyNote } from "@/components/sticky-note";
 import { AppHeader } from "./app-header";
 import { AppNav } from "./app-nav";
@@ -103,7 +104,7 @@ export default async function AppLayout({
   const clients = clientRows.map((c) => ({ id: c.id, name: c.name }));
 
   return (
-    <>
+    <ConfirmProvider>
       <a
         href="#content"
         className="sr-only rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white focus:not-sr-only focus:absolute focus:top-3 focus:left-3 focus:z-50"
@@ -132,6 +133,6 @@ export default async function AppLayout({
       </div>
       {modal}
       <StickyNote />
-    </>
+    </ConfirmProvider>
   );
 }

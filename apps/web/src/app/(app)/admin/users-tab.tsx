@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useConfirm } from "@destaworks/ui/confirm-dialog";
 import { toast } from "sonner";
 import type { AccessRoleDTO } from "@destaworks/contracts/validation/tenant";
 import {
@@ -68,6 +69,7 @@ export function UsersTab({
   onPassword: (email: string, result: { generatedPassword: string | null }) => void;
   emptyMessage?: string;
 }) {
+  const confirm = useConfirm();
   const [addOpen, setAddOpen] = useState(false);
   const [banTarget, setBanTarget] = useState<AdminUserDTO | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -100,7 +102,13 @@ export function UsersTab({
   }
 
   async function handleResetPassword(user: AdminUserDTO) {
-    if (!window.confirm(`Reset ${user.name}'s password? Their current password stops working.`)) {
+    if (
+      !(await confirm({
+        title: "Reset password",
+        message: `Reset ${user.name}'s password? Their current password stops working.`,
+        tone: "danger",
+      }))
+    ) {
       return;
     }
     setBusyId(user.id);
@@ -118,7 +126,14 @@ export function UsersTab({
   }
 
   async function handleRemove(user: AdminUserDTO) {
-    if (!window.confirm(`Remove ${user.name}'s account? This cannot be undone.`)) return;
+    if (
+      !(await confirm({
+        title: "Remove account",
+        message: `Remove ${user.name}'s account? This cannot be undone.`,
+        tone: "danger",
+      }))
+    )
+      return;
     setBusyId(user.id);
     const res = await deleteJson<DeleteAdminUserResponse>(`/api/admin/users/${user.id}`);
     setBusyId(null);

@@ -58,7 +58,7 @@ function ResumeRow({ doc, canDownload }: { doc: DocumentSummaryDTO; canDownload:
       >
         <Td className="font-medium">
           {doc.originalFilename}
-          {!clickable ? <span className="ml-2 text-xs text-gray">No preview yet</span> : null}
+          {!clickable ? <span className="ml-2 text-xs text-gray">No file stored</span> : null}
         </Td>
         <Td>{formatDate(doc.createdAt)}</Td>
       </tr>
@@ -123,14 +123,20 @@ function UploadResumeButton({
   const inputRef = useRef<HTMLInputElement>(null);
   const busy = stage !== "idle";
 
-  async function storageKeyFor(file: File): Promise<string | undefined> {
-    if (!storageEnabled) return undefined;
+  /** `storageKey: undefined` means storage is switched off for this install, which attaches the
+   *  file as metadata on purpose. A failed upload is a different thing and must not look like it. */
+  async function storageKeyFor(
+    file: File,
+  ): Promise<{ ok: true; storageKey: string | undefined } | { ok: false; reason: string }> {
+    if (!storageEnabled) return { ok: true, storageKey: undefined };
     const result = await uploadToStorage({
       filename: file.name,
       mimeType: file.type || "application/pdf",
       body: file,
     });
-    return result.ok ? result.storageKey : undefined;
+    return result.ok
+      ? { ok: true, storageKey: result.storageKey }
+      : { ok: false, reason: result.reason };
   }
 
   async function handleFile(file: File | undefined) {
@@ -149,13 +155,17 @@ function UploadResumeButton({
         // Best-effort — an unreadable/scanned PDF still attaches, just without extracted text.
       }
       setStage("uploading");
-      const storageKey = await storageKeyFor(file);
+      const stored = await storageKeyFor(file);
+      if (!stored.ok) {
+        toast.error(`Couldn't store ${file.name}. ${stored.reason}`);
+        return;
+      }
       setStage("saving");
       const res = await postResumeUpload(candidateId, {
         originalFilename: file.name,
         mimeType: file.type || "application/pdf",
         extractedText,
-        storageKey,
+        storageKey: stored.storageKey,
       });
       if (res.ok) {
         onUploaded(res.data);
