@@ -42,6 +42,7 @@ done
 
 cleanup() {
   docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
+  bash "$(dirname "$0")/e2e-storage.sh" stop >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
 
@@ -79,6 +80,16 @@ export SEED_TENANT_B_SLUG=e2e-tenant-b
 export SEED_TENANT_B_NAME='E2E Second Workspace'
 export SEED_TENANT_B_OWNER_EMAIL=owner-b@e2e.local
 export SEED_TENANT_B_OWNER_PASSWORD='E2eOwnerBPass123!'
+
+# Object storage, so the upload specs actually run instead of skipping. Matches the CI values.
+echo "==> starting a throwaway object store"
+bash "$(dirname "$0")/e2e-storage.sh" start
+export S3_ENDPOINT=http://127.0.0.1:8333
+export S3_PUBLIC_URL_BASE=http://127.0.0.1:8333
+export S3_ACCESS_KEY_ID=e2e-access-key
+export S3_SECRET_ACCESS_KEY=e2e-secret-key
+export S3_REGION=us-east-1
+export E2E_REQUIRE_STORAGE=1
 
 echo "==> applying migrations"
 pnpm exec prisma migrate deploy
