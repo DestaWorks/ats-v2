@@ -63,15 +63,26 @@ COPY . .
 RUN DIRECT_URL="postgresql://placeholder:placeholder@127.0.0.1:5432/placeholder" pnpm db:generate
 RUN pnpm build:api
 
-# Baked at BUILD time, not read at runtime: `next.config.ts` derives the CSP `connect-src` origin
-# from NEXT_PUBLIC_API_URL, and every `NEXT_PUBLIC_*` is inlined into the client bundle. An image
-# built with the wrong value produces a browser that is CSP-blocked from its own API, which looks
-# exactly like a network error and leaves nothing in the API log. It therefore cannot be deferred
-# to `docker run`, and a wrong value here means rebuilding the image, not restarting it.
+# Baked at BUILD time, not read at runtime: `next.config.ts` derives the whole CSP from these, and
+# every `NEXT_PUBLIC_*` is inlined into the client bundle. An image built with the wrong value
+# produces a browser that is CSP-blocked from its own API, which looks exactly like a network error
+# and leaves nothing in the API log. It cannot be deferred to `docker run`, and a wrong value means
+# rebuilding the image, not restarting it.
+#
+# The two S3 vars are here for the same reason and were missing until uploads failed in a browser
+# while succeeding from Node: `connect-src` and `frame-src` take S3_ENDPOINT (signed upload and
+# download URLs the browser fetches directly) and `img-src` takes S3_PUBLIC_URL_BASE (avatar <img>
+# tags). Unset at build time, both are filtered out of the CSP and every upload is blocked — as a
+# TypeError indistinguishable from the store being unreachable. They are read ONLY by the config at
+# build time; the running web container needs no S3 credentials.
 ARG NEXT_PUBLIC_API_URL
 ARG NEXT_PUBLIC_SENTRY_DSN
+ARG S3_ENDPOINT
+ARG S3_PUBLIC_URL_BASE
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 ENV NEXT_PUBLIC_SENTRY_DSN=${NEXT_PUBLIC_SENTRY_DSN}
+ENV S3_ENDPOINT=${S3_ENDPOINT}
+ENV S3_PUBLIC_URL_BASE=${S3_PUBLIC_URL_BASE}
 ENV NEXT_OUTPUT_STANDALONE=1
 RUN pnpm app:build
 # Server-only: admin reads PLATFORM_API_URL at runtime and inlines no NEXT_PUBLIC_* of its own,
