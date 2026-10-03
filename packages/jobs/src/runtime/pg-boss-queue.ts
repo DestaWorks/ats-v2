@@ -51,6 +51,24 @@ export interface PgBossJobQueueOptions {
  * It owns two things: turning a `JobDefinition` into the queue's configuration, and routing an
  * enqueue either through the caller's transaction or through pg-boss's own pool.
  */
+/**
+ * A queue that cannot be reached is a failing DEPENDENCY, not a fault in the caller's request.
+ *
+ * pg-boss raises plain `Error`s, which `classifyError` files as unexpected — so an unreachable or
+ * unconfigured queue answered 500 and raised a Sentry event for every attempt. That also hid a
+ * second thing: the E2E harness has no queue, and the export spec read the resulting 500 as
+ * normal. Anything already carrying a code (CONFLICT from a singleton collapse, a validation
+ * failure) passes through untouched; only an unclassified failure becomes UPSTREAM_ERROR.
+ */
+async function unavailableAsUpstream<T>(run: () => Promise<T>): Promise<T> {
+  try {
+    return await run();
+  } catch (error) {
+    if (error instanceof AppError) throw error;
+    throw new AppError("UPSTREAM_ERROR", "The job queue is unavailable. Please try again.");
+  }
+}
+
 export class PgBossJobQueue implements JobQueue {
   readonly #createBoss: () => BossClient;
   readonly #jobs: readonly RegisteredJob[];
@@ -94,7 +112,7 @@ export class PgBossJobQueue implements JobQueue {
     payload: JobPayload<TDefinition>,
     options?: EnqueueOptions & { tx?: unknown },
   ): Promise<string> {
-    await this.start();
+    await unavailableAsUpstream(() => this.start());
     const boss = this.#boss;
     if (!boss) throw new AppError("INTERNAL", "The job queue is not connected.");
 
@@ -105,7 +123,9 @@ export class PgBossJobQueue implements JobQueue {
       ...(options?.tx === undefined ? {} : { db: fromPrisma(asExecutor(options.tx)) }),
     };
 
-    const id = await boss.send(definition.name, asJsonObject(payload), sendOptions);
+    const id = await unavailableAsUpstream(() =>
+      boss.send(definition.name, asJsonObject(payload), sendOptions),
+    );
     if (id === null) {
       // pg-boss returns null when a singleton policy collapsed the send into an existing job.
       // That is the documented behaviour of `singletonKey`, not an error, but the caller was
