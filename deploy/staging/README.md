@@ -60,7 +60,7 @@ Three flags here are load-bearing, and each one caused an outage by its absence:
   `failed to find writable volumes for collection:avatars`. Check headroom with
   `wget -qO- http://127.0.0.1:9333/dir/status` and watch `Free`.
 - **`-p 127.0.0.1:8333:8333`.** Without it nothing outside the Docker network can reach the store,
-  so nginx cannot proxy avatar images.
+  so nginx cannot proxy to it and the browser can neither upload nor load an avatar.
 - **`-s3.config=/data/s3.json`.** Identities, including the anonymous read that makes avatars
   loadable. See `seaweedfs-identities.example.json`. The file must be readable inside the container
   (mode 644) and is read **only at startup** — editing it requires recreating the container.
@@ -103,9 +103,10 @@ are, and drop both the anonymous identity and the nginx route.
 
 ## nginx
 
-`nginx/` holds verbatim copies of the three `destaworks-*.conf` files from
-`/etc/nginx/sites-enabled/`. The EMR's own configs sit beside them on the host and are not copied
-here — they are not ours.
+`nginx/` holds verbatim copies of the four `destaworks-*.conf` files from
+`/etc/nginx/sites-enabled/`. Byte-identical on purpose: `diff` against the host finds drift, which
+is how the `/files/avatars/` route being retired showed up rather than quietly rotting here. The
+EMR's own configs sit beside them on the host and are not copied — they are not ours.
 
 | Host | Proxies to |
 |---|---|
@@ -120,6 +121,38 @@ matches the signature, 403) or kept (SeaweedFS reads `files` as the bucket, 404)
 for `13.140.40.247.nip.io` was **expanded** to cover `files.` rather than issuing a second one, so
 there is still a single renewal to track.
 
+## The storage host
+
+Storage answers on its **own name**, `files.13.140.40.247.nip.io`, proxied by
+`nginx/destaworks-files.conf` straight through to SeaweedFS on `127.0.0.1:8333` with the Host
+header and path preserved.
+
+**It has to be a host, not a path.** A presigned S3 URL signs the host *and* the path, and SeaweedFS
+revalidates both. Proxying `/files/` either strips the prefix — the path no longer matches what was
+signed, 403 — or keeps it, and SeaweedFS reads `files` as the bucket name, 404. There is no
+`proxy_pass` spelling that satisfies both. An earlier `/files/avatars/` path route worked only
+because anonymous avatar reads carry no signature to break; it has been retired.
+
+The certificate for `13.140.40.247.nip.io` was **expanded** to cover this name rather than issuing a
+second one, so there is still a single renewal to track:
+
+```bash
+certbot --nginx --cert-name 13.140.40.247.nip.io \
+  -d 13.140.40.247.nip.io -d admin.13.140.40.247.nip.io \
+  -d api.13.140.40.247.nip.io -d files.13.140.40.247.nip.io --expand
+```
+
+**Checking it from the wrong place will mislead you.** `curl` and Node have no CSP and do not
+enforce cross-origin rules, so a server-side probe against a signed URL passes while the browser is
+blocked. Both faults that reached staging this way were invisible to everything except a real
+browser — which is what `e2e/resume-upload.spec.ts` now exercises.
+
+| Check | Expect |
+|---|---|
+| `curl -I https://files.13.140.40.247.nip.io/` | `403` — up, and enforcing identities |
+| `curl -I https://files…/avatars/u/<id>/avatar.jpg` | `200 image/jpeg` — anonymous read allowed |
+| `curl -I https://files…/resumes/anything` | `403` — resumes stay signature-only |
+
 ## Environment files
 
 Per-service files under `/srv/destaworks/shared/`, referenced by `env_file:` and never committed:
@@ -129,8 +162,8 @@ Variables worth knowing (names only — values live on the host):
 
 | Variable | Note |
 |---|---|
-| `S3_ENDPOINT` | internal: `http://desta-ats-seaweedfs:8333` |
-| `S3_PUBLIC_URL_BASE` | **must be publicly resolvable** — see above |
+| `S3_ENDPOINT` | the PUBLIC storage host. Presigned URLs are built from it and the **browser** fetches them, so an internal name here breaks every upload |
+| `S3_PUBLIC_URL_BASE` | same host today. Avatar `<img>` URLs are built from it, so it must also be publicly resolvable |
 | `DB_POOL_MAX` | total pool budget for the API. Divided across cluster workers at fork time |
 | `API_WORKERS` | unset or 1 on staging, deliberately: the box is shared and more workers take cores from the EMR |
 | `NEXT_PUBLIC_API_URL` | baked at **build** time, not read at runtime — a wrong value means a rebuild |
