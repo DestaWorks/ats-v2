@@ -86,8 +86,15 @@ It was set to `http://desta-ats-seaweedfs:8333`, a Docker-internal hostname. Upl
 every avatar rendered as a broken image.
 
 ```
-S3_PUBLIC_URL_BASE="https://13.140.40.247.nip.io/files"
+S3_ENDPOINT="https://files.13.140.40.247.nip.io"
+S3_PUBLIC_URL_BASE="https://files.13.140.40.247.nip.io"
 ```
+
+**The storage origin must also be passed at BUILD time.** `next.config.ts` puts `S3_ENDPOINT` into
+the CSP's `connect-src` and `frame-src`, and `S3_PUBLIC_URL_BASE` into `img-src`. Omit the build
+args and both are filtered out, so the browser blocks every upload and every avatar — surfacing as a
+`TypeError` that looks exactly like the store being unreachable. Node has no CSP, so a server-side
+probe passes while the browser fails.
 
 **This is a deliberate trade-off, not a finished design.** Avatars are now readable by anyone with
 the URL. Keys are `u/{userId}/avatar.jpg` and user ids appear in API responses, so treat them as
@@ -102,14 +109,16 @@ here — they are not ours.
 
 | Host | Proxies to |
 |---|---|
-| `13.140.40.247.nip.io` | web on `4003`, plus `/files/avatars/` → SeaweedFS on `8333` |
+| `13.140.40.247.nip.io` | web on `4003` |
+| `files.13.140.40.247.nip.io` | SeaweedFS on `8333` — a dedicated host, see below |
 | `api.13.140.40.247.nip.io` | api on `4004` |
 | `admin.13.140.40.247.nip.io` | admin on `4005` |
 
-The route is `/files/avatars/`, not `/files/`, on purpose: only the avatars bucket is reachable even
-if the s3.json scoping were ever loosened. TLS is Certbot-managed against
-`/etc/letsencrypt/live/13.140.40.247.nip.io/`, which is why the route is a path on the existing host
-rather than a new subdomain — a new name would need its own certificate.
+Storage gets its **own host**, not a path on the main site. Presigned S3 URLs sign the host *and*
+the path and SeaweedFS revalidates both, so a `/files/` prefix either gets stripped (path no longer
+matches the signature, 403) or kept (SeaweedFS reads `files` as the bucket, 404). The certificate
+for `13.140.40.247.nip.io` was **expanded** to cover `files.` rather than issuing a second one, so
+there is still a single renewal to track.
 
 ## Environment files
 
@@ -138,9 +147,12 @@ git archive --format=tar <sha> | gzip | \
 
 # 2. build on the host — ~12 min, uses every core, so pick a quiet moment
 cd /srv/destaworks/releases/<sha>
-docker build --target api --build-arg NEXT_PUBLIC_API_URL=https://api.13.140.40.247.nip.io \
-  -t desta-ats/api:<sha>-apex .
-docker build --target worker -t desta-ats/worker:<sha> .
+BUILD_ARGS="--build-arg NEXT_PUBLIC_API_URL=https://api.13.140.40.247.nip.io \
+  --build-arg S3_ENDPOINT=https://files.13.140.40.247.nip.io \
+  --build-arg S3_PUBLIC_URL_BASE=https://files.13.140.40.247.nip.io"
+docker build --target api    $BUILD_ARGS -t desta-ats/api:<sha>-apex .
+docker build --target worker $BUILD_ARGS -t desta-ats/worker:<sha> .
+docker build --target web    $BUILD_ARGS -t desta-ats/web:<sha>-next .
 
 # 3. swap, one service at a time. The old images stay, so rollback is the same command
 cd /srv/destaworks/shared
