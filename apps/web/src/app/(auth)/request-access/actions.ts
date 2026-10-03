@@ -1,7 +1,7 @@
 "use server";
 
 import { accessRequestSchema } from "@destaworks/contracts/validation/auth";
-import { AppError, isAppErrorCode } from "@destaworks/integrations/http/app-error";
+import { logger } from "@destaworks/config/logger";
 import { headers } from "next/headers";
 import { readFailure } from "@/lib/api/client";
 import { apiUrl } from "@/lib/api/server";
@@ -26,7 +26,11 @@ export async function submitAccessRequest(
 
   const url = apiUrl("/access-requests", process.env.API_URL);
   if (url === null) {
-    throw new AppError("INTERNAL", "The API address is not configured (API_URL).");
+    logger.error("request_access.misconfigured", { reason: "API_URL is not set" });
+    return {
+      ok: false,
+      error: "We couldn't submit your request just now. Please try again in a moment.",
+    };
   }
 
   const host = (await headers()).get("host");
@@ -44,7 +48,11 @@ export async function submitAccessRequest(
       body: JSON.stringify(parsed.data),
     });
   } catch {
-    throw new AppError("UPSTREAM_ERROR", "Couldn't reach the API.", 502);
+    logger.error("request_access.unreachable", { url });
+    return {
+      ok: false,
+      error: "We couldn't submit your request just now. Please try again in a moment.",
+    };
   }
 
   if (res.ok) return { ok: true };
@@ -54,9 +62,11 @@ export async function submitAccessRequest(
     return { ok: false, error: "Too many requests. Please wait a moment and try again." };
   }
   if (failure.code === "CONFLICT") return { ok: false, error: failure.message };
-  throw new AppError(
-    isAppErrorCode(failure.code) ? failure.code : "INTERNAL",
-    failure.message,
-    res.status,
-  );
+  // Anything else is ours to fix, not the visitor's: the form is public and unauthenticated, so it
+  // gets one neutral sentence while the real code and status go to the log.
+  logger.error("request_access.rejected", { status: res.status, code: failure.code });
+  return {
+    ok: false,
+    error: "We couldn't submit your request just now. Please try again in a moment.",
+  };
 }

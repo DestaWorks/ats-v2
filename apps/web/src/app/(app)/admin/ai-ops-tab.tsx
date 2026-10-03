@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useConfirm } from "@destaworks/ui/confirm-dialog";
 import { toast } from "sonner";
 import {
   setAiDisabledSchema,
@@ -36,12 +37,20 @@ export function AiOpsTab({
   initialSettings: AiSettingsDTO;
   usage: AiUsageOverviewDTO;
 }) {
+  const confirm = useConfirm();
   const [settings, setSettings] = useState(initialSettings);
   const [pending, setPending] = useState(false);
   const [disabling, setDisabling] = useState(false);
 
   async function enable() {
-    if (!window.confirm("Re-enable AI features for everyone?")) return;
+    if (
+      !(await confirm({
+        title: "Re-enable AI",
+        message: "Re-enable AI features for everyone?",
+        tone: "primary",
+      }))
+    )
+      return;
     setPending(true);
     const res = await patchJson<AiSettingsDTO>("/api/admin/ai/settings", {
       disabled: false,

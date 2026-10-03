@@ -10,8 +10,9 @@ import { createUser } from "./fixtures/api";
  * password, and removing the account. All four actions ride the same row, so one test walks
  * the whole lifecycle in order rather than re-navigating to `/admin` per action.
  *
- * Reset password and Remove both go through a native `window.confirm` — Playwright blocks on an
- * unhandled dialog, so `page.on("dialog", ...)` is wired up once for the whole test.
+ * Reset password and Remove both confirm first, in an in-app `<dialog>` rather than the native
+ * `window.confirm` they used to use. The confirm button is scoped to the dialog because its label
+ * matches the row button that opened it.
  */
 test("changes a user's role, blocks/unblocks, resets their password, and removes them", async ({
   page,
@@ -19,8 +20,6 @@ test("changes a user's role, blocks/unblocks, resets their password, and removes
 }) => {
   const email = `e2e-lifecycle-${Date.now()}@example.com`;
   await createUser(request, `E2E Lifecycle ${Date.now()}`, email, "Associate", "E2eLifecycle123!");
-
-  page.on("dialog", (dialog) => void dialog.accept());
 
   await gotoReady(page, "/admin");
   const row = page.getByRole("row").filter({ hasText: email });
@@ -43,11 +42,19 @@ test("changes a user's role, blocks/unblocks, resets their password, and removes
 
   // Reset password
   await row.getByRole("button", { name: "Reset password", exact: true }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Reset password", exact: true })
+    .click();
   await expect(page.getByText(`Password for`)).toBeVisible();
   await expect(page.locator("code")).toBeVisible();
 
   // Remove
   await row.getByRole("button", { name: "Remove", exact: true }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Remove account", exact: true })
+    .click();
   await expect(row).toHaveCount(0);
 });
 

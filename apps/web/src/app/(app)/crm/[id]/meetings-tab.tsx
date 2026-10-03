@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useConfirm } from "@destaworks/ui/confirm-dialog";
 import { toast } from "sonner";
 import { MEETING_TYPES } from "@destaworks/domain/constants";
 import { addMeetingSchema, type ClientMeetingDTO } from "@destaworks/contracts/validation/client";
@@ -29,11 +30,19 @@ export function MeetingsTab({
   meetings: ClientMeetingDTO[];
   onChanged: (next: ClientMeetingDTO[]) => void;
 }) {
+  const confirm = useConfirm();
   const [modalOpen, setModalOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   async function handleDelete(meeting: ClientMeetingDTO) {
-    if (!window.confirm("Delete this meeting log entry? This cannot be undone.")) return;
+    if (
+      !(await confirm({
+        title: "Delete meeting log",
+        message: "Delete this meeting log entry? This cannot be undone.",
+        tone: "danger",
+      }))
+    )
+      return;
     setDeletingId(meeting.id);
     const res = await deleteJson(`/api/crm/clients/${clientId}/meetings/${meeting.id}`);
     setDeletingId(null);

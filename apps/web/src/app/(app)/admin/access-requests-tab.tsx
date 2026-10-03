@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useConfirm } from "@destaworks/ui/confirm-dialog";
 import { toast } from "sonner";
 import type { AccessRoleDTO } from "@destaworks/contracts/validation/tenant";
 import {
@@ -34,11 +35,19 @@ export function AccessRequestsTab({
   onResolved: (request: AccessRequestDTO) => void;
   onPassword: (email: string, result: { generatedPassword: string | null }) => void;
 }) {
+  const confirm = useConfirm();
   const [approving, setApproving] = useState<AccessRequestDTO | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   async function handleDecline(request: AccessRequestDTO) {
-    if (!window.confirm(`Decline the request from ${request.name}?`)) return;
+    if (
+      !(await confirm({
+        title: "Decline request",
+        message: `Decline the request from ${request.name}?`,
+        tone: "danger",
+      }))
+    )
+      return;
     setBusyId(request.id);
     const res = await postJson<PostAdminAccessRequestDeclineResponse>(
       `/api/admin/access-requests/${request.id}/decline`,

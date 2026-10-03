@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useConfirm } from "@destaworks/ui/confirm-dialog";
 import { toast } from "sonner";
 import {
   approvePortalRequestSchema,
@@ -58,11 +59,19 @@ export function PortalRequestsTab({
   onResolved: (request: PortalAccessRequestDTO) => void;
   onLinkGenerated: (link: { fullName: string; token: string }) => void;
 }) {
+  const confirm = useConfirm();
   const [approving, setApproving] = useState<PortalAccessRequestDTO | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   async function handleDecline(request: PortalAccessRequestDTO) {
-    if (!window.confirm(`Decline the request from ${request.name}?`)) return;
+    if (
+      !(await confirm({
+        title: "Decline request",
+        message: `Decline the request from ${request.name}?`,
+        tone: "danger",
+      }))
+    )
+      return;
     setBusyId(request.id);
     const res = await postJson<PostAdminPortalRequestDeclineResponse>(
       `/api/admin/portal/requests/${request.id}/decline`,

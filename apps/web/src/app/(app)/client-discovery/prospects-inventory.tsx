@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useConfirm } from "@destaworks/ui/confirm-dialog";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
@@ -33,6 +34,7 @@ export function ProspectsInventory({
   initial: ProspectListDTO;
   owners: { id: string; name: string }[];
 }) {
+  const confirm = useConfirm();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -106,9 +108,16 @@ export function ProspectsInventory({
     reload();
   }
 
-  function bulkDelete() {
+  async function bulkDelete() {
     const ids = [...selected];
-    if (!window.confirm(`Soft-delete ${ids.length} prospect(s)?`)) return;
+    if (
+      !(await confirm({
+        title: "Delete prospects",
+        message: `Soft-delete ${ids.length} prospect(s)?`,
+        tone: "danger",
+      }))
+    )
+      return;
     void runBulk({ action: "delete", ids }, "Deleted");
   }
 

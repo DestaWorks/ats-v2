@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useConfirm } from "@destaworks/ui/confirm-dialog";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { SavedIcpDTO } from "@destaworks/contracts/validation/saved-icp";
@@ -29,6 +30,7 @@ export function SavedIcpBar({
   savedIcps: SavedIcpDTO[];
   currentFilters: SearchProspectsQuery | null;
 }) {
+  const confirm = useConfirm();
   const router = useRouter();
   const [icps, setIcps] = useState(savedIcps);
   const [open, setOpen] = useState(false);
@@ -69,7 +71,14 @@ export function SavedIcpBar({
   }
 
   async function handleDelete(icp: SavedIcpDTO) {
-    if (!window.confirm(`Delete the "${icp.name}" ICP? This cannot be undone.`)) return;
+    if (
+      !(await confirm({
+        title: "Delete ICP",
+        message: `Delete the "${icp.name}" ICP? This cannot be undone.`,
+        tone: "danger",
+      }))
+    )
+      return;
     const result = await deleteJson<DeleteSavedIcpResponse>(`/api/saved-icps/${icp.id}`);
     if (!result.ok) {
       toast.error(messageForFailure(result.failure));

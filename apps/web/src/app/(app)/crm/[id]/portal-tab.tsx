@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useConfirm } from "@destaworks/ui/confirm-dialog";
 import { toast } from "sonner";
 import type { AdminPortalContactDTO } from "@destaworks/contracts/validation/portal";
 import type {
@@ -44,6 +45,7 @@ function GeneratedPortalLinkBanner({
 }
 
 export function PortalAccessTab({ clientId }: { clientId: string }) {
+  const confirm = useConfirm();
   const [contacts, setContacts] = useState<AdminPortalContactDTO[] | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
@@ -76,9 +78,11 @@ export function PortalAccessTab({ clientId }: { clientId: string }) {
     // which already confirms, so this must too. A first-time Generate has nothing to lose.
     if (
       contact.activeToken &&
-      !window.confirm(
-        `Regenerate ${contact.fullName}'s portal link? Their current link stops working immediately.`,
-      )
+      !(await confirm({
+        title: "Regenerate portal link",
+        message: `Regenerate ${contact.fullName}'s portal link? Their current link stops working immediately.`,
+        tone: "danger",
+      }))
     ) {
       return;
     }
@@ -100,7 +104,11 @@ export function PortalAccessTab({ clientId }: { clientId: string }) {
   async function handleRevoke(contact: AdminPortalContactDTO) {
     if (!contact.activeToken) return;
     if (
-      !window.confirm(`Revoke ${contact.fullName}'s portal link? It stops working immediately.`)
+      !(await confirm({
+        title: "Revoke portal link",
+        message: `Revoke ${contact.fullName}'s portal link? It stops working immediately.`,
+        tone: "danger",
+      }))
     ) {
       return;
     }
