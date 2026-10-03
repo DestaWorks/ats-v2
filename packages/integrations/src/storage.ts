@@ -5,11 +5,14 @@ import { AppError } from "./http/app-error";
 /**
  * Object storage client (Wave 6, D8: no file/image bytes in the database) — speaks the standard
  * S3 protocol via the AWS SDK rather than any one vendor's proprietary SDK, so swapping providers
- * later (Supabase Storage → real AWS S3 → Cloudflare R2 → Backblaze B2 → self-hosted MinIO, all
- * S3-compatible) is a credentials/endpoint change only, never a code change — same "swap the
- * provider, not the code" posture as `AI_MODEL` (`server/ai/config.ts`). Supabase Storage itself
- * exposes an S3-compatible endpoint (`https://<project-ref>.supabase.co/storage/v1/s3`), so this
- * targets that today.
+ * (Supabase Storage → AWS S3 → Cloudflare R2 → Backblaze B2 → self-hosted SeaweedFS or MinIO) is
+ * mostly a credentials/endpoint change.
+ *
+ * "Mostly", not "never a code change" — this file used to claim the latter and the SeaweedFS move
+ * on 2026-10-02 disproved it. The SDK's default `requestChecksumCalculation: "WHEN_SUPPORTED"`
+ * adds a CRC32 trailer to every PUT that non-AWS stores reject, so the swap needed the two
+ * checksum options set in `getClient()` below. Expect a provider change to need a compatibility
+ * flag, and verify an upload end-to-end before trusting it.
  *
  * Mirrors `apollo.ts`/`hunter.ts`'s "activate-by-key" convention — every function throws
  * `AppError("FEATURE_DISABLED")` until the S3 credentials are set, so avatar/resume uploads
@@ -156,6 +159,12 @@ function getClient(): S3Client {
       // Path-style addressing (`endpoint/bucket/key`) — required by Supabase and most non-AWS
       // S3-compatible providers; real AWS S3 accepts it too.
       forcePathStyle: true,
+      // Only send an integrity checksum when the operation requires one. The SDK default
+      // (`WHEN_SUPPORTED`) adds a CRC32 trailer to every PUT, which non-AWS stores reject —
+      // SeaweedFS answers `BadDigest: the Content-Md5 you specified did not match`, and a
+      // presigned upload then fails with no hint that the signer, not the caller, added it.
+      requestChecksumCalculation: "WHEN_REQUIRED",
+      responseChecksumValidation: "WHEN_REQUIRED",
     });
   }
   return client;
