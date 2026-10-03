@@ -107,6 +107,37 @@ When several branches run at once:
   on **separate Postgres databases**; **migrations and the data migration run staging-first, then
   production.** Never author schema directly against prod.
 
+### 1.3 Migrations — locking discipline
+
+Prisma runs each migration inside **one transaction**. Verified against Postgres 16 rather than
+taken from the docs:
+
+- `SET LOCAL lock_timeout` and `ADD CONSTRAINT ... NOT VALID` **work** there.
+- `CREATE INDEX CONCURRENTLY` **does not** — *"cannot run inside a transaction block"*.
+
+Every migration authored from 2026-09-28 on must therefore:
+
+1. **Set a lock timeout before taking any lock.** `SET LOCAL lock_timeout = '5s';` An `ALTER TABLE`
+   waits behind running readers, and every query arriving after it queues behind *it* — one long
+   `SELECT` plus one `ALTER` is a full outage on that table. Failing fast beats forming the queue.
+2. **Add constraints `NOT VALID`, then `VALIDATE` separately.** Validation takes a weaker lock than
+   adding-and-scanning under `ACCESS EXCLUSIVE`.
+3. **Never `SET NOT NULL` directly.** Backfill → `CHECK (col IS NOT NULL) NOT VALID` → `VALIDATE` →
+   set the column `NOT NULL` in a later release.
+4. **Acknowledge every index build.** `CONCURRENTLY` is unavailable here, so a plain `CREATE INDEX`
+   blocks writes for the whole build. It needs a `-- lock-ack: <why this table is small enough>`
+   comment, which `scripts/check-migration-safety.mjs` requires.
+
+`pnpm exec turbo run //#app:migration-check` enforces all four in CI. Migrations dated
+`20260911100000` or earlier are exempt and **must not be edited** — Prisma checksums them, so a
+changed file makes `migrate deploy` fail on drift.
+
+> **This expires at the legacy import.** Today's index builds are justified in-comment by the tables
+> being empty — true, and load-bearing. Once Phase 7 has loaded the legacy data that reasoning no
+> longer holds for any table it touched, and a plain `CREATE INDEX` on `candidates` or
+> `outreach_attempts` becomes an outage rather than a millisecond. **Re-make the call then; do not
+> inherit it.**
+
 ## 2. Languages & tooling
 
 - **TypeScript everywhere.** All six are on in `tooling/typescript/base.json` and none may be turned

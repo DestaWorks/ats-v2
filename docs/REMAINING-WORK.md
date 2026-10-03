@@ -21,6 +21,22 @@ P1 and P2 are empty — those tiers were cleared on 2026-09-01/02; see [Done](#d
 
 ---
 
+## P0 — before Phase 7: re-make the index-lock call
+
+`scripts/check-migration-safety.mjs` requires a `-- lock-ack:` comment on every index build, because
+`CREATE INDEX CONCURRENTLY` cannot run inside Prisma's migration transaction. Every acknowledgement
+written so far says the same thing: **the table is empty.**
+
+**The import is what makes that false.** After Phase 7, a plain `CREATE INDEX` on `candidates`,
+`outreach_attempts` or `activity_log` blocks writes for the length of the build instead of a
+millisecond. Before adding any index to a loaded table, either lift that one statement out of the
+Prisma migration engine so it can run `CONCURRENTLY`, or schedule it as deliberate downtime.
+
+Recorded here rather than left in a code comment, because a precondition nobody re-reads is exactly
+how the *"safe only because nothing is deployed"* note went stale.
+
+---
+
 ## P0 — Phase 7: the data migration
 
 **Status: not started.** `SAAS-RESTRUCTURE-PLAN.md` says so itself — the importers are not in the
