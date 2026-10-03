@@ -1,4 +1,6 @@
 import "reflect-metadata";
+import cluster from "node:cluster";
+import { availableParallelism } from "node:os";
 import { NestFactory } from "@nestjs/core";
 import type { INestApplication } from "@nestjs/common";
 import { logger } from "@destaworks/config/logger";
@@ -28,6 +30,66 @@ function allowedOrigins(): string[] {
     .split(",")
     .map((entry) => entry.trim())
     .filter((entry) => entry.length > 0);
+}
+
+function resolveWorkers(): number {
+  const parsed = Number.parseInt(process.env["API_WORKERS"] ?? "", 10);
+  if (!Number.isInteger(parsed) || parsed < 1) return 1;
+  return Math.min(parsed, availableParallelism());
+}
+
+function perWorkerPool(count: number): Record<string, string> | undefined {
+  const budget = Number.parseInt(process.env["DB_POOL_MAX"] ?? "", 10);
+  if (!Number.isInteger(budget) || budget < 1) return undefined;
+  return { DB_POOL_MAX: String(Math.max(2, Math.floor(budget / count))) };
+}
+
+function runPrimary(count: number): void {
+  requireServerEnv();
+  installNodeLogger();
+  const childEnv = perWorkerPool(count);
+  const perWorker = childEnv === undefined ? undefined : Number(childEnv["DB_POOL_MAX"]);
+  logger.info("api.cluster_starting", {
+    workers: count,
+    cores: availableParallelism(),
+    poolPerWorker: perWorker ?? "package default",
+    poolTotal: perWorker === undefined ? "unset" : perWorker * count,
+  });
+  if (perWorker !== undefined && perWorker * count > Number(process.env["DB_POOL_MAX"])) {
+    logger.warn("api.cluster_pool_overshoot", {
+      budget: Number(process.env["DB_POOL_MAX"]),
+      actual: perWorker * count,
+    });
+  }
+  for (let index = 0; index < count; index += 1) cluster.fork(childEnv);
+
+  let stopping = false;
+  let restarts = 0;
+  let windowStart = Date.now();
+
+  cluster.on("exit", (worker, code, signal) => {
+    if (stopping) return;
+    if (Date.now() - windowStart > 60_000) {
+      restarts = 0;
+      windowStart = Date.now();
+    }
+    restarts += 1;
+    if (restarts > count * 3) {
+      logger.error("api.cluster_crash_looping", { restarts, code, signal });
+      process.exit(1);
+    }
+    logger.warn("api.worker_exited", { pid: worker.process.pid, code, signal, restarts });
+    cluster.fork(childEnv);
+  });
+
+  for (const signal of ["SIGTERM", "SIGINT"] as const) {
+    process.once(signal, () => {
+      if (stopping) return;
+      stopping = true;
+      logger.info("api.cluster_shutting_down", { signal });
+      for (const worker of Object.values(cluster.workers ?? {})) worker?.kill(signal);
+    });
+  }
 }
 
 function resolvePort(): number {
@@ -117,4 +179,9 @@ function installShutdownHandlers(app: INestApplication, queue: StoppableQueue): 
 // (non-zero status, full stack on stderr) tells an orchestrator more than this file could log —
 // the structured logger drops error messages on purpose, because Prisma embeds field values in
 // them.
-await bootstrap();
+const workers = resolveWorkers();
+if (cluster.isPrimary && workers > 1) {
+  runPrimary(workers);
+} else {
+  await bootstrap();
+}
