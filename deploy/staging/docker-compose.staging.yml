@@ -1,0 +1,64 @@
+name: desta-ats
+
+networks:
+  default:
+    name: destaworks-net
+    external: true
+
+services:
+  api:
+    image: desta-ats/api:${REF:?set REF}-apex
+    env_file:
+      - /srv/destaworks/shared/.env.api
+      - /srv/destaworks/shared/.env.dbhost.api
+    environment:
+      NODE_ENV: production
+      PORT: 3004
+    ports: ["127.0.0.1:4004:3004"]
+    restart: unless-stopped
+
+  worker:
+    image: desta-ats/worker:${REF:?set REF}
+    env_file:
+      - /srv/destaworks/shared/.env.worker
+      - /srv/destaworks/shared/.env.dbhost.worker
+    environment:
+      NODE_ENV: production
+    restart: unless-stopped
+
+  web:
+    image: desta-ats/web:${REF:?set REF}-next
+    env_file:
+      - /srv/destaworks/shared/.env.web
+      - /srv/destaworks/shared/.env.dbhost.web
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      BETTER_AUTH_URL: https://13.140.40.247.nip.io
+    ports: ["127.0.0.1:4003:3000"]
+    restart: unless-stopped
+
+  admin:
+    image: desta-ats/admin:${REF:?set REF}-next
+    env_file:
+      - /srv/destaworks/shared/.env.admin
+      - /srv/destaworks/shared/.env.dbhost.admin
+    environment:
+      NODE_ENV: production
+      PORT: 3010
+    ports: ["127.0.0.1:4005:3010"]
+    restart: unless-stopped
+
+  redis:
+    image: redis:8-alpine
+    restart: unless-stopped
+    # Rate-limit counters only — sessions and the job queue both live in Postgres. Losing this
+    # loses nothing but the current windows, so it is deliberately NOT persisted.
+    command:
+      ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory-policy", "volatile-ttl"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    # Not published — only the app containers reach it, over the project network.

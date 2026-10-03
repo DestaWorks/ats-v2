@@ -1,0 +1,25 @@
+{
+  "_comment": [
+    "The S3 identity file SeaweedFS reads at startup, via -s3.config=/data/s3.json.",
+    "It lives INSIDE the named volume (destaworks_seaweedfs) on the host, never in this repo:",
+    "the real file carries live credentials. This is the shape only.",
+    "",
+    "The `anonymous` identity is what makes avatar <img> tags work. The browser sends no AWS",
+    "signature, so without it every avatar fetch is a 403. Scope it to Read:avatars and nothing",
+    "else — `resumes` and `exports` must stay signature-only, because those hold candidate",
+    "documents.",
+    "",
+    "After editing, SeaweedFS must be RECREATED, not restarted: the file is read once at startup."
+  ],
+  "identities": [
+    {
+      "name": "desta-ats",
+      "credentials": [{ "accessKey": "REPLACE_ME", "secretKey": "REPLACE_ME" }],
+      "actions": ["Admin", "Read", "Write", "List", "Tagging"]
+    },
+    {
+      "name": "anonymous",
+      "actions": ["Read:avatars"]
+    }
+  ]
+}
