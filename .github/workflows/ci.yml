@@ -116,6 +116,9 @@ jobs:
       # lower(email), is the ONLY guard against importing the same lead twice and has no restore
       # migration behind it. This replays every migration in order and fails if one is missing,
       # moved, or no longer tenant-leading.
+      - name: Migration locking discipline
+        run: pnpm exec turbo run //#app:migration-check ${{ env.TURBO_AFFECTED }}
+
       - name: Raw-SQL index survival
         run: pnpm raw-index:check
 

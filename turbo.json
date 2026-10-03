@@ -103,6 +103,9 @@
         "package.json"
       ]
     },
+    "//#app:migration-check": {
+      "inputs": ["packages/db/prisma/migrations/**", "scripts/check-migration-safety.mjs"]
+    },
     "//#app:raw-index-check": {
       "inputs": ["packages/db/prisma/migrations/**", "scripts/check-raw-sql-indexes.mjs"]
     },
