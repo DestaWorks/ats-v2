@@ -16,6 +16,7 @@ const h = vi.hoisted(() => ({
   candidateRepo: { list: vi.fn(), upsertByLegacyId: vi.fn(), findById: vi.fn(), update: vi.fn() },
   documentRepo: { upsertByLegacyId: vi.fn(), create: vi.fn() },
   stageHistoryRepo: { listByCandidate: vi.fn(), add: vi.fn() },
+  userRepo: { listByTenant: vi.fn() },
   writeAudit: vi.fn(),
   parseResume: vi.fn(),
   checkRateLimit: vi.fn(),
@@ -33,6 +34,9 @@ vi.mock("@destaworks/db/repositories/document.repository", () => ({
 }));
 vi.mock("@destaworks/db/repositories/stage-history.repository", () => ({
   stageHistoryRepository: h.stageHistoryRepo,
+}));
+vi.mock("@destaworks/db/repositories/user.repository", () => ({
+  userRepository: h.userRepo,
 }));
 vi.mock("@destaworks/db/audit", () => ({ writeAudit: h.writeAudit }));
 vi.mock("@destaworks/db/with-transaction", () => ({
@@ -80,6 +84,7 @@ beforeEach(() => {
     .mockImplementation((_ctx: TenantContext, legacyId: string) =>
       Promise.resolve({ id: `db-${legacyId}`, legacyId }),
     );
+  h.userRepo.listByTenant.mockReset().mockResolvedValue([]);
   h.stageHistoryRepo.listByCandidate.mockReset().mockResolvedValue([]);
   h.stageHistoryRepo.add.mockReset().mockResolvedValue({ id: "sh-1" });
   h.documentRepo.upsertByLegacyId.mockReset().mockResolvedValue({ id: "doc-1" });
@@ -213,7 +218,7 @@ describe("migrationService.commit", () => {
         candidateId: "db-L-1",
         toStatus: "SUBMITTED_TO_CLIENT",
         toStageOrder: 4,
-        actorId: owner.user.id,
+        actorId: "system-import",
       },
       h.fakeTx,
     );

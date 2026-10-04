@@ -55,6 +55,45 @@ describe("scalar parsers", () => {
   });
 });
 
+describe("transformRow — legacy actors", () => {
+  const USERS = new Map([["hanna girma", "user-hanna"]]);
+
+  it("resolves a legacy actor name onto the account id", () => {
+    const plan = transformRow(
+      row({ ID: "L-1", Name: "Jane", AddedBy: " Hanna   Girma " }),
+      2,
+      NO_CLIENTS,
+      USERS,
+    );
+
+    expect(plan.create.createdById).toBe("user-hanna");
+    expect(plan.actorId).toBe("user-hanna");
+    expect(plan.flags).not.toContain("actor-unmapped");
+  });
+
+  it("keeps an unmatched name but flags it, and never passes it off as a user id", () => {
+    const plan = transformRow(
+      row({ ID: "L-1", Name: "Jane", AddedBy: "Someone Who Left" }),
+      2,
+      NO_CLIENTS,
+      USERS,
+    );
+
+    // D-9 permits the raw string on the candidate; history must not pretend it is an account.
+    expect(plan.create.createdById).toBe("Someone Who Left");
+    expect(plan.actorId).toBe("system-import");
+    expect(plan.flags).toContain("actor-unmapped");
+  });
+
+  it("anchors to system-import when the legacy row names no actor at all", () => {
+    const plan = transformRow(row({ ID: "L-1", Name: "Jane" }), 2, NO_CLIENTS, USERS);
+
+    expect(plan.create.createdById).toBeNull();
+    expect(plan.actorId).toBe("system-import");
+    expect(plan.flags).not.toContain("actor-unmapped");
+  });
+});
+
 describe("transformRow — column mapping", () => {
   it("maps every column onto the target and mirrors stageOrder from status", () => {
     const clients = new Map([["docs medical group", "client-1"]]);

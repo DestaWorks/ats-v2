@@ -116,7 +116,10 @@ vi.mock("@destaworks/db/repositories/candidate.repository", () => ({
   },
 }));
 vi.mock("@destaworks/db/repositories/user.repository", () => ({
-  userRepository: { findActorById: () => Promise.resolve(h.actor) },
+  userRepository: {
+    findActorById: () => Promise.resolve(h.actor),
+    listByTenant: () => Promise.resolve([]),
+  },
 }));
 vi.mock("@destaworks/db/memberships", () => ({
   membershipReader: {
