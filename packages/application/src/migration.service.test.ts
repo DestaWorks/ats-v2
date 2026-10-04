@@ -15,6 +15,7 @@ const h = vi.hoisted(() => ({
   clientRepo: { list: vi.fn() },
   candidateRepo: { list: vi.fn(), upsertByLegacyId: vi.fn(), findById: vi.fn(), update: vi.fn() },
   documentRepo: { upsertByLegacyId: vi.fn(), create: vi.fn() },
+  stageHistoryRepo: { listByCandidate: vi.fn(), add: vi.fn() },
   writeAudit: vi.fn(),
   parseResume: vi.fn(),
   checkRateLimit: vi.fn(),
@@ -29,6 +30,9 @@ vi.mock("@destaworks/db/repositories/candidate.repository", () => ({
 }));
 vi.mock("@destaworks/db/repositories/document.repository", () => ({
   documentRepository: h.documentRepo,
+}));
+vi.mock("@destaworks/db/repositories/stage-history.repository", () => ({
+  stageHistoryRepository: h.stageHistoryRepo,
 }));
 vi.mock("@destaworks/db/audit", () => ({ writeAudit: h.writeAudit }));
 vi.mock("@destaworks/db/with-transaction", () => ({
@@ -76,6 +80,8 @@ beforeEach(() => {
     .mockImplementation((_ctx: TenantContext, legacyId: string) =>
       Promise.resolve({ id: `db-${legacyId}`, legacyId }),
     );
+  h.stageHistoryRepo.listByCandidate.mockReset().mockResolvedValue([]);
+  h.stageHistoryRepo.add.mockReset().mockResolvedValue({ id: "sh-1" });
   h.documentRepo.upsertByLegacyId.mockReset().mockResolvedValue({ id: "doc-1" });
   h.documentRepo.create.mockReset().mockResolvedValue({ id: "doc-ai-1" });
   h.candidateRepo.findById.mockReset().mockResolvedValue({ id: "db-L-1", name: "Jane" });
@@ -187,6 +193,41 @@ describe("migrationService.commit", () => {
       type: "resume",
       mimeType: "application/pdf",
     });
+  });
+
+  it("anchors the imported stage so the funnel does not read every row as stage 0", async () => {
+    h.candidateRepo.upsertByLegacyId.mockResolvedValue({
+      id: "db-L-1",
+      status: "SUBMITTED_TO_CLIENT",
+      stageOrder: 4,
+    });
+
+    await migrationService.commit(
+      { format: "csv", content: csv([{ ID: "L-1", Name: "Ok", Status: NEW }]) },
+      owner,
+    );
+
+    expect(h.stageHistoryRepo.add).toHaveBeenCalledWith(
+      owner,
+      {
+        candidateId: "db-L-1",
+        toStatus: "SUBMITTED_TO_CLIENT",
+        toStageOrder: 4,
+        actorId: owner.user.id,
+      },
+      h.fakeTx,
+    );
+  });
+
+  it("does not stack anchors when a re-run upserts a candidate that already has history", async () => {
+    h.stageHistoryRepo.listByCandidate.mockResolvedValue([{ id: "sh-existing" }]);
+
+    await migrationService.commit(
+      { format: "csv", content: csv([{ ID: "L-1", Name: "Ok", Status: NEW }]) },
+      owner,
+    );
+
+    expect(h.stageHistoryRepo.add).not.toHaveBeenCalled();
   });
 
   it("never writes for error rows (unrecognized status excluded from commit)", async () => {
