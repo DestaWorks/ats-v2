@@ -20,6 +20,7 @@ import { withTenantTransaction } from "@destaworks/db/with-transaction";
 import { candidateRepository } from "@destaworks/db/repositories/candidate.repository";
 import { clientRepository } from "@destaworks/db/repositories/client.repository";
 import { documentRepository } from "@destaworks/db/repositories/document.repository";
+import { stageHistoryRepository } from "@destaworks/db/repositories/stage-history.repository";
 import { AppError } from "@destaworks/integrations/http/app-error";
 import { checkRateLimit } from "@destaworks/integrations/http/rate-limit";
 import { fillEmptyFields } from "./resume.service";
@@ -383,6 +384,26 @@ export const migrationService = {
             tx,
           );
           candidateId = candidate.id;
+
+          // An imported candidate has no transitions, so `activeOrderAsOf` floors every one at 0
+          // and the funnel reads 100% in stage 0 at 0% conversion (OQ-3). One anchor records where
+          // the row actually sat. Written only when there is no history: commit is idempotent and a
+          // re-run must not stack anchors. `enteredAt` defaults to now — OQ-2 (the stage timing
+          // proxy) is still open, so this does not invent a legacy date.
+          const history = await stageHistoryRepository.listByCandidate(ctx, candidate.id, tx);
+          if (history.length === 0) {
+            await stageHistoryRepository.add(
+              ctx,
+              {
+                candidateId: candidate.id,
+                toStatus: candidate.status,
+                toStageOrder: candidate.stageOrder,
+                actorId: ctx.user.id,
+              },
+              tx,
+            );
+          }
+
           if (plan.document) {
             await documentRepository.upsertByLegacyId(
               ctx,

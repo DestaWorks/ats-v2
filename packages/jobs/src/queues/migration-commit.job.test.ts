@@ -90,6 +90,12 @@ vi.mock("@destaworks/db/repositories/client.repository", () => ({
 vi.mock("@destaworks/db/repositories/document.repository", () => ({
   documentRepository: { upsertByLegacyId: () => Promise.resolve({ id: "doc-1" }) },
 }));
+vi.mock("@destaworks/db/repositories/stage-history.repository", () => ({
+  stageHistoryRepository: {
+    listByCandidate: () => Promise.resolve([]),
+    add: () => Promise.resolve({ id: "sh-1" }),
+  },
+}));
 vi.mock("@destaworks/db/repositories/candidate.repository", () => ({
   candidateRepository: {
     listForDedupe: () => Promise.resolve([...store.candidates.values()]),
