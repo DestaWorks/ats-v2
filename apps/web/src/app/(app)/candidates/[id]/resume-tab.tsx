@@ -4,6 +4,10 @@ import { useRef, useState, type DragEvent } from "react";
 import { toast } from "sonner";
 import type { DownloadUrlEnvelope as GetDocumentDownloadUrlResponse } from "@destaworks/contracts/validation/envelopes";
 import type { DocumentSummaryDTO } from "@destaworks/contracts/validation/candidate";
+import {
+  RESUME_UPLOAD_ACCEPT,
+  resumeUploadMimeType,
+} from "@destaworks/contracts/validation/resume";
 import { getJson, messageForFailure } from "@/lib/api/client";
 import { uploadToStorage } from "@/lib/api/upload";
 import { Modal } from "@destaworks/ui/modal";
@@ -96,15 +100,16 @@ const MAX_RESUME_TEXT_CHARS = 100_000;
 type UploadStage = "idle" | "reading" | "uploading" | "saving";
 
 const STAGE_LABEL: Record<Exclude<UploadStage, "idle">, string> = {
-  reading: "Reading the PDF…",
+  reading: "Reading the file…",
   uploading: "Uploading to storage…",
   saving: "Attaching to this candidate…",
 };
 
 /** Attach a resume straight to THIS candidate — no AI extraction, no candidate matching (this
  *  candidate is already known). PDF text is extracted client-side (best-effort — a failure here
- *  never blocks the attach, it just means no `extractedText`); when Storage is configured the raw
- *  bytes also go straight to it via a signed URL, same flow the Parse Resume page already uses.
+ *  never blocks the attach, and Word files skip it entirely, which just means no `extractedText`);
+ *  when Storage is configured the raw bytes also go straight to it via a signed URL, same flow the
+ *  Parse Resume page already uses.
  *  A drag-and-drop zone (legacy-parity styling) surfaces which of the three steps is in flight,
  *  rather than a single opaque spinner, since a slow Storage PUT can otherwise look stuck. */
 function UploadResumeButton({
@@ -127,13 +132,10 @@ function UploadResumeButton({
    *  file as metadata on purpose. A failed upload is a different thing and must not look like it. */
   async function storageKeyFor(
     file: File,
+    mimeType: string,
   ): Promise<{ ok: true; storageKey: string | undefined } | { ok: false; reason: string }> {
     if (!storageEnabled) return { ok: true, storageKey: undefined };
-    const result = await uploadToStorage({
-      filename: file.name,
-      mimeType: file.type || "application/pdf",
-      body: file,
-    });
+    const result = await uploadToStorage({ filename: file.name, mimeType, body: file });
     return result.ok
       ? { ok: true, storageKey: result.storageKey }
       : { ok: false, reason: result.reason };
@@ -141,21 +143,25 @@ function UploadResumeButton({
 
   async function handleFile(file: File | undefined) {
     if (!file || busy) return;
-    if (!/\.pdf$/i.test(file.name)) {
-      toast.error("That's not a PDF file.");
+    const mimeType = resumeUploadMimeType(file.name);
+    if (!mimeType) {
+      toast.error("Upload a PDF, Word document, or text file.");
       return;
     }
     try {
       setStage("reading");
       let extractedText: string | undefined;
       try {
-        const text = await extractPdfText(file);
-        extractedText = text.length > 0 ? text.slice(0, MAX_RESUME_TEXT_CHARS) : undefined;
+        // PDF only. Word files attach without extracted text rather than being rejected.
+        if (mimeType === "application/pdf") {
+          const text = await extractPdfText(file);
+          extractedText = text.length > 0 ? text.slice(0, MAX_RESUME_TEXT_CHARS) : undefined;
+        }
       } catch {
         // Best-effort — an unreadable/scanned PDF still attaches, just without extracted text.
       }
       setStage("uploading");
-      const stored = await storageKeyFor(file);
+      const stored = await storageKeyFor(file, mimeType);
       if (!stored.ok) {
         toast.error(`Couldn't store ${file.name}. ${stored.reason}`);
         return;
@@ -163,7 +169,7 @@ function UploadResumeButton({
       setStage("saving");
       const res = await postResumeUpload(candidateId, {
         originalFilename: file.name,
-        mimeType: file.type || "application/pdf",
+        mimeType,
         extractedText,
         storageKey: stored.storageKey,
       });
@@ -185,7 +191,7 @@ function UploadResumeButton({
     <div
       role="button"
       aria-busy={busy}
-      aria-label="Upload resume PDF"
+      aria-label="Upload resume"
       tabIndex={busy ? -1 : 0}
       onClick={() => {
         if (!busy) inputRef.current?.click();
@@ -218,7 +224,7 @@ function UploadResumeButton({
         aria-label="Choose a resume file"
         ref={inputRef}
         type="file"
-        accept=".pdf,application/pdf"
+        accept={RESUME_UPLOAD_ACCEPT}
         className="sr-only"
         aria-hidden
         tabIndex={-1}
@@ -251,7 +257,9 @@ function UploadResumeButton({
             <span className="text-sm font-semibold text-charcoal">
               {dragOver ? "Drop the resume here" : "Upload resume"}
             </span>
-            <span className="text-xs text-gray">Click to browse, or drag a PDF here</span>
+            <span className="text-xs text-gray">
+              Click to browse, or drag a PDF or Word file here
+            </span>
           </span>
         </>
       )}

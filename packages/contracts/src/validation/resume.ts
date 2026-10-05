@@ -168,15 +168,46 @@ export const saveResumeInputSchema = z.object({
 });
 export type SaveResumeInput = z.infer<typeof saveResumeInputSchema>;
 
+/** What may land in the resumes bucket. Word files are stored but never text-extracted — that is
+ *  PDF-only and best-effort everywhere it runs, so a `.docx` attaches with no `extractedText`
+ *  rather than being rejected, which is what real resumes arrive as. */
+export const RESUME_UPLOAD_MIME_TYPES = [
+  "application/pdf",
+  "text/plain",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+] as const;
+
+const EXTENSION_MIME_TYPE: Readonly<Record<string, (typeof RESUME_UPLOAD_MIME_TYPES)[number]>> = {
+  ".pdf": "application/pdf",
+  ".txt": "text/plain",
+  ".doc": "application/msword",
+  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+};
+
+/** For a file input's `accept`: extensions first, since browsers report Word types inconsistently. */
+export const RESUME_UPLOAD_ACCEPT = [
+  ...Object.keys(EXTENSION_MIME_TYPE),
+  ...RESUME_UPLOAD_MIME_TYPES,
+].join(",");
+
+/** The extension wins over the browser's `File.type`, which is empty or wrong for Word often
+ *  enough that trusting it mislabels a `.docx` as PDF and breaks the presigned PUT. */
+export function resumeUploadMimeType(
+  filename: string,
+): (typeof RESUME_UPLOAD_MIME_TYPES)[number] | undefined {
+  const dot = filename.lastIndexOf(".");
+  return dot === -1 ? undefined : EXTENSION_MIME_TYPE[filename.slice(dot).toLowerCase()];
+}
+
 /** POST /api/resume/upload-url (Wave 6) — request: the file's name/type, to build a scoped
  *  storage path. Response: a short-lived URL the browser PUTs the raw bytes to directly.
  *  `mimeType` is an allowlist, not a free string — it's threaded into the presigned PUT's
  *  required Content-Type, so this is the one place that actually constrains what can land in the
- *  resumes bucket (both upload flows only ever produce PDF or plain text — see resume-flow.tsx /
- *  resume-tab.tsx). */
+ *  resumes bucket. */
 export const requestResumeUploadUrlSchema = z.object({
   filename: z.string().min(1).max(255),
-  mimeType: z.enum(["application/pdf", "text/plain"]),
+  mimeType: z.enum(RESUME_UPLOAD_MIME_TYPES),
 });
 export type RequestResumeUploadUrlInput = z.infer<typeof requestResumeUploadUrlSchema>;
 
