@@ -50,13 +50,37 @@ async function attachResume(
   candidateId: string,
   filename: string,
   bytes: Buffer,
+  mimeType = "application/pdf",
 ): Promise<void> {
   await gotoReady(page, `/candidates/${candidateId}`);
   await page.getByRole("tab", { name: /Resume/ }).click();
   await page
     .getByLabel("Choose a resume file")
-    .setInputFiles({ name: filename, mimeType: "application/pdf", buffer: bytes });
+    .setInputFiles({ name: filename, mimeType, buffer: bytes });
 }
+
+const DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+test("attaches a Word resume, which the allowlist used to reject outright", async ({
+  page,
+  request,
+}) => {
+  test.setTimeout(120_000);
+
+  const stamp = Date.now();
+  const filename = `e2e-resume-${stamp}.docx`;
+  // Nothing parses Word bytes — extraction is PDF-only and skipped for these — so the content is
+  // irrelevant. What this proves is that the picker, the allowlist and the presigned PUT (whose
+  // Content-Type is signed) all accept the type, which is the whole of the fix.
+  const bytes = Buffer.from(`E2E Word resume ${stamp}`, "utf8");
+  const candidateId = await createCandidate(request, `E2E Word ${stamp}`);
+
+  await attachResume(page, candidateId, filename, bytes, DOCX);
+
+  await expect(page.getByText(`${filename} uploaded`)).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByText(filename).first()).toBeVisible();
+  await expect(page.getByText("No file stored")).toHaveCount(0);
+});
 
 test("attaches a resume in the browser and the stored file is previewable", async ({
   page,
