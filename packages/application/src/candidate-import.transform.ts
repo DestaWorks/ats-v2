@@ -62,6 +62,7 @@ export interface ImportRowPlan {
   /** Legacy row carries a DeletedAt → imports soft-deleted (to Trash). */
   softDeleted: boolean;
   action: ImportAction;
+  actorId: string;
   /** Wave 1.3 backlog (Indrasur bulk-resume flow) — set by `migration.service.ts`'s `planImport`
    *  AFTER `transformRow` runs (matching needs every row's name at once, not just this one's).
    *  Optional/undefined when no resume ZIP was uploaded at all. */
@@ -161,14 +162,39 @@ const NEEDS_REVIEW_TAG = "Needs Review";
  * clients). The planned `action` here is `error`/`softDelete`/`add`; the service flips `add→update`
  * when the legacy id already exists in the DB.
  */
+export const SYSTEM_IMPORT_ACTOR = "system-import";
+
+export function normalizeActorKey(raw: string): string {
+  return raw.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
 export function transformRow(
   row: LegacyRow,
   rowNumber: number,
   clientsByName: Map<string, string>,
+  usersByName: Map<string, string> = new Map(),
 ): ImportRowPlan {
   const flags: string[] = [];
   const errors: string[] = [];
   const notes: string[] = [];
+
+  // D-9 permits a non-user string in an actor column, so an unresolved name is KEPT rather than
+  // discarded — but `mine`/owner filters compare against `User.id`, so an unresolved one silently
+  // matches nobody. Resolve where an account exists and flag where it does not, so the gap is in
+  // the report instead of invisible.
+  let unmappedActor = false;
+  const accountFor = (raw: string): string | null => {
+    const value = raw.trim();
+    if (!value) return null;
+    const match = usersByName.get(normalizeActorKey(value)) ?? null;
+    if (!match) unmappedActor = true;
+    return match;
+  };
+  const actorColumn = (raw: string): string | null => accountFor(raw) ?? (raw.trim() || null);
+
+  const addedByUserId = accountFor(row.AddedBy);
+  const createdById = addedByUserId ?? (row.AddedBy.trim() || null);
+  const licenseVerifiedById = actorColumn(row.LicenseVerifiedBy);
 
   const legacyId = row.ID.trim();
   const name = row.Name.trim();
@@ -261,16 +287,16 @@ export function transformRow(
     licenseStatus: licenseStatus.value ?? "Not Verified",
     licenseExpiry,
     licenseVerifiedAt,
-    licenseVerifiedById: row.LicenseVerifiedBy.trim() || null,
+    licenseVerifiedById,
     status: status ?? "NEW_CANDIDATE",
     stageOrder,
     ...(stageEnteredAt ? { stageEnteredAt } : {}),
     placedAt,
     clientId,
-    createdById: row.AddedBy.trim() || null,
+    createdById,
     ...(createdAt ? { createdAt } : {}),
     deletedAt,
-    deletedById: softDeleted ? row.DeletedBy.trim() || null : null,
+    deletedById: softDeleted ? actorColumn(row.DeletedBy) : null,
   };
 
   const update = buildUpdate(create, softDeleted);
@@ -290,8 +316,10 @@ export function transformRow(
   }
 
   const action: ImportAction = errors.length > 0 ? "error" : softDeleted ? "softDelete" : "add";
+  if (unmappedActor) flags.push("actor-unmapped");
 
   return {
+    actorId: addedByUserId ?? SYSTEM_IMPORT_ACTOR,
     legacyId,
     rowNumber,
     name,

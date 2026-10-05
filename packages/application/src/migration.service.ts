@@ -19,6 +19,7 @@ import { writeAudit } from "@destaworks/db/audit";
 import { withTenantTransaction } from "@destaworks/db/with-transaction";
 import { candidateRepository } from "@destaworks/db/repositories/candidate.repository";
 import { clientRepository } from "@destaworks/db/repositories/client.repository";
+import { userRepository } from "@destaworks/db/repositories/user.repository";
 import { documentRepository } from "@destaworks/db/repositories/document.repository";
 import { stageHistoryRepository } from "@destaworks/db/repositories/stage-history.repository";
 import { AppError } from "@destaworks/integrations/http/app-error";
@@ -29,6 +30,7 @@ import {
   dedupeByEmail,
   normalizeClientKey,
   transformRow,
+  normalizeActorKey,
   type ImportRowPlan,
 } from "./candidate-import.transform";
 import { parseSheet } from "./sheet-parse";
@@ -176,9 +178,10 @@ async function planImport(ctx: TenantContext, input: ImportInput): Promise<Plann
   const { rows, parseErrors } = parseSheet(input.content, input.format);
   const checksum = contentChecksum(input.content);
 
-  const [clients, existing] = await Promise.all([
+  const [clients, existing, users] = await Promise.all([
     clientRepository.list(ctx),
     candidateRepository.listForDedupe(ctx, true),
+    userRepository.listByTenant(ctx.tenantId),
   ]);
   const clientsByName = new Map<string, string>();
   for (const c of clients) {
@@ -186,12 +189,15 @@ async function planImport(ctx: TenantContext, input: ImportInput): Promise<Plann
     if (c.legacyId) clientsByName.set(normalizeClientKey(c.legacyId), c.id);
   }
 
+  const usersByName = new Map<string, string>();
+  for (const u of users) usersByName.set(normalizeActorKey(u.name), u.id);
+
   const existingLegacyIds = new Set(
     existing.map((c) => c.legacyId).filter((id): id is string => Boolean(id)),
   );
 
   // rowNumber: +2 = 1-indexed data row past the header (matches a spreadsheet's line numbers).
-  const plans = rows.map((row, i) => transformRow(row, i + 2, clientsByName));
+  const plans = rows.map((row, i) => transformRow(row, i + 2, clientsByName, usersByName));
   for (const p of plans) {
     if (p.action === "error" || p.softDeleted) continue;
     p.action = existingLegacyIds.has(p.legacyId) ? "update" : "add";
@@ -398,7 +404,7 @@ export const migrationService = {
                 candidateId: candidate.id,
                 toStatus: candidate.status,
                 toStageOrder: candidate.stageOrder,
-                actorId: ctx.user.id,
+                actorId: plan.actorId,
               },
               tx,
             );
