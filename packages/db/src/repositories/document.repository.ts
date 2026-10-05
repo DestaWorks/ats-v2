@@ -151,6 +151,16 @@ export const documentRepository = {
     return rows.map(decryptRow);
   },
 
+  /** Every stored object for a candidate, soft-deleted rows included — a purge has to reach those
+   *  too, and `listByCandidate` deliberately hides them. Returns keys only: no row is decrypted. */
+  async storageKeysByCandidate(ctx: TenantContext, candidateId: string, tx?: ScopedTx) {
+    const rows = await db(ctx, tx).document.findMany({
+      where: { candidateId, storageKey: { not: null } },
+      select: { storageKey: true },
+    });
+    return rows.map((row) => row.storageKey).filter((key): key is string => key !== null);
+  },
+
   async softDelete(ctx: TenantContext, id: string, actorId: string, tx?: ScopedTx) {
     return decryptRow(
       await db(ctx, tx).document.update({
