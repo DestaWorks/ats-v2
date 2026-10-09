@@ -57,7 +57,9 @@ const h = vi.hoisted(() => ({
   outreachRepo: { listForCandidate: vi.fn(), createForCandidate: vi.fn() },
   leadRepo: { findByPromotedCandidateId: vi.fn() },
   stageRepo: { add: vi.fn(), listByCandidate: vi.fn() },
-  docRepo: { listByCandidate: vi.fn() },
+  docRepo: { listByCandidate: vi.fn(), storageKeysByCandidate: vi.fn() },
+  deleteObject: vi.fn(),
+  loggerError: vi.fn(),
   noteRepo: { listByCandidate: vi.fn(), create: vi.fn() },
   clientRepo: {
     list: vi.fn(),
@@ -89,6 +91,15 @@ vi.mock("@destaworks/db/repositories/document.repository", () => ({
   documentRepository: h.docRepo,
 }));
 vi.mock("@destaworks/db/repositories/note.repository", () => ({ noteRepository: h.noteRepo }));
+vi.mock("@destaworks/config/logger", () => ({
+  logger: { error: h.loggerError, warn: vi.fn(), info: vi.fn(), debug: vi.fn() },
+}));
+vi.mock("@destaworks/integrations/storage", () => ({
+  RESUME_BUCKET: "resumes",
+  storageEnabled: true,
+  persistedStorageKey: (key: string) => key,
+  deleteObject: h.deleteObject,
+}));
 vi.mock("@destaworks/db/repositories/client.repository", () => ({
   clientRepository: h.clientRepo,
   cachedClientNameMap: h.cachedClientNameMap,
@@ -168,6 +179,9 @@ beforeEach(() => {
   h.candidateRepo.softDelete.mockReset();
   h.candidateRepo.restore.mockReset();
   h.candidateRepo.purge.mockReset();
+  h.docRepo.storageKeysByCandidate.mockReset().mockResolvedValue([]);
+  h.deleteObject.mockReset().mockResolvedValue(undefined);
+  h.loggerError.mockReset();
   h.candidateRepo.listDeleted.mockReset();
   h.candidateRepo.incrementOutreach.mockReset();
   h.outreachRepo.listForCandidate.mockReset();
@@ -479,6 +493,64 @@ describe("candidateService.purge", () => {
     expect(h.writeAudit.mock.invocationCallOrder[0]!).toBeLessThan(
       h.candidateRepo.purge.mock.invocationCallOrder[0]!,
     );
+  });
+
+  it("deletes the stored files too — a purged resume must not outlive its row", async () => {
+    h.candidateRepo.findById.mockResolvedValue(candidate({ deletedAt: new Date() }));
+    h.candidateRepo.purge.mockResolvedValue({ id: "c1" });
+    h.docRepo.storageKeysByCandidate.mockResolvedValue(["t1/c1/a.pdf", "t1/c1/b.docx"]);
+
+    await candidateService.purge("c1", h.owner as TenantContext);
+
+    expect(h.deleteObject).toHaveBeenCalledTimes(2);
+    expect(h.deleteObject).toHaveBeenCalledWith("resumes", "t1/c1/a.pdf");
+    expect(h.deleteObject).toHaveBeenCalledWith("resumes", "t1/c1/b.docx");
+  });
+
+  it("reads the keys before the cascade, and deletes only after it commits", async () => {
+    h.candidateRepo.findById.mockResolvedValue(candidate({ deletedAt: new Date() }));
+    h.candidateRepo.purge.mockResolvedValue({ id: "c1" });
+    h.docRepo.storageKeysByCandidate.mockResolvedValue(["t1/c1/a.pdf"]);
+
+    await candidateService.purge("c1", h.owner as TenantContext);
+
+    // The cascade removes the rows naming the keys, so reading after it would find nothing.
+    expect(h.docRepo.storageKeysByCandidate.mock.invocationCallOrder[0]!).toBeLessThan(
+      h.candidateRepo.purge.mock.invocationCallOrder[0]!,
+    );
+    expect(h.candidateRepo.purge.mock.invocationCallOrder[0]!).toBeLessThan(
+      h.deleteObject.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it("a storage failure does not undo the purge, and never logs the key", async () => {
+    h.candidateRepo.findById.mockResolvedValue(candidate({ deletedAt: new Date() }));
+    h.candidateRepo.purge.mockResolvedValue({ id: "c1" });
+    h.docRepo.storageKeysByCandidate.mockResolvedValue(["t1/c1/Jane Doe Resume.pdf"]);
+    h.deleteObject.mockRejectedValue(new Error("store unreachable"));
+
+    // The row is gone either way — the purge was the instruction and it succeeded.
+    await expect(candidateService.purge("c1", h.owner as TenantContext)).resolves.toEqual({
+      id: "c1",
+    });
+
+    expect(h.loggerError).toHaveBeenCalledTimes(1);
+    const [event, fields] = h.loggerError.mock.calls[0]!;
+    expect(event).toBe("candidate.purge.storage_orphaned");
+    expect(fields).toEqual({ candidateId: "c1", failed: 1, total: 1 });
+    // The key ends in the uploaded filename, which is routinely the candidate's own name.
+    expect(JSON.stringify(h.loggerError.mock.calls)).not.toContain("Jane Doe");
+  });
+
+  it("touches storage not at all when the candidate had no stored files", async () => {
+    h.candidateRepo.findById.mockResolvedValue(candidate({ deletedAt: new Date() }));
+    h.candidateRepo.purge.mockResolvedValue({ id: "c1" });
+    h.docRepo.storageKeysByCandidate.mockResolvedValue([]);
+
+    await candidateService.purge("c1", h.owner as TenantContext);
+
+    expect(h.deleteObject).not.toHaveBeenCalled();
+    expect(h.loggerError).not.toHaveBeenCalled();
   });
 });
 

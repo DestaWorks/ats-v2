@@ -36,6 +36,9 @@ test("shows the empty state for a week with no saved brief", async ({ page }) =>
   const weekInput = page.getByLabel("Week of (Monday)");
   await expect(weekInput).toBeVisible();
   await weekInput.fill("2099-01-01");
+  // `fill` resolves when the change event is dispatched, but `mondayOf` normalizes on React's next
+  // render — reading straight away can capture the typed date and assert a week that never renders.
+  await expect(weekInput).not.toHaveValue("2099-01-01");
   const normalizedMonday = await weekInput.inputValue();
 
   await expect(

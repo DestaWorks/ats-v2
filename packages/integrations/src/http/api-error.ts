@@ -128,8 +128,18 @@ const FRAMEWORK_MESSAGES: Record<AppErrorCode, string> = {
   STAGE_BLOCKED: "Bad request",
   FEATURE_DISABLED: "Bad request",
   UPSTREAM_ERROR: "Bad request",
+  OVERLOADED: "The server is busy. Please try again.",
   EXTRACTION_FAILED: "Bad request",
 };
+
+/**
+ * Prisma codes meaning "the pool had nothing to give", not "this request is wrong".
+ *
+ * P2024 is the pool-checkout timeout; P2028 is an interactive transaction that could not acquire a
+ * connection within `maxWait`. Matched on code, not message: `integrations` may not import Prisma,
+ * and the codes are stable where the strings are not.
+ */
+const POOL_EXHAUSTED_CODES = new Set(["P2024", "P2028"]);
 
 export function classifyError(err: unknown): ClassifiedError {
   if (err instanceof AppError) {
@@ -142,11 +152,20 @@ export function classifyError(err: unknown): ClassifiedError {
       issues: err.issues.map((issue) => ({ path: issue.path.join("."), message: issue.message })),
     };
   }
+  const errorCode = readString(err, "code");
+  if (errorCode !== undefined && POOL_EXHAUSTED_CODES.has(errorCode)) {
+    return {
+      kind: "app",
+      status: 503,
+      code: "OVERLOADED",
+      message: FRAMEWORK_MESSAGES.OVERLOADED,
+    };
+  }
   return {
     kind: "unexpected",
     ...INTERNAL_ERROR,
     errorType: readString(err, "name") ?? "Error",
-    errorCode: readString(err, "code"),
+    errorCode,
   };
 }
 
@@ -189,8 +208,10 @@ export function errorLogEntry(
   const { durationMs } = context;
   switch (classified.kind) {
     case "app":
+      // 4xx is the caller's problem and stays at debug. 5xx is ours — an overloaded pool or a dead
+      // upstream must be visible at the level production actually runs at, or we shed load silently.
       return {
-        level: "debug",
+        level: classified.status >= 500 ? "warn" : "debug",
         event: API_LOG_EVENTS.rejected,
         fields: { ...head, errorCode: classified.code, durationMs },
       };

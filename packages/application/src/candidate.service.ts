@@ -65,6 +65,13 @@ import {
   type ClientRulesRow,
 } from "@destaworks/db/repositories/client-rules.repository";
 import { documentRepository } from "@destaworks/db/repositories/document.repository";
+import { logger } from "@destaworks/config/logger";
+import {
+  RESUME_BUCKET,
+  deleteObject,
+  persistedStorageKey,
+  storageEnabled,
+} from "@destaworks/integrations/storage";
 import { noteRepository } from "@destaworks/db/repositories/note.repository";
 import { stageHistoryRepository } from "@destaworks/db/repositories/stage-history.repository";
 import { checkStageGate } from "@destaworks/domain/rules/stage-gates";
@@ -561,6 +568,35 @@ function pickAudited(row: CandidateRow, input: CandidateUpdateInput): Record<str
  * handler). Hard purge — the capability-gated (`purgeCandidate`) destructive path — lands in
  * Wave 2.5, separate from this soft delete.
  */
+/**
+ * Delete a purged candidate's stored files, after the row cascade has committed.
+ *
+ * Best-effort on purpose: the purge is the user's instruction and has already succeeded, so a
+ * storage outage must not resurrect the record. A failure is logged loudly instead, because an
+ * object that outlives its row is a PHI orphan nothing will point at again.
+ *
+ * The key is never logged — it ends in the uploaded filename, which is routinely the candidate's
+ * own name.
+ */
+async function removeStoredObjects(storageKeys: string[], candidateId: string): Promise<void> {
+  if (!storageEnabled || storageKeys.length === 0) return;
+  let failed = 0;
+  for (const key of storageKeys) {
+    try {
+      await deleteObject(RESUME_BUCKET, persistedStorageKey(key));
+    } catch {
+      failed += 1;
+    }
+  }
+  if (failed > 0) {
+    logger.error("candidate.purge.storage_orphaned", {
+      candidateId,
+      failed,
+      total: storageKeys.length,
+    });
+  }
+}
+
 export const candidateService = {
   /**
    * Create a candidate. COMPOSABLE (OQ-1): `opts.user` lets a caller (e.g. `leadService.promote`)
@@ -694,7 +730,9 @@ export const candidateService = {
     if (existing.deletedAt === null) {
       throw new AppError("CONFLICT", "Only trashed candidates can be purged");
     }
-    return withTenantTransaction(ctx, async (tx) => {
+    // Read the keys BEFORE the cascade removes the rows that name them.
+    const storageKeys = await documentRepository.storageKeysByCandidate(ctx, id);
+    const purged = await withTenantTransaction(ctx, async (tx) => {
       await writeAudit(tx, {
         entity: "candidate",
         entityId: id,
@@ -705,6 +743,8 @@ export const candidateService = {
       await candidateRepository.purge(ctx, id, tx); // cascades documents / notes / stage history
       return { id };
     });
+    await removeStoredObjects(storageKeys, id);
+    return purged;
   },
 
   /**

@@ -9,11 +9,11 @@ import { MODULES, ROLE_CAPABILITIES } from "@destaworks/domain/constants";
  * decrypted back to the object (and `extractedText` string encrypted/decrypted).
  */
 
-const { create } = vi.hoisted(() => ({ create: vi.fn() }));
+const { create, findMany } = vi.hoisted(() => ({ create: vi.fn(), findMany: vi.fn() }));
 
 vi.mock("server-only", () => ({}));
 vi.mock("../prisma", () => {
-  const prisma: Record<string, unknown> = { document: { create } };
+  const prisma: Record<string, unknown> = { document: { create, findMany } };
   // The seam builds its client with `prisma.$extends(...)`. Returning the fake unchanged keeps
   // these assertions about the query the REPOSITORY composes; that the extension then adds the
   // tenant filter is proven against real Prisma in `tenant-scope.test.ts`.
@@ -35,6 +35,7 @@ function echoStore() {
 
 beforeEach(() => {
   create.mockReset();
+  findMany.mockReset().mockResolvedValue([]);
   echoStore();
   delete process.env.FIELD_ENCRYPTION_KEY;
 });
@@ -87,5 +88,29 @@ describe("documentRepository field encryption", () => {
 
     expect(row.extractedData).toEqual(data); // decrypted + parsed back to the object
     expect(row.extractedText).toBe("secret");
+  });
+});
+
+describe("documentRepository.storageKeysByCandidate", () => {
+  it("does NOT filter deletedAt — a purge must reach a soft-deleted document's file too", async () => {
+    await documentRepository.storageKeysByCandidate(ctx, "c1");
+
+    const [args] = findMany.mock.calls[0]!;
+    expect(args.where).toEqual({ candidateId: "c1", storageKey: { not: null } });
+    expect(args.where).not.toHaveProperty("deletedAt");
+  });
+
+  it("returns only the keys, dropping rows that never reached storage", async () => {
+    findMany.mockResolvedValue([{ storageKey: "t1/c1/a.pdf" }, { storageKey: null }]);
+
+    await expect(documentRepository.storageKeysByCandidate(ctx, "c1")).resolves.toEqual([
+      "t1/c1/a.pdf",
+    ]);
+  });
+
+  it("selects the key alone, so no encrypted field is read or decrypted", async () => {
+    await documentRepository.storageKeysByCandidate(ctx, "c1");
+
+    expect(findMany.mock.calls[0]![0].select).toEqual({ storageKey: true });
   });
 });

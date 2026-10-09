@@ -1,4 +1,9 @@
-import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+  DeleteObjectCommand,
+} from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { AppError } from "./http/app-error";
 
@@ -168,6 +173,15 @@ function getClient(): S3Client {
     });
   }
   return client;
+}
+
+/** Permanently remove one stored object.
+ *
+ *  Only the candidate purge uses this. That path hard-deletes the row and cascades its documents,
+ *  so without this the bytes outlive every record pointing at them — and resumes are PHI, which
+ *  makes an orphan a disclosure risk rather than wasted disk. */
+export async function deleteObject(bucket: string, key: PersistedStorageKey): Promise<void> {
+  await getClient().send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
 }
 
 /** Upload bytes to a PUBLIC bucket (avatars) and return the permanent public URL. There's no

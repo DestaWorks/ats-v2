@@ -10,6 +10,7 @@ export type AppErrorCode =
   | "RATE_LIMITED"
   | "EXTRACTION_FAILED"
   | "UPSTREAM_ERROR"
+  | "OVERLOADED"
   | "INTERNAL";
 
 const DEFAULT_STATUS: Record<AppErrorCode, number> = {
@@ -32,6 +33,10 @@ const DEFAULT_STATUS: Record<AppErrorCode, number> = {
   // Wave 2.7 Discover: a third-party HTTP call (NPPES, or any future external integration)
   // failed, timed out, or returned an unparseable body — generic, not scoped to one provider.
   UPSTREAM_ERROR: 502,
+  // The database could not hand out a connection in time. 503 because it is the server being
+  // beyond capacity and the request is worth retrying — a 500 says "this request is broken",
+  // which sends the caller away and buries real faults in Sentry under load.
+  OVERLOADED: 503,
   INTERNAL: 500,
 };
 

@@ -38,6 +38,8 @@ const COMPLETE_READS: Record<string, string> = {
   "client-portal-token.repository.ts::findActiveForContacts":
     "bounded by the contact set — at most one live token each",
   "stage-history.repository.ts::listByCandidateIds": "bounded by the candidate set",
+  "document.repository.ts::storageKeysByCandidate":
+    "a purge must delete every stored file — a cap would silently orphan the rest",
   "user.repository.ts::namesByIds": "bounded by the id set",
   "user.repository.ts::emailsByIds": "bounded by the id set",
 
